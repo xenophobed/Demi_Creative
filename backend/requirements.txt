@@ -1,0 +1,37 @@
+# Core Framework
+fastapi==0.110.0
+uvicorn[standard]==0.27.0
+pydantic==2.6.1
+pydantic-settings==2.1.0
+python-dotenv==1.0.1
+python-multipart==0.0.6  # For file upload support
+
+# AI & Agent
+claude-agent-sdk==0.1.25
+anthropic==0.18.1
+openai==1.12.0
+
+# Vector Database (Local)
+chromadb==0.4.22
+
+# Image Processing
+pillow==10.2.0
+
+# HTTP Client
+httpx==0.26.0
+
+# Utilities
+pyyaml==6.0.1
+
+# Testing
+pytest==7.4.4
+pytest-asyncio==0.23.4
+pytest-cov==4.1.0
+pytest-mock==3.12.0
+
+# Code Quality
+black==24.1.1
+mypy==1.8.0
+
+# Logging
+structlog==24.1.0

@@ -1,0 +1,57 @@
+{
+  "session_id": "83c843e6-fac1-4bcf-8afd-05ea1ce46a85",
+  "child_id": "test_001",
+  "story_title": "神秘的冒险之旅",
+  "age_group": "6-8",
+  "interests": [
+    "动物",
+    "冒险"
+  ],
+  "theme": null,
+  "voice": "fable",
+  "enable_audio": true,
+  "current_segment": 2,
+  "total_segments": 5,
+  "choice_history": [
+    "choice_0_a"
+  ],
+  "segments": [
+    {
+      "segment_id": 0,
+      "text": "在一个阳光明媚的早晨，小主人公发现了一个神秘的动物...",
+      "choices": [
+        {
+          "choice_id": "choice_0_a",
+          "text": "立刻打开看看",
+          "emoji": "🔓"
+        },
+        {
+          "choice_id": "choice_0_b",
+          "text": "先找朋友一起来",
+          "emoji": "👫"
+        }
+      ]
+    },
+    {
+      "segment_id": 1,
+      "text": "故事继续发展...",
+      "choices": [
+        {
+          "choice_id": "choice_1_a",
+          "text": "选项A",
+          "emoji": "⭐"
+        },
+        {
+          "choice_id": "choice_1_b",
+          "text": "选项B",
+          "emoji": "🌟"
+        }
+      ]
+    }
+  ],
+  "status": "active",
+  "created_at": "2026-01-29T18:24:50.072447",
+  "updated_at": "2026-01-29T18:25:12.044229",
+  "expires_at": "2026-01-30T18:24:50.072447",
+  "educational_summary": null
+}
