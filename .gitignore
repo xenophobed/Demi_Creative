@@ -1,5 +1,7 @@
 # Environment
 .env
+*.env
+backend/.env
 venv/
 backend/venv/
 
@@ -28,3 +30,7 @@ htmlcov/
 
 # Logs
 *.log
+
+# Runtime data
+data/sessions/
+data/uploads/
