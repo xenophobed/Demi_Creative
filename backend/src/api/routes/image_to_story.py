@@ -8,7 +8,7 @@ import uuid
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Dict, Any
 
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, status
 from fastapi.responses import JSONResponse
@@ -29,7 +29,28 @@ router = APIRouter(
 )
 
 
+# ============================================================================
+# 故事存储（内存存储，生产环境应使用数据库）
+# ============================================================================
+story_storage: Dict[str, Dict[str, Any]] = {}
+
+
+def save_story(story_id: str, response_data: Dict[str, Any]) -> None:
+    """保存故事到存储"""
+    story_storage[story_id] = {
+        **response_data,
+        "stored_at": datetime.now().isoformat()
+    }
+
+
+def get_story(story_id: str) -> Optional[Dict[str, Any]]:
+    """从存储中获取故事"""
+    return story_storage.get(story_id)
+
+
+# ============================================================================
 # 配置
+# ============================================================================
 UPLOAD_DIR = Path("./data/uploads")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -205,6 +226,7 @@ async def create_story_from_image(
             ))
 
         # 构建响应
+        created_at = datetime.now()
         response = ImageToStoryResponse(
             story_id=story_id,
             story=StoryContent(
@@ -217,8 +239,38 @@ async def create_story_from_image(
             characters=characters,
             analysis=result.get("analysis", {}),
             safety_score=result.get("safety_score", 0.9),
-            created_at=datetime.now()
+            created_at=created_at
         )
+
+        # 保存故事到存储
+        save_story(story_id, {
+            "story_id": story_id,
+            "story": {
+                "text": story_text,
+                "word_count": word_count,
+                "age_adapted": True
+            },
+            "audio_url": result.get("audio_url"),
+            "educational_value": {
+                "themes": result.get("themes", []),
+                "concepts": result.get("concepts", []),
+                "moral": result.get("moral")
+            },
+            "characters": [
+                {
+                    "character_name": c.character_name,
+                    "description": c.description,
+                    "appearances": c.appearances
+                }
+                for c in characters
+            ],
+            "analysis": result.get("analysis", {}),
+            "safety_score": result.get("safety_score", 0.9),
+            "created_at": created_at.isoformat(),
+            "child_id": child_id,
+            "age_group": age_group.value,
+            "image_path": str(image_path)
+        })
 
         return response
 
@@ -252,3 +304,81 @@ async def create_story_from_image(
         # if image_path and image_path.exists():
         #     image_path.unlink()
         pass
+
+
+@router.get(
+    "/stories/{story_id}",
+    summary="获取故事",
+    description="根据故事ID获取已生成的故事详情",
+    responses={
+        200: {"description": "成功获取故事"},
+        404: {"description": "故事不存在"}
+    }
+)
+async def get_story_by_id(story_id: str):
+    """
+    获取故事详情
+
+    **参数**:
+    - story_id: 故事唯一标识符
+
+    **返回**:
+    - 故事完整数据，包括文本、音频URL、教育价值等
+
+    **示例请求**:
+    ```bash
+    curl "http://localhost:8000/api/v1/stories/{story_id}"
+    ```
+    """
+    story = get_story(story_id)
+
+    if not story:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"故事不存在: {story_id}"
+        )
+
+    return JSONResponse(content=story)
+
+
+@router.get(
+    "/stories",
+    summary="列出所有故事",
+    description="获取所有已生成故事的列表（用于调试）"
+)
+async def list_stories(
+    child_id: Optional[str] = None,
+    limit: int = 20
+):
+    """
+    列出故事
+
+    **参数**:
+    - child_id: 可选，按儿童ID筛选
+    - limit: 返回数量限制
+
+    **返回**:
+    - 故事列表摘要
+    """
+    stories = []
+
+    for sid, data in story_storage.items():
+        # 如果指定了 child_id，进行筛选
+        if child_id and data.get("child_id") != child_id:
+            continue
+
+        stories.append({
+            "story_id": sid,
+            "child_id": data.get("child_id"),
+            "created_at": data.get("created_at"),
+            "word_count": data.get("story", {}).get("word_count", 0),
+            "has_audio": bool(data.get("audio_url"))
+        })
+
+        if len(stories) >= limit:
+            break
+
+    return JSONResponse(content={
+        "total": len(stories),
+        "stories": stories
+    })

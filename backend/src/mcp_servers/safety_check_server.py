@@ -38,8 +38,8 @@ SAFETY_RULES = """
 
 
 @tool(
-    name="check_content_safety",
-    description="""检查内容是否适合儿童，确保符合安全标准。
+    "check_content_safety",
+    """检查内容是否适合儿童，确保符合安全标准。
 
     这个工具会：
     1. 检测负面内容（暴力、恐怖、不当语言等）
@@ -49,28 +49,7 @@ SAFETY_RULES = """
     5. 提供修改建议（如有问题）
 
     所有生成的内容在呈现给儿童前必须通过此检查。""",
-    input_schema={
-        "type": "object",
-        "properties": {
-            "content_text": {
-                "type": "string",
-                "description": "需要检查的文本内容（故事、新闻等）"
-            },
-            "content_type": {
-                "type": "string",
-                "description": "内容类型",
-                "enum": ["story", "news", "interactive_story", "other"],
-                "default": "story"
-            },
-            "target_age": {
-                "type": "integer",
-                "description": "目标年龄（3-12岁）",
-                "minimum": 3,
-                "maximum": 12
-            }
-        },
-        "required": ["content_text", "target_age"]
-    }
+    {"content_text": str, "content_type": str, "target_age": int}
 )
 async def check_content_safety(args: Dict[str, Any]) -> Dict[str, Any]:
     """
@@ -153,7 +132,7 @@ async def check_content_safety(args: Dict[str, Any]) -> Dict[str, Any]:
         client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
         response = client.messages.create(
-            model="claude-3-5-sonnet-20241022",
+            model="claude-sonnet-4-20250514",
             max_tokens=2048,
             messages=[{
                 "role": "user",
@@ -233,8 +212,8 @@ async def check_content_safety(args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 @tool(
-    name="suggest_content_improvements",
-    description="""根据安全检查结果，生成改进后的内容。
+    "suggest_content_improvements",
+    """根据安全检查结果，生成改进后的内容。
 
     这个工具会：
     1. 接收原始内容和安全检查结果
@@ -243,26 +222,7 @@ async def check_content_safety(args: Dict[str, Any]) -> Dict[str, Any]:
     4. 返回改进后的内容
 
     仅在安全检查未通过时使用。""",
-    input_schema={
-        "type": "object",
-        "properties": {
-            "original_content": {
-                "type": "string",
-                "description": "原始内容文本"
-            },
-            "safety_check_result": {
-                "type": "object",
-                "description": "安全检查结果（来自 check_content_safety）"
-            },
-            "target_age": {
-                "type": "integer",
-                "description": "目标年龄",
-                "minimum": 3,
-                "maximum": 12
-            }
-        },
-        "required": ["original_content", "safety_check_result", "target_age"]
-    }
+    {"original_content": str, "safety_check_result": dict, "target_age": int}
 )
 async def suggest_content_improvements(args: Dict[str, Any]) -> Dict[str, Any]:
     """
@@ -331,7 +291,7 @@ async def suggest_content_improvements(args: Dict[str, Any]) -> Dict[str, Any]:
         client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
         response = client.messages.create(
-            model="claude-3-5-sonnet-20241022",
+            model="claude-sonnet-4-20250514",
             max_tokens=2048,
             messages=[{
                 "role": "user",

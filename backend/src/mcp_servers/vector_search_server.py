@@ -38,8 +38,8 @@ def get_or_create_collection():
 
 
 @tool(
-    name="search_similar_drawings",
-    description="""在向量数据库中搜索与当前画作相似的历史画作。
+    "search_similar_drawings",
+    """在向量数据库中搜索与当前画作相似的历史画作。
 
     这个工具用于：
     1. 查找儿童之前画过的相似内容
@@ -47,25 +47,7 @@ def get_or_create_collection():
     3. 保持故事连续性
 
     返回相似画作列表，包含相似度分数。""",
-    input_schema={
-        "type": "object",
-        "properties": {
-            "drawing_description": {
-                "type": "string",
-                "description": "画作的文字描述（来自 Vision Analysis 的结果）"
-            },
-            "child_id": {
-                "type": "string",
-                "description": "儿童ID，用于过滤该儿童的历史画作"
-            },
-            "top_k": {
-                "type": "integer",
-                "description": "返回最相似的 K 个结果（默认 5）",
-                "default": 5
-            }
-        },
-        "required": ["drawing_description", "child_id"]
-    }
+    {"drawing_description": str, "child_id": str, "top_k": int}
 )
 async def search_similar_drawings(args: Dict[str, Any]) -> Dict[str, Any]:
     """
@@ -142,8 +124,8 @@ async def search_similar_drawings(args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 @tool(
-    name="store_drawing_embedding",
-    description="""将儿童画作的分析结果存储到向量数据库。
+    "store_drawing_embedding",
+    """将儿童画作的分析结果存储到向量数据库。
 
     这个工具用于：
     1. 保存画作的向量表示
@@ -151,39 +133,7 @@ async def search_similar_drawings(args: Dict[str, Any]) -> Dict[str, Any]:
     3. 建立长期记忆系统
 
     每次创作新故事后调用此工具。""",
-    input_schema={
-        "type": "object",
-        "properties": {
-            "drawing_description": {
-                "type": "string",
-                "description": "画作的文字描述"
-            },
-            "child_id": {
-                "type": "string",
-                "description": "儿童ID"
-            },
-            "drawing_analysis": {
-                "type": "object",
-                "description": "画作分析结果（来自 Vision Analysis）",
-                "properties": {
-                    "objects": {"type": "array"},
-                    "scene": {"type": "string"},
-                    "mood": {"type": "string"},
-                    "colors": {"type": "array"},
-                    "recurring_characters": {"type": "array"}
-                }
-            },
-            "story_text": {
-                "type": "string",
-                "description": "为该画作生成的故事文本（可选）"
-            },
-            "image_path": {
-                "type": "string",
-                "description": "画作图片路径（可选）"
-            }
-        },
-        "required": ["drawing_description", "child_id", "drawing_analysis"]
-    }
+    {"drawing_description": str, "child_id": str, "drawing_analysis": dict, "story_text": str, "image_path": str}
 )
 async def store_drawing_embedding(args: Dict[str, Any]) -> Dict[str, Any]:
     """

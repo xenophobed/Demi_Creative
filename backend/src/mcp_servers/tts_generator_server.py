@@ -34,8 +34,8 @@ def get_audio_output_path():
 
 
 @tool(
-    name="generate_story_audio",
-    description="""将故事文本转换为语音音频文件。
+    "generate_story_audio",
+    """将故事文本转换为语音音频文件。
 
     这个工具用于：
     1. 将文字故事转换为语音朗读
@@ -44,35 +44,7 @@ def get_audio_output_path():
     4. 生成 MP3 格式音频文件
 
     返回音频文件路径。""",
-    input_schema={
-        "type": "object",
-        "properties": {
-            "story_text": {
-                "type": "string",
-                "description": "要转换为语音的故事文本"
-            },
-            "voice": {
-                "type": "string",
-                "description": "声音选项",
-                "enum": list(AVAILABLE_VOICES.keys()),
-                "default": "nova"
-            },
-            "speed": {
-                "type": "number",
-                "description": "朗读速度（0.25-4.0，默认 1.0）",
-                "minimum": 0.25,
-                "maximum": 4.0,
-                "default": 1.0
-            },
-            "child_age": {
-                "type": "integer",
-                "description": "儿童年龄，用于调整朗读速度（可选）",
-                "minimum": 3,
-                "maximum": 12
-            }
-        },
-        "required": ["story_text"]
-    }
+    {"story_text": str, "voice": str, "speed": float, "child_age": int}
 )
 async def generate_story_audio(args: Dict[str, Any]) -> Dict[str, Any]:
     """
@@ -170,15 +142,11 @@ async def generate_story_audio(args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 @tool(
-    name="list_available_voices",
-    description="""列出所有可用的 TTS 声音选项。
+    "list_available_voices",
+    """列出所有可用的 TTS 声音选项。
 
     返回声音列表及其描述，帮助选择合适的声音。""",
-    input_schema={
-        "type": "object",
-        "properties": {},
-        "required": []
-    }
+    {}
 )
 async def list_available_voices(args: Dict[str, Any]) -> Dict[str, Any]:
     """
@@ -221,41 +189,13 @@ def _get_recommendation(voice_id: str) -> str:
 
 
 @tool(
-    name="generate_audio_batch",
-    description="""批量生成多个音频文件。
+    "generate_audio_batch",
+    """批量生成多个音频文件。
 
     用于互动故事的多个段落，一次性生成所有音频。
 
     注意：批量生成可能需要较长时间，建议分段不超过 10 个。""",
-    input_schema={
-        "type": "object",
-        "properties": {
-            "story_segments": {
-                "type": "array",
-                "description": "故事段落列表",
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "segment_id": {"type": "string", "description": "段落ID"},
-                        "text": {"type": "string", "description": "段落文本"}
-                    },
-                    "required": ["segment_id", "text"]
-                }
-            },
-            "voice": {
-                "type": "string",
-                "description": "声音选项",
-                "enum": list(AVAILABLE_VOICES.keys()),
-                "default": "nova"
-            },
-            "speed": {
-                "type": "number",
-                "description": "朗读速度",
-                "default": 1.0
-            }
-        },
-        "required": ["story_segments"]
-    }
+    {"story_segments": list, "voice": str, "speed": float}
 )
 async def generate_audio_batch(args: Dict[str, Any]) -> Dict[str, Any]:
     """

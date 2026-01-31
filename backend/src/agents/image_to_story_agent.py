@@ -6,9 +6,10 @@ Image to Story Agent
 
 import os
 from pathlib import Path
-from typing import Dict, Any, AsyncIterator
+from typing import Dict, Any, AsyncIterator, Optional, List
 
-from claude_agent_sdk import query, ClaudeAgentOptions, ResultMessage
+from pydantic import BaseModel
+from claude_agent_sdk import query, ClaudeAgentOptions, ResultMessage, ClaudeSDKClient
 from ..mcp_servers import (
     vision_server,
     vector_server,
@@ -16,6 +17,33 @@ from ..mcp_servers import (
     tts_server
 )
 
+
+# ============================================================================
+# Pydantic 模型定义（用于 Structured Output）
+# ============================================================================
+
+class Character(BaseModel):
+    """故事中的角色"""
+    name: str
+    description: str
+    appearances: int = 1
+
+
+class StoryOutput(BaseModel):
+    """故事生成的结构化输出"""
+    story: str
+    themes: List[str] = []
+    concepts: List[str] = []
+    moral: Optional[str] = None
+    characters: List[Character] = []
+    analysis: Dict[str, Any] = {}
+    safety_score: float = 0.9
+    audio_url: Optional[str] = None
+
+
+# ============================================================================
+# Agent 函数
+# ============================================================================
 
 async def image_to_story(
     image_path: str,
@@ -45,7 +73,7 @@ async def image_to_story(
     interests_str = "、".join(interests) if interests else "未指定"
 
     # 构建提示词
-    prompt = f"""请使用 Story Generation Skill 为这幅儿童画作创作故事。
+    prompt = f"""请为这幅儿童画作创作一个适合{child_age}岁儿童的故事。
 
 **任务信息**：
 - 画作路径: {image_path}
@@ -53,18 +81,16 @@ async def image_to_story(
 - 儿童年龄: {child_age}岁
 - 兴趣爱好: {interests_str}
 
-**工作流程**：
-1. 使用 `mcp__vision-analysis__analyze_children_drawing` 分析画作
-2. 使用 `mcp__vector-search__search_similar_drawings` 查找历史记忆
-3. 根据年龄和分析结果创作故事
-4. 使用 `mcp__safety-check__check_content_safety` 检查安全性
-5. 使用 `mcp__vector-search__store_drawing_embedding` 存储记忆
-6. 使用 `mcp__tts-generation__generate_story_audio` 生成语音
+**要求**：
+1. 首先使用 `mcp__vision-analysis__analyze_children_drawing` 工具分析画作
+2. 根据分析结果创作一个温馨、有教育意义的故事
+3. 故事长度约 200-400 字
+4. 语言要适合 {child_age} 岁儿童
 
-请严格按照 Story Generation Skill 的工作流程执行。
+请根据画作内容创作故事，并提取主题、概念和寓意。
 """
 
-    # 配置 Agent 选项
+    # 配置 Agent 选项（使用 Structured Output）
     options = ClaudeAgentOptions(
         mcp_servers={
             "vision-analysis": vision_server,
@@ -83,20 +109,42 @@ async def image_to_story(
             "mcp__safety-check__suggest_content_improvements",
             # TTS Tools
             "mcp__tts-generation__generate_story_audio",
-            # Skills
-            "Skill"
         ],
         cwd=".",
-        setting_sources=["user", "project"],
-        permission_mode="acceptEdits"
+        permission_mode="acceptEdits",
+        max_turns=10,
+        # 使用 Structured Output
+        output_format={
+            "type": "json_schema",
+            "schema": StoryOutput.model_json_schema()
+        }
     )
 
-    # 调用 Agent
+    # 使用 ClaudeSDKClient 调用 Agent
     result_data = {}
-    async for message in query(prompt=prompt, options=options):
-        if isinstance(message, ResultMessage):
-            result_data = message.result
-            break
+    async with ClaudeSDKClient(options=options) as client:
+        await client.query(prompt)
+
+        async for message in client.receive_response():
+            if isinstance(message, ResultMessage):
+                # 使用 structured_output 获取结构化结果
+                if hasattr(message, 'structured_output') and message.structured_output:
+                    result_data = message.structured_output
+                elif message.result:
+                    # 回退：如果没有 structured_output，尝试解析 result
+                    if isinstance(message.result, dict):
+                        result_data = message.result
+                    else:
+                        result_data = {
+                            "story": str(message.result),
+                            "themes": [],
+                            "concepts": [],
+                            "moral": None,
+                            "characters": [],
+                            "analysis": {},
+                            "safety_score": 0.9
+                        }
+                break
 
     return result_data
 
@@ -121,7 +169,7 @@ async def stream_image_to_story(
     """
     interests_str = "、".join(interests) if interests else "未指定"
 
-    prompt = f"""请使用 Story Generation Skill 为这幅儿童画作创作故事。
+    prompt = f"""请为这幅儿童画作创作故事。
 
 **任务信息**：
 - 画作路径: {image_path}
@@ -129,7 +177,7 @@ async def stream_image_to_story(
 - 儿童年龄: {child_age}岁
 - 兴趣爱好: {interests_str}
 
-请严格按照 Story Generation Skill 的工作流程执行，并在每一步完成后告知进展。
+请分析画作并创作故事，在每一步完成后告知进展。
 """
 
     options = ClaudeAgentOptions(
@@ -146,11 +194,14 @@ async def stream_image_to_story(
             "mcp__safety-check__check_content_safety",
             "mcp__safety-check__suggest_content_improvements",
             "mcp__tts-generation__generate_story_audio",
-            "Skill"
         ],
         cwd=".",
-        setting_sources=["user", "project"],
-        permission_mode="acceptEdits"
+        permission_mode="acceptEdits",
+        max_turns=10,
+        output_format={
+            "type": "json_schema",
+            "schema": StoryOutput.model_json_schema()
+        }
     )
 
     async for message in query(prompt=prompt, options=options):

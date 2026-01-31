@@ -7,9 +7,11 @@ Creative Agent FastAPI Application
 import os
 from datetime import datetime
 from contextlib import asynccontextmanager
+from pathlib import Path
 from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from fastapi.exceptions import RequestValidationError
 from dotenv import load_dotenv
 
@@ -184,6 +186,22 @@ async def health_check():
         timestamp=datetime.now(),
         services=services_status
     )
+
+
+# ============================================================================
+# Static Files (Audio, Uploads)
+# ============================================================================
+
+# 获取数据目录路径
+_backend_dir = Path(__file__).parent.parent
+_data_dir = _backend_dir / "data"
+
+# 确保目录存在
+(_data_dir / "audio").mkdir(parents=True, exist_ok=True)
+(_data_dir / "uploads").mkdir(parents=True, exist_ok=True)
+
+# 挂载静态文件
+app.mount("/data", StaticFiles(directory=str(_data_dir)), name="data")
 
 
 # ============================================================================

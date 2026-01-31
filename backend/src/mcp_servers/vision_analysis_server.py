@@ -15,8 +15,8 @@ from claude_agent_sdk import tool, create_sdk_mcp_server
 
 
 @tool(
-    name="analyze_children_drawing",
-    description="""分析儿童画作，识别画面中的物体、场景、情绪和颜色。
+    "analyze_children_drawing",
+    """分析儿童画作，识别画面中的物体、场景、情绪和颜色。
 
     这个工具会：
     1. 识别画作中的物体（动物、人物、植物、物品等）
@@ -26,22 +26,7 @@ from claude_agent_sdk import tool, create_sdk_mcp_server
     5. 检测是否有重复出现的角色
 
     返回结构化的分析结果。""",
-    input_schema={
-        "type": "object",
-        "properties": {
-            "image_path": {
-                "type": "string",
-                "description": "儿童画作的图片文件路径（支持 PNG, JPG, JPEG）"
-            },
-            "child_age": {
-                "type": "integer",
-                "description": "儿童年龄（3-12岁），用于调整分析重点",
-                "minimum": 3,
-                "maximum": 12
-            }
-        },
-        "required": ["image_path", "child_age"]
-    }
+    {"image_path": str, "child_age": int}
 )
 async def analyze_children_drawing(args: Dict[str, Any]) -> Dict[str, Any]:
     """
@@ -120,7 +105,7 @@ async def analyze_children_drawing(args: Dict[str, Any]) -> Dict[str, Any]:
 
     try:
         response = client.messages.create(
-            model="claude-3-5-sonnet-20241022",
+            model="claude-sonnet-4-20250514",
             max_tokens=1024,
             messages=[{
                 "role": "user",

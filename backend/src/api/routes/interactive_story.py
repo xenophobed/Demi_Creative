@@ -23,82 +23,17 @@ from ..models import (
     SessionStatus as SessionStatusEnum
 )
 from ...services import session_manager
+from ...agents.interactive_story_agent import (
+    generate_story_opening,
+    generate_next_segment,
+    AGE_CONFIG
+)
 
 
 router = APIRouter(
     prefix="/api/v1/story/interactive",
     tags=["互动故事"]
 )
-
-
-# TODO: 实现互动故事生成逻辑（当前为模拟实现）
-async def generate_story_opening(
-    child_id: str,
-    age_group: str,
-    interests: List[str],
-    theme: str = None
-) -> dict:
-    """
-    生成故事开场
-
-    TODO: 调用 Interactive Story Skill
-    """
-    # 模拟故事开场
-    return {
-        "title": f"{'神秘的' if not theme else theme}冒险之旅",
-        "segment": {
-            "segment_id": 0,
-            "text": f"在一个阳光明媚的早晨，小主人公发现了一个神秘的{interests[0] if interests else '宝箱'}...",
-            "choices": [
-                {"choice_id": "choice_0_a", "text": "立刻打开看看", "emoji": "🔓"},
-                {"choice_id": "choice_0_b", "text": "先找朋友一起来", "emoji": "👫"}
-            ]
-        }
-    }
-
-
-async def generate_next_segment(
-    session_id: str,
-    choice_id: str,
-    session_data: dict
-) -> dict:
-    """
-    根据选择生成下一段落
-
-    TODO: 调用 Interactive Story Skill
-    """
-    segment_count = len(session_data.get("segments", []))
-
-    # 模拟生成下一段
-    if segment_count < 3:
-        # 继续故事
-        return {
-            "segment": {
-                "segment_id": segment_count,
-                "text": "故事继续发展...",
-                "choices": [
-                    {"choice_id": f"choice_{segment_count}_a", "text": "选项A", "emoji": "⭐"},
-                    {"choice_id": f"choice_{segment_count}_b", "text": "选项B", "emoji": "🌟"}
-                ]
-            },
-            "is_ending": False
-        }
-    else:
-        # 结局
-        return {
-            "segment": {
-                "segment_id": segment_count,
-                "text": "经过重重冒险，小主人公终于达成了目标！这是一个美好的结局。",
-                "choices": [],
-                "is_ending": True
-            },
-            "is_ending": True,
-            "educational_summary": {
-                "themes": ["勇气", "友谊"],
-                "concepts": ["决策", "合作"],
-                "moral": "勇敢面对挑战，和朋友一起会更有力量"
-            }
-        }
 
 
 @router.post(
@@ -141,7 +76,10 @@ async def start_interactive_story(
             theme=request.theme
         )
 
-        # 2. 创建会话
+        # 2. 创建会话（根据年龄组确定总段落数）
+        age_config = AGE_CONFIG.get(request.age_group.value, AGE_CONFIG["6-8"])
+        total_segments = age_config["total_segments"]
+
         session = session_manager.create_session(
             child_id=request.child_id,
             story_title=opening_data["title"],
@@ -150,7 +88,7 @@ async def start_interactive_story(
             theme=request.theme,
             voice=request.voice.value,
             enable_audio=request.enable_audio,
-            total_segments=5  # 预计总段落数
+            total_segments=total_segments
         )
 
         # 3. 保存开场段落
@@ -238,13 +176,17 @@ async def choose_story_branch(
                 detail=f"会话已{session.status}，无法继续"
             )
 
-        # 3. 生成下一段
+        # 3. 生成下一段（传递完整的会话上下文）
         next_data = await generate_next_segment(
             session_id=session_id,
             choice_id=request.choice_id,
             session_data={
                 "segments": session.segments,
-                "choice_history": session.choice_history
+                "choice_history": session.choice_history,
+                "age_group": session.age_group,
+                "interests": session.interests,
+                "theme": session.theme,
+                "story_title": session.story_title
             }
         )
 
