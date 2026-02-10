@@ -1,45 +1,33 @@
-import { useState, useCallback } from 'react'
+import { useCallback } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { storyService } from '@/api/services/storyService'
 import { getErrorMessage } from '@/api/client'
 import useStoryStore from '@/store/useStoryStore'
 import useChildStore from '@/store/useChildStore'
-import type { AgeGroup, VoiceType, ImageToStoryResponse, StreamCallbacks } from '@/types/api'
-
-interface StreamingState {
-  isStreaming: boolean
-  streamStatus: string
-  streamMessage: string
-  thinkingContent: string
-  currentTurn: number
-}
+import { storyGenerationManager } from '@/services/storyGenerationManager'
+import type { AgeGroup, VoiceType } from '@/types/api'
 
 interface UseStoryGenerationOptions {
   onSuccess?: () => void
   onError?: (error: string) => void
 }
 
-const initialStreamingState: StreamingState = {
-  isStreaming: false,
-  streamStatus: '',
-  streamMessage: '',
-  thinkingContent: '',
-  currentTurn: 0,
-}
-
 export function useStoryGeneration(options?: UseStoryGenerationOptions) {
   const navigate = useNavigate()
-  const [streaming, setStreaming] = useState<StreamingState>(initialStreamingState)
 
   const {
     selectedImage,
     selectedVoice,
     enableAudio,
+    uploadStatus,
+    streaming,
+    generationInProgress,
     setUploadStatus,
     setUploadError,
     setCurrentStory,
     reset,
+    resetStreaming,
   } = useStoryStore()
 
   const { currentChild, defaultChildId } = useChildStore()
@@ -99,118 +87,37 @@ export function useStoryGeneration(options?: UseStoryGenerationOptions) {
     })
   }
 
-  // Streaming generate
+  // Streaming generate — delegates to the singleton manager
   const generateStream = useCallback(
-    async (ageGroup: AgeGroup, interests?: string[]) => {
-      if (!selectedImage) {
-        setUploadError('Please select an image first')
-        return
-      }
-
-      setUploadStatus('uploading')
-      setUploadError(null)
-      setStreaming({
-        isStreaming: true,
-        streamStatus: 'started',
-        streamMessage: 'Uploading image...',
-        thinkingContent: '',
-        currentTurn: 0,
-      })
-
-      const childId = currentChild?.child_id || defaultChildId
-
-      const callbacks: StreamCallbacks = {
-        onStatus: (data) => {
-          setStreaming((prev) => ({
-            ...prev,
-            streamStatus: data.status,
-            streamMessage: data.message,
-          }))
-          if (data.status === 'started') {
-            setUploadStatus('processing')
-          }
-        },
-        onThinking: (data) => {
-          setStreaming((prev) => ({
-            ...prev,
-            thinkingContent: data.content,
-            currentTurn: data.turn,
-          }))
-        },
-        onToolUse: (data) => {
-          setStreaming((prev) => ({
-            ...prev,
-            streamMessage: data.message,
-          }))
-        },
-        onResult: (data) => {
-          const storyData = data as ImageToStoryResponse
-          setUploadStatus('success')
-          setCurrentStory(storyData)
-          options?.onSuccess?.()
-          navigate(`/story/${storyData.story_id}`)
-        },
-        onComplete: () => {
-          setStreaming(initialStreamingState)
-        },
-        onError: (data) => {
-          setUploadStatus('error')
-          setUploadError(data.message)
-          setStreaming(initialStreamingState)
-          options?.onError?.(data.message)
-        },
-      }
-
-      try {
-        await storyService.generateStoryFromImageStream(
-          selectedImage,
-          {
-            childId,
-            ageGroup,
-            interests,
-            voice: selectedVoice,
-            enableAudio,
-          },
-          callbacks
-        )
-      } catch (err) {
-        const message = getErrorMessage(err)
-        setUploadStatus('error')
-        setUploadError(message)
-        setStreaming(initialStreamingState)
-        options?.onError?.(message)
-      }
+    (ageGroup: AgeGroup, interests?: string[]) => {
+      storyGenerationManager.startGeneration(ageGroup, interests)
     },
-    [
-      selectedImage,
-      selectedVoice,
-      enableAudio,
-      currentChild,
-      defaultChildId,
-      setUploadStatus,
-      setUploadError,
-      setCurrentStory,
-      navigate,
-      options,
-    ]
+    []
   )
+
+  const cancel = useCallback(() => {
+    storyGenerationManager.cancelGeneration()
+  }, [])
 
   const resetAll = () => {
     reset()
     mutation.reset()
-    setStreaming(initialStreamingState)
+    resetStreaming()
   }
 
   return {
     generate,
     generateStream,
+    cancel,
     reset: resetAll,
     isLoading: mutation.isPending || streaming.isStreaming,
+    isGenerating: generationInProgress,
     isError: mutation.isError,
     isSuccess: mutation.isSuccess,
     error: mutation.error ? getErrorMessage(mutation.error) : null,
     data: mutation.data,
     streaming,
+    uploadStatus,
   }
 }
 

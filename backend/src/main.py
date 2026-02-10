@@ -7,7 +7,6 @@ Creative Agent FastAPI Application
 import os
 from datetime import datetime
 from contextlib import asynccontextmanager
-from pathlib import Path
 from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -16,7 +15,9 @@ from fastapi.exceptions import RequestValidationError
 from dotenv import load_dotenv
 
 from .api.models import ErrorResponse, ErrorDetail, HealthCheckResponse
-from .services import session_manager
+from .paths import DATA_DIR, UPLOAD_DIR, AUDIO_DIR, VIDEO_DIR, VIDEO_JOBS_DIR
+from .services.database import db_manager, session_repo
+from .services.database.schema import init_schema, migrate_json_sessions
 
 
 # 加载环境变量
@@ -33,14 +34,30 @@ async def lifespan(app: FastAPI):
     # 启动时
     print("🚀 Creative Agent API Starting...")
 
+    # 连接数据库
+    await db_manager.connect()
+    print("📦 Database connected")
+
+    # 初始化schema
+    await init_schema(db_manager)
+
+    # 迁移JSON会话数据
+    migrated = await migrate_json_sessions(db_manager)
+    if migrated > 0:
+        print(f"📂 Migrated {migrated} JSON sessions to database")
+
     # 清理过期会话
-    cleaned = session_manager.cleanup_expired_sessions()
+    cleaned = await session_repo.cleanup_expired_sessions()
     print(f"🧹 Cleaned up {cleaned} expired sessions")
 
     yield
 
     # 关闭时
     print("👋 Creative Agent API Shutting down...")
+
+    # 断开数据库连接
+    await db_manager.disconnect()
+    print("📦 Database disconnected")
 
 
 # ============================================================================
@@ -162,9 +179,8 @@ async def root():
 )
 async def health_check():
     """健康检查端点"""
-    # 检查会话管理器
-    sessions_dir = session_manager.sessions_dir
-    sessions_accessible = sessions_dir.exists() and sessions_dir.is_dir()
+    # 检查数据库连接
+    db_connected = db_manager.is_connected
 
     # 检查环境变量
     required_env_vars = ["ANTHROPIC_API_KEY", "OPENAI_API_KEY"]
@@ -172,7 +188,7 @@ async def health_check():
 
     services_status = {
         "api": "running",
-        "session_manager": "running" if sessions_accessible else "degraded",
+        "database": "running" if db_connected else "disconnected",
         "environment": "configured" if env_vars_set else "missing_keys"
     }
 
@@ -192,26 +208,27 @@ async def health_check():
 # Static Files (Audio, Uploads)
 # ============================================================================
 
-# 获取数据目录路径
-_backend_dir = Path(__file__).parent.parent
-_data_dir = _backend_dir / "data"
-
 # 确保目录存在
-(_data_dir / "audio").mkdir(parents=True, exist_ok=True)
-(_data_dir / "uploads").mkdir(parents=True, exist_ok=True)
+AUDIO_DIR.mkdir(parents=True, exist_ok=True)
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+VIDEO_DIR.mkdir(parents=True, exist_ok=True)
+VIDEO_JOBS_DIR.mkdir(parents=True, exist_ok=True)
 
 # 挂载静态文件
-app.mount("/data", StaticFiles(directory=str(_data_dir)), name="data")
+app.mount("/data", StaticFiles(directory=str(DATA_DIR)), name="data")
 
 
 # ============================================================================
 # API Routes
 # ============================================================================
 
-from .api.routes import image_to_story, interactive_story
+from .api.routes import image_to_story, interactive_story, audio, video, users
 
 app.include_router(image_to_story.router)
 app.include_router(interactive_story.router)
+app.include_router(audio.router)
+app.include_router(video.router)
+app.include_router(users.router)
 
 
 # ============================================================================

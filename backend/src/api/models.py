@@ -17,8 +17,8 @@ from pydantic import BaseModel, Field, field_validator
 class AgeGroup(str, Enum):
     """年龄组"""
     AGE_3_5 = "3-5"
-    AGE_6_8 = "6-8"
-    AGE_9_12 = "9-12"
+    AGE_6_9 = "6-9"
+    AGE_10_12 = "10-12"
 
 
 class VoiceType(str, Enum):
@@ -44,6 +44,21 @@ class SessionStatus(str, Enum):
     EXPIRED = "expired"
 
 
+class VideoStyle(str, Enum):
+    """视频风格"""
+    GENTLE_ANIMATION = "gentle_animation"  # 温和动画，通用儿童友好风格
+    PLAYFUL = "playful"                    # 活泼风格
+    STORYBOOK = "storybook"                # 绘本风格
+
+
+class VideoStatus(str, Enum):
+    """视频生成状态"""
+    PENDING = "pending"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
 # ============================================================================
 # 画作转故事 API Models
 # ============================================================================
@@ -58,7 +73,7 @@ class ImageToStoryRequest(BaseModel):
     )
     age_group: AgeGroup = Field(
         ...,
-        description="年龄组：3-5, 6-8, 9-12"
+        description="年龄组：3-5, 6-9, 10-12"
     )
     interests: Optional[List[str]] = Field(
         default=None,
@@ -107,7 +122,10 @@ class ImageToStoryResponse(BaseModel):
     """画作转故事响应"""
     story_id: str = Field(..., description="故事唯一ID")
     story: StoryContent = Field(..., description="故事内容")
+    image_url: Optional[str] = Field(None, description="画作图片URL")
     audio_url: Optional[str] = Field(None, description="语音文件URL")
+    video_url: Optional[str] = Field(None, description="视频文件URL")
+    video_job_id: Optional[str] = Field(None, description="视频生成任务ID")
     educational_value: EducationalValue = Field(..., description="教育价值")
     characters: List[CharacterMemory] = Field(
         default_factory=list,
@@ -183,6 +201,19 @@ class StorySegment(BaseModel):
     is_ending: bool = Field(
         default=False,
         description="是否为结局"
+    )
+    # Optional content support for age-based behavior
+    primary_mode: str = Field(
+        default="both",
+        description="主要内容模式: 'audio' | 'text' | 'both'"
+    )
+    optional_content_available: bool = Field(
+        default=False,
+        description="是否有可选内容按钮"
+    )
+    optional_content_type: Optional[str] = Field(
+        None,
+        description="可选内容类型: 'text' (3-5岁显示文字) | 'audio' (10-12岁播放语音)"
     )
 
 
@@ -268,4 +299,167 @@ class HealthCheckResponse(BaseModel):
     services: Dict[str, str] = Field(
         default_factory=dict,
         description="依赖服务状态"
+    )
+
+
+# ============================================================================
+# 视频生成 API Models
+# ============================================================================
+
+class VideoJobRequest(BaseModel):
+    """视频生成请求"""
+    story_id: str = Field(..., description="故事ID")
+    style: VideoStyle = Field(
+        default=VideoStyle.GENTLE_ANIMATION,
+        description="视频风格"
+    )
+    include_audio: bool = Field(
+        default=True,
+        description="是否包含音频旁白"
+    )
+    duration_seconds: int = Field(
+        default=10,
+        ge=5,
+        le=30,
+        description="视频时长（秒）"
+    )
+
+
+class VideoJobResponse(BaseModel):
+    """视频生成任务响应"""
+    job_id: str = Field(..., description="任务ID")
+    story_id: str = Field(..., description="故事ID")
+    status: VideoStatus = Field(..., description="任务状态")
+    estimated_completion: Optional[datetime] = Field(
+        None,
+        description="预计完成时间"
+    )
+    created_at: datetime = Field(
+        default_factory=datetime.now,
+        description="创建时间"
+    )
+
+
+class VideoJobStatusResponse(BaseModel):
+    """视频任务状态响应"""
+    job_id: str = Field(..., description="任务ID")
+    status: VideoStatus = Field(..., description="任务状态")
+    progress_percent: int = Field(
+        default=0,
+        ge=0,
+        le=100,
+        description="进度百分比"
+    )
+    video_url: Optional[str] = Field(None, description="视频URL")
+    error_message: Optional[str] = Field(None, description="错误信息")
+    created_at: datetime = Field(..., description="创建时间")
+    completed_at: Optional[datetime] = Field(None, description="完成时间")
+
+
+# ============================================================================
+# 用户认证 API Models
+# ============================================================================
+
+class UserRegisterRequest(BaseModel):
+    """用户注册请求"""
+    username: str = Field(
+        ...,
+        min_length=3,
+        max_length=50,
+        description="用户名"
+    )
+    email: str = Field(
+        ...,
+        description="邮箱地址"
+    )
+    password: str = Field(
+        ...,
+        min_length=6,
+        description="密码，至少6个字符"
+    )
+    display_name: Optional[str] = Field(
+        None,
+        max_length=100,
+        description="显示名称"
+    )
+
+    @field_validator('email')
+    @classmethod
+    def validate_email(cls, v):
+        if "@" not in v or "." not in v:
+            raise ValueError("邮箱格式不正确")
+        return v.lower()
+
+    @field_validator('username')
+    @classmethod
+    def validate_username(cls, v):
+        if not v.replace("_", "").replace("-", "").isalnum():
+            raise ValueError("用户名只能包含字母、数字、下划线和连字符")
+        return v.lower()
+
+
+class UserLoginRequest(BaseModel):
+    """用户登录请求"""
+    username_or_email: str = Field(
+        ...,
+        description="用户名或邮箱"
+    )
+    password: str = Field(
+        ...,
+        description="密码"
+    )
+
+
+class UserResponse(BaseModel):
+    """用户信息响应"""
+    user_id: str = Field(..., description="用户唯一ID")
+    username: str = Field(..., description="用户名")
+    email: str = Field(..., description="邮箱")
+    display_name: Optional[str] = Field(None, description="显示名称")
+    avatar_url: Optional[str] = Field(None, description="头像URL")
+    is_active: bool = Field(..., description="是否激活")
+    is_verified: bool = Field(..., description="是否已验证")
+    created_at: datetime = Field(..., description="注册时间")
+    last_login_at: Optional[datetime] = Field(None, description="最后登录时间")
+
+
+class UserWithStatsResponse(UserResponse):
+    """User info with content statistics"""
+    story_count: int = Field(0, description="Total stories created")
+    session_count: int = Field(0, description="Total interactive sessions")
+
+
+class TokenResponse(BaseModel):
+    """令牌响应"""
+    access_token: str = Field(..., description="访问令牌")
+    token_type: str = Field(default="bearer", description="令牌类型")
+    expires_in: int = Field(..., description="过期时间（秒）")
+
+
+class AuthResponse(BaseModel):
+    """认证响应（登录/注册）"""
+    user: UserResponse = Field(..., description="用户信息")
+    token: TokenResponse = Field(..., description="访问令牌")
+
+
+class ChangePasswordRequest(BaseModel):
+    """修改密码请求"""
+    old_password: str = Field(..., description="旧密码")
+    new_password: str = Field(
+        ...,
+        min_length=6,
+        description="新密码，至少6个字符"
+    )
+
+
+class UpdateProfileRequest(BaseModel):
+    """更新资料请求"""
+    display_name: Optional[str] = Field(
+        None,
+        max_length=100,
+        description="显示名称"
+    )
+    avatar_url: Optional[str] = Field(
+        None,
+        description="头像URL"
     )

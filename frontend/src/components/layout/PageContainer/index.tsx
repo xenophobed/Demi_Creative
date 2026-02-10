@@ -1,10 +1,28 @@
-import { Outlet, Link, useLocation } from 'react-router-dom'
+import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { AnimatedBackground } from '@/components/depth/AnimatedBackground'
 import { ConfettiController } from '@/components/effects/Confetti'
+import GenerationStatusBar from '@/components/layout/GenerationStatusBar'
+import useGenerationNavigator from '@/hooks/useGenerationNavigator'
+import useAuthStore from '@/store/useAuthStore'
+import { authService } from '@/api/services/authService'
 
 function PageContainer() {
   const location = useLocation()
+  const navigate = useNavigate()
+  const { isAuthenticated, user, logout } = useAuthStore()
+
+  useGenerationNavigator()
+
+  const handleLogout = async () => {
+    try {
+      await authService.logout()
+    } catch {
+      // Ignore logout errors
+    }
+    logout()
+    navigate('/')
+  }
 
   return (
     <div className="min-h-screen gradient-bg relative">
@@ -27,18 +45,67 @@ function PageContainer() {
                 🎨
               </motion.span>
               <span className="text-xl font-bold text-gradient">
-                Creative Studio
+                Creative Workshop
               </span>
             </Link>
 
             {/* Navigation links */}
             <div className="flex items-center gap-4">
-              <NavLink to="/upload" icon="✏️" label="Create" />
               <NavLink to="/history" icon="📚" label="My Stories" />
+
+              {/* Auth section */}
+              {isAuthenticated ? (
+                <div className="flex items-center gap-3 ml-2 pl-4 border-l border-gray-200">
+                  <Link to="/profile">
+                    <motion.div
+                      className="flex items-center gap-2 text-gray-600"
+                      whileHover={{ scale: 1.02 }}
+                    >
+                      <span className="text-xl">
+                        {user?.avatar_url ? (
+                          <img
+                            src={user.avatar_url}
+                            alt="avatar"
+                            className="w-7 h-7 rounded-full object-cover"
+                          />
+                        ) : (
+                          '👤'
+                        )}
+                      </span>
+                      <span className="text-sm font-medium hidden sm:inline">
+                        {user?.display_name || user?.username}
+                      </span>
+                    </motion.div>
+                  </Link>
+                  <motion.button
+                    onClick={handleLogout}
+                    className="text-gray-500 hover:text-red-500 transition-colors p-2"
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.95 }}
+                    title="Sign Out"
+                  >
+                    🚪
+                  </motion.button>
+                </div>
+              ) : (
+                <Link to="/login">
+                  <motion.div
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-btn font-medium bg-secondary text-white shadow-button"
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                  >
+                    <span>👤</span>
+                    <span>Sign In</span>
+                  </motion.div>
+                </Link>
+              )}
             </div>
           </div>
         </div>
       </nav>
+
+      {/* Generation progress bar (visible when generating on other pages) */}
+      <GenerationStatusBar />
 
       {/* Main content area */}
       <main className="max-w-4xl mx-auto px-4 py-8 relative z-10">

@@ -17,6 +17,28 @@ import type {
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1'
 
 /**
+ * Get auth token from localStorage for raw fetch() calls.
+ * The axios client handles this via interceptors, but SSE streams use raw fetch.
+ */
+function getAuthToken(): string | null {
+  try {
+    const authStorage = localStorage.getItem('auth-storage')
+    if (authStorage) {
+      const { state } = JSON.parse(authStorage)
+      return state?.token || null
+    }
+  } catch {
+    // Ignore parsing errors
+  }
+  return null
+}
+
+function getAuthHeaders(): Record<string, string> {
+  const token = getAuthToken()
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
+
+/**
  * 故事服务 API
  */
 export const storyService = {
@@ -77,7 +99,8 @@ export const storyService = {
       voice?: VoiceType
       enableAudio?: boolean
     },
-    callbacks: StreamCallbacks
+    callbacks: StreamCallbacks,
+    signal?: AbortSignal
   ): Promise<void> {
     const formData = new FormData()
     formData.append('image', image)
@@ -96,7 +119,9 @@ export const storyService = {
 
     const response = await fetch(`${API_BASE_URL}/image-to-story/stream`, {
       method: 'POST',
+      headers: getAuthHeaders(),
       body: formData,
+      signal,
     })
 
     if (!response.ok) {
@@ -238,6 +263,7 @@ export const storyService = {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        ...getAuthHeaders(),
       },
       body: JSON.stringify(params),
     })
@@ -322,6 +348,7 @@ export const storyService = {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...getAuthHeaders(),
         },
         body: JSON.stringify(choice),
       }

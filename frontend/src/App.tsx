@@ -9,17 +9,24 @@ const UploadPage = lazy(() => import('./pages/UploadPage'))
 const StoryPage = lazy(() => import('./pages/StoryPage'))
 const HistoryPage = lazy(() => import('./pages/HistoryPage'))
 const InteractiveStoryPage = lazy(() => import('./pages/InteractiveStoryPage'))
+const LoginPage = lazy(() => import('./pages/LoginPage'))
+const ProfilePage = lazy(() => import('./pages/ProfilePage'))
 
 function App() {
   return (
     <Suspense fallback={<Loading fullScreen message="Loading..." />}>
       <Routes>
+        {/* Auth routes (no page container) */}
+        <Route path="/login" element={<LoginPage />} />
+
+        {/* Main app routes */}
         <Route path="/" element={<PageContainer />}>
           <Route index element={<HomePage />} />
           <Route path="upload" element={<UploadPage />} />
           <Route path="story/:storyId" element={<StoryPage />} />
           <Route path="history" element={<HistoryPage />} />
           <Route path="interactive" element={<InteractiveStoryPage />} />
+          <Route path="profile" element={<ProfilePage />} />
         </Route>
       </Routes>
     </Suspense>

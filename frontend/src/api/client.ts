@@ -13,10 +13,21 @@ const apiClient: AxiosInstance = axios.create({
   },
 })
 
-// Request interceptor
+// Request interceptor - adds auth token to requests
 apiClient.interceptors.request.use(
   (config) => {
-    // Can add auth token here
+    // Get token from localStorage (persisted by auth store)
+    try {
+      const authStorage = localStorage.getItem('auth-storage')
+      if (authStorage) {
+        const { state } = JSON.parse(authStorage)
+        if (state?.token) {
+          config.headers.Authorization = `Bearer ${state.token}`
+        }
+      }
+    } catch {
+      // Ignore parsing errors
+    }
     return config
   },
   (error) => {

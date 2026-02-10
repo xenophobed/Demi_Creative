@@ -1,25 +1,46 @@
 import { create } from 'zustand'
-import type { ImageToStoryResponse, UploadStatus, VoiceType } from '@/types/api'
+import type { ImageToStoryResponse, UploadStatus, VoiceType, SSEStatusData, SSEThinkingData } from '@/types/api'
+
+export interface StreamingState {
+  isStreaming: boolean
+  streamStatus: string
+  streamMessage: string
+  thinkingContent: string
+  currentTurn: number
+}
+
+export const initialStreamingState: StreamingState = {
+  isStreaming: false,
+  streamStatus: '',
+  streamMessage: '',
+  thinkingContent: '',
+  currentTurn: 0,
+}
 
 interface StoryState {
-  // 当前故事
+  // Current story
   currentStory: ImageToStoryResponse | null
 
-  // 上传状态
+  // Upload status
   uploadStatus: UploadStatus
   uploadProgress: number
   uploadError: string | null
 
-  // 选中的图片
+  // Selected image
   selectedImage: File | null
   imagePreviewUrl: string | null
 
-  // 语音设置
+  // Voice settings
   selectedVoice: VoiceType
   enableAudio: boolean
 
-  // 故事历史（本地缓存）
+  // Story history (local cache)
   storyHistory: ImageToStoryResponse[]
+
+  // Streaming state (persisted across navigation)
+  streaming: StreamingState
+  generationInProgress: boolean
+  generationError: string | null
 
   // Actions
   setCurrentStory: (story: ImageToStoryResponse | null) => void
@@ -32,6 +53,15 @@ interface StoryState {
   addToHistory: (story: ImageToStoryResponse) => void
   clearHistory: () => void
   reset: () => void
+
+  // Streaming actions
+  startStreaming: () => void
+  updateStreamStatus: (data: SSEStatusData) => void
+  updateThinking: (data: SSEThinkingData) => void
+  setStreamMessage: (message: string) => void
+  stopStreaming: () => void
+  setGenerationError: (error: string | null) => void
+  resetStreaming: () => void
 }
 
 const useStoryStore = create<StoryState>((set, get) => ({
@@ -44,6 +74,9 @@ const useStoryStore = create<StoryState>((set, get) => ({
   selectedVoice: 'nova',
   enableAudio: true,
   storyHistory: [],
+  streaming: initialStreamingState,
+  generationInProgress: false,
+  generationError: null,
 
   setCurrentStory: (story) => {
     set({ currentStory: story })
@@ -101,7 +134,6 @@ const useStoryStore = create<StoryState>((set, get) => ({
   clearHistory: () => set({ storyHistory: [] }),
 
   reset: () => {
-    // 释放预览 URL
     const oldUrl = get().imagePreviewUrl
     if (oldUrl) {
       URL.revokeObjectURL(oldUrl)
@@ -114,6 +146,76 @@ const useStoryStore = create<StoryState>((set, get) => ({
       uploadError: null,
       selectedImage: null,
       imagePreviewUrl: null,
+      streaming: initialStreamingState,
+      generationInProgress: false,
+      generationError: null,
+    })
+  },
+
+  // Streaming actions
+  startStreaming: () => {
+    set({
+      streaming: {
+        isStreaming: true,
+        streamStatus: 'started',
+        streamMessage: 'Uploading image...',
+        thinkingContent: '',
+        currentTurn: 0,
+      },
+      generationInProgress: true,
+      generationError: null,
+    })
+  },
+
+  updateStreamStatus: (data) => {
+    set((state) => ({
+      streaming: {
+        ...state.streaming,
+        streamStatus: data.status,
+        streamMessage: data.message,
+      },
+    }))
+  },
+
+  updateThinking: (data) => {
+    set((state) => ({
+      streaming: {
+        ...state.streaming,
+        thinkingContent: data.content,
+        currentTurn: data.turn,
+      },
+    }))
+  },
+
+  setStreamMessage: (message) => {
+    set((state) => ({
+      streaming: {
+        ...state.streaming,
+        streamMessage: message,
+      },
+    }))
+  },
+
+  stopStreaming: () => {
+    set({
+      streaming: initialStreamingState,
+      generationInProgress: false,
+    })
+  },
+
+  setGenerationError: (error) => {
+    set({
+      generationError: error,
+      generationInProgress: false,
+      streaming: initialStreamingState,
+    })
+  },
+
+  resetStreaming: () => {
+    set({
+      streaming: initialStreamingState,
+      generationInProgress: false,
+      generationError: null,
     })
   },
 }))

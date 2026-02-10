@@ -34,7 +34,6 @@ function UploadPage() {
     imagePreviewUrl,
     selectedVoice,
     enableAudio,
-    uploadStatus,
     uploadError,
     setSelectedImage,
     setSelectedVoice,
@@ -53,7 +52,7 @@ function UploadPage() {
     (currentChild?.interests || []).filter((i) => DEFAULT_INTERESTS.includes(i))
   )
 
-  const { generateStream, isLoading, streaming } = useStoryGeneration()
+  const { generateStream, cancel, isLoading, isGenerating, streaming, uploadStatus: currentUploadStatus } = useStoryGeneration()
 
   const handleAgeGroupSelect = (ageGroup: AgeGroup) => {
     setSelectedAgeGroup(ageGroup)
@@ -82,10 +81,10 @@ function UploadPage() {
 
   // Map streaming state to animation phase
   const getAnimationPhase = (): AnimationPhase => {
-    if (!streaming.isStreaming && uploadStatus !== 'uploading' && uploadStatus !== 'processing') {
+    if (!streaming.isStreaming && currentUploadStatus !== 'uploading' && currentUploadStatus !== 'processing') {
       return 'idle'
     }
-    if (uploadStatus === 'uploading') return 'connecting'
+    if (currentUploadStatus === 'uploading') return 'connecting'
     if (streaming.thinkingContent) return 'thinking'
     if (streaming.streamMessage.includes('tool') || streaming.streamMessage.includes('analyz')) {
       return 'tool_executing'
@@ -96,13 +95,13 @@ function UploadPage() {
   const animationPhase = getAnimationPhase()
 
   // Show loading state with enhanced streaming visualization
-  if (uploadStatus === 'uploading' || uploadStatus === 'processing' || isLoading) {
+  if (currentUploadStatus === 'uploading' || currentUploadStatus === 'processing' || isLoading || isGenerating) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] perspective-1000">
         <PerspectiveContainer enableTilt={false} className="w-full max-w-md">
           <StreamingVisualizer
             phase={animationPhase}
-            message={streaming.streamMessage || getLoadingMessage(uploadStatus)}
+            message={streaming.streamMessage || getLoadingMessage(currentUploadStatus)}
             thinkingContent={streaming.thinkingContent}
             layout="card"
             showParticles={false}
@@ -122,6 +121,17 @@ function UploadPage() {
             <p className="text-gray-400 text-sm mt-2">This may take a moment, please wait</p>
           )}
         </motion.div>
+        <motion.button
+          className="mt-4 px-6 py-2 rounded-full bg-gray-200 hover:bg-red-100 text-gray-600 hover:text-red-600 text-sm font-medium transition-colors"
+          onClick={cancel}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.6 }}
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+        >
+          Cancel Generation
+        </motion.button>
       </div>
     )
   }
@@ -410,7 +420,7 @@ function UploadPage() {
             size="lg"
             className="w-full shadow-lg"
             onClick={handleGenerate}
-            disabled={!isReady}
+            disabled={!isReady || isGenerating}
             isLoading={isLoading}
           >
             {isReady ? (

@@ -2,16 +2,17 @@
 Image to Story API Routes
 
 画作转故事 API 端点
+支持流式响应（SSE）以提供更好的用户体验
 """
 
+import json
 import uuid
-import os
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, AsyncGenerator
 
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, status
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Header, status
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from ..models import (
     ImageToStoryResponse,
@@ -20,7 +21,9 @@ from ..models import (
     CharacterMemory,
     AgeGroup
 )
-from ...agents.image_to_story_agent import image_to_story
+from ...agents.image_to_story_agent import image_to_story, stream_image_to_story
+from ...utils.audio_strategy import get_audio_strategy
+from ...services.database import story_repo
 
 
 router = APIRouter(
@@ -29,29 +32,26 @@ router = APIRouter(
 )
 
 
-# ============================================================================
-# 故事存储（内存存储，生产环境应使用数据库）
-# ============================================================================
-story_storage: Dict[str, Dict[str, Any]] = {}
-
-
-def save_story(story_id: str, response_data: Dict[str, Any]) -> None:
-    """保存故事到存储"""
-    story_storage[story_id] = {
-        **response_data,
-        "stored_at": datetime.now().isoformat()
-    }
-
-
-def get_story(story_id: str) -> Optional[Dict[str, Any]]:
-    """从存储中获取故事"""
-    return story_storage.get(story_id)
+async def _optional_user_id(authorization: Optional[str]) -> Optional[str]:
+    """Extract user_id from Bearer token if present, return None otherwise."""
+    if not authorization:
+        return None
+    parts = authorization.split()
+    if len(parts) != 2 or parts[0].lower() != "bearer":
+        return None
+    try:
+        from ...services.user_service import user_service
+        user = await user_service.validate_token(parts[1])
+        return user.user_id if user else None
+    except Exception:
+        return None
 
 
 # ============================================================================
 # 配置
 # ============================================================================
-UPLOAD_DIR = Path("./data/uploads")
+from ...paths import UPLOAD_DIR
+
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
@@ -133,8 +133,8 @@ def parse_age_group(age_group: str) -> int:
     """
     age_map = {
         "3-5": 4,
-        "6-8": 7,
-        "9-12": 10
+        "6-9": 7,
+        "10-12": 11
     }
     return age_map.get(age_group, 7)
 
@@ -152,7 +152,8 @@ async def create_story_from_image(
     age_group: AgeGroup = Form(..., description="年龄组：3-5, 6-8, 9-12"),
     interests: Optional[str] = Form(None, description="兴趣标签，用逗号分隔（最多5个）"),
     voice: str = Form("nova", description="语音类型"),
-    enable_audio: bool = Form(True, description="是否生成语音")
+    enable_audio: bool = Form(True, description="是否生成语音"),
+    authorization: Optional[str] = Header(None),
 ):
     """
     画作转故事 API
@@ -174,6 +175,9 @@ async def create_story_from_image(
     ```
     """
     try:
+        # 0. Optionally extract user_id from auth token
+        user_id = await _optional_user_id(authorization)
+
         # 1. 验证图片
         validate_image_file(image)
 
@@ -196,7 +200,9 @@ async def create_story_from_image(
             image_path=str(image_path),
             child_id=child_id,
             child_age=child_age,
-            interests=interests_list
+            interests=interests_list,
+            enable_audio=enable_audio,
+            voice=voice
         )
 
         # 5. 解析结果并构建响应
@@ -225,6 +231,15 @@ async def create_story_from_image(
                 appearances=char_data.get("appearances", 1)
             ))
 
+        # 构建图片URL（相对于静态文件服务）
+        image_url = f"/data/uploads/{child_id}/{image_path.name}"
+
+        # Handle audio URL from agent result
+        audio_url = None
+        if result.get("audio_path"):
+            audio_filename = Path(result["audio_path"]).name
+            audio_url = f"/data/audio/{audio_filename}"
+
         # 构建响应
         created_at = datetime.now()
         response = ImageToStoryResponse(
@@ -234,7 +249,8 @@ async def create_story_from_image(
                 word_count=word_count,
                 age_adapted=True
             ),
-            audio_url=result.get("audio_url"),
+            image_url=image_url,
+            audio_url=audio_url,
             educational_value=educational_value,
             characters=characters,
             analysis=result.get("analysis", {}),
@@ -242,15 +258,16 @@ async def create_story_from_image(
             created_at=created_at
         )
 
-        # 保存故事到存储
-        save_story(story_id, {
+        # 保存故事到数据库
+        story_data = {
             "story_id": story_id,
             "story": {
                 "text": story_text,
                 "word_count": word_count,
                 "age_adapted": True
             },
-            "audio_url": result.get("audio_url"),
+            "image_url": image_url,
+            "audio_url": audio_url,
             "educational_value": {
                 "themes": result.get("themes", []),
                 "concepts": result.get("concepts", []),
@@ -270,7 +287,10 @@ async def create_story_from_image(
             "child_id": child_id,
             "age_group": age_group.value,
             "image_path": str(image_path)
-        })
+        }
+        if user_id:
+            story_data["user_id"] = user_id
+        await story_repo.create(story_data)
 
         return response
 
@@ -306,6 +326,158 @@ async def create_story_from_image(
         pass
 
 
+@router.post(
+    "/image-to-story/stream",
+    summary="画作转故事（流式）",
+    description="上传儿童画作，使用 SSE 流式返回故事生成进度",
+    status_code=status.HTTP_200_OK
+)
+async def create_story_from_image_stream(
+    image: UploadFile = File(..., description="儿童画作图片（PNG/JPG，最大10MB）"),
+    child_id: str = Form(..., description="儿童唯一标识符"),
+    age_group: AgeGroup = Form(..., description="年龄组：3-5, 6-8, 9-12"),
+    interests: Optional[str] = Form(None, description="兴趣标签，用逗号分隔（最多5个）"),
+    voice: str = Form("nova", description="语音类型"),
+    enable_audio: bool = Form(True, description="是否生成语音"),
+    authorization: Optional[str] = Header(None),
+):
+    """
+    流式画作转故事 API
+
+    使用 Server-Sent Events (SSE) 流式返回故事生成进度。
+
+    **事件类型**:
+    - `status`: 状态更新 (started, processing)
+    - `thinking`: AI 思考过程
+    - `tool_use`: 工具使用通知（分析画作、安全检查等）
+    - `tool_result`: 工具结果
+    - `result`: 故事内容
+    - `complete`: 生成完成
+    - `error`: 错误信息
+    """
+    # 验证图片
+    try:
+        validate_image_file(image)
+    except HTTPException as e:
+        async def error_generator():
+            yield f"event: error\ndata: {json.dumps({'error': 'ValidationError', 'message': e.detail}, ensure_ascii=False)}\n\n"
+        return StreamingResponse(error_generator(), media_type="text/event-stream")
+
+    # 保存图片
+    try:
+        image_path = await save_upload_file(image, child_id)
+    except HTTPException as e:
+        async def error_generator():
+            yield f"event: error\ndata: {json.dumps({'error': 'UploadError', 'message': e.detail}, ensure_ascii=False)}\n\n"
+        return StreamingResponse(error_generator(), media_type="text/event-stream")
+
+    # 解析参数
+    child_age = parse_age_group(age_group.value)
+    interests_list = None
+    if interests:
+        interests_list = [i.strip() for i in interests.split(",") if i.strip()]
+        if len(interests_list) > 5:
+            async def error_generator():
+                yield f"event: error\ndata: {json.dumps({'error': 'ValidationError', 'message': '兴趣标签最多5个'}, ensure_ascii=False)}\n\n"
+            return StreamingResponse(error_generator(), media_type="text/event-stream")
+
+    # Optionally extract user_id from auth token
+    user_id = await _optional_user_id(authorization)
+
+    # 构建图片URL（相对于静态文件服务）
+    image_url = f"/data/uploads/{child_id}/{image_path.name}"
+
+    async def event_generator() -> AsyncGenerator[str, None]:
+        story_id = str(uuid.uuid4())
+        result_data = None
+
+        try:
+            # 流式生成故事
+            async for event in stream_image_to_story(
+                image_path=str(image_path),
+                child_id=child_id,
+                child_age=child_age,
+                interests=interests_list,
+                enable_audio=enable_audio,
+                voice=voice
+            ):
+                event_type = event.get("type", "message")
+                event_data = event.get("data", {})
+
+                # 当收到结果时，构建完整响应
+                if event_type == "result":
+                    result_data = event_data
+
+                    # 提取故事文本
+                    story_text = result_data.get("story", "")
+                    word_count = len(story_text)
+
+                    # Handle audio URL from agent result
+                    audio_url = None
+                    if result_data.get("audio_path"):
+                        audio_filename = Path(result_data["audio_path"]).name
+                        audio_url = f"/data/audio/{audio_filename}"
+
+                    # 构建完整响应数据
+                    response_data = {
+                        "story_id": story_id,
+                        "story": {
+                            "text": story_text,
+                            "word_count": word_count,
+                            "age_adapted": True
+                        },
+                        "image_url": image_url,
+                        "audio_url": audio_url,
+                        "educational_value": {
+                            "themes": result_data.get("themes", []),
+                            "concepts": result_data.get("concepts", []),
+                            "moral": result_data.get("moral")
+                        },
+                        "characters": [
+                            {
+                                "character_name": c.get("name", ""),
+                                "description": c.get("description", ""),
+                                "appearances": c.get("appearances", 1)
+                            }
+                            for c in result_data.get("characters", [])
+                        ],
+                        "analysis": result_data.get("analysis", {}),
+                        "safety_score": result_data.get("safety_score", 0.9),
+                        "created_at": datetime.now().isoformat()
+                    }
+
+                    # 保存故事到数据库
+                    story_save_data = {
+                        **response_data,
+                        "child_id": child_id,
+                        "age_group": age_group.value,
+                        "image_path": str(image_path)
+                    }
+                    if user_id:
+                        story_save_data["user_id"] = user_id
+                    await story_repo.create(story_save_data)
+
+                    yield f"event: result\ndata: {json.dumps(response_data, ensure_ascii=False)}\n\n"
+
+                else:
+                    # 转发其他事件
+                    yield f"event: {event_type}\ndata: {json.dumps(event_data, ensure_ascii=False)}\n\n"
+
+        except Exception as e:
+            error_data = {"error": str(type(e).__name__), "message": f"故事生成失败: {str(e)}"}
+            yield f"event: error\ndata: {json.dumps(error_data, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        }
+    )
+
+
 @router.get(
     "/stories/{story_id}",
     summary="获取故事",
@@ -330,7 +502,7 @@ async def get_story_by_id(story_id: str):
     curl "http://localhost:8000/api/v1/stories/{story_id}"
     ```
     """
-    story = get_story(story_id)
+    story = await story_repo.get_by_id(story_id)
 
     if not story:
         raise HTTPException(
@@ -360,23 +532,21 @@ async def list_stories(
     **返回**:
     - 故事列表摘要
     """
-    stories = []
+    if child_id:
+        all_stories = await story_repo.list_by_child(child_id, limit)
+    else:
+        all_stories = await story_repo.list_all(limit)
 
-    for sid, data in story_storage.items():
-        # 如果指定了 child_id，进行筛选
-        if child_id and data.get("child_id") != child_id:
-            continue
-
-        stories.append({
-            "story_id": sid,
+    stories = [
+        {
+            "story_id": data.get("story_id"),
             "child_id": data.get("child_id"),
             "created_at": data.get("created_at"),
             "word_count": data.get("story", {}).get("word_count", 0),
             "has_audio": bool(data.get("audio_url"))
-        })
-
-        if len(stories) >= limit:
-            break
+        }
+        for data in all_stories
+    ]
 
     return JSONResponse(content={
         "total": len(stories),

@@ -38,8 +38,16 @@ class SessionData:
     updated_at: str
     expires_at: str
 
+    # Fields with defaults must come last
+    # 音频追踪
+    audio_urls: Optional[Dict[int, str]] = None  # segment_id -> audio_url
+
     # 教育总结（完成后）
     educational_summary: Optional[Dict[str, Any]] = None
+
+    def __post_init__(self):
+        if self.audio_urls is None:
+            self.audio_urls = {}
 
 
 class SessionManager:
@@ -140,6 +148,10 @@ class SessionManager:
                 data['status'] = 'expired'
                 self._save_session_dict(session_id, data)
 
+            # Ensure backwards compatibility with audio_urls field
+            if 'audio_urls' not in data:
+                data['audio_urls'] = {}
+
             return SessionData(**data)
         except Exception as e:
             print(f"Error loading session {session_id}: {e}")
@@ -151,7 +163,9 @@ class SessionManager:
         segment: Optional[Dict[str, Any]] = None,
         choice_id: Optional[str] = None,
         status: Optional[str] = None,
-        educational_summary: Optional[Dict[str, Any]] = None
+        educational_summary: Optional[Dict[str, Any]] = None,
+        audio_url: Optional[str] = None,
+        segment_id: Optional[int] = None
     ) -> bool:
         """
         更新会话数据
@@ -162,6 +176,8 @@ class SessionManager:
             choice_id: 选择的选项ID
             status: 新状态
             educational_summary: 教育总结
+            audio_url: 段落的音频URL
+            segment_id: 音频对应的段落ID
 
         Returns:
             bool: 是否更新成功
@@ -186,6 +202,12 @@ class SessionManager:
         # 更新教育总结
         if educational_summary:
             session.educational_summary = educational_summary
+
+        # 更新音频URL
+        if audio_url and segment_id is not None:
+            if session.audio_urls is None:
+                session.audio_urls = {}
+            session.audio_urls[segment_id] = audio_url
 
         # 更新时间戳
         session.updated_at = datetime.now().isoformat()

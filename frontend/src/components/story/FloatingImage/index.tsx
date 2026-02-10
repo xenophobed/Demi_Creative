@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { motion, useSpring, useTransform } from 'framer-motion'
 import { useStreamVisualizationContext } from '@/providers/StreamVisualizationProvider'
 
@@ -36,6 +37,7 @@ function FloatingImage({
   tilt = true,
   float = true,
 }: FloatingImageProps) {
+  const [hasError, setHasError] = useState(false)
   const { mousePosition, prefersReducedMotion } = useStreamVisualizationContext()
 
   // Spring smoothed mouse position
@@ -62,6 +64,23 @@ function FloatingImage({
   // Dynamic shadow based on tilt
   const shadowX = useTransform(mouseXSpring, [-1, 1], [10, -10])
   const shadowY = useTransform(mouseYSpring, [-1, 1], [-5, 15])
+
+  // Image scale based on mouse (depth effect)
+  const imageScale = useTransform(
+    [mouseXSpring, mouseYSpring],
+    ([mx, my]: number[]) =>
+      prefersReducedMotion ? 1 : 1 + (Math.abs(mx) + Math.abs(my)) * 0.02
+  )
+
+  // Glare overlay gradient
+  const glareBackground = useTransform(
+    [mouseXSpring, mouseYSpring],
+    ([mx, my]: number[]) => {
+      const glareX = ((mx + 1) / 2) * 100
+      const glareY = ((my + 1) / 2) * 100
+      return `radial-gradient(circle at ${glareX}% ${glareY}%, rgba(255,255,255,0.2) 0%, transparent 50%)`
+    }
+  )
 
   // Float animation variants
   const floatAnimation = float && !prefersReducedMotion
@@ -125,36 +144,52 @@ function FloatingImage({
         <div className="floating-artwork-frame">
           {/* Image container with depth effect */}
           <div className="floating-artwork-image-container relative overflow-hidden rounded">
-            <motion.img
-              src={src}
-              alt={alt}
-              className="floating-artwork-image"
-              loading="eager"
-              style={{
-                // Subtle scale on parallax for depth
-                scale: useTransform(
-                  [mouseXSpring, mouseYSpring],
-                  ([mx, my]: number[]) =>
-                    prefersReducedMotion ? 1 : 1 + (Math.abs(mx) + Math.abs(my)) * 0.02
-                ),
-              }}
-            />
-
-            {/* Shine/glare overlay */}
-            {!prefersReducedMotion && (
-              <motion.div
-                className="absolute inset-0 pointer-events-none"
+            {hasError ? (
+              <div
+                className="floating-artwork-image flex flex-col items-center justify-center gap-2 text-center"
                 style={{
-                  background: useTransform(
-                    [mouseXSpring, mouseYSpring],
-                    ([mx, my]: number[]) => {
-                      const glareX = ((mx + 1) / 2) * 100
-                      const glareY = ((my + 1) / 2) * 100
-                      return `radial-gradient(circle at ${glareX}% ${glareY}%, rgba(255,255,255,0.2) 0%, transparent 50%)`
-                    }
-                  ),
+                  background: 'linear-gradient(135deg, #f0e6ff 0%, #e0f0ff 100%)',
+                  aspectRatio: '1',
                 }}
-              />
+              >
+                <span className="text-3xl">🖼️</span>
+                <span className="text-sm text-gray-500">Image unavailable</span>
+              </div>
+            ) : (
+              <>
+                <motion.img
+                  src={src}
+                  alt={alt}
+                  className="floating-artwork-image"
+                  loading="eager"
+                  onError={() => setHasError(true)}
+                  style={{
+                    // Subtle scale on parallax for depth
+                    scale: useTransform(
+                      [mouseXSpring, mouseYSpring],
+                      ([mx, my]: number[]) =>
+                        prefersReducedMotion ? 1 : 1 + (Math.abs(mx) + Math.abs(my)) * 0.02
+                    ),
+                  }}
+                />
+
+                {/* Shine/glare overlay */}
+                {!prefersReducedMotion && (
+                  <motion.div
+                    className="absolute inset-0 pointer-events-none"
+                    style={{
+                      background: useTransform(
+                        [mouseXSpring, mouseYSpring],
+                        ([mx, my]: number[]) => {
+                          const glareX = ((mx + 1) / 2) * 100
+                          const glareY = ((my + 1) / 2) * 100
+                          return `radial-gradient(circle at ${glareX}% ${glareY}%, rgba(255,255,255,0.2) 0%, transparent 50%)`
+                        }
+                      ),
+                    }}
+                  />
+                )}
+              </>
             )}
           </div>
         </div>

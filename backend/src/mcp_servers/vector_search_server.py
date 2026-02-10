@@ -145,11 +145,47 @@ async def store_drawing_embedding(args: Dict[str, Any]) -> Dict[str, Any]:
     Returns:
         存储结果
     """
-    drawing_description = args["drawing_description"]
-    child_id = args["child_id"]
-    drawing_analysis = args["drawing_analysis"]
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"[VectorStore] 收到存储请求，参数: {json.dumps(args, ensure_ascii=False, default=str)[:500]}")
+
+    drawing_description = args.get("drawing_description", "")
+    child_id = args.get("child_id", "")
+    drawing_analysis = args.get("drawing_analysis", {})
     story_text = args.get("story_text", "")
     image_path = args.get("image_path", "")
+
+    # 参数验证
+    if not drawing_description:
+        logger.warning("[VectorStore] drawing_description 为空")
+        return {
+            "content": [{
+                "type": "text",
+                "text": json.dumps({
+                    "success": False,
+                    "error": "drawing_description 不能为空"
+                }, ensure_ascii=False)
+            }]
+        }
+
+    if not child_id:
+        logger.warning("[VectorStore] child_id 为空")
+        return {
+            "content": [{
+                "type": "text",
+                "text": json.dumps({
+                    "success": False,
+                    "error": "child_id 不能为空"
+                }, ensure_ascii=False)
+            }]
+        }
+
+    # 如果 drawing_analysis 是字符串，尝试解析为 dict
+    if isinstance(drawing_analysis, str):
+        try:
+            drawing_analysis = json.loads(drawing_analysis)
+        except json.JSONDecodeError:
+            drawing_analysis = {}
 
     try:
         # 获取集合
