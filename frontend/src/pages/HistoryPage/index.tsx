@@ -6,15 +6,20 @@ import Button from '@/components/common/Button'
 import Card from '@/components/common/Card'
 import useStoryStore from '@/store/useStoryStore'
 import useAuthStore from '@/store/useAuthStore'
+import useChildStore from '@/store/useChildStore'
 import { authService } from '@/api/services/authService'
+import { storyService } from '@/api/services/storyService'
 import SafetyBadge from '@/components/story/SafetyBadge'
 
 function HistoryPage() {
   const navigate = useNavigate()
   const { storyHistory, clearHistory, setCurrentStory } = useStoryStore()
   const { isAuthenticated } = useAuthStore()
+  const { currentChild, defaultChildId } = useChildStore()
   const [pageSize] = useState(20)
   const [offset, setOffset] = useState(0)
+
+  const childId = currentChild?.child_id || defaultChildId
 
   // Fetch server stories for authenticated users
   const { data: serverData, isLoading: serverLoading } = useQuery({
@@ -23,73 +28,107 @@ function HistoryPage() {
     enabled: isAuthenticated,
   })
 
+  // Fetch stories by child_id (works for all users, survives refresh)
+  const { data: childStories } = useQuery({
+    queryKey: ['child-stories-history', childId],
+    queryFn: () => storyService.getStoryHistory(childId),
+    enabled: !!childId && !isAuthenticated,
+  })
+
   // Merge server stories with local stories (deduplicate by story_id)
   const mergedStories = (() => {
-    if (!isAuthenticated || !serverData?.stories) {
-      // Not authenticated: use local only
-      return storyHistory.map((s) => ({
+    if (isAuthenticated && serverData?.stories) {
+      // Authenticated: use server data
+      const serverIds = new Set(serverData.stories.map((s) => s.story_id))
+
+      const serverItems = serverData.stories.map((s) => ({
         story_id: s.story_id,
-        story_text: s.story.text,
-        word_count: s.story.word_count,
-        image_url: s.image_url ?? null,
-        audio_url: s.audio_url ?? null,
-        safety_score: s.safety_score,
-        themes: s.educational_value.themes,
+        story_text: s.story_preview || '',
+        word_count: s.word_count,
+        image_url: s.image_url,
+        audio_url: s.audio_url,
+        safety_score: undefined as number | undefined,
+        themes: s.themes,
         created_at: s.created_at,
-        source: 'local' as const,
+        source: 'server' as const,
       }))
+
+      // Add local stories not on server
+      const localOnly = storyHistory
+        .filter((s) => !serverIds.has(s.story_id))
+        .map((s) => ({
+          story_id: s.story_id,
+          story_text: s.story.text,
+          word_count: s.story.word_count,
+          image_url: s.image_url ?? null,
+          audio_url: s.audio_url ?? null,
+          safety_score: s.safety_score as number | undefined,
+          themes: s.educational_value.themes,
+          created_at: s.created_at,
+          source: 'local' as const,
+        }))
+
+      return [...serverItems, ...localOnly].sort(
+        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      )
     }
 
-    // Build a set of server story IDs
-    const serverIds = new Set(serverData.stories.map((s) => s.story_id))
-
-    // Convert server stories
-    const serverItems = serverData.stories.map((s) => ({
-      story_id: s.story_id,
-      story_text: s.story_preview || '',
-      word_count: s.word_count,
-      image_url: s.image_url,
-      audio_url: s.audio_url,
-      safety_score: undefined as number | undefined,
-      themes: s.themes,
-      created_at: s.created_at,
-      source: 'server' as const,
-    }))
-
-    // Add local stories not on server
-    const localOnly = storyHistory
-      .filter((s) => !serverIds.has(s.story_id))
-      .map((s) => ({
+    // Not authenticated: use child_id stories from server, fall back to local
+    if (childStories && childStories.length > 0) {
+      const serverIds = new Set(childStories.map((s) => s.story_id))
+      const serverItems = childStories.map((s) => ({
         story_id: s.story_id,
-        story_text: s.story.text,
-        word_count: s.story.word_count,
+        story_text: s.story?.text?.slice(0, 200) + '...' || '',
+        word_count: s.story?.word_count || 0,
         image_url: s.image_url ?? null,
         audio_url: s.audio_url ?? null,
         safety_score: s.safety_score as number | undefined,
-        themes: s.educational_value.themes,
+        themes: s.educational_value?.themes || [],
         created_at: s.created_at,
-        source: 'local' as const,
+        source: 'server' as const,
       }))
 
-    // Merge and sort by created_at descending
-    return [...serverItems, ...localOnly].sort(
-      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-    )
+      const localOnly = storyHistory
+        .filter((s) => !serverIds.has(s.story_id))
+        .map((s) => ({
+          story_id: s.story_id,
+          story_text: s.story.text,
+          word_count: s.story.word_count,
+          image_url: s.image_url ?? null,
+          audio_url: s.audio_url ?? null,
+          safety_score: s.safety_score as number | undefined,
+          themes: s.educational_value.themes,
+          created_at: s.created_at,
+          source: 'local' as const,
+        }))
+
+      return [...serverItems, ...localOnly].sort(
+        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      )
+    }
+
+    // Fallback: local only
+    return storyHistory.map((s) => ({
+      story_id: s.story_id,
+      story_text: s.story.text,
+      word_count: s.story.word_count,
+      image_url: s.image_url ?? null,
+      audio_url: s.audio_url ?? null,
+      safety_score: s.safety_score,
+      themes: s.educational_value.themes,
+      created_at: s.created_at,
+      source: 'local' as const,
+    }))
   })()
 
-  const totalCount = isAuthenticated
-    ? (serverData?.total ?? 0) + storyHistory.filter(
-        (s) => !serverData?.stories.some((ss) => ss.story_id === s.story_id)
-      ).length
-    : storyHistory.length
+  const totalCount = mergedStories.length
 
   const hasMore = isAuthenticated && serverData && offset + pageSize < serverData.total
 
   const handleStoryClick = (storyId: string) => {
     const localStory = storyHistory.find((s) => s.story_id === storyId)
-    if (localStory) {
-      setCurrentStory(localStory)
-    }
+    // Always set the matching story (or clear stale data)
+    setCurrentStory(localStory ?? null)
     navigate(`/story/${storyId}`)
   }
 
@@ -173,6 +212,12 @@ function HistoryPage() {
                           src={story.image_url.startsWith('/') ? story.image_url : '/' + story.image_url}
                           alt="Artwork"
                           className="w-full h-full object-cover"
+                          onError={(e) => {
+                            // Hide broken image and show fallback emoji
+                            const target = e.currentTarget
+                            target.style.display = 'none'
+                            target.parentElement!.innerHTML = '<span style="font-size:2.25rem">📖</span>'
+                          }}
                         />
                       ) : (
                         <motion.span

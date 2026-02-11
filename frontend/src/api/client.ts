@@ -48,6 +48,23 @@ apiClient.interceptors.response.use(
 
       // Handle different status codes
       switch (error.response.status) {
+        case 401:
+          // Token expired or invalid - clear auth state
+          try {
+            const authStorage = localStorage.getItem('auth-storage')
+            if (authStorage) {
+              const parsed = JSON.parse(authStorage)
+              if (parsed.state?.token) {
+                parsed.state.token = null
+                parsed.state.user = null
+                parsed.state.isAuthenticated = false
+                localStorage.setItem('auth-storage', JSON.stringify(parsed))
+              }
+            }
+          } catch {
+            // Ignore
+          }
+          break
         case 400:
           // Bad request
           break

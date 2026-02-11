@@ -2,21 +2,34 @@ import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { motion, useSpring, useTransform } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import Button from '@/components/common/Button'
 import TiltCard from '@/components/depth/TiltCard'
 import { FloatingElement } from '@/components/depth/ParallaxContainer'
 import { DepthLayer } from '@/components/depth/DepthLayer'
 import { useStreamVisualizationContext } from '@/providers/StreamVisualizationProvider'
 import useStoryStore from '@/store/useStoryStore'
+import useChildStore from '@/store/useChildStore'
+import { storyService } from '@/api/services/storyService'
 import { StoryCard } from '@/components/story/StoryDisplay'
 
 function HomePage() {
   const navigate = useNavigate()
   const { storyHistory } = useStoryStore()
+  const { currentChild, defaultChildId } = useChildStore()
   const { mousePosition, prefersReducedMotion } = useStreamVisualizationContext()
 
-  // Get recent 3 stories
-  const recentStories = storyHistory.slice(0, 3)
+  const childId = currentChild?.child_id || defaultChildId
+
+  // Fetch stories from server (persisted child_id survives refresh)
+  const { data: serverStories } = useQuery({
+    queryKey: ['child-stories', childId],
+    queryFn: () => storyService.getStoryHistory(childId),
+    enabled: !!childId,
+  })
+
+  // Use server stories, fall back to in-memory store
+  const recentStories = (serverStories ?? storyHistory).slice(0, 3)
 
   // Mouse springs for parallax
   const mouseXSpring = useSpring(mousePosition.x, { stiffness: 80, damping: 25 })
@@ -183,6 +196,7 @@ function HomePage() {
                 Transform your artwork into magical stories!
               </motion.p>
               <motion.div
+                className="flex flex-col sm:flex-row gap-3 mt-2"
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.4 }}
@@ -190,41 +204,26 @@ function HomePage() {
                 <Link to="/upload">
                   <Button
                     size="lg"
-                    rightIcon={<span>→</span>}
-                    className="shadow-lg hover:shadow-xl transition-shadow"
+                    rightIcon={<span>🖼️</span>}
+                    className="shadow-lg hover:shadow-xl transition-shadow w-full sm:w-auto"
                   >
-                    Start Creating
+                    Art to Story
+                  </Button>
+                </Link>
+                <Link to="/interactive">
+                  <Button
+                    size="lg"
+                    variant="secondary"
+                    rightIcon={<span>🎭</span>}
+                    className="shadow-lg hover:shadow-xl transition-shadow w-full sm:w-auto"
+                  >
+                    Interactive Tales
                   </Button>
                 </Link>
               </motion.div>
             </div>
           </div>
         </DepthLayer>
-      </motion.div>
-
-      {/* Feature Cards with 3D tilt */}
-      <motion.div
-        className="grid md:grid-cols-2 gap-6"
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.3 }}
-      >
-        <FeatureCard
-          emoji="🖼️"
-          title="Art to Story"
-          description="Upload your artwork, AI creates a unique story"
-          color="primary"
-          link="/upload"
-          delay={0}
-        />
-        <FeatureCard
-          emoji="🎭"
-          title="Interactive Tales"
-          description="Choose your adventure, create unique endings"
-          color="accent"
-          link="/interactive"
-          delay={0.1}
-        />
       </motion.div>
 
       {/* Recent Stories */}
@@ -330,72 +329,6 @@ function HomePage() {
         </TiltCard>
       </motion.div>
     </div>
-  )
-}
-
-function FeatureCard({
-  emoji,
-  title,
-  description,
-  color,
-  link,
-  delay = 0,
-}: {
-  emoji: string
-  title: string
-  description: string
-  color: 'primary' | 'secondary' | 'accent'
-  link: string
-  delay?: number
-}) {
-  const colorClasses = {
-    primary: 'from-primary/10 to-primary/5 hover:from-primary/20 hover:to-primary/10',
-    secondary: 'from-secondary/10 to-secondary/5 hover:from-secondary/20 hover:to-secondary/10',
-    accent: 'from-accent/20 to-accent/10 hover:from-accent/30 hover:to-accent/20',
-  }
-
-  const glowColors = {
-    primary: 'rgba(255, 107, 107, 0.4)',
-    secondary: 'rgba(78, 205, 196, 0.4)',
-    accent: 'rgba(255, 230, 109, 0.5)',
-  }
-
-  return (
-    <Link to={link}>
-      <motion.div
-        initial={{ opacity: 0, y: 20, rotateX: 15 }}
-        animate={{ opacity: 1, y: 0, rotateX: 0 }}
-        transition={{ delay: 0.3 + delay, type: 'spring', stiffness: 100 }}
-      >
-        <TiltCard
-          maxTilt={12}
-          perspective={800}
-          glare
-          glow
-          glowColor={glowColors[color]}
-          className="h-full cursor-pointer"
-        >
-          <div
-            className={`bg-gradient-to-br ${colorClasses[color]} rounded-card p-6 h-full transition-all duration-300`}
-          >
-            <div className="flex flex-col items-center text-center py-4">
-              <motion.span
-                className="text-5xl mb-4 block"
-                whileHover={{
-                  rotate: [0, -15, 15, 0],
-                  scale: [1, 1.2, 1.2, 1],
-                  transition: { duration: 0.5 },
-                }}
-              >
-                {emoji}
-              </motion.span>
-              <h3 className="text-xl font-bold text-gray-800 mb-2">{title}</h3>
-              <p className="text-gray-600">{description}</p>
-            </div>
-          </div>
-        </TiltCard>
-      </motion.div>
-    </Link>
   )
 }
 

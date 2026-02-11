@@ -52,23 +52,26 @@ function StoryPage() {
   const [isPlaying, setIsPlaying] = useState(false)
   const [isAudioLoading, setIsAudioLoading] = useState(false)
 
-  // If store doesn't have the story, try to fetch from API
+  // Only use currentStory if it matches the URL's storyId
+  const matchingStory = currentStory?.story_id === storyId ? currentStory : null
+
+  // If store doesn't have the matching story, fetch from API
   const { data: fetchedStory, isLoading, error } = useQuery({
     queryKey: ['story', storyId],
     queryFn: () => storyService.getStory(storyId!),
-    enabled: !currentStory && !!storyId,
+    enabled: !matchingStory && !!storyId,
     retry: 1,
   })
 
-  // Use story from store or API
-  const story = currentStory || fetchedStory
+  // Use matching store story or fetched story
+  const story = matchingStory || fetchedStory
 
   // If API returned a story, save to store
   useEffect(() => {
-    if (fetchedStory && !currentStory) {
+    if (fetchedStory && !matchingStory) {
       setCurrentStory(fetchedStory)
     }
-  }, [fetchedStory, currentStory, setCurrentStory])
+  }, [fetchedStory, matchingStory, setCurrentStory])
 
   // Initialize audio
   useEffect(() => {

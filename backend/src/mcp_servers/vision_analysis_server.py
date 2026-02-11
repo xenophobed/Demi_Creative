@@ -10,7 +10,8 @@ import base64
 from typing import Any, Dict
 from pathlib import Path
 
-from anthropic import Anthropic
+import anyio
+from anthropic import AsyncAnthropic
 from claude_agent_sdk import tool, create_sdk_mcp_server
 
 
@@ -52,9 +53,9 @@ async def analyze_children_drawing(args: Dict[str, Any]) -> Dict[str, Any]:
             }]
         }
 
-    # 读取图片并转换为 base64
-    with open(image_path, "rb") as f:
-        image_data = base64.standard_b64encode(f.read()).decode("utf-8")
+    # 读取图片并转换为 base64（非阻塞）
+    raw_bytes = await anyio.Path(image_path).read_bytes()
+    image_data = base64.standard_b64encode(raw_bytes).decode("utf-8")
 
     # 确定图片格式
     file_extension = Path(image_path).suffix.lower()
@@ -66,7 +67,7 @@ async def analyze_children_drawing(args: Dict[str, Any]) -> Dict[str, Any]:
     media_type = media_type_map.get(file_extension, "image/jpeg")
 
     # 调用 Claude Vision API
-    client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+    client = AsyncAnthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
     # 根据年龄调整分析提示
     age_context = ""
@@ -104,7 +105,7 @@ async def analyze_children_drawing(args: Dict[str, Any]) -> Dict[str, Any]:
 4. 保持儿童友好的语言风格"""
 
     try:
-        response = client.messages.create(
+        response = await client.messages.create(
             model="claude-sonnet-4-20250514",
             max_tokens=1024,
             messages=[{

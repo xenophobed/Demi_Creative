@@ -130,6 +130,26 @@ CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_users_is_active ON users(is_active);
 """
 
+# ============================================================================
+# Tokens Table
+# ============================================================================
+
+TOKENS_TABLE = """
+CREATE TABLE IF NOT EXISTS tokens (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    token TEXT UNIQUE NOT NULL,
+    user_id TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+);
+"""
+
+TOKENS_INDEXES = """
+CREATE INDEX IF NOT EXISTS idx_tokens_user_id ON tokens(user_id);
+CREATE INDEX IF NOT EXISTS idx_tokens_expires_at ON tokens(expires_at);
+"""
+
 
 # ============================================================================
 # Schema Initialization
@@ -163,6 +183,15 @@ async def init_schema(db: "DatabaseManager") -> None:
     # Create story segments table
     await db.execute(STORY_SEGMENTS_TABLE)
     await db.execute(STORY_SEGMENTS_INDEX)
+
+    # Create tokens table
+    await db.execute(TOKENS_TABLE)
+    for stmt in TOKENS_INDEXES.strip().split(";"):
+        if stmt.strip():
+            try:
+                await db.execute(stmt)
+            except Exception:
+                pass
 
     await db.commit()
 

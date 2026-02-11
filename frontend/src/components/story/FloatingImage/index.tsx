@@ -164,12 +164,7 @@ function FloatingImage({
                   loading="eager"
                   onError={() => setHasError(true)}
                   style={{
-                    // Subtle scale on parallax for depth
-                    scale: useTransform(
-                      [mouseXSpring, mouseYSpring],
-                      ([mx, my]: number[]) =>
-                        prefersReducedMotion ? 1 : 1 + (Math.abs(mx) + Math.abs(my)) * 0.02
-                    ),
+                    scale: imageScale,
                   }}
                 />
 
@@ -178,14 +173,7 @@ function FloatingImage({
                   <motion.div
                     className="absolute inset-0 pointer-events-none"
                     style={{
-                      background: useTransform(
-                        [mouseXSpring, mouseYSpring],
-                        ([mx, my]: number[]) => {
-                          const glareX = ((mx + 1) / 2) * 100
-                          const glareY = ((my + 1) / 2) * 100
-                          return `radial-gradient(circle at ${glareX}% ${glareY}%, rgba(255,255,255,0.2) 0%, transparent 50%)`
-                        }
-                      ),
+                      background: glareBackground,
                     }}
                   />
                 )}

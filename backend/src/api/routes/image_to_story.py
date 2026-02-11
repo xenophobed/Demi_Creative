@@ -514,6 +514,30 @@ async def get_story_by_id(story_id: str):
 
 
 @router.get(
+    "/stories/history/{child_id}",
+    summary="获取儿童故事历史",
+    description="获取指定儿童的完整故事列表（含图片、主题等详情）"
+)
+async def get_child_story_history(
+    child_id: str,
+    limit: int = 20
+):
+    """
+    获取指定儿童的故事历史
+
+    **参数**:
+    - child_id: 儿童ID
+    - limit: 返回数量限制
+
+    **返回**:
+    - 完整故事列表（ImageToStoryResponse 格式）
+    """
+    stories = await story_repo.list_by_child(child_id, limit)
+
+    return JSONResponse(content=stories)
+
+
+@router.get(
     "/stories",
     summary="列出所有故事",
     description="获取所有已生成故事的列表（用于调试）"

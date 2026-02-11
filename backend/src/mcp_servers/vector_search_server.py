@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional
 from datetime import datetime
 import hashlib
 
+import anyio
 import chromadb
 from chromadb.config import Settings
 from claude_agent_sdk import tool, create_sdk_mcp_server
@@ -64,16 +65,16 @@ async def search_similar_drawings(args: Dict[str, Any]) -> Dict[str, Any]:
     top_k = args.get("top_k", 5)
 
     try:
-        # 获取集合
-        collection = get_or_create_collection()
+        # 获取集合（offload blocking ChromaDB call to thread）
+        collection = await anyio.to_thread.run_sync(get_or_create_collection)
 
         # 使用 ChromaDB 的查询功能
         # ChromaDB 会自动将查询文本转换为向量并搜索
-        results = collection.query(
+        results = await anyio.to_thread.run_sync(lambda: collection.query(
             query_texts=[drawing_description],
             n_results=top_k,
             where={"child_id": child_id}  # 过滤该儿童的画作
-        )
+        ))
 
         # 格式化结果
         similar_drawings = []
@@ -188,8 +189,8 @@ async def store_drawing_embedding(args: Dict[str, Any]) -> Dict[str, Any]:
             drawing_analysis = {}
 
     try:
-        # 获取集合
-        collection = get_or_create_collection()
+        # 获取集合（offload blocking ChromaDB call to thread）
+        collection = await anyio.to_thread.run_sync(get_or_create_collection)
 
         # 生成唯一 ID
         timestamp = datetime.now().isoformat()
@@ -216,11 +217,11 @@ async def store_drawing_embedding(args: Dict[str, Any]) -> Dict[str, Any]:
 
         # 存储到 ChromaDB
         # ChromaDB 会自动将文本转换为向量
-        collection.add(
+        await anyio.to_thread.run_sync(lambda: collection.add(
             ids=[doc_id],
             documents=[drawing_description],
             metadatas=[metadata]
-        )
+        ))
 
         return {
             "content": [{

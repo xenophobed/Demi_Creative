@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 from typing import Optional, Tuple
 from dataclasses import dataclass
 
-from .database import user_repo, UserData
+from .database import user_repo, db_manager, UserData
 
 
 @dataclass
@@ -36,9 +36,8 @@ class UserService:
 
     def __init__(self):
         self._repo = user_repo
-        # 简单的内存令牌存储 (生产环境应使用Redis)
-        self._tokens: dict[str, Tuple[str, datetime]] = {}
-        self._token_expiry_hours = 24
+        self._db = db_manager
+        self._token_expiry_days = 30
 
     def _hash_password(self, password: str, salt: Optional[str] = None) -> Tuple[str, str]:
         """
@@ -77,9 +76,9 @@ class UserService:
         except ValueError:
             return False
 
-    def _generate_token(self, user_id: str) -> TokenData:
+    async def _generate_token(self, user_id: str) -> TokenData:
         """
-        生成访问令牌
+        生成访问令牌并持久化到数据库
 
         Args:
             user_id: 用户ID
@@ -88,13 +87,19 @@ class UserService:
             TokenData: 令牌数据
         """
         token = secrets.token_urlsafe(32)
-        expires_at = datetime.now() + timedelta(hours=self._token_expiry_hours)
-        self._tokens[token] = (user_id, expires_at)
+        now = datetime.now()
+        expires_at = now + timedelta(days=self._token_expiry_days)
+
+        await self._db.execute(
+            "INSERT INTO tokens (token, user_id, expires_at, created_at) VALUES (?, ?, ?, ?)",
+            (token, user_id, expires_at.isoformat(), now.isoformat())
+        )
+        await self._db.commit()
 
         return TokenData(
             access_token=token,
             token_type="bearer",
-            expires_in=self._token_expiry_hours * 3600,
+            expires_in=self._token_expiry_days * 86400,
             user_id=user_id
         )
 
@@ -147,7 +152,7 @@ class UserService:
         )
 
         # 生成令牌
-        token = self._generate_token(user.user_id)
+        token = await self._generate_token(user.user_id)
 
         return AuthResult(
             success=True,
@@ -189,7 +194,7 @@ class UserService:
         await self._repo.update_last_login(user.user_id)
 
         # 生成令牌
-        token = self._generate_token(user.user_id)
+        token = await self._generate_token(user.user_id)
 
         return AuthResult(
             success=True,
@@ -207,8 +212,10 @@ class UserService:
         Returns:
             bool: 是否成功
         """
-        if token in self._tokens:
-            del self._tokens[token]
+        row = await self._db.fetchone("SELECT id FROM tokens WHERE token = ?", (token,))
+        if row:
+            await self._db.execute("DELETE FROM tokens WHERE token = ?", (token,))
+            await self._db.commit()
             return True
         return False
 
@@ -222,17 +229,20 @@ class UserService:
         Returns:
             UserData 或 None
         """
-        if token not in self._tokens:
+        row = await self._db.fetchone(
+            "SELECT user_id, expires_at FROM tokens WHERE token = ?", (token,)
+        )
+        if not row:
             return None
-
-        user_id, expires_at = self._tokens[token]
 
         # 检查是否过期
+        expires_at = datetime.fromisoformat(row["expires_at"])
         if datetime.now() > expires_at:
-            del self._tokens[token]
+            await self._db.execute("DELETE FROM tokens WHERE token = ?", (token,))
+            await self._db.commit()
             return None
 
-        return await self._repo.get_by_id(user_id)
+        return await self._repo.get_by_id(row["user_id"])
 
     async def get_current_user(self, token: str) -> Optional[UserData]:
         """
@@ -310,21 +320,21 @@ class UserService:
         user = await self._repo.get_by_id(user_id)
         return AuthResult(success=True, user=user)
 
-    def cleanup_expired_tokens(self) -> int:
+    async def cleanup_expired_tokens(self) -> int:
         """
         清理过期令牌
 
         Returns:
             int: 清理的令牌数量
         """
-        now = datetime.now()
-        expired = [
-            token for token, (_, expires_at) in self._tokens.items()
-            if now > expires_at
-        ]
-        for token in expired:
-            del self._tokens[token]
-        return len(expired)
+        now = datetime.now().isoformat()
+        rows = await self._db.fetchall(
+            "SELECT id FROM tokens WHERE expires_at < ?", (now,)
+        )
+        if rows:
+            await self._db.execute("DELETE FROM tokens WHERE expires_at < ?", (now,))
+            await self._db.commit()
+        return len(rows)
 
 
 # 全局用户服务实例
