@@ -4,18 +4,6 @@ import type { CharacterMemory, EducationalValue } from '@/types/api'
 
 type TabType = 'characters' | 'learning' | 'analysis'
 
-interface DrawingAnalysis {
-  drawing_elements?: {
-    main_character?: string
-    setting?: string
-    decorative_elements?: string[]
-    text?: string
-  }
-  story_connection?: Record<string, string>
-  age_appropriateness?: string
-  interest_alignment?: string
-}
-
 interface TabbedMetadataProps {
   characters: CharacterMemory[]
   educationalValue: EducationalValue
@@ -67,8 +55,6 @@ function TabbedMetadata({
     },
   ]
 
-  const analysisData = analysis as DrawingAnalysis
-
   return (
     <div className={`tabbed-metadata ${className}`}>
       {/* Safety badge */}
@@ -114,7 +100,7 @@ function TabbedMetadata({
               <LearningContent educationalValue={educationalValue} />
             )}
             {activeTab === 'analysis' && (
-              <AnalysisContent analysis={analysisData} />
+              <AnalysisContent analysis={analysis} />
             )}
           </motion.div>
         )}
@@ -208,8 +194,79 @@ function LearningContent({ educationalValue }: { educationalValue: EducationalVa
   )
 }
 
-function AnalysisContent({ analysis }: { analysis: DrawingAnalysis }) {
-  if (Object.keys(analysis).length === 0) {
+function formatKey(key: string): string {
+  return key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+}
+
+function AnalysisValue({ value }: { value: unknown }) {
+  if (value == null) return null
+
+  // String
+  if (typeof value === 'string') {
+    return <span className="analysis-value">{value}</span>
+  }
+
+  // Number
+  if (typeof value === 'number') {
+    return <span className="analysis-value">{value}</span>
+  }
+
+  // Array of strings
+  if (Array.isArray(value)) {
+    const items = value.filter(v => v != null)
+    if (items.length === 0) return null
+
+    // Array of primitives → tags
+    if (items.every(v => typeof v === 'string' || typeof v === 'number')) {
+      return (
+        <div className="analysis-tags">
+          {items.map((item, i) => (
+            <span key={i} className="analysis-tag">{String(item)}</span>
+          ))}
+        </div>
+      )
+    }
+
+    // Array of objects → render each
+    return (
+      <div className="analysis-details">
+        {items.map((item, i) => (
+          <div key={i} className="analysis-section" style={{ paddingLeft: '0.5rem' }}>
+            <AnalysisObject data={item as Record<string, unknown>} />
+          </div>
+        ))}
+      </div>
+    )
+  }
+
+  // Nested object
+  if (typeof value === 'object') {
+    return <AnalysisObject data={value as Record<string, unknown>} />
+  }
+
+  return <span className="analysis-value">{String(value)}</span>
+}
+
+function AnalysisObject({ data }: { data: Record<string, unknown> }) {
+  const entries = Object.entries(data).filter(([, v]) => v != null)
+  if (entries.length === 0) return null
+
+  return (
+    <div className="analysis-details">
+      {entries.map(([key, val]) => (
+        <div key={key} className="analysis-row">
+          <span className="analysis-label">{formatKey(key)}:</span>
+          <AnalysisValue value={val} />
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function AnalysisContent({ analysis }: { analysis: Record<string, unknown> }) {
+  const entries = Object.entries(analysis).filter(([, v]) => v != null)
+
+  if (entries.length === 0) {
     return (
       <div className="tab-empty">
         <span>No detailed analysis available</span>
@@ -219,85 +276,22 @@ function AnalysisContent({ analysis }: { analysis: DrawingAnalysis }) {
 
   return (
     <div className="analysis-content">
-      {/* Drawing elements */}
-      {analysis.drawing_elements && (
-        <div className="analysis-section">
+      {entries.map(([key, value]) => (
+        <div key={key} className="analysis-section">
           <h4 className="analysis-section-title">
-            <span>🎨</span> Drawing Elements
+            <span>🔍</span> {formatKey(key)}
           </h4>
-          <div className="analysis-details">
-            {analysis.drawing_elements.main_character && (
-              <div className="analysis-row">
-                <span className="analysis-label">Main character:</span>
-                <span className="analysis-value">{analysis.drawing_elements.main_character}</span>
-              </div>
-            )}
-            {analysis.drawing_elements.setting && (
-              <div className="analysis-row">
-                <span className="analysis-label">Setting:</span>
-                <span className="analysis-value">{analysis.drawing_elements.setting}</span>
-              </div>
-            )}
-            {analysis.drawing_elements.decorative_elements &&
-              analysis.drawing_elements.decorative_elements.length > 0 && (
-              <div className="analysis-row">
-                <span className="analysis-label">Elements:</span>
-                <div className="analysis-tags">
-                  {analysis.drawing_elements.decorative_elements.map((elem) => (
-                    <span key={elem} className="analysis-tag">{elem}</span>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
+          {typeof value === 'string' || typeof value === 'number' ? (
+            <p className="analysis-value" style={{ paddingLeft: '1.5rem' }}>{String(value)}</p>
+          ) : (
+            <div style={{ paddingLeft: '1.5rem' }}>
+              <AnalysisValue value={value} />
+            </div>
+          )}
         </div>
-      )}
-
-      {/* Story connection */}
-      {analysis.story_connection && Object.keys(analysis.story_connection).length > 0 && (
-        <div className="analysis-section">
-          <h4 className="analysis-section-title">
-            <span>🔗</span> Story Connection
-          </h4>
-          <div className="analysis-details">
-            {Object.entries(analysis.story_connection).map(([key, value]) => (
-              <div key={key} className="analysis-row">
-                <span className="analysis-label">{formatKey(key)}:</span>
-                <span className="analysis-value">{value}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Age appropriateness */}
-      {analysis.age_appropriateness && (
-        <div className="analysis-badge success">
-          <span>✅</span>
-          <span>{analysis.age_appropriateness}</span>
-        </div>
-      )}
-
-      {/* Interest alignment */}
-      {analysis.interest_alignment && (
-        <div className="analysis-badge info">
-          <span>💫</span>
-          <span>{analysis.interest_alignment}</span>
-        </div>
-      )}
+      ))}
     </div>
   )
-}
-
-function formatKey(key: string): string {
-  const keyMap: Record<string, string> = {
-    bird: 'Bird',
-    musical_notes: 'Musical Notes',
-    rain: 'Rain',
-    flowers: 'Flowers',
-    text_integration: 'Text Integration',
-  }
-  return keyMap[key] || key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
 }
 
 export default TabbedMetadata

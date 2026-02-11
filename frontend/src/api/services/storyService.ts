@@ -10,8 +10,8 @@ import type {
   AgeGroup,
   VoiceType,
   StreamCallbacks,
-  SSEEventType,
 } from '@/types/api'
+import { consumeSSEStream } from '../utils/sseStream'
 
 // API 基础 URL
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1'
@@ -128,62 +128,7 @@ export const storyService = {
       throw new Error(`HTTP error! status: ${response.status}`)
     }
 
-    const reader = response.body?.getReader()
-    if (!reader) {
-      throw new Error('No response body')
-    }
-
-    const decoder = new TextDecoder()
-    let buffer = ''
-
-    try {
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-
-        buffer += decoder.decode(value, { stream: true })
-
-        const lines = buffer.split('\n')
-        buffer = lines.pop() || ''
-
-        let eventType: SSEEventType | null = null
-
-        for (const line of lines) {
-          if (line.startsWith('event: ')) {
-            eventType = line.slice(7).trim() as SSEEventType
-          } else if (line.startsWith('data: ') && eventType) {
-            const data = JSON.parse(line.slice(6))
-
-            switch (eventType) {
-              case 'status':
-                callbacks.onStatus?.(data)
-                break
-              case 'thinking':
-                callbacks.onThinking?.(data)
-                break
-              case 'tool_use':
-                callbacks.onToolUse?.(data)
-                break
-              case 'tool_result':
-                callbacks.onToolResult?.(data)
-                break
-              case 'result':
-                callbacks.onResult?.(data)
-                break
-              case 'complete':
-                callbacks.onComplete?.(data)
-                break
-              case 'error':
-                callbacks.onError?.(data)
-                break
-            }
-            eventType = null
-          }
-        }
-      }
-    } finally {
-      reader.releaseLock()
-    }
+    await consumeSSEStream(response, callbacks)
   },
 
   /**
@@ -272,66 +217,7 @@ export const storyService = {
       throw new Error(`HTTP error! status: ${response.status}`)
     }
 
-    const reader = response.body?.getReader()
-    if (!reader) {
-      throw new Error('No response body')
-    }
-
-    const decoder = new TextDecoder()
-    let buffer = ''
-
-    try {
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-
-        buffer += decoder.decode(value, { stream: true })
-
-        // 解析 SSE 事件
-        const lines = buffer.split('\n')
-        buffer = lines.pop() || '' // 保留不完整的行
-
-        let eventType: SSEEventType | null = null
-
-        for (const line of lines) {
-          if (line.startsWith('event: ')) {
-            eventType = line.slice(7).trim() as SSEEventType
-          } else if (line.startsWith('data: ') && eventType) {
-            const data = JSON.parse(line.slice(6))
-
-            switch (eventType) {
-              case 'status':
-                callbacks.onStatus?.(data)
-                break
-              case 'thinking':
-                callbacks.onThinking?.(data)
-                break
-              case 'tool_use':
-                callbacks.onToolUse?.(data)
-                break
-              case 'tool_result':
-                callbacks.onToolResult?.(data)
-                break
-              case 'session':
-                callbacks.onSession?.(data)
-                break
-              case 'result':
-                callbacks.onResult?.(data)
-                break
-              case 'complete':
-                callbacks.onComplete?.(data)
-                break
-              case 'error':
-                callbacks.onError?.(data)
-                break
-            }
-            eventType = null
-          }
-        }
-      }
-    } finally {
-      reader.releaseLock()
-    }
+    await consumeSSEStream(response, callbacks)
   },
 
   /**
@@ -358,62 +244,7 @@ export const storyService = {
       throw new Error(`HTTP error! status: ${response.status}`)
     }
 
-    const reader = response.body?.getReader()
-    if (!reader) {
-      throw new Error('No response body')
-    }
-
-    const decoder = new TextDecoder()
-    let buffer = ''
-
-    try {
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-
-        buffer += decoder.decode(value, { stream: true })
-
-        const lines = buffer.split('\n')
-        buffer = lines.pop() || ''
-
-        let eventType: SSEEventType | null = null
-
-        for (const line of lines) {
-          if (line.startsWith('event: ')) {
-            eventType = line.slice(7).trim() as SSEEventType
-          } else if (line.startsWith('data: ') && eventType) {
-            const data = JSON.parse(line.slice(6))
-
-            switch (eventType) {
-              case 'status':
-                callbacks.onStatus?.(data)
-                break
-              case 'thinking':
-                callbacks.onThinking?.(data)
-                break
-              case 'tool_use':
-                callbacks.onToolUse?.(data)
-                break
-              case 'tool_result':
-                callbacks.onToolResult?.(data)
-                break
-              case 'result':
-                callbacks.onResult?.(data)
-                break
-              case 'complete':
-                callbacks.onComplete?.(data)
-                break
-              case 'error':
-                callbacks.onError?.(data)
-                break
-            }
-            eventType = null
-          }
-        }
-      }
-    } finally {
-      reader.releaseLock()
-    }
+    await consumeSSEStream(response, callbacks)
   },
 }
 
