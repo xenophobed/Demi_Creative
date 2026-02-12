@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type {
+  AgeGroup,
   StorySegment,
   EducationalValue,
   InteractiveStoryStartResponse,
@@ -22,6 +23,7 @@ interface InteractiveStoryState {
   // Session state
   sessionId: string | null
   storyTitle: string
+  ageGroup: AgeGroup | null
   currentSegment: StorySegment | null
   segments: StorySegment[]
   choiceHistory: string[]
@@ -33,9 +35,10 @@ interface InteractiveStoryState {
   streaming: StreamingState
 
   // Actions
-  setSession: (response: InteractiveStoryStartResponse) => void
+  setSession: (response: InteractiveStoryStartResponse, ageGroup?: AgeGroup) => void
   addSegment: (response: ChoiceResponse) => void
   complete: (summary: EducationalValue) => void
+  setAgeGroup: (ageGroup: AgeGroup) => void
   reset: () => void
 
   // Streaming actions
@@ -56,6 +59,7 @@ const initialStreamingState: StreamingState = {
 const initialState = {
   sessionId: null,
   storyTitle: '',
+  ageGroup: null as AgeGroup | null,
   currentSegment: null,
   segments: [],
   choiceHistory: [],
@@ -68,10 +72,11 @@ const initialState = {
 const useInteractiveStoryStore = create<InteractiveStoryState>((set) => ({
   ...initialState,
 
-  setSession: (response) => {
-    set({
+  setSession: (response, ageGroup) => {
+    set((state) => ({
       sessionId: response.session_id,
       storyTitle: response.story_title,
+      ageGroup: ageGroup || state.ageGroup,
       currentSegment: response.opening,
       segments: [response.opening],
       choiceHistory: [],
@@ -79,7 +84,7 @@ const useInteractiveStoryStore = create<InteractiveStoryState>((set) => ({
       status: 'playing',
       educationalSummary: null,
       streaming: initialStreamingState,
-    })
+    }))
   },
 
   addSegment: (response) => {
@@ -98,6 +103,10 @@ const useInteractiveStoryStore = create<InteractiveStoryState>((set) => ({
       educationalSummary: summary,
       streaming: initialStreamingState,
     })
+  },
+
+  setAgeGroup: (ageGroup) => {
+    set({ ageGroup })
   },
 
   reset: () => {

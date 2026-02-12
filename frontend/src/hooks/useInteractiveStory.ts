@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react'
 import { storyService } from '@/api/services/storyService'
 import useInteractiveStoryStore from '@/store/useInteractiveStoryStore'
 import type {
+  AgeGroup,
   InteractiveStoryStartRequest,
   InteractiveStoryStartResponse,
   ChoiceResponse,
@@ -22,6 +23,7 @@ interface UseInteractiveStoryReturn {
   // State
   sessionId: string | null
   storyTitle: string
+  ageGroup: AgeGroup | null
   currentSegment: StorySegment | null
   choiceHistory: string[]
   progress: number
@@ -48,6 +50,7 @@ export function useInteractiveStory(): UseInteractiveStoryReturn {
   const {
     sessionId,
     storyTitle,
+    ageGroup,
     currentSegment,
     choiceHistory,
     progress,
@@ -57,6 +60,7 @@ export function useInteractiveStory(): UseInteractiveStoryReturn {
     setSession,
     addSegment,
     complete,
+    setAgeGroup,
     reset: resetStore,
     startStreaming,
     updateStreamStatus,
@@ -68,10 +72,11 @@ export function useInteractiveStory(): UseInteractiveStoryReturn {
     async (params: InteractiveStoryStartRequest) => {
       setIsLoading(true)
       setError(null)
+      setAgeGroup(params.age_group)
 
       try {
         const response = await storyService.startInteractiveStory(params)
-        setSession(response)
+        setSession(response, params.age_group)
       } catch (err) {
         const message =
           err instanceof Error ? err.message : 'Failed to start story, please try again'
@@ -81,13 +86,14 @@ export function useInteractiveStory(): UseInteractiveStoryReturn {
         setIsLoading(false)
       }
     },
-    [setSession]
+    [setSession, setAgeGroup]
   )
 
   const startStoryStream = useCallback(
     async (params: InteractiveStoryStartRequest) => {
       setIsLoading(true)
       setError(null)
+      setAgeGroup(params.age_group)
       startStreaming()
 
       const callbacks: StreamCallbacks = {
@@ -106,7 +112,7 @@ export function useInteractiveStory(): UseInteractiveStoryReturn {
         onResult: (data) => {
           // Cast to InteractiveStoryStartResponse
           const response = data as InteractiveStoryStartResponse
-          setSession(response)
+          setSession(response, params.age_group)
         },
         onComplete: () => {
           stopStreaming()
@@ -130,7 +136,7 @@ export function useInteractiveStory(): UseInteractiveStoryReturn {
         throw err
       }
     },
-    [setSession, startStreaming, updateStreamStatus, updateThinking, stopStreaming]
+    [setSession, setAgeGroup, startStreaming, updateStreamStatus, updateThinking, stopStreaming]
   )
 
   const makeChoice = useCallback(
@@ -268,6 +274,7 @@ export function useInteractiveStory(): UseInteractiveStoryReturn {
   return {
     sessionId,
     storyTitle,
+    ageGroup,
     currentSegment,
     choiceHistory,
     progress,

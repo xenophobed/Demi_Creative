@@ -1,14 +1,16 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import Button from '@/components/common/Button'
 import Card from '@/components/common/Card'
+import AgeAwareContent from '@/components/common/AgeAwareContent'
 import EducationalTags from '@/components/story/EducationalTags'
 import StorySegmentDisplay from '@/components/interactive/StorySegmentDisplay'
 import ChoiceButtons from '@/components/interactive/ChoiceButtons'
 import ProgressIndicator from '@/components/interactive/ProgressIndicator'
 import { StreamingVisualizer } from '@/components/streaming/StreamingVisualizer'
 import { PerspectiveContainer } from '@/components/depth/PerspectiveContainer'
+import { storyService } from '@/api/services/storyService'
 import useInteractiveStory from '@/hooks/useInteractiveStory'
 import useStreamVisualization from '@/hooks/useStreamVisualization'
 import useChildStore, { DEFAULT_INTERESTS } from '@/store/useChildStore'
@@ -34,7 +36,9 @@ function InteractiveStoryPage() {
 
   // Story hook - use streaming versions for better UX
   const {
+    sessionId,
     storyTitle,
+    ageGroup: storeAgeGroup,
     currentSegment,
     choiceHistory,
     progress,
@@ -47,6 +51,13 @@ function InteractiveStoryPage() {
     makeChoiceStream,
     reset,
   } = useInteractiveStory()
+
+  // On-demand audio state (for 10-12 age group)
+  const [onDemandAudioUrl, setOnDemandAudioUrl] = useState<string | null>(null)
+  const [isAudioGenerating, setIsAudioGenerating] = useState(false)
+
+  // Use storeAgeGroup during play, selectedAge during setup
+  const activeAgeGroup = storeAgeGroup || selectedAge
 
   // Stream visualization hook
   const { triggerConfetti } = useStreamVisualization()
@@ -62,6 +73,9 @@ function InteractiveStoryPage() {
 
   const animationPhase = getAnimationPhase()
 
+  // Save state
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+
   // Track segment changes for reveal animation
   const [isRevealing, setIsRevealing] = useState(false)
 
@@ -72,6 +86,29 @@ function InteractiveStoryPage() {
       return () => clearTimeout(timer)
     }
   }, [currentSegment?.segment_id, streaming.isStreaming])
+
+  // Reset on-demand audio when segment changes
+  useEffect(() => {
+    setOnDemandAudioUrl(null)
+    setIsAudioGenerating(false)
+  }, [currentSegment?.segment_id])
+
+  // On-demand audio handler for 10-12 age group
+  const handleRequestAudio = useCallback(async () => {
+    if (!sessionId || !currentSegment || isAudioGenerating) return
+    setIsAudioGenerating(true)
+    try {
+      const result = await storyService.generateAudioOnDemand(
+        sessionId,
+        currentSegment.segment_id
+      )
+      setOnDemandAudioUrl(result.audio_url)
+    } catch {
+      // Silently fail - button will remain clickable
+    } finally {
+      setIsAudioGenerating(false)
+    }
+  }, [sessionId, currentSegment, isAudioGenerating])
 
   // Trigger confetti on completion
   useEffect(() => {
@@ -130,6 +167,18 @@ function InteractiveStoryPage() {
     setSelectedInterests([])
     setTheme('')
   }
+
+  // Save interactive story to My Stories
+  const handleSaveStory = useCallback(async () => {
+    if (!sessionId || saveStatus === 'saving' || saveStatus === 'saved') return
+    setSaveStatus('saving')
+    try {
+      await storyService.saveInteractiveStory(sessionId)
+      setSaveStatus('saved')
+    } catch {
+      setSaveStatus('error')
+    }
+  }, [sessionId, saveStatus])
 
   // Calculate total segments (estimate based on progress)
   const totalSegments = progress > 0 ? Math.round((choiceHistory.length + 1) / (progress / 100)) : 5
@@ -307,15 +356,24 @@ function InteractiveStoryPage() {
             choiceHistory={choiceHistory}
           />
 
-          {/* Story Segment with reveal animation */}
-          <PerspectiveContainer enableTilt={false}>
-            <StorySegmentDisplay
-              segment={currentSegment}
-              title={storyTitle}
-              segmentIndex={choiceHistory.length}
-              isRevealing={isRevealing}
-            />
-          </PerspectiveContainer>
+          {/* Story Segment with age-aware content display */}
+          <AgeAwareContent
+            ageGroup={activeAgeGroup}
+            audioUrl={currentSegment.audio_url || onDemandAudioUrl}
+            onRequestAudio={handleRequestAudio}
+            isAudioLoading={isAudioGenerating}
+            autoPlayAudio={activeAgeGroup === '3-5'}
+            textContent={
+              <PerspectiveContainer enableTilt={false}>
+                <StorySegmentDisplay
+                  segment={currentSegment}
+                  title={storyTitle}
+                  segmentIndex={choiceHistory.length}
+                  isRevealing={isRevealing}
+                />
+              </PerspectiveContainer>
+            }
+          />
 
           {/* Choices */}
           {!currentSegment.is_ending && currentSegment.choices.length > 0 && (
@@ -354,13 +412,22 @@ function InteractiveStoryPage() {
         >
           {/* Final segment display with celebration */}
           {currentSegment && (
-            <PerspectiveContainer enableTilt={false}>
-              <StorySegmentDisplay
-                segment={currentSegment}
-                title={storyTitle}
-                segmentIndex={choiceHistory.length}
-              />
-            </PerspectiveContainer>
+            <AgeAwareContent
+              ageGroup={activeAgeGroup}
+              audioUrl={currentSegment.audio_url || onDemandAudioUrl}
+              onRequestAudio={handleRequestAudio}
+              isAudioLoading={isAudioGenerating}
+              autoPlayAudio={activeAgeGroup === '3-5'}
+              textContent={
+                <PerspectiveContainer enableTilt={false}>
+                  <StorySegmentDisplay
+                    segment={currentSegment}
+                    title={storyTitle}
+                    segmentIndex={choiceHistory.length}
+                  />
+                </PerspectiveContainer>
+              }
+            />
           )}
 
           {/* Educational Summary */}
@@ -389,6 +456,21 @@ function InteractiveStoryPage() {
 
           {/* Action buttons */}
           <div className="flex flex-col sm:flex-row gap-3">
+            <Button
+              variant="secondary"
+              size="lg"
+              className="flex-1"
+              onClick={handleSaveStory}
+              disabled={saveStatus === 'saving' || saveStatus === 'saved'}
+              isLoading={saveStatus === 'saving'}
+              leftIcon={<span>{saveStatus === 'saved' ? '✅' : '💾'}</span>}
+            >
+              {saveStatus === 'saved'
+                ? 'Saved!'
+                : saveStatus === 'error'
+                  ? 'Retry Save'
+                  : 'Save to My Stories'}
+            </Button>
             <Button
               variant="primary"
               size="lg"

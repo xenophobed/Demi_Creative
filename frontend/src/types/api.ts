@@ -1,8 +1,8 @@
 /**
- * API Types - 与后端 Pydantic 模型对应
+ * API Types - Corresponds to backend Pydantic models
  */
 
-// 枚举类型
+// Enum types
 export type AgeGroup = '3-5' | '6-9' | '10-12';
 
 export type VoiceType = 'nova' | 'shimmer' | 'alloy' | 'echo' | 'fable' | 'onyx';
@@ -11,7 +11,7 @@ export type StoryMode = 'linear' | 'interactive';
 
 export type SessionStatus = 'active' | 'completed' | 'expired';
 
-// 画作转故事请求
+// Image-to-story request
 export interface ImageToStoryRequest {
   child_id: string;
   age_group: AgeGroup;
@@ -20,33 +20,34 @@ export interface ImageToStoryRequest {
   enable_audio?: boolean;
 }
 
-// 故事内容
+// Story content
 export interface StoryContent {
   text: string;
   word_count: number;
   age_adapted: boolean;
 }
 
-// 教育价值
+// Educational value
 export interface EducationalValue {
   themes: string[];
   concepts: string[];
   moral?: string;
 }
 
-// 角色记忆
+// Character memory
 export interface CharacterMemory {
   character_name: string;
   description: string;
   appearances: number;
 }
 
-// 画作转故事响应
+// Image-to-story response
 export interface ImageToStoryResponse {
   story_id: string;
   story: StoryContent;
   image_url: string | null;
   audio_url: string | null;
+  age_group?: AgeGroup;
   educational_value: EducationalValue;
   characters: CharacterMemory[];
   analysis: Record<string, unknown>;
@@ -54,7 +55,7 @@ export interface ImageToStoryResponse {
   created_at: string;
 }
 
-// 互动故事请求
+// Interactive story request
 export interface InteractiveStoryStartRequest {
   child_id: string;
   age_group: AgeGroup;
@@ -64,23 +65,26 @@ export interface InteractiveStoryStartRequest {
   enable_audio?: boolean;
 }
 
-// 故事选项
+// Story choice
 export interface StoryChoice {
   choice_id: string;
   text: string;
   emoji: string;
 }
 
-// 故事段落
+// Story segment
 export interface StorySegment {
   segment_id: number;
   text: string;
   audio_url: string | null;
   choices: StoryChoice[];
   is_ending: boolean;
+  primary_mode?: 'audio' | 'text' | 'both';
+  optional_content_available?: boolean;
+  optional_content_type?: 'text' | 'audio' | null;
 }
 
-// 开始互动故事响应
+// Start interactive story response
 export interface InteractiveStoryStartResponse {
   session_id: string;
   story_title: string;
@@ -88,12 +92,12 @@ export interface InteractiveStoryStartResponse {
   created_at: string;
 }
 
-// 选择分支请求
+// Choice branch request
 export interface ChoiceRequest {
   choice_id: string;
 }
 
-// 选择分支响应
+// Choice branch response
 export interface ChoiceResponse {
   session_id: string;
   next_segment: StorySegment;
@@ -101,7 +105,7 @@ export interface ChoiceResponse {
   progress: number;
 }
 
-// 会话状态响应
+// Session status response
 export interface SessionStatusResponse {
   session_id: string;
   status: SessionStatus;
@@ -116,14 +120,14 @@ export interface SessionStatusResponse {
   expires_at: string;
 }
 
-// 错误详情
+// Error detail
 export interface ErrorDetail {
   field?: string;
   message: string;
   code?: string;
 }
 
-// 错误响应
+// Error response
 export interface ErrorResponse {
   error: string;
   message: string;
@@ -131,7 +135,7 @@ export interface ErrorResponse {
   timestamp: string;
 }
 
-// 健康检查响应
+// Health check response
 export interface HealthCheckResponse {
   status: string;
   version: string;
@@ -139,9 +143,59 @@ export interface HealthCheckResponse {
   services: Record<string, string>;
 }
 
-// 前端专用类型
+// ============================================================================
+// News-to-Kids Types
+// ============================================================================
 
-// 故事历史项
+export type NewsCategory =
+  | 'science'
+  | 'nature'
+  | 'technology'
+  | 'space'
+  | 'animals'
+  | 'sports'
+  | 'culture'
+  | 'general';
+
+export interface NewsToKidsRequest {
+  news_url?: string;
+  news_text?: string;
+  age_group: AgeGroup;
+  child_id: string;
+  category?: NewsCategory;
+  enable_audio?: boolean;
+  voice?: VoiceType;
+}
+
+export interface KeyConcept {
+  term: string;
+  explanation: string;
+  emoji: string;
+}
+
+export interface InteractiveQuestion {
+  question: string;
+  hint?: string;
+  emoji: string;
+}
+
+export interface NewsToKidsResponse {
+  conversion_id: string;
+  kid_title: string;
+  kid_content: string;
+  why_care: string;
+  key_concepts: KeyConcept[];
+  interactive_questions: InteractiveQuestion[];
+  category: NewsCategory;
+  age_group: AgeGroup;
+  audio_url: string | null;
+  original_url: string | null;
+  created_at: string;
+}
+
+// Frontend-specific types
+
+// Story history item
 export interface StoryHistoryItem {
   story_id: string;
   title: string;
@@ -152,7 +206,7 @@ export interface StoryHistoryItem {
   safety_score: number;
 }
 
-// 儿童配置
+// Child profile
 export interface ChildProfile {
   child_id: string;
   name: string;
@@ -161,10 +215,10 @@ export interface ChildProfile {
   avatar?: string;
 }
 
-// 上传状态
+// Upload status
 export type UploadStatus = 'idle' | 'uploading' | 'processing' | 'success' | 'error';
 
-// 音频播放状态
+// Audio playback state
 export interface AudioState {
   isPlaying: boolean;
   currentTime: number;
@@ -173,10 +227,10 @@ export interface AudioState {
 }
 
 // ============================================================================
-// 流式响应类型
+// Streaming response types
 // ============================================================================
 
-// SSE 事件类型
+// SSE event type
 export type SSEEventType =
   | 'status'
   | 'thinking'
@@ -187,7 +241,7 @@ export type SSEEventType =
   | 'complete'
   | 'error';
 
-// SSE 事件数据
+// SSE event data
 export interface SSEStatusData {
   status: 'started' | 'processing' | 'completed';
   message: string;
@@ -219,7 +273,7 @@ export interface SSEErrorData {
   message: string;
 }
 
-// 流式回调类型
+// Stream callback types
 export interface StreamCallbacks {
   onStatus?: (data: SSEStatusData) => void;
   onThinking?: (data: SSEThinkingData) => void;

@@ -1,14 +1,15 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { motion, AnimatePresence } from 'framer-motion'
-import { Howl } from 'howler'
+import { motion } from 'framer-motion'
 import Button from '@/components/common/Button'
 import Loading from '@/components/common/Loading'
+import AgeAwareContent from '@/components/common/AgeAwareContent'
 import BookContainer from '@/components/story/BookContainer'
 import StoryDisplay from '@/components/story/StoryDisplay'
 import TabbedMetadata from '@/components/story/TabbedMetadata'
 import useStoryStore from '@/store/useStoryStore'
+import useChildStore from '@/store/useChildStore'
 import storyService from '@/api/services/storyService'
 
 // Convert audio URL to full path
@@ -46,11 +47,11 @@ function StoryPage() {
   const navigate = useNavigate()
 
   const { currentStory, setCurrentStory, reset } = useStoryStore()
+  const { currentChild } = useChildStore()
 
-  // Audio state
-  const [sound, setSound] = useState<Howl | null>(null)
-  const [isPlaying, setIsPlaying] = useState(false)
-  const [isAudioLoading, setIsAudioLoading] = useState(false)
+  // On-demand audio state (for 10-12 age group)
+  const [onDemandAudioUrl, setOnDemandAudioUrl] = useState<string | null>(null)
+  const [isAudioGenerating, setIsAudioGenerating] = useState(false)
 
   // Only use currentStory if it matches the URL's storyId
   const matchingStory = currentStory?.story_id === storyId ? currentStory : null
@@ -73,46 +74,19 @@ function StoryPage() {
     }
   }, [fetchedStory, matchingStory, setCurrentStory])
 
-  // Initialize audio
-  useEffect(() => {
-    if (!story?.audio_url) return
-
-    const audioUrl = getAudioUrl(story.audio_url)
-    setIsAudioLoading(true)
-
-    const newSound = new Howl({
-      src: [audioUrl],
-      html5: true,
-      onload: () => {
-        setIsAudioLoading(false)
-      },
-      onend: () => {
-        setIsPlaying(false)
-      },
-      onloaderror: () => {
-        setIsAudioLoading(false)
-        console.error('Failed to load audio')
-      },
-    })
-
-    setSound(newSound)
-
-    return () => {
-      newSound.unload()
+  // On-demand audio handler for 10-12 age group
+  const handleRequestAudio = useCallback(async () => {
+    if (!story || isAudioGenerating) return
+    setIsAudioGenerating(true)
+    try {
+      const result = await storyService.generateAudioForStory(story.story_id)
+      setOnDemandAudioUrl(result.audio_url)
+    } catch {
+      // Silently fail - button will remain clickable
+    } finally {
+      setIsAudioGenerating(false)
     }
-  }, [story?.audio_url])
-
-  const toggleAudio = useCallback(() => {
-    if (!sound) return
-
-    if (isPlaying) {
-      sound.pause()
-      setIsPlaying(false)
-    } else {
-      sound.play()
-      setIsPlaying(true)
-    }
-  }, [sound, isPlaying])
+  }, [story, isAudioGenerating])
 
   const handleNewStory = () => {
     reset()
@@ -153,6 +127,8 @@ function StoryPage() {
   }
 
   const imageUrl = getImageUrl(story.image_url)
+  // Use the story's age_group (content was generated for it), fall back to child store
+  const ageGroup = story.age_group || currentChild?.age_group || null
 
   return (
     <motion.div
@@ -160,7 +136,7 @@ function StoryPage() {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
     >
-      {/* Header with back button and audio */}
+      {/* Header with back button */}
       <motion.header
         className="story-page-header"
         initial={{ opacity: 0, y: -20 }}
@@ -177,57 +153,8 @@ function StoryPage() {
 
         <h1 className="page-title">Your Story</h1>
 
-        {story.audio_url && (
-          <motion.button
-            className={`audio-button ${isPlaying ? 'playing' : ''}`}
-            onClick={toggleAudio}
-            disabled={isAudioLoading}
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            aria-label={isPlaying ? 'Pause story' : 'Listen to story'}
-          >
-            {isAudioLoading ? (
-              <LoadingSpinner />
-            ) : isPlaying ? (
-              <>
-                <SpeakerWaveIcon />
-                <span>Pause</span>
-              </>
-            ) : (
-              <>
-                <SpeakerIcon />
-                <span>Listen</span>
-              </>
-            )}
-
-            {/* Audio wave animation */}
-            <AnimatePresence>
-              {isPlaying && (
-                <motion.div
-                  className="audio-waves"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                >
-                  {[...Array(3)].map((_, i) => (
-                    <motion.span
-                      key={i}
-                      className="wave-bar"
-                      animate={{
-                        height: ['8px', '16px', '8px'],
-                      }}
-                      transition={{
-                        duration: 0.5,
-                        repeat: Infinity,
-                        delay: i * 0.1,
-                      }}
-                    />
-                  ))}
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </motion.button>
-        )}
+        {/* Empty spacer to maintain layout */}
+        <div className="w-10" />
       </motion.header>
 
       {/* Success notification */}
@@ -252,14 +179,23 @@ function StoryPage() {
         </div>
       </motion.div>
 
-      {/* Book container with story */}
-      <BookContainer>
-        <StoryDisplay
-          story={story.story}
-          title={story.story.text.split('\n')[0]?.slice(0, 50) || `Story #${story.story_id.slice(0, 6)}`}
-          imageUrl={imageUrl}
-        />
-      </BookContainer>
+      {/* Book container with story - age-aware display */}
+      <AgeAwareContent
+        ageGroup={ageGroup}
+        audioUrl={story.audio_url ? getAudioUrl(story.audio_url) : onDemandAudioUrl}
+        onRequestAudio={handleRequestAudio}
+        isAudioLoading={isAudioGenerating}
+        autoPlayAudio={ageGroup === '3-5'}
+        textContent={
+          <BookContainer>
+            <StoryDisplay
+              story={story.story}
+              title={story.story.text.split('\n')[0]?.slice(0, 50) || `Story #${story.story_id.slice(0, 6)}`}
+              imageUrl={imageUrl}
+            />
+          </BookContainer>
+        }
+      />
 
       {/* Tabbed metadata section */}
       <TabbedMetadata
@@ -306,43 +242,6 @@ function StoryPage() {
         Love this story? Share it with your family!
       </motion.p>
     </motion.div>
-  )
-}
-
-// Icons
-function SpeakerIcon() {
-  return (
-    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-      <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z" />
-    </svg>
-  )
-}
-
-function SpeakerWaveIcon() {
-  return (
-    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-      <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z" />
-    </svg>
-  )
-}
-
-function LoadingSpinner() {
-  return (
-    <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
-      <circle
-        className="opacity-25"
-        cx="12"
-        cy="12"
-        r="10"
-        stroke="currentColor"
-        strokeWidth="4"
-      />
-      <path
-        className="opacity-75"
-        fill="currentColor"
-        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-      />
-    </svg>
   )
 }
 

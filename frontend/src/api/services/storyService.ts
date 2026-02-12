@@ -10,10 +10,12 @@ import type {
   AgeGroup,
   VoiceType,
   StreamCallbacks,
+  NewsToKidsRequest,
+  NewsToKidsResponse,
 } from '@/types/api'
 import { consumeSSEStream } from '../utils/sseStream'
 
-// API 基础 URL
+// API base URL
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1'
 
 /**
@@ -39,13 +41,13 @@ function getAuthHeaders(): Record<string, string> {
 }
 
 /**
- * 故事服务 API
+ * Story service API
  */
 export const storyService = {
   /**
-   * 画作转故事
-   * @param image 图片文件
-   * @param params 请求参数
+   * Generate story from drawing
+   * @param image Image file
+   * @param params Request parameters
    */
   async generateStoryFromImage(
     image: File,
@@ -87,8 +89,8 @@ export const storyService = {
   },
 
   /**
-   * 画作转故事（流式）
-   * 使用 Server-Sent Events 获取实时进度
+   * Generate story from drawing (streaming)
+   * Uses Server-Sent Events for real-time progress
    */
   async generateStoryFromImageStream(
     image: File,
@@ -132,7 +134,7 @@ export const storyService = {
   },
 
   /**
-   * 开始互动故事
+   * Start interactive story
    */
   async startInteractiveStory(
     params: InteractiveStoryStartRequest
@@ -145,7 +147,7 @@ export const storyService = {
   },
 
   /**
-   * 选择互动故事分支
+   * Make a choice in interactive story
    */
   async makeChoice(
     sessionId: string,
@@ -159,7 +161,7 @@ export const storyService = {
   },
 
   /**
-   * 获取会话状态
+   * Get session status
    */
   async getSessionStatus(sessionId: string): Promise<SessionStatusResponse> {
     const response = await apiClient.get<SessionStatusResponse>(
@@ -169,7 +171,7 @@ export const storyService = {
   },
 
   /**
-   * 获取故事详情
+   * Get story details
    */
   async getStory(storyId: string): Promise<ImageToStoryResponse> {
     const response = await apiClient.get<ImageToStoryResponse>(
@@ -179,7 +181,7 @@ export const storyService = {
   },
 
   /**
-   * 获取故事历史列表
+   * Get story history list
    */
   async getStoryHistory(childId: string): Promise<ImageToStoryResponse[]> {
     const response = await apiClient.get<ImageToStoryResponse[]>(
@@ -189,7 +191,19 @@ export const storyService = {
   },
 
   /**
-   * 健康检查
+   * Save interactive story to My Stories
+   */
+  async saveInteractiveStory(
+    sessionId: string
+  ): Promise<{ story_id: string; session_id: string; message: string }> {
+    const response = await apiClient.post(
+      `/story/interactive/${sessionId}/save`
+    )
+    return response.data
+  },
+
+  /**
+   * Health check
    */
   async healthCheck(): Promise<HealthCheckResponse> {
     const response = await apiClient.get<HealthCheckResponse>('/health')
@@ -197,8 +211,8 @@ export const storyService = {
   },
 
   /**
-   * 开始互动故事（流式）
-   * 使用 Server-Sent Events 获取实时进度
+   * Start interactive story (streaming)
+   * Uses Server-Sent Events for real-time progress
    */
   async startInteractiveStoryStream(
     params: InteractiveStoryStartRequest,
@@ -221,7 +235,53 @@ export const storyService = {
   },
 
   /**
-   * 选择互动故事分支（流式）
+   * Convert news article to kid-friendly content
+   */
+  async convertNews(
+    params: NewsToKidsRequest
+  ): Promise<NewsToKidsResponse> {
+    const response = await apiClient.post<NewsToKidsResponse>(
+      '/news-to-kids/convert',
+      params
+    )
+    return response.data
+  },
+
+  /**
+   * Convert news to kids (streaming)
+   */
+  async convertNewsStream(
+    params: NewsToKidsRequest,
+    callbacks: StreamCallbacks
+  ): Promise<void> {
+    const response = await fetch(`${API_BASE_URL}/news-to-kids/convert/stream`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAuthHeaders(),
+      },
+      body: JSON.stringify(params),
+    })
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+
+    await consumeSSEStream(response, callbacks)
+  },
+
+  /**
+   * Get news conversion history
+   */
+  async getNewsHistory(childId: string): Promise<NewsToKidsResponse[]> {
+    const response = await apiClient.get<NewsToKidsResponse[]>(
+      `/news-to-kids/history/${childId}`
+    )
+    return response.data
+  },
+
+  /**
+   * Make a choice in interactive story (streaming)
    */
   async makeChoiceStream(
     sessionId: string,
@@ -245,6 +305,40 @@ export const storyService = {
     }
 
     await consumeSSEStream(response, callbacks)
+  },
+
+  /**
+   * Generate audio on-demand for an interactive story segment (10-12 age group)
+   */
+  async generateAudioOnDemand(
+    sessionId: string,
+    segmentId: number,
+    voice?: string,
+    speed?: number
+  ): Promise<{ session_id: string; segment_id: number; audio_url: string; duration?: number }> {
+    const response = await apiClient.post('/audio/generate', {
+      session_id: sessionId,
+      segment_id: segmentId,
+      voice: voice || 'alloy',
+      speed: speed || 1.1,
+    })
+    return response.data
+  },
+
+  /**
+   * Generate audio on-demand for an image-to-story (10-12 age group)
+   */
+  async generateAudioForStory(
+    storyId: string,
+    voice?: string,
+    speed?: number
+  ): Promise<{ story_id: string; audio_url: string; duration?: number }> {
+    const response = await apiClient.post('/audio/generate-for-story', {
+      story_id: storyId,
+      voice: voice || 'alloy',
+      speed: speed || 1.1,
+    })
+    return response.data
   },
 }
 
