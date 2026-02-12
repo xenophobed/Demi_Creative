@@ -41,8 +41,8 @@ class StoryRepository:
                 story_id, user_id, child_id, age_group, story_text, word_count,
                 themes, concepts, moral, characters, analysis,
                 safety_score, image_path, image_url, audio_url,
-                created_at, stored_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                story_type, created_at, stored_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 story_id,
@@ -60,6 +60,7 @@ class StoryRepository:
                 story_data.get('image_path'),
                 story_data.get('image_url'),
                 story_data.get('audio_url'),
+                story_data.get('story_type', 'image_to_story'),
                 story_data.get('created_at', now),
                 now
             )
@@ -70,13 +71,13 @@ class StoryRepository:
 
     async def get_by_id(self, story_id: str) -> Optional[Dict[str, Any]]:
         """
-        根据ID获取故事
+        Get a story by ID
 
         Args:
-            story_id: 故事ID
+            story_id: Story ID
 
         Returns:
-            Optional[Dict]: 故事数据或None
+            Optional[Dict]: Story data or None
         """
         row = await self._db.fetchone(
             "SELECT * FROM stories WHERE story_id = ?",
@@ -90,14 +91,14 @@ class StoryRepository:
 
     async def list_by_child(self, child_id: str, limit: int = 20) -> List[Dict[str, Any]]:
         """
-        获取指定儿童的故事列表
+        Get a list of stories for a specific child
 
         Args:
-            child_id: 儿童ID
-            limit: 返回数量限制
+            child_id: Child ID
+            limit: Maximum number of results to return
 
         Returns:
-            List[Dict]: 故事列表
+            List[Dict]: List of stories
         """
         rows = await self._db.fetchall(
             """
@@ -109,6 +110,34 @@ class StoryRepository:
             (child_id, limit)
         )
 
+        return [self._row_to_dict(row) for row in rows]
+
+    async def list_by_user_and_child(
+        self,
+        user_id: str,
+        child_id: str,
+        limit: int = 20,
+    ) -> List[Dict[str, Any]]:
+        """
+        Get stories scoped to a specific user AND child profile.
+
+        Args:
+            user_id: Owner's user ID
+            child_id: Child profile ID
+            limit: Maximum number of stories to return
+
+        Returns:
+            List[Dict]: Stories matching both user_id and child_id
+        """
+        rows = await self._db.fetchall(
+            """
+            SELECT * FROM stories
+            WHERE user_id = ? AND child_id = ?
+            ORDER BY created_at DESC
+            LIMIT ?
+            """,
+            (user_id, child_id, limit),
+        )
         return [self._row_to_dict(row) for row in rows]
 
     async def list_all(self, limit: int = 20) -> List[Dict[str, Any]]:
@@ -303,6 +332,7 @@ class StoryRepository:
             },
             "characters": characters,
             "analysis": analysis,
+            "story_type": row.get('story_type', 'image_to_story'),
             "safety_score": row.get('safety_score', 0.9),
             "created_at": row['created_at'],
             "stored_at": row['stored_at']

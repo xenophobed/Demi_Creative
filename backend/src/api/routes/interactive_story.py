@@ -1,17 +1,17 @@
 """
 Interactive Story API Routes
 
-互动故事 API 端点
-支持流式响应（SSE）以提供更好的用户体验
+Interactive story API endpoints
+Supports streaming responses (SSE) for a better user experience
 """
 
 import json
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional, AsyncGenerator
+from typing import AsyncGenerator
 
-from fastapi import APIRouter, HTTPException, Header, status, Path as PathParam
+from fastapi import APIRouter, Depends, HTTPException, status, Path as PathParam
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from ..models import (
@@ -20,12 +20,15 @@ from ..models import (
     ChoiceRequest,
     ChoiceResponse,
     SessionStatusResponse,
+    SaveInteractiveStoryResponse,
     StorySegment,
     StoryChoice,
     EducationalValue,
     SessionStatus as SessionStatusEnum
 )
-from ...services.database import session_repo
+from ..deps import get_current_user, get_session_for_owner
+from ...services.database import session_repo, story_repo, preference_repo
+from ...services.user_service import UserData
 from ...agents.interactive_story_agent import (
     generate_story_opening,
     generate_story_opening_stream,
@@ -38,65 +41,47 @@ from ...utils.audio_strategy import get_audio_strategy
 
 router = APIRouter(
     prefix="/api/v1/story/interactive",
-    tags=["互动故事"]
+    tags=["Interactive Story"]
 )
-
-
-async def _optional_user_id(authorization: Optional[str]) -> Optional[str]:
-    """Extract user_id from Bearer token if present, return None otherwise."""
-    if not authorization:
-        return None
-    parts = authorization.split()
-    if len(parts) != 2 or parts[0].lower() != "bearer":
-        return None
-    try:
-        from ...services.user_service import user_service
-        user = await user_service.validate_token(parts[1])
-        return user.user_id if user else None
-    except Exception:
-        return None
 
 
 @router.post(
     "/start",
     response_model=InteractiveStoryStartResponse,
-    summary="开始互动故事",
-    description="创建新的互动故事会话",
+    summary="Start interactive story",
+    description="Create a new interactive story session",
     status_code=status.HTTP_201_CREATED
 )
 async def start_interactive_story(
     request: InteractiveStoryStartRequest,
-    authorization: Optional[str] = Header(None),
+    user: UserData = Depends(get_current_user),
 ):
     """
-    开始互动故事
+    Start an interactive story
 
-    **工作流程**:
-    1. 验证请求参数
-    2. 创建新会话
-    3. 生成故事开场
-    4. 返回会话ID和第一段
+    **Workflow**:
+    1. Validate request parameters
+    2. Create a new session
+    3. Generate the story opening
+    4. Return the session ID and first segment
 
-    **示例请求**:
+    **Example request**:
     ```json
     {
       "child_id": "child_001",
       "age_group": "6-8",
-      "interests": ["动物", "冒险"],
-      "theme": "森林探险",
+      "interests": ["animals", "adventure"],
+      "theme": "forest exploration",
       "voice": "fable",
       "enable_audio": true
     }
     ```
     """
     try:
-        # Optionally extract user_id from auth token
-        user_id = await _optional_user_id(authorization)
-
         # Get audio strategy for the age group
         audio_strategy = get_audio_strategy(request.age_group.value)
 
-        # 1. 生成故事开场
+        # 1. Generate story opening
         opening_data = await generate_story_opening(
             child_id=request.child_id,
             age_group=request.age_group.value,
@@ -106,11 +91,11 @@ async def start_interactive_story(
             voice=request.voice.value
         )
 
-        # 2. 创建会话（根据年龄组确定总段落数）
+        # 2. Create session (determine total segments based on age group)
         age_config = AGE_CONFIG.get(request.age_group.value, AGE_CONFIG["6-9"])
         total_segments = age_config["total_segments"]
 
-        create_kwargs = dict(
+        session = await session_repo.create_session(
             child_id=request.child_id,
             story_title=opening_data["title"],
             age_group=request.age_group.value,
@@ -119,12 +104,10 @@ async def start_interactive_story(
             voice=request.voice.value,
             enable_audio=request.enable_audio,
             total_segments=total_segments,
+            user_id=user.user_id,
         )
-        if user_id:
-            create_kwargs["user_id"] = user_id
-        session = await session_repo.create_session(**create_kwargs)
 
-        # 3. 保存开场段落
+        # 3. Save opening segment
         segment_data = opening_data["segment"]
 
         # Handle audio URL from agent result
@@ -140,7 +123,7 @@ async def start_interactive_story(
             segment_id=segment_data["segment_id"]
         )
 
-        # 4. 构建响应 with age-based display settings
+        # 4. Build response with age-based display settings
         opening_segment = StorySegment(
             segment_id=segment_data["segment_id"],
             text=segment_data["text"],
@@ -171,48 +154,48 @@ async def start_interactive_story(
         )
 
     except Exception as e:
-        print(f"❌ Error starting interactive story: {e}")
+        print(f"Error starting interactive story: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="故事创建失败，请稍后重试"
+            detail="Story creation failed, please try again later"
         )
 
 
 @router.post(
     "/start/stream",
-    summary="开始互动故事（流式）",
-    description="创建新的互动故事会话，使用 Server-Sent Events 流式返回进度",
+    summary="Start interactive story (streaming)",
+    description="Create a new interactive story session with Server-Sent Events streaming progress",
     status_code=status.HTTP_200_OK
 )
 async def start_interactive_story_stream(
     request: InteractiveStoryStartRequest,
-    authorization: Optional[str] = Header(None),
+    user: UserData = Depends(get_current_user),
 ):
     """
-    流式开始互动故事
+    Start an interactive story with streaming
 
-    使用 Server-Sent Events (SSE) 流式返回故事生成进度。
+    Uses Server-Sent Events (SSE) to stream story generation progress.
 
-    **事件类型**:
-    - `status`: 状态更新 (started, processing)
-    - `thinking`: AI 思考过程
-    - `tool_use`: 工具使用通知
-    - `tool_result`: 工具结果
-    - `session`: 会话创建完成
-    - `result`: 故事内容
-    - `complete`: 生成完成
-    - `error`: 错误信息
+    **Event types**:
+    - `status`: Status update (started, processing)
+    - `thinking`: AI thinking process
+    - `tool_use`: Tool usage notification
+    - `tool_result`: Tool result
+    - `session`: Session creation complete
+    - `result`: Story content
+    - `complete`: Generation complete
+    - `error`: Error message
 
-    **示例事件流**:
+    **Example event stream**:
     ```
     event: status
-    data: {"status": "started", "message": "正在创作故事..."}
+    data: {"status": "started", "message": "Creating story..."}
 
     event: thinking
-    data: {"content": "让我想想...", "turn": 1}
+    data: {"content": "Let me think...", "turn": 1}
 
     event: session
-    data: {"session_id": "xxx", "story_title": "冒险之旅"}
+    data: {"session_id": "xxx", "story_title": "Adventure Journey"}
 
     event: result
     data: {"title": "...", "segment": {...}}
@@ -221,9 +204,6 @@ async def start_interactive_story_stream(
     data: {"status": "completed"}
     ```
     """
-    # Optionally extract user_id from auth token
-    user_id = await _optional_user_id(authorization)
-
     async def event_generator() -> AsyncGenerator[str, None]:
         session = None
         opening_data = None
@@ -232,7 +212,7 @@ async def start_interactive_story_stream(
         audio_strategy = get_audio_strategy(request.age_group.value)
 
         try:
-            # 流式生成故事开场
+            # Stream story opening generation
             async for event in generate_story_opening_stream(
                 child_id=request.child_id,
                 age_group=request.age_group.value,
@@ -244,29 +224,27 @@ async def start_interactive_story_stream(
                 event_type = event.get("type", "message")
                 event_data = event.get("data", {})
 
-                # 当收到结果时，创建会话
+                # When receiving a result, create the session
                 if event_type == "result":
                     opening_data = event_data
 
-                    # 创建会话
+                    # Create session
                     age_config = AGE_CONFIG.get(request.age_group.value, AGE_CONFIG["6-9"])
                     total_segments = age_config["total_segments"]
 
-                    stream_create_kwargs = dict(
+                    session = await session_repo.create_session(
                         child_id=request.child_id,
-                        story_title=opening_data.get("title", "未命名故事"),
+                        story_title=opening_data.get("title", "Untitled Story"),
                         age_group=request.age_group.value,
                         interests=request.interests,
                         theme=request.theme,
                         voice=request.voice.value,
                         enable_audio=request.enable_audio,
                         total_segments=total_segments,
+                        user_id=user.user_id,
                     )
-                    if user_id:
-                        stream_create_kwargs["user_id"] = user_id
-                    session = await session_repo.create_session(**stream_create_kwargs)
 
-                    # 保存开场段落
+                    # Save opening segment
                     segment_data = opening_data.get("segment", {})
 
                     # Handle audio URL from agent result
@@ -282,10 +260,10 @@ async def start_interactive_story_stream(
                         segment_id=segment_data.get("segment_id", 0)
                     )
 
-                    # 发送会话信息
+                    # Send session info
                     yield f"event: session\ndata: {json.dumps({'session_id': session.session_id, 'story_title': opening_data.get('title', '')}, ensure_ascii=False)}\n\n"
 
-                    # 构建完整响应数据 with age-based display settings
+                    # Build complete response data with age-based display settings
                     response_data = {
                         "session_id": session.session_id,
                         "story_title": opening_data.get("title", ""),
@@ -304,11 +282,11 @@ async def start_interactive_story_stream(
                     yield f"event: result\ndata: {json.dumps(response_data, ensure_ascii=False)}\n\n"
 
                 else:
-                    # 转发其他事件
+                    # Forward other events
                     yield f"event: {event_type}\ndata: {json.dumps(event_data, ensure_ascii=False)}\n\n"
 
         except Exception as e:
-            error_data = {"error": str(e), "message": "故事创建失败"}
+            error_data = {"error": str(e), "message": "Story creation failed"}
             yield f"event: error\ndata: {json.dumps(error_data, ensure_ascii=False)}\n\n"
 
     return StreamingResponse(
@@ -324,30 +302,23 @@ async def start_interactive_story_stream(
 
 @router.post(
     "/{session_id}/choose/stream",
-    summary="选择故事分支（流式）",
-    description="在互动故事中做出选择，使用 SSE 流式返回下一段"
+    summary="Choose story branch (streaming)",
+    description="Make a choice in the interactive story, use SSE streaming to return the next segment"
 )
 async def choose_story_branch_stream(
-    session_id: str = PathParam(..., description="会话ID"),
-    request: ChoiceRequest = ...
+    session_id: str = PathParam(..., description="Session ID"),
+    request: ChoiceRequest = ...,
+    user: UserData = Depends(get_current_user),
 ):
     """
-    流式选择故事分支
-
-    使用 Server-Sent Events 流式返回下一段故事。
+    Choose a story branch with streaming (requires authentication + session ownership)
     """
-    # 验证会话
-    session = await session_repo.get_session(session_id)
-    if not session:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="会话不存在"
-        )
+    session = await get_session_for_owner(session_id, user.user_id)
 
     if session.status != "active":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"会话已{session.status}，无法继续"
+            detail=f"Session is {session.status}, cannot continue"
         )
 
     async def event_generator() -> AsyncGenerator[str, None]:
@@ -355,7 +326,7 @@ async def choose_story_branch_stream(
         audio_strategy = get_audio_strategy(session.age_group)
 
         try:
-            # 流式生成下一段
+            # Stream next segment generation
             async for event in generate_next_segment_stream(
                 session_id=session_id,
                 choice_id=request.choice_id,
@@ -384,7 +355,7 @@ async def choose_story_branch_stream(
                         audio_filename = Path(next_data["audio_path"]).name
                         audio_url = f"/data/audio/{audio_filename}"
 
-                    # 更新会话
+                    # Update session
                     await session_repo.update_session(
                         session_id=session_id,
                         segment=segment_data,
@@ -395,10 +366,28 @@ async def choose_story_branch_stream(
                         segment_id=segment_data.get("segment_id", 0)
                     )
 
-                    # 获取更新后的会话
+                    # Update preferences on completion (Advanced Memory)
+                    if is_ending:
+                        try:
+                            await preference_repo.update_from_choices(
+                                child_id=session.child_id,
+                                choice_history=session.choice_history + [request.choice_id],
+                                session_data={
+                                    "theme": session.theme,
+                                    "interests": session.interests,
+                                },
+                            )
+                            if next_data.get("educational_summary"):
+                                await preference_repo.update_from_story_result(
+                                    session.child_id, next_data["educational_summary"]
+                                )
+                        except Exception:
+                            pass  # Non-critical
+
+                    # Get updated session
                     updated_session = await session_repo.get_session(session_id)
 
-                    # 构建响应 with age-based display settings
+                    # Build response with age-based display settings
                     response_data = {
                         "session_id": session_id,
                         "next_segment": {
@@ -421,7 +410,7 @@ async def choose_story_branch_stream(
                     yield f"event: {event_type}\ndata: {json.dumps(event_data, ensure_ascii=False)}\n\n"
 
         except Exception as e:
-            error_data = {"error": str(e), "message": "故事分支生成失败"}
+            error_data = {"error": str(e), "message": "Story branch generation failed"}
             yield f"event: error\ndata: {json.dumps(error_data, ensure_ascii=False)}\n\n"
 
     return StreamingResponse(
@@ -438,50 +427,32 @@ async def choose_story_branch_stream(
 @router.post(
     "/{session_id}/choose",
     response_model=ChoiceResponse,
-    summary="选择故事分支",
-    description="在互动故事中做出选择，获取下一段"
+    summary="Choose story branch",
+    description="Make a choice in the interactive story and get the next segment"
 )
 async def choose_story_branch(
-    session_id: str = PathParam(..., description="会话ID"),
-    request: ChoiceRequest = ...
+    session_id: str = PathParam(..., description="Session ID"),
+    request: ChoiceRequest = ...,
+    user: UserData = Depends(get_current_user),
 ):
     """
-    选择故事分支
-
-    **工作流程**:
-    1. 验证会话存在且有效
-    2. 记录选择
-    3. 生成下一段
-    4. 更新会话状态
-    5. 返回下一段内容
-
-    **示例请求**:
-    ```json
-    {
-      "choice_id": "choice_0_a"
-    }
-    ```
+    Choose a story branch (requires authentication + session ownership)
     """
     try:
-        # 1. 获取会话
-        session = await session_repo.get_session(session_id)
-        if not session:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="会话不存在"
-            )
+        # 1. Get session and verify ownership
+        session = await get_session_for_owner(session_id, user.user_id)
 
-        # 2. 检查会话状态
+        # 2. Check session status
         if session.status != "active":
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"会话已{session.status}，无法继续"
+                detail=f"Session is {session.status}, cannot continue"
             )
 
         # Get audio strategy for the age group
         audio_strategy = get_audio_strategy(session.age_group)
 
-        # 3. 生成下一段（传递完整的会话上下文）
+        # 3. Generate next segment (pass full session context)
         next_data = await generate_next_segment(
             session_id=session_id,
             choice_id=request.choice_id,
@@ -497,7 +468,7 @@ async def choose_story_branch(
             voice=session.voice
         )
 
-        # 4. 更新会话
+        # 4. Update session
         segment_data = next_data["segment"]
         is_ending = next_data.get("is_ending", False)
 
@@ -517,7 +488,25 @@ async def choose_story_branch(
             segment_id=segment_data["segment_id"]
         )
 
-        # 5. 构建响应 with age-based display settings
+        # Update preferences on completion (Advanced Memory)
+        if is_ending:
+            try:
+                await preference_repo.update_from_choices(
+                    child_id=session.child_id,
+                    choice_history=session.choice_history + [request.choice_id],
+                    session_data={
+                        "theme": session.theme,
+                        "interests": session.interests,
+                    },
+                )
+                if next_data.get("educational_summary"):
+                    await preference_repo.update_from_story_result(
+                        session.child_id, next_data["educational_summary"]
+                    )
+            except Exception:
+                pass  # Non-critical
+
+        # 5. Build response with age-based display settings
         next_segment = StorySegment(
             segment_id=segment_data["segment_id"],
             text=segment_data["text"],
@@ -532,7 +521,7 @@ async def choose_story_branch(
             optional_content_type=audio_strategy.optional_content_type
         )
 
-        # 更新后的会话
+        # Updated session
         updated_session = await session_repo.get_session(session_id)
 
         response = ChoiceResponse(
@@ -548,57 +537,31 @@ async def choose_story_branch(
         raise
 
     except Exception as e:
-        print(f"❌ Error choosing story branch: {e}")
+        print(f"Error choosing story branch: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="故事分支生成失败，请稍后重试"
+            detail="Story branch generation failed, please try again later"
         )
 
 
 @router.get(
     "/{session_id}/status",
     response_model=SessionStatusResponse,
-    summary="获取会话状态",
-    description="查询互动故事会话的当前状态"
+    summary="Get session status",
+    description="Query the current status of an interactive story session"
 )
 async def get_session_status(
-    session_id: str = PathParam(..., description="会话ID")
+    session_id: str = PathParam(..., description="Session ID"),
+    user: UserData = Depends(get_current_user),
 ):
     """
-    获取会话状态
-
-    **返回信息**:
-    - 会话基本信息
-    - 当前进度
-    - 选择历史
-    - 教育总结（如果已完成）
-
-    **示例响应**:
-    ```json
-    {
-      "session_id": "xxx",
-      "status": "active",
-      "child_id": "child_001",
-      "story_title": "神秘的冒险之旅",
-      "current_segment": 2,
-      "total_segments": 5,
-      "choice_history": ["choice_0_a", "choice_1_b"],
-      "created_at": "2024-01-26T10:00:00",
-      "updated_at": "2024-01-26T10:05:00",
-      "expires_at": "2024-01-27T10:00:00"
-    }
-    ```
+    Get session status (requires authentication + session ownership)
     """
     try:
-        # 获取会话
-        session = await session_repo.get_session(session_id)
-        if not session:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="会话不存在"
-            )
+        # Get session and verify ownership
+        session = await get_session_for_owner(session_id, user.user_id)
 
-        # 构建响应
+        # Build response
         educational_summary = None
         if session.educational_summary:
             educational_summary = EducationalValue(**session.educational_summary)
@@ -623,8 +586,86 @@ async def get_session_status(
         raise
 
     except Exception as e:
-        print(f"❌ Error getting session status: {e}")
+        print(f"Error getting session status: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="获取会话状态失败"
+            detail="Failed to get session status"
+        )
+
+
+@router.post(
+    "/{session_id}/save",
+    response_model=SaveInteractiveStoryResponse,
+    summary="Save interactive story to My Stories",
+    description="Save a completed interactive story session as a story record"
+)
+async def save_interactive_story(
+    session_id: str = PathParam(..., description="Session ID"),
+    user: UserData = Depends(get_current_user),
+):
+    """
+    Save a completed interactive story to the stories table.
+    Requires authentication + session ownership.
+    """
+    try:
+        # Get session and verify ownership
+        session = await get_session_for_owner(session_id, user.user_id)
+
+        if session.status != "completed":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Can only save completed stories"
+            )
+
+        # Concatenate all segment texts
+        full_text = "\n\n".join(
+            seg.get("text", "") for seg in session.segments if seg.get("text")
+        )
+
+        # Build story data
+        story_id = str(uuid.uuid4())
+        educational = session.educational_summary or {}
+
+        story_data = {
+            "story_id": story_id,
+            "user_id": user.user_id,
+            "child_id": session.child_id,
+            "age_group": session.age_group,
+            "story": {
+                "text": full_text,
+                "word_count": len(full_text.split()),
+                "age_adapted": True,
+            },
+            "educational_value": {
+                "themes": educational.get("themes", []),
+                "concepts": educational.get("concepts", []),
+                "moral": educational.get("moral"),
+            },
+            "characters": [],
+            "analysis": {
+                "story_type": "interactive",
+                "session_id": session_id,
+                "choices_made": len(session.choice_history),
+                "story_title": session.story_title,
+            },
+            "safety_score": 0.9,
+            "created_at": session.created_at,
+        }
+
+        await story_repo.create(story_data)
+
+        return SaveInteractiveStoryResponse(
+            story_id=story_id,
+            session_id=session_id,
+            message="Interactive story saved successfully"
+        )
+
+    except HTTPException:
+        raise
+
+    except Exception as e:
+        print(f"Error saving interactive story: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to save interactive story"
         )

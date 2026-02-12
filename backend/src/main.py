@@ -1,7 +1,7 @@
 """
 Creative Agent FastAPI Application
 
-儿童创意工坊 API 服务
+Children's Creative Workshop API Service
 """
 
 import os
@@ -20,7 +20,7 @@ from .services.database import db_manager, session_repo
 from .services.database.schema import init_schema, migrate_json_sessions
 
 
-# 加载环境变量
+# Load environment variables
 load_dotenv()
 
 
@@ -30,32 +30,32 @@ load_dotenv()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """应用生命周期管理"""
-    # 启动时
+    """Application lifecycle management"""
+    # On startup
     print("🚀 Creative Agent API Starting...")
 
-    # 连接数据库
+    # Connect to database
     await db_manager.connect()
     print("📦 Database connected")
 
-    # 初始化schema
+    # Initialize schema
     await init_schema(db_manager)
 
-    # 迁移JSON会话数据
+    # Migrate JSON session data
     migrated = await migrate_json_sessions(db_manager)
     if migrated > 0:
         print(f"📂 Migrated {migrated} JSON sessions to database")
 
-    # 清理过期会话
+    # Clean up expired sessions
     cleaned = await session_repo.cleanup_expired_sessions()
     print(f"🧹 Cleaned up {cleaned} expired sessions")
 
     yield
 
-    # 关闭时
+    # On shutdown
     print("👋 Creative Agent API Shutting down...")
 
-    # 断开数据库连接
+    # Disconnect from database
     await db_manager.disconnect()
     print("📦 Database disconnected")
 
@@ -66,7 +66,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Creative Agent API",
-    description="儿童创意工坊 - AI Agent 内容生成服务",
+    description="Children's Creative Workshop - AI Agent Content Generation Service",
     version="1.0.0",
     lifespan=lifespan,
     docs_url="/api/docs",
@@ -82,8 +82,8 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:3000",  # React 前端
-        "http://localhost:5173",  # Vite 前端
+        "http://localhost:3000",  # React frontend
+        "http://localhost:5173",  # Vite frontend
         os.getenv("FRONTEND_URL", "http://localhost:3000")
     ],
     allow_credentials=True,
@@ -101,7 +101,7 @@ async def validation_exception_handler(
     request: Request,
     exc: RequestValidationError
 ):
-    """请求验证错误处理"""
+    """Request validation error handler"""
     errors = []
 
     for error in exc.errors():
@@ -115,7 +115,7 @@ async def validation_exception_handler(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         content=ErrorResponse(
             error="ValidationError",
-            message="请求参数验证失败",
+            message="Request parameter validation failed",
             details=errors,
             timestamp=datetime.now()
         ).model_dump(mode='json')
@@ -124,7 +124,7 @@ async def validation_exception_handler(
 
 @app.exception_handler(ValueError)
 async def value_error_handler(request: Request, exc: ValueError):
-    """值错误处理"""
+    """Value error handler"""
     return JSONResponse(
         status_code=status.HTTP_400_BAD_REQUEST,
         content=ErrorResponse(
@@ -137,14 +137,14 @@ async def value_error_handler(request: Request, exc: ValueError):
 
 @app.exception_handler(Exception)
 async def general_exception_handler(request: Request, exc: Exception):
-    """通用错误处理"""
+    """General error handler"""
     print(f"❌ Unhandled exception: {exc}")
 
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content=ErrorResponse(
             error="InternalServerError",
-            message="服务器内部错误，请稍后重试",
+            message="Internal server error, please try again later",
             timestamp=datetime.now()
         ).model_dump(mode='json')
     )
@@ -157,10 +157,10 @@ async def general_exception_handler(request: Request, exc: Exception):
 @app.get(
     "/",
     response_model=HealthCheckResponse,
-    tags=["健康检查"]
+    tags=["Health Check"]
 )
 async def root():
-    """根路径健康检查"""
+    """Root path health check"""
     return HealthCheckResponse(
         status="healthy",
         version="1.0.0",
@@ -175,14 +175,14 @@ async def root():
 @app.get(
     "/health",
     response_model=HealthCheckResponse,
-    tags=["健康检查"]
+    tags=["Health Check"]
 )
 async def health_check():
-    """健康检查端点"""
-    # 检查数据库连接
+    """Health check endpoint"""
+    # Check database connection
     db_connected = db_manager.is_connected
 
-    # 检查环境变量
+    # Check environment variables
     required_env_vars = ["ANTHROPIC_API_KEY", "OPENAI_API_KEY"]
     env_vars_set = all(os.getenv(var) for var in required_env_vars)
 
@@ -208,27 +208,30 @@ async def health_check():
 # Static Files (Audio, Uploads)
 # ============================================================================
 
-# 确保目录存在
+# Ensure directories exist
 AUDIO_DIR.mkdir(parents=True, exist_ok=True)
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 VIDEO_DIR.mkdir(parents=True, exist_ok=True)
 VIDEO_JOBS_DIR.mkdir(parents=True, exist_ok=True)
 
-# 挂载静态文件
-app.mount("/data", StaticFiles(directory=str(DATA_DIR)), name="data")
+# Scoped static file mounts (blocks access to DB files, sessions, vectors, video_jobs)
+app.mount("/data/audio", StaticFiles(directory=str(AUDIO_DIR)), name="audio")
+app.mount("/data/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
+app.mount("/data/videos", StaticFiles(directory=str(VIDEO_DIR)), name="videos")
 
 
 # ============================================================================
 # API Routes
 # ============================================================================
 
-from .api.routes import image_to_story, interactive_story, audio, video, users
+from .api.routes import image_to_story, interactive_story, audio, video, users, news_to_kids
 
 app.include_router(image_to_story.router)
 app.include_router(interactive_story.router)
 app.include_router(audio.router)
 app.include_router(video.router)
 app.include_router(users.router)
+app.include_router(news_to_kids.router)
 
 
 # ============================================================================

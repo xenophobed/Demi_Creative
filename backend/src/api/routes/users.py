@@ -1,12 +1,12 @@
 """
 User API Routes
 
-用户认证和管理 API 端点
+User authentication and management API endpoints
 """
 
 from datetime import datetime
 from typing import Optional
-from fastapi import APIRouter, HTTPException, Header, status
+from fastapi import APIRouter, Depends, HTTPException, Header, status
 
 from ..models import (
     UserRegisterRequest,
@@ -19,17 +19,18 @@ from ..models import (
     UpdateProfileRequest,
     ErrorResponse,
 )
+from ..deps import get_current_user
 from ...services.user_service import user_service, UserData
 
 
 router = APIRouter(
     prefix="/api/v1/users",
-    tags=["用户认证"]
+    tags=["User Authentication"]
 )
 
 
 def _user_to_response(user: UserData) -> UserResponse:
-    """将UserData转换为UserResponse"""
+    """Convert UserData to UserResponse"""
     return UserResponse(
         user_id=user.user_id,
         username=user.username,
@@ -43,64 +44,25 @@ def _user_to_response(user: UserData) -> UserResponse:
     )
 
 
-async def get_current_user(authorization: Optional[str] = Header(None)) -> UserData:
-    """
-    从请求头获取当前用户
-
-    Args:
-        authorization: Authorization header
-
-    Returns:
-        UserData: 当前用户
-
-    Raises:
-        HTTPException: 未授权或令牌无效
-    """
-    if not authorization:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="未提供认证令牌"
-        )
-
-    # 解析 Bearer token
-    parts = authorization.split()
-    if len(parts) != 2 or parts[0].lower() != "bearer":
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="认证令牌格式错误"
-        )
-
-    token = parts[1]
-    user = await user_service.validate_token(token)
-
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="认证令牌无效或已过期"
-        )
-
-    return user
-
-
 @router.post(
     "/register",
     response_model=AuthResponse,
     status_code=status.HTTP_201_CREATED,
     responses={
-        400: {"model": ErrorResponse, "description": "请求参数错误"},
-        409: {"model": ErrorResponse, "description": "用户已存在"}
+        400: {"model": ErrorResponse, "description": "Invalid request parameters"},
+        409: {"model": ErrorResponse, "description": "User already exists"}
     },
-    summary="用户注册",
-    description="创建新用户账户并返回访问令牌"
+    summary="User registration",
+    description="Create a new user account and return an access token"
 )
 async def register(request: UserRegisterRequest):
     """
-    用户注册
+    User registration
 
-    注册流程:
-    1. 验证用户名和邮箱格式
-    2. 检查用户名和邮箱是否已存在
-    3. 创建用户并生成访问令牌
+    Registration flow:
+    1. Validate username and email format
+    2. Check if username and email already exist
+    3. Create user and generate access token
     """
     result = await user_service.register(
         username=request.username,
@@ -110,8 +72,8 @@ async def register(request: UserRegisterRequest):
     )
 
     if not result.success:
-        # 判断是参数错误还是冲突错误
-        if "已存在" in result.error or "已被注册" in result.error:
+        # Determine whether it is a parameter error or a conflict error
+        if "already exists" in result.error or "already registered" in result.error:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=result.error
@@ -135,19 +97,19 @@ async def register(request: UserRegisterRequest):
     "/login",
     response_model=AuthResponse,
     responses={
-        401: {"model": ErrorResponse, "description": "认证失败"}
+        401: {"model": ErrorResponse, "description": "Authentication failed"}
     },
-    summary="用户登录",
-    description="使用用户名/邮箱和密码登录"
+    summary="User login",
+    description="Log in with username/email and password"
 )
 async def login(request: UserLoginRequest):
     """
-    用户登录
+    User login
 
-    登录流程:
-    1. 通过用户名或邮箱查找用户
-    2. 验证密码
-    3. 生成并返回访问令牌
+    Login flow:
+    1. Find user by username or email
+    2. Verify password
+    3. Generate and return access token
     """
     result = await user_service.login(
         username_or_email=request.username_or_email,
@@ -173,14 +135,14 @@ async def login(request: UserLoginRequest):
 @router.post(
     "/logout",
     status_code=status.HTTP_204_NO_CONTENT,
-    summary="用户登出",
-    description="使当前访问令牌失效"
+    summary="User logout",
+    description="Invalidate the current access token"
 )
 async def logout(authorization: Optional[str] = Header(None)):
     """
-    用户登出
+    User logout
 
-    使当前令牌失效
+    Invalidate the current token
     """
     if authorization:
         parts = authorization.split()
@@ -192,18 +154,13 @@ async def logout(authorization: Optional[str] = Header(None)):
     "/me",
     response_model=UserResponse,
     responses={
-        401: {"model": ErrorResponse, "description": "未授权"}
+        401: {"model": ErrorResponse, "description": "Unauthorized"}
     },
-    summary="获取当前用户信息",
-    description="获取当前登录用户的信息"
+    summary="Get current user info",
+    description="Get information about the currently logged-in user"
 )
-async def get_me(authorization: Optional[str] = Header(None)):
-    """
-    获取当前用户信息
-
-    需要在请求头中提供有效的访问令牌
-    """
-    user = await get_current_user(authorization)
+async def get_me(user: UserData = Depends(get_current_user)):
+    """Get current user info"""
     return _user_to_response(user)
 
 
@@ -211,24 +168,17 @@ async def get_me(authorization: Optional[str] = Header(None)):
     "/me",
     response_model=UserResponse,
     responses={
-        401: {"model": ErrorResponse, "description": "未授权"},
-        400: {"model": ErrorResponse, "description": "请求参数错误"}
+        401: {"model": ErrorResponse, "description": "Unauthorized"},
+        400: {"model": ErrorResponse, "description": "Invalid request parameters"}
     },
-    summary="更新当前用户资料",
-    description="更新当前登录用户的显示名称和头像"
+    summary="Update current user profile",
+    description="Update the display name and avatar of the currently logged-in user"
 )
 async def update_me(
     request: UpdateProfileRequest,
-    authorization: Optional[str] = Header(None)
+    user: UserData = Depends(get_current_user),
 ):
-    """
-    更新用户资料
-
-    可更新的字段:
-    - display_name: 显示名称
-    - avatar_url: 头像URL
-    """
-    user = await get_current_user(authorization)
+    """Update user profile"""
 
     result = await user_service.update_profile(
         user_id=user.user_id,
@@ -249,22 +199,17 @@ async def update_me(
     "/me/change-password",
     response_model=UserResponse,
     responses={
-        401: {"model": ErrorResponse, "description": "未授权或旧密码错误"},
-        400: {"model": ErrorResponse, "description": "新密码不符合要求"}
+        401: {"model": ErrorResponse, "description": "Unauthorized or incorrect old password"},
+        400: {"model": ErrorResponse, "description": "New password does not meet requirements"}
     },
-    summary="修改密码",
-    description="修改当前登录用户的密码"
+    summary="Change password",
+    description="Change the password of the currently logged-in user"
 )
 async def change_password(
     request: ChangePasswordRequest,
-    authorization: Optional[str] = Header(None)
+    user: UserData = Depends(get_current_user),
 ):
-    """
-    修改密码
-
-    需要提供旧密码进行验证
-    """
-    user = await get_current_user(authorization)
+    """Change password"""
 
     result = await user_service.change_password(
         user_id=user.user_id,
@@ -273,7 +218,7 @@ async def change_password(
     )
 
     if not result.success:
-        if "旧密码" in result.error:
+        if "old password" in result.error.lower():
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail=result.error
@@ -295,9 +240,8 @@ async def change_password(
     summary="Get current user stats",
     description="Get current user info with story and session counts"
 )
-async def get_me_stats(authorization: Optional[str] = Header(None)):
+async def get_me_stats(user: UserData = Depends(get_current_user)):
     """Get current user info with content statistics"""
-    user = await get_current_user(authorization)
 
     from ...services.database import user_repo
     user_with_stats = await user_repo.get_with_stats(user.user_id)
@@ -334,10 +278,9 @@ async def get_me_stats(authorization: Optional[str] = Header(None)):
 async def get_me_stories(
     limit: int = 20,
     offset: int = 0,
-    authorization: Optional[str] = Header(None),
+    user: UserData = Depends(get_current_user),
 ):
     """Get current user's stories with pagination"""
-    user = await get_current_user(authorization)
 
     from ...services.database import user_repo
     result = await user_repo.get_user_stories(user.user_id, limit=limit, offset=offset)
@@ -356,10 +299,9 @@ async def get_me_sessions(
     status_filter: Optional[str] = None,
     limit: int = 20,
     offset: int = 0,
-    authorization: Optional[str] = Header(None),
+    user: UserData = Depends(get_current_user),
 ):
     """Get current user's interactive story sessions with pagination"""
-    user = await get_current_user(authorization)
 
     from ...services.database import user_repo
     result = await user_repo.get_user_sessions(
@@ -372,14 +314,14 @@ async def get_me_sessions(
     "/{user_id}",
     response_model=UserResponse,
     responses={
-        404: {"model": ErrorResponse, "description": "用户不存在"}
+        404: {"model": ErrorResponse, "description": "User not found"}
     },
-    summary="获取用户信息",
-    description="根据用户ID获取公开的用户信息"
+    summary="Get user info",
+    description="Get public user information by user ID"
 )
 async def get_user(user_id: str):
     """
-    获取指定用户的公开信息
+    Get public information for a specified user
     """
     from ...services.database import user_repo
 
@@ -387,7 +329,7 @@ async def get_user(user_id: str):
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="用户不存在"
+            detail="User not found"
         )
 
     return _user_to_response(user)

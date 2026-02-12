@@ -1,8 +1,8 @@
 """
 Video API Routes
 
-视频生成 API 端点
-支持从儿童画作生成动画视频
+Video generation API endpoints
+Supports generating animated videos from children's artwork
 """
 
 import json
@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import JSONResponse
 
 from ..models import (
@@ -20,24 +20,26 @@ from ..models import (
     VideoStyle,
     VideoStatus
 )
+from ..deps import get_current_user, get_story_for_owner
 from ...mcp_servers import generate_painting_video, check_video_status, combine_video_audio
 from ...services.database import story_repo
+from ...services.user_service import UserData
 
 
 router = APIRouter(
     prefix="/api/v1/video",
-    tags=["视频生成"]
+    tags=["Video Generation"]
 )
 
 
 # ============================================================================
-# 配置
+# Configuration
 # ============================================================================
 from ...paths import VIDEO_DIR, VIDEO_JOBS_DIR, DATA_DIR
 
 
 def load_job_from_file(job_id: str) -> Optional[dict]:
-    """从文件加载任务状态"""
+    """Load job status from file"""
     job_file = VIDEO_JOBS_DIR / f"{job_id}.json"
     if job_file.exists():
         with open(job_file, "r", encoding="utf-8") as f:
@@ -48,58 +50,40 @@ def load_job_from_file(job_id: str) -> Optional[dict]:
 @router.post(
     "/generate",
     response_model=VideoJobResponse,
-    summary="生成视频",
-    description="为画作故事生成动画视频",
+    summary="Generate video",
+    description="Generate an animated video for an artwork story",
     status_code=status.HTTP_202_ACCEPTED
 )
-async def generate_video(request: VideoJobRequest):
+async def generate_video(
+    request: VideoJobRequest,
+    user: UserData = Depends(get_current_user),
+):
     """
-    生成画作动画视频
-
-    **工作流程**:
-    1. 验证故事存在
-    2. 获取故事关联的画作图片
-    3. 调用视频生成服务
-    4. 返回任务ID供查询进度
-
-    **示例请求**:
-    ```json
-    {
-      "story_id": "xxx-xxx-xxx",
-      "style": "gentle_animation",
-      "include_audio": true,
-      "duration_seconds": 10
-    }
-    ```
+    Generate an artwork animation video (requires authentication + story ownership)
     """
-    # 1. 获取故事
-    story = await story_repo.get_by_id(request.story_id)
-    if not story:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"故事不存在: {request.story_id}"
-        )
+    # 1. Get story and verify ownership
+    story = await get_story_for_owner(request.story_id, user.user_id)
 
-    # 2. 获取画作图片路径
+    # 2. Get artwork image path
     image_path = story.get("image_path")
     if not image_path:
-        # 尝试从 image_url 推断路径
+        # Try to infer path from image_url
         image_url = story.get("image_url", "")
         if image_url.startswith("/data/"):
             image_path = str(DATA_DIR / image_url.removeprefix("/data/"))
         else:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="故事缺少画作图片"
+                detail="Story is missing artwork image"
             )
 
     if not Path(image_path).exists():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"画作图片文件不存在: {image_path}"
+            detail=f"Artwork image file not found: {image_path}"
         )
 
-    # 3. 调用视频生成工具
+    # 3. Call video generation tool
     try:
         result = await generate_painting_video({
             "image_path": image_path,
@@ -113,13 +97,13 @@ async def generate_video(request: VideoJobRequest):
         if not result_data.get("success") and not result_data.get("job_id"):
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=result_data.get("error", "视频生成失败")
+                detail=result_data.get("error", "Video generation failed")
             )
 
         job_id = result_data["job_id"]
         job_status = result_data.get("status", "pending")
 
-        # 计算预计完成时间
+        # Calculate estimated completion time
         estimated_completion = None
         if job_status == "pending":
             estimated_completion = datetime.now() + timedelta(minutes=5)
@@ -128,7 +112,7 @@ async def generate_video(request: VideoJobRequest):
                 result_data["estimated_completion"]
             )
 
-        # 4. 如果请求包含音频，且视频已完成，合并音频
+        # 4. If audio was requested and video is already completed, combine audio
         if request.include_audio and job_status == "completed":
             audio_url = story.get("audio_url")
             if audio_url:
@@ -144,7 +128,7 @@ async def generate_video(request: VideoJobRequest):
 
                     combine_data = json.loads(combine_result["content"][0]["text"])
                     if combine_data.get("success"):
-                        # 更新任务状态文件
+                        # Update job status file
                         job_file = VIDEO_JOBS_DIR / f"{job_id}.json"
                         if job_file.exists():
                             with open(job_file, "r", encoding="utf-8") as f:
@@ -168,46 +152,43 @@ async def generate_video(request: VideoJobRequest):
         print(f"Error generating video: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="视频生成失败，请稍后重试"
+            detail="Video generation failed, please try again later"
         )
 
 
 @router.get(
     "/status/{job_id}",
     response_model=VideoJobStatusResponse,
-    summary="查询视频生成状态",
-    description="根据任务ID查询视频生成进度"
+    summary="Check video generation status",
+    description="Check video generation progress by job ID"
 )
-async def get_video_status(job_id: str):
+async def get_video_status(
+    job_id: str,
+    user: UserData = Depends(get_current_user),
+):
     """
-    查询视频生成任务状态
-
-    **参数**:
-    - job_id: 视频生成任务ID
-
-    **返回**:
-    - 任务状态、进度和视频URL（完成时）
-
-    **示例请求**:
-    ```bash
-    curl "http://localhost:8000/api/v1/video/status/{job_id}"
-    ```
+    Check video generation job status (requires authentication + story ownership)
     """
     try:
+        # Verify ownership via the job's story_id
+        job_data_check = load_job_from_file(job_id)
+        if job_data_check and job_data_check.get("story_id"):
+            await get_story_for_owner(job_data_check["story_id"], user.user_id)
+
         result = await check_video_status({"job_id": job_id})
         result_data = json.loads(result["content"][0]["text"])
 
         if not result_data.get("success"):
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=result_data.get("error", f"任务不存在: {job_id}")
+                detail=result_data.get("error", f"Job not found: {job_id}")
             )
 
-        # 加载任务详情以获取合并后的视频URL
+        # Load job details to get combined video URL
         job_data = load_job_from_file(job_id)
         video_url = result_data.get("video_url")
 
-        # 优先使用合并后的视频
+        # Prefer combined video
         if job_data and job_data.get("combined_video_url"):
             video_url = job_data["combined_video_url"]
 
@@ -235,54 +216,49 @@ async def get_video_status(job_id: str):
         print(f"Error checking video status: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="查询状态失败"
+            detail="Failed to check status"
         )
 
 
 @router.get(
     "/{video_id}",
-    summary="获取视频信息",
-    description="根据视频ID获取视频元数据",
+    summary="Get video info",
+    description="Get video metadata by video ID",
     responses={
-        200: {"description": "成功获取视频信息"},
-        404: {"description": "视频不存在"}
+        200: {"description": "Successfully retrieved video info"},
+        404: {"description": "Video not found"}
     }
 )
-async def get_video_info(video_id: str):
+async def get_video_info(
+    video_id: str,
+    user: UserData = Depends(get_current_user),
+):
     """
-    获取视频元数据
-
-    **参数**:
-    - video_id: 视频ID（也是任务ID）
-
-    **返回**:
-    - 视频元数据，包括URL、大小、时长等
-
-    **示例请求**:
-    ```bash
-    curl "http://localhost:8000/api/v1/video/{video_id}"
-    ```
+    Get video metadata (requires authentication + story ownership)
     """
-    # 加载任务状态获取视频信息
     job_data = load_job_from_file(video_id)
 
     if not job_data:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"视频不存在: {video_id}"
+            detail=f"Video not found: {video_id}"
         )
+
+    # Verify ownership via the job's story_id
+    if job_data.get("story_id"):
+        await get_story_for_owner(job_data["story_id"], user.user_id)
 
     if job_data.get("status") != "completed":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"视频尚未生成完成，当前状态: {job_data.get('status')}"
+            detail=f"Video generation not yet complete, current status: {job_data.get('status')}"
         )
 
-    # 获取视频文件信息
+    # Get video file info
     video_path = job_data.get("video_path")
     combined_path = job_data.get("combined_video_path")
 
-    # 优先使用合并后的视频
+    # Prefer combined video
     final_path = combined_path if combined_path else video_path
     final_url = job_data.get("combined_video_url") or f"/data/videos/{job_data.get('video_filename')}"
 
@@ -307,28 +283,19 @@ async def get_video_info(video_id: str):
 
 @router.get(
     "/story/{story_id}",
-    summary="获取故事的所有视频",
-    description="获取指定故事关联的所有视频"
+    summary="Get all videos for a story",
+    description="Get all videos associated with a specific story"
 )
-async def get_videos_by_story(story_id: str):
+async def get_videos_by_story(
+    story_id: str,
+    user: UserData = Depends(get_current_user),
+):
     """
-    获取故事关联的视频列表
-
-    **参数**:
-    - story_id: 故事ID
-
-    **返回**:
-    - 该故事的所有视频列表
+    Get list of videos associated with a story (requires authentication + story ownership)
     """
-    # 验证故事存在
-    story = await story_repo.get_by_id(story_id)
-    if not story:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"故事不存在: {story_id}"
-        )
+    await get_story_for_owner(story_id, user.user_id)
 
-    # 扫描任务目录查找相关视频
+    # Scan job directory for related videos
     videos = []
     if VIDEO_JOBS_DIR.exists():
         for job_file in VIDEO_JOBS_DIR.glob("*.json"):
@@ -353,7 +320,7 @@ async def get_videos_by_story(story_id: str):
             except (json.JSONDecodeError, IOError):
                 continue
 
-    # 按创建时间排序
+    # Sort by creation time
     videos.sort(key=lambda x: x.get("created_at", ""), reverse=True)
 
     return JSONResponse(content={

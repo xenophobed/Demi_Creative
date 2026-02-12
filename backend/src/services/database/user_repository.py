@@ -99,13 +99,13 @@ class UserRepository:
 
     async def get_by_id(self, user_id: str) -> Optional[UserData]:
         """
-        根据用户ID获取用户
+        Get a user by user ID
 
         Args:
-            user_id: 用户ID
+            user_id: User ID
 
         Returns:
-            UserData 或 None
+            UserData or None
         """
         row = await self._db.fetchone(
             "SELECT * FROM users WHERE user_id = ?",
@@ -115,32 +115,32 @@ class UserRepository:
 
     async def get_by_username(self, username: str) -> Optional[UserData]:
         """
-        根据用户名获取用户
+        Get a user by username (case-insensitive).
 
         Args:
-            username: 用户名
+            username: Username
 
         Returns:
-            UserData 或 None
+            UserData or None
         """
         row = await self._db.fetchone(
-            "SELECT * FROM users WHERE username = ?",
+            "SELECT * FROM users WHERE username = ? COLLATE NOCASE",
             (username,)
         )
         return self._row_to_user(row) if row else None
 
     async def get_by_email(self, email: str) -> Optional[UserData]:
         """
-        根据邮箱获取用户
+        Get a user by email (case-insensitive).
 
         Args:
-            email: 邮箱
+            email: Email address
 
         Returns:
-            UserData 或 None
+            UserData or None
         """
         row = await self._db.fetchone(
-            "SELECT * FROM users WHERE email = ?",
+            "SELECT * FROM users WHERE email = ? COLLATE NOCASE",
             (email,)
         )
         return self._row_to_user(row) if row else None
@@ -155,18 +155,18 @@ class UserRepository:
         password_hash: Optional[str] = None
     ) -> bool:
         """
-        更新用户信息
+        Update user information
 
         Args:
-            user_id: 用户ID
-            display_name: 显示名称
-            avatar_url: 头像URL
-            is_active: 是否激活
-            is_verified: 是否验证
-            password_hash: 新密码哈希
+            user_id: User ID
+            display_name: Display name
+            avatar_url: Avatar URL
+            is_active: Whether the account is active
+            is_verified: Whether the account is verified
+            password_hash: New password hash
 
         Returns:
-            bool: 是否更新成功
+            bool: Whether the update was successful
         """
         user = await self.get_by_id(user_id)
         if not user:
@@ -207,13 +207,13 @@ class UserRepository:
 
     async def update_last_login(self, user_id: str) -> bool:
         """
-        更新最后登录时间
+        Update last login time
 
         Args:
-            user_id: 用户ID
+            user_id: User ID
 
         Returns:
-            bool: 是否更新成功
+            bool: Whether the update was successful
         """
         now = datetime.now().isoformat()
         cursor = await self._db.execute(
@@ -225,13 +225,13 @@ class UserRepository:
 
     async def delete_user(self, user_id: str) -> bool:
         """
-        删除用户
+        Delete a user
 
         Args:
-            user_id: 用户ID
+            user_id: User ID
 
         Returns:
-            bool: 是否删除成功
+            bool: Whether the deletion was successful
         """
         cursor = await self._db.execute(
             "DELETE FROM users WHERE user_id = ?",
@@ -247,15 +247,15 @@ class UserRepository:
         offset: int = 0
     ) -> List[UserData]:
         """
-        列出用户
+        List users
 
         Args:
-            is_active: 按激活状态过滤
-            limit: 返回数量限制
-            offset: 偏移量
+            is_active: Filter by active status
+            limit: Maximum number of results to return
+            offset: Pagination offset
 
         Returns:
-            List[UserData]: 用户列表
+            List[UserData]: List of users
         """
         query = "SELECT * FROM users WHERE 1=1"
         params: List = []
@@ -271,7 +271,7 @@ class UserRepository:
         return [self._row_to_user(row) for row in rows]
 
     async def check_username_exists(self, username: str) -> bool:
-        """检查用户名是否存在"""
+        """Check if username already exists."""
         row = await self._db.fetchone(
             "SELECT 1 FROM users WHERE username = ?",
             (username,)
@@ -464,6 +464,7 @@ class UserRepository:
             "themes": json.loads(row.get('themes') or '[]'),
             "image_url": row.get('image_url'),
             "audio_url": row.get('audio_url'),
+            "story_type": row.get('story_type', 'image_to_story'),
             "created_at": row['created_at']
         }
 

@@ -16,10 +16,11 @@ function LoginPage() {
   // Form mode
   const [mode, setMode] = useState<AuthMode>('login')
 
-  // Form state
-  const [username, setUsername] = useState('')
+  // Form state — pre-fill credentials in dev mode for convenience
+  const isDev = import.meta.env.DEV
+  const [username, setUsername] = useState(isDev ? 'demi2014@proton.me' : '')
   const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
+  const [password, setPassword] = useState(isDev ? '$!$Ymd@2022' : '')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [displayName, setDisplayName] = useState('')
 
