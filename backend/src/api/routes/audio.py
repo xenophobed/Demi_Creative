@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field
 from ..deps import get_current_user, get_session_for_owner, get_story_for_owner
 from ...services.database import session_repo, story_repo
 from ...services.user_service import UserData
-from ...mcp_servers import generate_story_audio
+from ...services.tts_service import generate_story_audio_file
 
 
 router = APIRouter(
@@ -63,7 +63,8 @@ async def generate_audio_on_demand(
         return AudioGenerateResponse(
             session_id=request.session_id,
             segment_id=request.segment_id,
-            audio_url=existing_url
+            audio_url=existing_url,
+            duration=None,
         )
 
     # 3. Get segment text
@@ -84,13 +85,18 @@ async def generate_audio_on_demand(
 
     # 4. Call TTS service to generate audio
     try:
-        result = await generate_story_audio(
+        result = await generate_story_audio_file(
             text=text,
             voice=request.voice,
             speed=request.speed,
-            child_id=session.child_id,
-            session_id=request.session_id
+            child_age=None,
         )
+
+        if not result.get("success"):
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=result.get("error", "Audio generation failed")
+            )
 
         audio_path = result.get("audio_path")
         if not audio_path:
@@ -163,7 +169,8 @@ async def generate_audio_for_story(
     if existing_audio:
         return StoryAudioGenerateResponse(
             story_id=request.story_id,
-            audio_url=existing_audio
+            audio_url=existing_audio,
+            duration=None,
         )
 
     # 3. Get story text
@@ -177,12 +184,18 @@ async def generate_audio_for_story(
 
     # 4. Generate TTS audio
     try:
-        result = await generate_story_audio(
+        result = await generate_story_audio_file(
             text=text,
             voice=request.voice,
             speed=request.speed,
-            child_id=story.get("child_id", ""),
+            child_age=None,
         )
+
+        if not result.get("success"):
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=result.get("error", "Audio generation failed")
+            )
 
         audio_path = result.get("audio_path")
         if not audio_path:
