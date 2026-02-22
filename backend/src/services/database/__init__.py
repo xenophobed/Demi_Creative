@@ -8,6 +8,7 @@ from .connection import DatabaseManager, db_manager
 from .story_repository import StoryRepository, story_repo
 from .session_repository import SessionRepository, session_repo
 from .user_repository import UserRepository, user_repo, UserData
+from .preference_repository import PreferenceRepository, preference_repo
 
 __all__ = [
     "DatabaseManager",
@@ -19,4 +20,6 @@ __all__ = [
     "UserRepository",
     "user_repo",
     "UserData",
+    "PreferenceRepository",
+    "preference_repo",
 ]

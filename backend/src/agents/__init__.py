@@ -14,6 +14,7 @@ from .interactive_story_agent import (
     StoryOpeningOutput,
     NextSegmentOutput
 )
+from .news_to_kids_agent import convert_news_to_kids, stream_news_to_kids
 
 __all__ = [
     # Image to Story Agent
@@ -28,4 +29,7 @@ __all__ = [
     "AGE_CONFIG",
     "StoryOpeningOutput",
     "NextSegmentOutput",
+    # News to Kids Agent
+    "convert_news_to_kids",
+    "stream_news_to_kids",
 ]

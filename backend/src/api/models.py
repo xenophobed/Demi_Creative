@@ -59,6 +59,18 @@ class VideoStatus(str, Enum):
     FAILED = "failed"
 
 
+class NewsCategory(str, Enum):
+    """新闻分类"""
+    SCIENCE = "science"
+    NATURE = "nature"
+    TECHNOLOGY = "technology"
+    SPACE = "space"
+    ANIMALS = "animals"
+    SPORTS = "sports"
+    CULTURE = "culture"
+    GENERAL = "general"
+
+
 # ============================================================================
 # 画作转故事 API Models
 # ============================================================================
@@ -257,6 +269,53 @@ class SessionStatusResponse(BaseModel):
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
     expires_at: datetime = Field(..., description="过期时间")
+
+
+class SaveInteractiveStoryResponse(BaseModel):
+    """保存互动故事响应"""
+    story_id: str = Field(..., description="保存后的故事ID")
+    session_id: str = Field(..., description="互动会话ID")
+    message: str = Field(..., description="操作结果消息")
+
+
+class KeyConceptResponse(BaseModel):
+    """新闻关键概念"""
+    term: str = Field(..., description="概念词")
+    explanation: str = Field(..., description="儿童友好解释")
+    emoji: str = Field(default="💡", description="概念图标")
+
+
+class InteractiveQuestionResponse(BaseModel):
+    """互动提问"""
+    question: str = Field(..., description="问题")
+    hint: Optional[str] = Field(None, description="提示")
+    emoji: str = Field(default="🤔", description="问题图标")
+
+
+class NewsToKidsRequest(BaseModel):
+    """新闻转儿童内容请求"""
+    child_id: str = Field(..., min_length=1, max_length=100, description="儿童唯一标识符")
+    age_group: AgeGroup = Field(..., description="年龄组")
+    category: NewsCategory = Field(default=NewsCategory.GENERAL, description="新闻分类")
+    news_url: Optional[str] = Field(None, description="新闻URL")
+    news_text: Optional[str] = Field(None, description="新闻原文")
+    enable_audio: bool = Field(default=True, description="是否生成音频")
+    voice: Optional[VoiceType] = Field(default=VoiceType.FABLE, description="语音类型")
+
+
+class NewsToKidsResponse(BaseModel):
+    """新闻转儿童内容响应"""
+    conversion_id: str = Field(..., description="转换ID")
+    kid_title: str = Field(..., description="儿童版标题")
+    kid_content: str = Field(..., description="儿童版正文")
+    why_care: str = Field(..., description="为什么重要")
+    key_concepts: List[KeyConceptResponse] = Field(default_factory=list, description="关键概念")
+    interactive_questions: List[InteractiveQuestionResponse] = Field(default_factory=list, description="互动问题")
+    category: NewsCategory = Field(..., description="新闻分类")
+    age_group: AgeGroup = Field(..., description="年龄组")
+    audio_url: Optional[str] = Field(None, description="音频URL")
+    original_url: Optional[str] = Field(None, description="原始新闻URL")
+    created_at: datetime = Field(default_factory=datetime.now, description="创建时间")
 
 
 # ============================================================================
