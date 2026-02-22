@@ -52,6 +52,7 @@ function PageContainer() {
             {/* Navigation links */}
             <div className="flex items-center gap-4">
               <NavLink to="/history" icon="📚" label="My Stories" />
+              <NavLink to="/news" icon="📰" label="News for Kids" />
 
               {/* Auth section */}
               {isAuthenticated ? (

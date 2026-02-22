@@ -206,8 +206,11 @@ export const storyService = {
    * Health check
    */
   async healthCheck(): Promise<HealthCheckResponse> {
-    const response = await apiClient.get<HealthCheckResponse>('/health')
-    return response.data
+    const response = await fetch('/health')
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+    return response.json() as Promise<HealthCheckResponse>
   },
 
   /**

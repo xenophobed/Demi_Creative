@@ -6,7 +6,7 @@ User authentication and management API endpoints
 
 from datetime import datetime
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, Header, status
+from fastapi import APIRouter, Depends, HTTPException, Header, Query, status
 
 from ..models import (
     UserRegisterRequest,
@@ -296,16 +296,19 @@ async def get_me_stories(
     description="Get paginated list of interactive story sessions for the current user"
 )
 async def get_me_sessions(
-    status_filter: Optional[str] = None,
+    status: Optional[str] = None,
+    status_filter: Optional[str] = Query(default=None, alias="status_filter"),
     limit: int = 20,
     offset: int = 0,
     user: UserData = Depends(get_current_user),
 ):
     """Get current user's interactive story sessions with pagination"""
 
+    effective_status = status if status is not None else status_filter
+
     from ...services.database import user_repo
     result = await user_repo.get_user_sessions(
-        user.user_id, status=status_filter, limit=limit, offset=offset
+        user.user_id, status=effective_status, limit=limit, offset=offset
     )
     return result
 

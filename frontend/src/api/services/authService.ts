@@ -96,8 +96,18 @@ export const authService = {
   /**
    * Get current user's interactive sessions (paginated)
    */
-  async getMySessions(params?: { status?: string; limit?: number; offset?: number }): Promise<PaginatedSessions> {
-    const response = await apiClient.get<PaginatedSessions>(`${AUTH_BASE}/me/sessions`, { params })
+  async getMySessions(params?: { status?: string; status_filter?: string; limit?: number; offset?: number }): Promise<PaginatedSessions> {
+    const normalizedParams = params
+      ? {
+          status_filter: params.status_filter ?? params.status,
+          limit: params.limit,
+          offset: params.offset,
+        }
+      : undefined
+
+    const response = await apiClient.get<PaginatedSessions>(`${AUTH_BASE}/me/sessions`, {
+      params: normalizedParams,
+    })
     return response.data
   },
 }
