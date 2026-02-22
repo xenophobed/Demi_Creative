@@ -6,6 +6,7 @@ Supports streaming responses (SSE) for a better user experience
 """
 
 import json
+import re
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -43,6 +44,7 @@ UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
+CHILD_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,100}$")
 
 
 def validate_image_file(file: UploadFile) -> None:
@@ -55,8 +57,15 @@ def validate_image_file(file: UploadFile) -> None:
     Raises:
         HTTPException: If the file does not meet requirements
     """
+    filename = file.filename
+    if not filename:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Uploaded file must include a filename"
+        )
+
     # Check file extension
-    file_ext = Path(file.filename).suffix.lower()
+    file_ext = Path(filename).suffix.lower()
     if file_ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -64,11 +73,27 @@ def validate_image_file(file: UploadFile) -> None:
         )
 
     # Check MIME type
-    if not file.content_type.startswith("image/"):
+    content_type = file.content_type
+    if not content_type or not content_type.startswith("image/"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="File must be an image type"
         )
+
+
+def validate_child_id(child_id: str) -> str:
+    """
+    Validate child_id used in file paths.
+
+    Allows only simple identifier characters to prevent path traversal.
+    """
+    normalized = child_id.strip()
+    if not CHILD_ID_PATTERN.fullmatch(normalized):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid child_id format. Use 1-100 characters: letters, numbers, underscore, hyphen"
+        )
+    return normalized
 
 
 async def save_upload_file(file: UploadFile, child_id: str) -> Path:
@@ -85,14 +110,34 @@ async def save_upload_file(file: UploadFile, child_id: str) -> Path:
     Raises:
         HTTPException: If the file is too large
     """
+    base_upload_dir = UPLOAD_DIR.resolve()
+
     # Create child-specific directory
-    child_dir = UPLOAD_DIR / child_id
+    child_dir = (base_upload_dir / child_id).resolve()
+    if base_upload_dir not in child_dir.parents:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid upload path"
+        )
+
     child_dir.mkdir(parents=True, exist_ok=True)
 
     # Generate unique filename
-    file_ext = Path(file.filename).suffix.lower()
+    filename = file.filename
+    if not filename:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Uploaded file must include a filename"
+        )
+
+    file_ext = Path(filename).suffix.lower()
     unique_filename = f"{uuid.uuid4()}{file_ext}"
-    file_path = child_dir / unique_filename
+    file_path = (child_dir / unique_filename).resolve()
+    if file_path.parent != child_dir:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid upload file path"
+        )
 
     # Save file and check size
     content = await file.read()
@@ -164,9 +209,10 @@ async def create_story_from_image(
     try:
         # 1. Validate image
         validate_image_file(image)
+        safe_child_id = validate_child_id(child_id)
 
         # 2. Save image
-        image_path = await save_upload_file(image, child_id)
+        image_path = await save_upload_file(image, safe_child_id)
 
         # 3. Parse parameters
         child_age = parse_age_group(age_group.value)
@@ -182,9 +228,9 @@ async def create_story_from_image(
         # 4. Call Agent to generate story
         result = await image_to_story(
             image_path=str(image_path),
-            child_id=child_id,
+            child_id=safe_child_id,
             child_age=child_age,
-            interests=interests_list,
+            interests=interests_list if interests_list is not None else [],
             enable_audio=enable_audio,
             voice=voice
         )
@@ -216,7 +262,7 @@ async def create_story_from_image(
             ))
 
         # Build image URL (relative to static file server)
-        image_url = f"/data/uploads/{child_id}/{image_path.name}"
+        image_url = f"/data/uploads/{safe_child_id}/{image_path.name}"
 
         # Handle audio URL from agent result
         audio_url = None
@@ -235,6 +281,8 @@ async def create_story_from_image(
             ),
             image_url=image_url,
             audio_url=audio_url,
+            video_url=None,
+            video_job_id=None,
             educational_value=educational_value,
             characters=characters,
             analysis=result.get("analysis", {}),
@@ -268,7 +316,7 @@ async def create_story_from_image(
             "analysis": result.get("analysis", {}),
             "safety_score": result.get("safety_score", 0.9),
             "created_at": created_at.isoformat(),
-            "child_id": child_id,
+            "child_id": safe_child_id,
             "age_group": age_group.value,
             "image_path": str(image_path)
         }
@@ -277,7 +325,7 @@ async def create_story_from_image(
 
         # Update child preferences (Advanced Memory)
         try:
-            await preference_repo.update_from_story_result(child_id, result)
+            await preference_repo.update_from_story_result(safe_child_id, result)
         except Exception:
             pass  # Non-critical: don't fail the request
 
@@ -347,6 +395,7 @@ async def create_story_from_image_stream(
     # Validate image
     try:
         validate_image_file(image)
+        safe_child_id = validate_child_id(child_id)
     except HTTPException as e:
         async def error_generator():
             yield f"event: error\ndata: {json.dumps({'error': 'ValidationError', 'message': e.detail}, ensure_ascii=False)}\n\n"
@@ -354,7 +403,7 @@ async def create_story_from_image_stream(
 
     # Save image
     try:
-        image_path = await save_upload_file(image, child_id)
+        image_path = await save_upload_file(image, safe_child_id)
     except HTTPException as e:
         async def error_generator():
             yield f"event: error\ndata: {json.dumps({'error': 'UploadError', 'message': e.detail}, ensure_ascii=False)}\n\n"
@@ -371,7 +420,7 @@ async def create_story_from_image_stream(
             return StreamingResponse(error_generator(), media_type="text/event-stream")
 
     # Build image URL (relative to static file server)
-    image_url = f"/data/uploads/{child_id}/{image_path.name}"
+    image_url = f"/data/uploads/{safe_child_id}/{image_path.name}"
 
     async def event_generator() -> AsyncGenerator[str, None]:
         story_id = str(uuid.uuid4())
@@ -381,9 +430,9 @@ async def create_story_from_image_stream(
             # Stream story generation
             async for event in stream_image_to_story(
                 image_path=str(image_path),
-                child_id=child_id,
+                child_id=safe_child_id,
                 child_age=child_age,
-                interests=interests_list,
+                interests=interests_list if interests_list is not None else [],
                 enable_audio=enable_audio,
                 voice=voice
             ):
@@ -435,7 +484,7 @@ async def create_story_from_image_stream(
                     # Save story to database
                     story_save_data = {
                         **response_data,
-                        "child_id": child_id,
+                        "child_id": safe_child_id,
                         "age_group": age_group.value,
                         "image_path": str(image_path)
                     }
@@ -444,7 +493,7 @@ async def create_story_from_image_stream(
 
                     # Update child preferences (Advanced Memory)
                     try:
-                        await preference_repo.update_from_story_result(child_id, result_data)
+                        await preference_repo.update_from_story_result(safe_child_id, result_data)
                     except Exception:
                         pass  # Non-critical
 

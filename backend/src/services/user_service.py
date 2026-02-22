@@ -1,10 +1,11 @@
 """
 User Service
 
-用户认证和管理服务
+User authentication and management service
 """
 
 import hashlib
+import base64
 import secrets
 from datetime import datetime, timedelta
 from typing import Optional, Tuple
@@ -15,16 +16,16 @@ from .database import user_repo, db_manager, UserData
 
 @dataclass
 class TokenData:
-    """令牌数据"""
+    """Token data"""
     access_token: str
     token_type: str = "bearer"
-    expires_in: int = 3600  # 秒
+    expires_in: int = 3600  # seconds
     user_id: str = ""
 
 
 @dataclass
 class AuthResult:
-    """认证结果"""
+    """Authentication result"""
     success: bool
     user: Optional[UserData] = None
     token: Optional[TokenData] = None
@@ -32,59 +33,106 @@ class AuthResult:
 
 
 class UserService:
-    """用户服务类"""
+    """User service class"""
 
     def __init__(self):
         self._repo = user_repo
         self._db = db_manager
         self._token_expiry_days = 30
+        self._password_scheme = "pbkdf2_sha256"
+        self._pbkdf2_iterations = 260000
 
     def _hash_password(self, password: str, salt: Optional[str] = None) -> Tuple[str, str]:
         """
-        哈希密码
+        Hash a password
 
         Args:
-            password: 明文密码
-            salt: 盐值（可选）
+            password: Plain-text password
+            salt: Salt value (optional)
 
         Returns:
-            Tuple[str, str]: (哈希值, 盐值)
+            Tuple[str, str]: (hash value, salt value)
         """
         if salt is None:
             salt = secrets.token_hex(16)
 
-        # 使用PBKDF2-like方式
+        derived_key = hashlib.pbkdf2_hmac(
+            "sha256",
+            password.encode("utf-8"),
+            salt.encode("utf-8"),
+            self._pbkdf2_iterations,
+        )
+        hash_value = base64.b64encode(derived_key).decode("ascii")
+        return (
+            f"{self._password_scheme}${self._pbkdf2_iterations}${salt}${hash_value}",
+            salt,
+        )
+
+    def _hash_password_legacy(self, password: str, salt: str) -> str:
+        """Legacy password hashing for backward compatibility."""
         salted = f"{salt}:{password}"
-        hash_value = hashlib.sha256(salted.encode()).hexdigest()
-        return f"{salt}:{hash_value}", salt
+        hash_value = hashlib.sha256(salted.encode("utf-8")).hexdigest()
+        return f"{salt}:{hash_value}"
+
+    def _verify_password_with_rehash(self, password: str, stored_hash: str) -> Tuple[bool, bool]:
+        """
+        Verify password and indicate whether the hash should be upgraded.
+
+        Returns:
+            Tuple[bool, bool]: (is_valid, should_rehash)
+        """
+        if stored_hash.startswith(f"{self._password_scheme}$"):
+            try:
+                scheme, iterations_str, salt, expected_hash = stored_hash.split("$", 3)
+                if scheme != self._password_scheme:
+                    return False, False
+
+                iterations = int(iterations_str)
+                derived_key = hashlib.pbkdf2_hmac(
+                    "sha256",
+                    password.encode("utf-8"),
+                    salt.encode("utf-8"),
+                    iterations,
+                )
+                computed_hash = base64.b64encode(derived_key).decode("ascii")
+                is_valid = secrets.compare_digest(computed_hash, expected_hash)
+                should_rehash = is_valid and iterations < self._pbkdf2_iterations
+                return is_valid, should_rehash
+            except (ValueError, TypeError):
+                return False, False
+
+        # Legacy format: "salt:sha256"
+        try:
+            salt, _ = stored_hash.split(":", 1)
+            computed_hash = self._hash_password_legacy(password, salt)
+            is_valid = secrets.compare_digest(computed_hash, stored_hash)
+            return is_valid, is_valid
+        except ValueError:
+            return False, False
 
     def _verify_password(self, password: str, stored_hash: str) -> bool:
         """
-        验证密码
+        Verify a password
 
         Args:
-            password: 明文密码
-            stored_hash: 存储的哈希值
+            password: Plain-text password
+            stored_hash: Stored hash value
 
         Returns:
-            bool: 密码是否正确
+            bool: Whether the password is correct
         """
-        try:
-            salt, _ = stored_hash.split(":", 1)
-            computed_hash, _ = self._hash_password(password, salt)
-            return secrets.compare_digest(computed_hash, stored_hash)
-        except ValueError:
-            return False
+        is_valid, _ = self._verify_password_with_rehash(password, stored_hash)
+        return is_valid
 
     async def _generate_token(self, user_id: str) -> TokenData:
         """
-        生成访问令牌并持久化到数据库
+        Generate an access token and persist it to the database
 
         Args:
-            user_id: 用户ID
+            user_id: User ID
 
         Returns:
-            TokenData: 令牌数据
+            TokenData: Token data
         """
         token = secrets.token_urlsafe(32)
         now = datetime.now()
@@ -111,38 +159,38 @@ class UserService:
         display_name: Optional[str] = None
     ) -> AuthResult:
         """
-        用户注册
+        User registration
 
         Args:
-            username: 用户名
-            email: 邮箱
-            password: 密码
-            display_name: 显示名称
+            username: Username
+            email: Email address
+            password: Password
+            display_name: Display name
 
         Returns:
-            AuthResult: 注册结果
+            AuthResult: Registration result
         """
-        # 验证用户名
+        # Validate username
         if len(username) < 3 or len(username) > 50:
-            return AuthResult(success=False, error="用户名长度必须在3-50个字符之间")
+            return AuthResult(success=False, error="Username must be between 3 and 50 characters")
 
-        # 验证邮箱格式
+        # Validate email format
         if "@" not in email or "." not in email:
-            return AuthResult(success=False, error="邮箱格式不正确")
+            return AuthResult(success=False, error="Invalid email format")
 
-        # 验证密码强度
+        # Validate password strength
         if len(password) < 6:
-            return AuthResult(success=False, error="密码长度至少6个字符")
+            return AuthResult(success=False, error="Password must be at least 6 characters")
 
-        # 检查用户名是否存在
+        # Check if username already exists
         if await self._repo.check_username_exists(username):
-            return AuthResult(success=False, error="用户名已存在")
+            return AuthResult(success=False, error="Username already exists")
 
-        # 检查邮箱是否存在
+        # Check if email already exists
         if await self._repo.check_email_exists(email):
-            return AuthResult(success=False, error="邮箱已被注册")
+            return AuthResult(success=False, error="Email already registered")
 
-        # 创建用户
+        # Create user
         password_hash, _ = self._hash_password(password)
         user = await self._repo.create_user(
             username=username,
@@ -151,7 +199,7 @@ class UserService:
             display_name=display_name
         )
 
-        # 生成令牌
+        # Generate token
         token = await self._generate_token(user.user_id)
 
         return AuthResult(
@@ -166,34 +214,40 @@ class UserService:
         password: str
     ) -> AuthResult:
         """
-        用户登录
+        User login
 
         Args:
-            username_or_email: 用户名或邮箱
-            password: 密码
+            username_or_email: Username or email
+            password: Password
 
         Returns:
-            AuthResult: 登录结果
+            AuthResult: Login result
         """
-        # 尝试用用户名或邮箱查找用户
+        # Try to find user by username or email
         user = await self._repo.get_by_username(username_or_email)
         if not user:
             user = await self._repo.get_by_email(username_or_email)
 
         if not user:
-            return AuthResult(success=False, error="用户不存在")
+            return AuthResult(success=False, error="User not found")
 
         if not user.is_active:
-            return AuthResult(success=False, error="账户已被禁用")
+            return AuthResult(success=False, error="Account has been disabled")
 
-        # 验证密码
-        if not self._verify_password(password, user.password_hash):
-            return AuthResult(success=False, error="密码错误")
+        # Verify password
+        is_valid, should_rehash = self._verify_password_with_rehash(password, user.password_hash)
+        if not is_valid:
+            return AuthResult(success=False, error="Incorrect password")
 
-        # 更新最后登录时间
+        if should_rehash:
+            upgraded_hash, _ = self._hash_password(password)
+            await self._repo.update_user(user.user_id, password_hash=upgraded_hash)
+            user.password_hash = upgraded_hash
+
+        # Update last login time
         await self._repo.update_last_login(user.user_id)
 
-        # 生成令牌
+        # Generate token
         token = await self._generate_token(user.user_id)
 
         return AuthResult(
@@ -204,13 +258,13 @@ class UserService:
 
     async def logout(self, token: str) -> bool:
         """
-        用户登出
+        User logout
 
         Args:
-            token: 访问令牌
+            token: Access token
 
         Returns:
-            bool: 是否成功
+            bool: Whether successful
         """
         row = await self._db.fetchone("SELECT id FROM tokens WHERE token = ?", (token,))
         if row:
@@ -221,13 +275,13 @@ class UserService:
 
     async def validate_token(self, token: str) -> Optional[UserData]:
         """
-        验证令牌
+        Validate a token
 
         Args:
-            token: 访问令牌
+            token: Access token
 
         Returns:
-            UserData 或 None
+            UserData or None
         """
         row = await self._db.fetchone(
             "SELECT user_id, expires_at FROM tokens WHERE token = ?", (token,)
@@ -235,7 +289,7 @@ class UserService:
         if not row:
             return None
 
-        # 检查是否过期
+        # Check if expired
         expires_at = datetime.fromisoformat(row["expires_at"])
         if datetime.now() > expires_at:
             await self._db.execute("DELETE FROM tokens WHERE token = ?", (token,))
@@ -246,13 +300,13 @@ class UserService:
 
     async def get_current_user(self, token: str) -> Optional[UserData]:
         """
-        获取当前用户（validate_token的别名）
+        Get current user (alias for validate_token)
 
         Args:
-            token: 访问令牌
+            token: Access token
 
         Returns:
-            UserData 或 None
+            UserData or None
         """
         return await self.validate_token(token)
 
@@ -263,29 +317,29 @@ class UserService:
         new_password: str
     ) -> AuthResult:
         """
-        修改密码
+        Change password
 
         Args:
-            user_id: 用户ID
-            old_password: 旧密码
-            new_password: 新密码
+            user_id: User ID
+            old_password: Old password
+            new_password: New password
 
         Returns:
-            AuthResult: 操作结果
+            AuthResult: Operation result
         """
         user = await self._repo.get_by_id(user_id)
         if not user:
-            return AuthResult(success=False, error="用户不存在")
+            return AuthResult(success=False, error="User not found")
 
-        # 验证旧密码
+        # Verify old password
         if not self._verify_password(old_password, user.password_hash):
-            return AuthResult(success=False, error="旧密码错误")
+            return AuthResult(success=False, error="Incorrect old password")
 
-        # 验证新密码
+        # Validate new password
         if len(new_password) < 6:
-            return AuthResult(success=False, error="新密码长度至少6个字符")
+            return AuthResult(success=False, error="New password must be at least 6 characters")
 
-        # 更新密码
+        # Update password
         new_hash, _ = self._hash_password(new_password)
         await self._repo.update_user(user_id, password_hash=new_hash)
 
@@ -298,15 +352,15 @@ class UserService:
         avatar_url: Optional[str] = None
     ) -> AuthResult:
         """
-        更新用户资料
+        Update user profile
 
         Args:
-            user_id: 用户ID
-            display_name: 显示名称
-            avatar_url: 头像URL
+            user_id: User ID
+            display_name: Display name
+            avatar_url: Avatar URL
 
         Returns:
-            AuthResult: 操作结果
+            AuthResult: Operation result
         """
         success = await self._repo.update_user(
             user_id,
@@ -315,17 +369,17 @@ class UserService:
         )
 
         if not success:
-            return AuthResult(success=False, error="用户不存在")
+            return AuthResult(success=False, error="User not found")
 
         user = await self._repo.get_by_id(user_id)
         return AuthResult(success=True, user=user)
 
     async def cleanup_expired_tokens(self) -> int:
         """
-        清理过期令牌
+        Clean up expired tokens
 
         Returns:
-            int: 清理的令牌数量
+            int: Number of tokens cleaned up
         """
         now = datetime.now().isoformat()
         rows = await self._db.fetchall(
@@ -337,5 +391,5 @@ class UserService:
         return len(rows)
 
 
-# 全局用户服务实例
+# Global user service instance
 user_service = UserService()
