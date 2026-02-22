@@ -50,7 +50,7 @@ export interface UpdateProfileRequest {
 
 // Change password request
 export interface ChangePasswordRequest {
-  current_password: string
+  old_password: string
   new_password: string
 }
 
