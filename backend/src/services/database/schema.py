@@ -150,6 +150,20 @@ CREATE INDEX IF NOT EXISTS idx_tokens_user_id ON tokens(user_id);
 CREATE INDEX IF NOT EXISTS idx_tokens_expires_at ON tokens(expires_at);
 """
 
+CHILD_PREFERENCES_TABLE = """
+CREATE TABLE IF NOT EXISTS child_preferences (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    child_id TEXT UNIQUE NOT NULL,
+    profile_json TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+"""
+
+CHILD_PREFERENCES_INDEXES = """
+CREATE INDEX IF NOT EXISTS idx_child_preferences_child_id ON child_preferences(child_id);
+CREATE INDEX IF NOT EXISTS idx_child_preferences_updated_at ON child_preferences(updated_at DESC);
+"""
+
 
 # ============================================================================
 # Schema Initialization
@@ -187,6 +201,15 @@ async def init_schema(db: "DatabaseManager") -> None:
     # Create tokens table
     await db.execute(TOKENS_TABLE)
     for stmt in TOKENS_INDEXES.strip().split(";"):
+        if stmt.strip():
+            try:
+                await db.execute(stmt)
+            except Exception:
+                pass
+
+    # Create child preferences table
+    await db.execute(CHILD_PREFERENCES_TABLE)
+    for stmt in CHILD_PREFERENCES_INDEXES.strip().split(";"):
         if stmt.strip():
             try:
                 await db.execute(stmt)
