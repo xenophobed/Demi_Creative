@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { useQuery } from '@tanstack/react-query'
@@ -19,11 +19,11 @@ function ProfilePage() {
   })
   const [saving, setSaving] = useState(false)
 
-  // Redirect to login if not authenticated
-  if (!isAuthenticated) {
-    navigate('/login')
-    return null
-  }
+  useEffect(() => {
+    if (!isAuthenticated) {
+      navigate('/login')
+    }
+  }, [isAuthenticated, navigate])
 
   // Fetch user stats
   const { data: stats, isLoading: statsLoading } = useQuery({
@@ -65,6 +65,10 @@ function ProfilePage() {
       month: 'long',
       day: 'numeric',
     })
+  }
+
+  if (!isAuthenticated) {
+    return null
   }
 
   return (

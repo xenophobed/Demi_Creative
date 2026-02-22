@@ -13,6 +13,53 @@ import useChildStore from '@/store/useChildStore'
 import { storyService } from '@/api/services/storyService'
 import { StoryCard } from '@/components/story/StoryDisplay'
 
+interface StarPosition {
+  top: number
+  left: number
+  duration: number
+  emoji: string
+}
+
+function FloatingStar({
+  star,
+  index,
+  mouseXSpring,
+  mouseYSpring,
+}: {
+  star: StarPosition
+  index: number
+  mouseXSpring: ReturnType<typeof useSpring>
+  mouseYSpring: ReturnType<typeof useSpring>
+}) {
+  const x = useTransform(mouseXSpring, [-1, 1], [-15 * (1 - index * 0.1), 15 * (1 - index * 0.1)])
+  const y = useTransform(mouseYSpring, [-1, 1], [-10 * (1 - index * 0.1), 10 * (1 - index * 0.1)])
+
+  return (
+    <motion.span
+      className="absolute text-2xl pointer-events-none select-none"
+      style={{
+        top: `${star.top}%`,
+        left: `${star.left}%`,
+        x,
+        y,
+      }}
+      animate={{
+        y: [0, -15, 0],
+        opacity: [0.3, 0.8, 0.3],
+        scale: [0.8, 1.1, 0.8],
+        rotate: [0, 10, -10, 0],
+      }}
+      transition={{
+        duration: star.duration,
+        repeat: Infinity,
+        delay: index * 0.2,
+      }}
+    >
+      {star.emoji}
+    </motion.span>
+  )
+}
+
 function HomePage() {
   const navigate = useNavigate()
   const { storyHistory } = useStoryStore()
@@ -37,13 +84,13 @@ function HomePage() {
 
   // Memoize star positions to prevent recalculation on every render
   const starPositions = useMemo(
-    () =>
-      [...Array(8)].map((_, i) => ({
-        top: 15 + Math.random() * 70,
-        left: 5 + Math.random() * 90,
-        duration: 2 + Math.random() * 2,
-        emoji: ['⭐', '✨', '🌟', '💫'][i % 4],
-      })),
+      () =>
+        [...Array(8)].map((_, i) => ({
+          top: 15 + Math.random() * 70,
+          left: 5 + Math.random() * 90,
+          duration: 2 + Math.random() * 2,
+          emoji: ['⭐', '✨', '🌟', '💫'][i % 4],
+        })),
     []
   )
 
@@ -77,37 +124,13 @@ function HomePage() {
         {/* Floating stars with parallax */}
         {!prefersReducedMotion &&
           starPositions.map((star, i) => (
-            <motion.span
+            <FloatingStar
               key={i}
-              className="absolute text-2xl pointer-events-none select-none"
-              style={{
-                top: `${star.top}%`,
-                left: `${star.left}%`,
-                x: useTransform(
-                  mouseXSpring,
-                  [-1, 1],
-                  [-15 * (1 - i * 0.1), 15 * (1 - i * 0.1)]
-                ),
-                y: useTransform(
-                  mouseYSpring,
-                  [-1, 1],
-                  [-10 * (1 - i * 0.1), 10 * (1 - i * 0.1)]
-                ),
-              }}
-              animate={{
-                y: [0, -15, 0],
-                opacity: [0.3, 0.8, 0.3],
-                scale: [0.8, 1.1, 0.8],
-                rotate: [0, 10, -10, 0],
-              }}
-              transition={{
-                duration: star.duration,
-                repeat: Infinity,
-                delay: i * 0.2,
-              }}
-            >
-              {star.emoji}
-            </motion.span>
+              star={star}
+              index={i}
+              mouseXSpring={mouseXSpring}
+              mouseYSpring={mouseYSpring}
+            />
           ))}
 
         {/* Main content layer - moves faster (foreground) */}
