@@ -55,6 +55,15 @@ function BookContainer({
     [rotateXSpring, rotateYSpring],
     ([rx, ry]: number[]) => 30 + Math.abs(rx) + Math.abs(ry)
   )
+  const shadowFilter = useTransform(shadowBlur, (blur) => `blur(${blur}px)`)
+  const glareBackground = useTransform(
+    [mouseXSpring, mouseYSpring],
+    ([x, y]: number[]) => {
+      const glareX = ((x + 1) / 2) * 100
+      const glareY = ((y + 1) / 2) * 100
+      return `radial-gradient(circle at ${glareX}% ${glareY}%, rgba(255,255,255,0.08) 0%, transparent 50%)`
+    }
+  )
 
   const handleMouseMove = (e: MouseEvent<HTMLDivElement>) => {
     if (prefersReducedMotion || !enableTilt || !containerRef.current) return
@@ -141,7 +150,7 @@ function BookContainer({
             style={{
               x: shadowX,
               y: shadowY,
-              filter: useTransform(shadowBlur, (blur) => `blur(${blur}px)`),
+              filter: shadowFilter,
               background: 'rgba(0, 0, 0, 0.15)',
               transform: 'translateZ(-50px)',
             }}
@@ -190,14 +199,7 @@ function BookContainer({
           <motion.div
             className="book-glare absolute inset-0 pointer-events-none rounded-inherit overflow-hidden"
             style={{
-              background: useTransform(
-                [mouseXSpring, mouseYSpring],
-                ([x, y]: number[]) => {
-                  const glareX = ((x + 1) / 2) * 100
-                  const glareY = ((y + 1) / 2) * 100
-                  return `radial-gradient(circle at ${glareX}% ${glareY}%, rgba(255,255,255,0.08) 0%, transparent 50%)`
-                }
-              ),
+              background: glareBackground,
             }}
           />
         )}

@@ -144,6 +144,7 @@ function getAnimation(config: ParticleConfig, particle: Particle) {
       }
 
     case 'burst':
+    {
       const angle = random(0, 360) * (Math.PI / 180)
       const distance = random(50, 150)
       return {
@@ -157,6 +158,7 @@ function getAnimation(config: ParticleConfig, particle: Particle) {
           ease: 'easeOut',
         },
       }
+    }
 
     case 'float':
     default:

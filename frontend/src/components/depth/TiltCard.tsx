@@ -67,6 +67,10 @@ export function TiltCard({
   const glareXSpring = useSpring(glareX, springConfig)
   const glareYSpring = useSpring(glareY, springConfig)
   const glareOpacitySpring = useSpring(glareOpacity, springConfig)
+  const glareBackground = useTransform(
+    [glareXSpring, glareYSpring],
+    ([x, y]) => `radial-gradient(circle at ${x}% ${y}%, rgba(255,255,255,0.3) 0%, transparent 50%)`
+  )
 
   // Dynamic shadow based on tilt
   const shadowX = useTransform(rotateYSpring, [-maxTilt, maxTilt], [20, -20])
@@ -136,11 +140,7 @@ export function TiltCard({
             <motion.div
               className="tilt-card-glare absolute inset-0 pointer-events-none rounded-inherit overflow-hidden"
               style={{
-                background: useTransform(
-                  [glareXSpring, glareYSpring],
-                  ([x, y]) =>
-                    `radial-gradient(circle at ${x}% ${y}%, rgba(255,255,255,0.3) 0%, transparent 50%)`
-                ),
+                background: glareBackground,
                 opacity: glareOpacitySpring,
               }}
             />
