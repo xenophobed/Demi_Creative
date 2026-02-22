@@ -22,8 +22,15 @@ from .models import (
     ChoiceRequest,
     ChoiceResponse,
     SessionStatusResponse,
+    SaveInteractiveStoryResponse,
     StorySegment,
     StoryChoice,
+    # 新闻转儿童
+    NewsCategory,
+    NewsToKidsRequest,
+    NewsToKidsResponse,
+    KeyConceptResponse,
+    InteractiveQuestionResponse,
     # 错误处理
     ErrorResponse,
     ErrorDetail,
@@ -49,8 +56,15 @@ __all__ = [
     "ChoiceRequest",
     "ChoiceResponse",
     "SessionStatusResponse",
+    "SaveInteractiveStoryResponse",
     "StorySegment",
     "StoryChoice",
+    # 新闻转儿童
+    "NewsCategory",
+    "NewsToKidsRequest",
+    "NewsToKidsResponse",
+    "KeyConceptResponse",
+    "InteractiveQuestionResponse",
     # 错误处理
     "ErrorResponse",
     "ErrorDetail",
