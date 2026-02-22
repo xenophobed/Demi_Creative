@@ -4,6 +4,7 @@
 backend/.env
 venv/
 backend/venv/
+backend/.venv/
 
 # Python
 __pycache__/
@@ -34,3 +35,11 @@ htmlcov/
 # Runtime data
 data/sessions/
 data/uploads/
+backend/data/
+
+# Frontend artifacts
+frontend/node_modules/
+frontend/dist/
+frontend/*.tsbuildinfo
+frontend/vite.config.d.ts
+frontend/vite.config.js
