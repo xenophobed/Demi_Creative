@@ -5,7 +5,7 @@ Tests for Image to Story API
 """
 
 import pytest
-from httpx import AsyncClient
+from httpx import AsyncClient, ASGITransport
 from pathlib import Path
 from io import BytesIO
 from PIL import Image
@@ -29,7 +29,7 @@ class TestImageToStoryAPI:
 
     async def test_upload_valid_image(self, sample_image):
         """测试上传有效图片"""
-        async with AsyncClient(app=app, base_url="http://test") as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             files = {
                 "image": ("drawing.png", sample_image, "image/png")
             }
@@ -53,7 +53,7 @@ class TestImageToStoryAPI:
 
     async def test_upload_invalid_file_type(self):
         """测试上传无效文件类型"""
-        async with AsyncClient(app=app, base_url="http://test") as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             # 创建文本文件
             text_file = BytesIO(b"This is not an image")
 
@@ -76,7 +76,7 @@ class TestImageToStoryAPI:
 
     async def test_upload_too_large_file(self):
         """测试上传超大文件"""
-        async with AsyncClient(app=app, base_url="http://test") as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             # 创建超大图片（模拟）
             large_file = BytesIO(b"0" * (11 * 1024 * 1024))  # 11MB
 
@@ -99,7 +99,7 @@ class TestImageToStoryAPI:
 
     async def test_missing_required_fields(self, sample_image):
         """测试缺少必填字段"""
-        async with AsyncClient(app=app, base_url="http://test") as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             files = {
                 "image": ("drawing.png", sample_image, "image/png")
             }
@@ -120,7 +120,7 @@ class TestImageToStoryAPI:
 
     async def test_invalid_age_group(self, sample_image):
         """测试无效的年龄组"""
-        async with AsyncClient(app=app, base_url="http://test") as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             files = {
                 "image": ("drawing.png", sample_image, "image/png")
             }
@@ -139,7 +139,7 @@ class TestImageToStoryAPI:
 
     async def test_too_many_interests(self, sample_image):
         """测试兴趣标签过多"""
-        async with AsyncClient(app=app, base_url="http://test") as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             files = {
                 "image": ("drawing.png", sample_image, "image/png")
             }
@@ -166,7 +166,7 @@ class TestImageToStoryResponseFormat:
     @pytest.mark.skip(reason="需要 mock Agent 响应")
     async def test_response_structure(self, sample_image):
         """测试响应结构"""
-        async with AsyncClient(app=app, base_url="http://test") as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             files = {
                 "image": ("drawing.png", sample_image, "image/png")
             }

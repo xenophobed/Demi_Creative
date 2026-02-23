@@ -5,7 +5,7 @@ Tests for Health Check API
 """
 
 import pytest
-from httpx import AsyncClient
+from httpx import AsyncClient, ASGITransport
 
 from backend.src.main import app
 
@@ -16,7 +16,7 @@ class TestHealthCheck:
 
     async def test_root_endpoint(self):
         """测试根路径"""
-        async with AsyncClient(app=app, base_url="http://test") as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             response = await client.get("/")
 
             assert response.status_code == 200
@@ -32,7 +32,7 @@ class TestHealthCheck:
 
     async def test_health_endpoint(self):
         """测试健康检查端点"""
-        async with AsyncClient(app=app, base_url="http://test") as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             response = await client.get("/health")
 
             assert response.status_code == 200
@@ -54,7 +54,7 @@ class TestHealthCheck:
 
     async def test_health_status_values(self):
         """测试健康状态值"""
-        async with AsyncClient(app=app, base_url="http://test") as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             response = await client.get("/health")
 
             assert response.status_code == 200
@@ -77,7 +77,7 @@ class TestAPIDocumentation:
 
     async def test_openapi_json(self):
         """测试 OpenAPI JSON 可访问"""
-        async with AsyncClient(app=app, base_url="http://test") as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             response = await client.get("/api/openapi.json")
 
             assert response.status_code == 200
@@ -94,7 +94,7 @@ class TestAPIDocumentation:
 
     async def test_swagger_ui_accessible(self):
         """测试 Swagger UI 可访问"""
-        async with AsyncClient(app=app, base_url="http://test") as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             response = await client.get("/api/docs")
 
             # Swagger UI 返回 HTML
@@ -103,7 +103,7 @@ class TestAPIDocumentation:
 
     async def test_redoc_accessible(self):
         """测试 ReDoc 可访问"""
-        async with AsyncClient(app=app, base_url="http://test") as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             response = await client.get("/api/redoc")
 
             # ReDoc 返回 HTML
