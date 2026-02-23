@@ -19,6 +19,15 @@ export function useAudioPlayer(src: string | null, options?: UseAudioPlayerOptio
 
   const soundRef = useRef<Howl | null>(null)
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
+  const onEndRef = useRef(options?.onEnd)
+  const onLoadRef = useRef(options?.onLoad)
+  const onErrorRef = useRef(options?.onError)
+
+  useEffect(() => {
+    onEndRef.current = options?.onEnd
+    onLoadRef.current = options?.onLoad
+    onErrorRef.current = options?.onError
+  }, [options?.onEnd, options?.onLoad, options?.onError])
 
   // 清理函数
   const cleanup = useCallback(() => {
@@ -56,7 +65,7 @@ export function useAudioPlayer(src: string | null, options?: UseAudioPlayerOptio
           duration: sound.duration(),
           isLoading: false,
         }))
-        options?.onLoad?.()
+        onLoadRef.current?.()
 
         if (options?.autoPlay) {
           sound.play()
@@ -69,15 +78,15 @@ export function useAudioPlayer(src: string | null, options?: UseAudioPlayerOptio
           isPlaying: false,
           currentTime: 0,
         }))
-        options?.onEnd?.()
+        onEndRef.current?.()
       },
       onloaderror: (_id, error) => {
         setState(prev => ({ ...prev, isLoading: false }))
-        options?.onError?.(String(error) || 'Audio failed to load')
+        onErrorRef.current?.(String(error) || 'Audio failed to load')
       },
       onplayerror: (_id, error) => {
         setState(prev => ({ ...prev, isPlaying: false }))
-        options?.onError?.(String(error) || 'Audio failed to play')
+        onErrorRef.current?.(String(error) || 'Audio failed to play')
       },
     })
 
