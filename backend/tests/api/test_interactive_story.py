@@ -10,6 +10,7 @@ from httpx import AsyncClient
 
 from backend.src.main import app
 from backend.src.services import session_manager
+from backend.src.services.database import session_repo
 
 
 @pytest.fixture(autouse=True)
@@ -185,7 +186,7 @@ class TestChooseStoryBranch:
     async def test_choose_branch_completed_session(self, active_session_id):
         """测试已完成的会话"""
         # 先将会话标记为完成
-        session_manager.update_session(
+        await session_repo.update_session(
             session_id=active_session_id,
             status="completed"
         )
