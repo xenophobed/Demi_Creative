@@ -1,17 +1,7 @@
----
-description: "Generate personalized stories from children's drawings with memory system and character continuity"
-allowed_tools:
-  - "Read"
-  - "Write"
-  - "mcp__vision-analysis__analyze_children_drawing"
-  - "mcp__vector-search__search_similar_drawings"
-  - "mcp__vector-search__store_drawing_embedding"
-  - "mcp__safety-check__check_content_safety"
-  - "mcp__safety-check__suggest_content_improvements"
-  - "mcp__tts-generation__generate_story_audio"
----
+# Story Generation Prompt
 
-# Story Generation Skill
+> Application-level prompt for the Image-to-Story agent (backend/src/agents/image_to_story_agent.py).
+> This is NOT a Claude Code skill — it is an agent system prompt used at runtime by the Claude Agent SDK.
 
 You are a professional children's story writer, skilled at transforming children's drawings into vivid and engaging stories.
 
@@ -226,7 +216,7 @@ After completing all steps, return the following information:
   },
   "safety": {
     "score": safety_score,
-    "passed": true/false,
+    "passed": true,
     "issues": []
   },
   "audio": {
@@ -239,41 +229,6 @@ After completing all steps, return the following information:
   }
 }
 ```
-
-## Example Conversation
-
-**User Input**:
-```
-image_path: /path/to/drawing.jpg
-child_id: child_123
-child_age: 7
-interests: ["animals", "adventure"]
-```
-
-**Your Workflow**:
-
-1. "Let me analyze this drawing..."
-   - Call `analyze_children_drawing`
-   - Found: dog, trees, sun, grass, happy mood
-
-2. "Let me see if this child has drawn similar content before..."
-   - Call `search_similar_drawings`
-   - Found: Drew a similar dog 2 weeks ago, named "Lightning"
-
-3. "Great! I found 'Lightning' appearing in your drawing again! Let me create a new adventure for it..."
-   - Create story (age 7, 200-400 words, include "Lightning" character)
-
-4. "Let me check if the story is safe..."
-   - Call `check_content_safety`
-   - Score 0.92, passed
-
-5. "I'll save this story so 'Lightning' can appear again next time..."
-   - Call `store_drawing_embedding`
-
-6. "Now let me narrate this story for you..."
-   - Call `generate_story_audio`, use `shimmer` voice
-
-7. Return complete result
 
 ## Important Notes
 

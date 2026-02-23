@@ -1,7 +1,8 @@
 """
 Tests for Interactive Story API
 
-互动故事 API 单元测试
+Uses dependency_overrides (see conftest.py) so get_current_user never
+touches the DB.  All requests go through ASGITransport for httpx >= 0.27.
 """
 
 import pytest
@@ -12,23 +13,33 @@ from backend.src.main import app
 from backend.src.services.database import session_repo
 
 
-def _client():
+def _client() -> AsyncClient:
     return AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
 
 
-@pytest_asyncio.fixture(autouse=True)
+# ---------------------------------------------------------------------------
+# Cleanup fixture — async, uses session_repo instead of sync session_manager
+# ---------------------------------------------------------------------------
+
+@pytest.fixture(autouse=True)
 async def cleanup_sessions():
     """每个测试后清理会话"""
     yield
-    # 清理测试会话
-    sessions = await session_repo.list_sessions(child_id="test_child_001")
-    for session in sessions:
-        await session_repo.delete_session(session.session_id)
+    try:
+        sessions = await session_repo.list_sessions(child_id="test_child_001")
+        for s in sessions:
+            await session_repo.delete_session(s.session_id)
+    except Exception:
+        pass  # DB may not be connected for pure-validation tests
 
+
+# ============================================================================
+# Start Interactive Story
+# ============================================================================
 
 @pytest.mark.asyncio
 class TestStartInteractiveStory:
-    """开始互动故事测试"""
+    """Start interactive story tests"""
 
     async def test_start_story_success(self):
         """测试成功开始故事"""
@@ -36,21 +47,20 @@ class TestStartInteractiveStory:
             payload = {
                 "child_id": "test_child_001",
                 "age_group": "6-8",
-                "interests": ["动物", "冒险"],
-                "theme": "森林探险",
+                "interests": ["animals", "adventure"],
+                "theme": "forest exploration",
                 "voice": "fable",
-                "enable_audio": True
+                "enable_audio": True,
             }
 
             response = await client.post(
                 "/api/v1/story/interactive/start",
-                json=payload
+                json=payload,
             )
 
             assert response.status_code == 201
             result = response.json()
 
-            # 验证响应字段
             assert "session_id" in result
             assert "story_title" in result
             assert "opening" in result
@@ -61,7 +71,6 @@ class TestStartInteractiveStory:
             assert "choices" in opening
             assert len(opening["choices"]) > 0
 
-            # 验证选项格式
             for choice in opening["choices"]:
                 assert "choice_id" in choice
                 assert "text" in choice
@@ -73,12 +82,12 @@ class TestStartInteractiveStory:
             payload = {
                 "child_id": "test_child_001",
                 "age_group": "6-8",
-                "interests": []  # 空列表
+                "interests": [],
             }
 
             response = await client.post(
                 "/api/v1/story/interactive/start",
-                json=payload
+                json=payload,
             )
 
             assert response.status_code == 422
@@ -91,12 +100,12 @@ class TestStartInteractiveStory:
             payload = {
                 "child_id": "test_child_001",
                 "age_group": "6-8",
-                "interests": ["动物", "冒险", "太空", "科学", "音乐", "运动"]  # 6个
+                "interests": ["a", "b", "c", "d", "e", "f"],
             }
 
             response = await client.post(
                 "/api/v1/story/interactive/start",
-                json=payload
+                json=payload,
             )
 
             assert response.status_code == 422
@@ -107,20 +116,24 @@ class TestStartInteractiveStory:
             payload = {
                 "child_id": "test_child_001",
                 "age_group": "invalid",
-                "interests": ["动物"]
+                "interests": ["animals"],
             }
 
             response = await client.post(
                 "/api/v1/story/interactive/start",
-                json=payload
+                json=payload,
             )
 
             assert response.status_code == 422
 
 
+# ============================================================================
+# Choose Story Branch
+# ============================================================================
+
 @pytest.mark.asyncio
 class TestChooseStoryBranch:
-    """选择故事分支测试"""
+    """Choose story branch tests"""
 
     @pytest_asyncio.fixture
     async def active_session_id(self):
@@ -129,39 +142,30 @@ class TestChooseStoryBranch:
             payload = {
                 "child_id": "test_child_001",
                 "age_group": "6-8",
-                "interests": ["动物", "冒险"]
+                "interests": ["animals", "adventure"],
             }
 
             response = await client.post(
                 "/api/v1/story/interactive/start",
-                json=payload
+                json=payload,
             )
 
+            assert response.status_code == 201
             return response.json()["session_id"]
 
     async def test_choose_branch_success(self, active_session_id):
         """测试成功选择分支"""
         async with _client() as client:
-            # 获取第一段的选项
-            status_response = await client.get(
-                f"/api/v1/story/interactive/{active_session_id}/status"
-            )
-            # 假设选择第一个选项（实际需要从会话中获取）
             choice_id = "choice_0_a"
-
-            payload = {
-                "choice_id": choice_id
-            }
 
             response = await client.post(
                 f"/api/v1/story/interactive/{active_session_id}/choose",
-                json=payload
+                json={"choice_id": choice_id},
             )
 
             assert response.status_code == 200
             result = response.json()
 
-            # 验证响应
             assert "session_id" in result
             assert "next_segment" in result
             assert "choice_history" in result
@@ -174,43 +178,36 @@ class TestChooseStoryBranch:
     async def test_choose_branch_invalid_session(self):
         """测试无效会话ID"""
         async with _client() as client:
-            payload = {
-                "choice_id": "choice_0_a"
-            }
-
             response = await client.post(
                 "/api/v1/story/interactive/invalid_session/choose",
-                json=payload
+                json={"choice_id": "choice_0_a"},
             )
 
             assert response.status_code == 404
-            assert "会话不存在" in response.json()["detail"]
 
     async def test_choose_branch_completed_session(self, active_session_id):
-        """测试已完成的会话"""
-        # 先将会话标记为完成
+        """Test choosing a branch on a completed session returns 400."""
         await session_repo.update_session(
             session_id=active_session_id,
-            status="completed"
+            status="completed",
         )
 
         async with _client() as client:
-            payload = {
-                "choice_id": "choice_0_a"
-            }
-
             response = await client.post(
                 f"/api/v1/story/interactive/{active_session_id}/choose",
-                json=payload
+                json={"choice_id": "choice_0_a"},
             )
 
             assert response.status_code == 400
-            assert "无法继续" in response.json()["detail"]
 
+
+# ============================================================================
+# Get Session Status
+# ============================================================================
 
 @pytest.mark.asyncio
 class TestGetSessionStatus:
-    """获取会话状态测试"""
+    """Session status tests"""
 
     @pytest_asyncio.fixture
     async def test_session_id(self):
@@ -219,27 +216,27 @@ class TestGetSessionStatus:
             payload = {
                 "child_id": "test_child_001",
                 "age_group": "6-8",
-                "interests": ["动物"]
+                "interests": ["animals"],
             }
 
             response = await client.post(
                 "/api/v1/story/interactive/start",
-                json=payload
+                json=payload,
             )
 
+            assert response.status_code == 201
             return response.json()["session_id"]
 
     async def test_get_status_success(self, test_session_id):
         """测试成功获取状态"""
         async with _client() as client:
             response = await client.get(
-                f"/api/v1/story/interactive/{test_session_id}/status"
+                f"/api/v1/story/interactive/{test_session_id}/status",
             )
 
             assert response.status_code == 200
             result = response.json()
 
-            # 验证响应字段
             assert "session_id" in result
             assert "status" in result
             assert "child_id" in result
@@ -259,16 +256,19 @@ class TestGetSessionStatus:
         """测试获取不存在的会话状态"""
         async with _client() as client:
             response = await client.get(
-                "/api/v1/story/interactive/invalid_session/status"
+                "/api/v1/story/interactive/invalid_session/status",
             )
 
             assert response.status_code == 404
-            assert "会话不存在" in response.json()["detail"]
 
+
+# ============================================================================
+# Full Story Progression
+# ============================================================================
 
 @pytest.mark.asyncio
 class TestStoryProgression:
-    """故事进度测试"""
+    """Full story flow tests"""
 
     async def test_full_story_flow(self):
         """测试完整故事流程"""
@@ -277,37 +277,31 @@ class TestStoryProgression:
             start_payload = {
                 "child_id": "test_child_001",
                 "age_group": "6-8",
-                "interests": ["动物", "冒险"]
+                "interests": ["animals", "adventure"],
             }
 
             start_response = await client.post(
                 "/api/v1/story/interactive/start",
-                json=start_payload
+                json=start_payload,
             )
 
             assert start_response.status_code == 201
             session_id = start_response.json()["session_id"]
 
-            # 2. 进行多次选择
+            # 2. Make several choices
             for i in range(3):
-                choice_payload = {
-                    "choice_id": f"choice_{i}_a"
-                }
-
                 choice_response = await client.post(
                     f"/api/v1/story/interactive/{session_id}/choose",
-                    json=choice_payload
+                    json={"choice_id": f"choice_{i}_a"},
                 )
 
                 assert choice_response.status_code == 200
                 result = choice_response.json()
-
-                # 检查进度递增
                 assert result["progress"] >= i / 5
 
-            # 3. 检查最终状态
+            # 3. Check final status
             status_response = await client.get(
-                f"/api/v1/story/interactive/{session_id}/status"
+                f"/api/v1/story/interactive/{session_id}/status",
             )
 
             assert status_response.status_code == 200

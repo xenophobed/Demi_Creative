@@ -39,6 +39,12 @@ async for message in query(
 
 ## 1. 正确的架构设计
 
+### 1.0 Artifact Graph（新增）
+
+Artifact 系统采用 Story 容器 + Artifact 一等实体的混合模型，详细设计见：
+
+- [ARTIFACT_GRAPH_MODEL.md](ARTIFACT_GRAPH_MODEL.md)
+
 ### 1.1 整体架构
 
 ```

@@ -35,6 +35,8 @@ htmlcov/
 # Runtime data
 data/sessions/
 data/uploads/
+data/audio/
+data/vectors/
 backend/data/
 
 # Frontend artifacts

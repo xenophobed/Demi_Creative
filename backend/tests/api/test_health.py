@@ -38,13 +38,11 @@ class TestHealthCheck:
             assert response.status_code == 200
             result = response.json()
 
-            # 验证响应结构
             assert "status" in result
             assert "version" in result
             assert "timestamp" in result
             assert "services" in result
 
-            # 验证服务状态
             services = result["services"]
             assert "api" in services
             assert "session_manager" in services
@@ -60,10 +58,8 @@ class TestHealthCheck:
             assert response.status_code == 200
             result = response.json()
 
-            # 状态应该是有效值
             assert result["status"] in ["healthy", "degraded", "unhealthy"]
 
-            # 各服务状态应该是有效值
             services = result["services"]
             valid_statuses = ["running", "degraded", "configured", "missing_keys"]
 
@@ -83,12 +79,10 @@ class TestAPIDocumentation:
             assert response.status_code == 200
             openapi_spec = response.json()
 
-            # 验证 OpenAPI 规范
             assert "openapi" in openapi_spec
             assert "info" in openapi_spec
             assert "paths" in openapi_spec
 
-            # 验证基本信息
             assert openapi_spec["info"]["title"] == "Creative Agent API"
             assert openapi_spec["info"]["version"] == "1.0.0"
 
@@ -97,7 +91,6 @@ class TestAPIDocumentation:
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             response = await client.get("/api/docs")
 
-            # Swagger UI 返回 HTML
             assert response.status_code == 200
             assert "text/html" in response.headers["content-type"]
 
@@ -106,6 +99,5 @@ class TestAPIDocumentation:
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             response = await client.get("/api/redoc")
 
-            # ReDoc 返回 HTML
             assert response.status_code == 200
             assert "text/html" in response.headers["content-type"]

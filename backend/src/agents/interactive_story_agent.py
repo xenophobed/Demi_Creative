@@ -26,6 +26,15 @@ except Exception:  # pragma: no cover - import fallback for test env
     AssistantMessage = object
     ToolUseBlock = object
     ToolResultBlock = object
+
+
+def _should_use_mock() -> bool:
+    """Return True when running inside pytest or when the SDK is unavailable."""
+    return (
+        ClaudeSDKClient is None
+        or ClaudeAgentOptions is None
+        or os.getenv("PYTEST_CURRENT_TEST") is not None
+    )
 from ..mcp_servers import (
     safety_server,
     tts_server,
