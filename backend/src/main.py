@@ -189,7 +189,7 @@ async def health_check():
     services_status = {
         "api": "running",
         "database": "running" if db_connected else "degraded",
-        "session_manager": "running",
+        "session_manager": "running" if db_connected else "degraded",
         "environment": "configured" if env_vars_set else "missing_keys"
     }
 

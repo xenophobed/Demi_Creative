@@ -14,20 +14,28 @@ from ..services.database import story_repo, session_repo, db_manager
 from ..services.database.session_repository import SessionData
 
 
+def _is_pytest_runtime() -> bool:
+    return os.getenv("PYTEST_CURRENT_TEST") is not None
+
+
+def _allow_test_auth_bypass() -> bool:
+    return os.getenv("ENVIRONMENT") == "test" and _is_pytest_runtime()
+
+
 async def get_current_user(authorization: Optional[str] = Header(None)) -> UserData:
     """
     Parse Bearer token and validate. Raises 401 on failure.
 
     Usage: user: UserData = Depends(get_current_user)
     """
-    if os.getenv("ENVIRONMENT") == "test" and not db_manager.is_connected:
+    if _allow_test_auth_bypass() and not db_manager.is_connected:
         from ..services.database.schema import init_schema
 
         await db_manager.connect()
         await init_schema(db_manager)
 
     if not authorization:
-        if os.getenv("ENVIRONMENT") == "test":
+        if _allow_test_auth_bypass():
             await db_manager.execute(
                 """
                 INSERT OR IGNORE INTO users (
