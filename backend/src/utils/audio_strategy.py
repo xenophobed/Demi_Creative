@@ -40,6 +40,15 @@ _AUDIO_STRATEGIES = {
         optional_content_available=True,
         optional_content_type="text"  # "Show Text" button
     ),
+    "6-8": AudioStrategy(
+        mode=AudioMode.SIMULTANEOUS,
+        auto_generate_audio=True,
+        default_voice="shimmer",  # Lively voice for this age group
+        default_speed=1.0,
+        primary_mode="both",
+        optional_content_available=False,
+        optional_content_type=None
+    ),
     "6-9": AudioStrategy(
         mode=AudioMode.SIMULTANEOUS,
         auto_generate_audio=True,

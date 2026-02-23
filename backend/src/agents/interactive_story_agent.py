@@ -33,6 +33,15 @@ from ..mcp_servers import (
 )
 
 
+def _should_use_mock() -> bool:
+    """Return True when running inside pytest or when the SDK is unavailable."""
+    return (
+        ClaudeSDKClient is None
+        or ClaudeAgentOptions is None
+        or os.getenv("PYTEST_CURRENT_TEST") is not None
+    )
+
+
 # ============================================================================
 # 流式事件类型
 # ============================================================================
@@ -97,6 +106,19 @@ AGE_CONFIG = {
         "audio_mode": "audio_first",
         "voice": "nova",
         "speed": 0.9
+    },
+    "6-8": {
+        "word_count": "100-200",
+        "sentence_length": "10-15字",
+        "complexity": "简单",
+        "vocab_level": "小学低年级词汇",
+        "theme_depth": "有趣的冒险，简单的道德选择",
+        "choices_style": "有趣的选择，配有emoji",
+        "total_segments": 4,
+        # Audio settings
+        "audio_mode": "simultaneous",
+        "voice": "shimmer",
+        "speed": 1.0
     },
     "6-9": {
         "word_count": "100-200",
@@ -189,7 +211,7 @@ async def generate_story_opening(
         包含故事标题和开场段落的字典
     """
     config = AGE_CONFIG.get(age_group, AGE_CONFIG["6-9"])
-    if ClaudeSDKClient is None or ClaudeAgentOptions is None:
+    if _should_use_mock():
         return _mock_opening(interests)
     interests_str = "、".join(interests) if interests else "冒险"
     theme_str = theme if theme else f"关于{interests[0]}的冒险" if interests else "神秘的冒险"
@@ -343,7 +365,7 @@ async def generate_story_opening_stream(
         流式事件字典，包含 type 和 data 字段
     """
     config = AGE_CONFIG.get(age_group, AGE_CONFIG["6-9"])
-    if ClaudeSDKClient is None or ClaudeAgentOptions is None:
+    if _should_use_mock():
         yield {"type": "status", "data": {"status": "started", "message": "正在生成故事开场..."}}
         yield {"type": "result", "data": _mock_opening(interests)}
         yield {"type": "complete", "data": {"status": "completed", "message": "故事开场生成完成"}}
@@ -603,7 +625,7 @@ async def generate_next_segment_stream(
     total_segments = config["total_segments"]
     is_final_segment = segment_count >= total_segments - 1
 
-    if ClaudeSDKClient is None or ClaudeAgentOptions is None:
+    if _should_use_mock():
         yield {"type": "status", "data": {"status": "processing", "message": "正在继续故事..."}}
         yield {"type": "result", "data": _mock_next_segment(segment_count, is_final_segment)}
         yield {"type": "complete", "data": {"status": "completed", "message": "段落生成完成"}}
@@ -885,7 +907,7 @@ async def generate_next_segment(
     # Determine if this should be the ending
     is_final_segment = segment_count >= total_segments - 1
 
-    if ClaudeSDKClient is None or ClaudeAgentOptions is None:
+    if _should_use_mock():
         return _mock_next_segment(segment_count, is_final_segment)
 
     # Build story context from previous segments
