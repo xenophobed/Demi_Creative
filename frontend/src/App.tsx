@@ -11,6 +11,7 @@ const HistoryPage = lazy(() => import('./pages/HistoryPage'))
 const InteractiveStoryPage = lazy(() => import('./pages/InteractiveStoryPage'))
 const LoginPage = lazy(() => import('./pages/LoginPage'))
 const ProfilePage = lazy(() => import('./pages/ProfilePage'))
+const NewsPage = lazy(() => import('./pages/NewsPage'))
 
 function App() {
   return (
@@ -26,6 +27,7 @@ function App() {
           <Route path="story/:storyId" element={<StoryPage />} />
           <Route path="history" element={<HistoryPage />} />
           <Route path="interactive" element={<InteractiveStoryPage />} />
+          <Route path="news" element={<NewsPage />} />
           <Route path="profile" element={<ProfilePage />} />
         </Route>
       </Routes>
