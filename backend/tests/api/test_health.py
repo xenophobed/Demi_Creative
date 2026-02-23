@@ -5,7 +5,7 @@ Tests for Health Check API
 """
 
 import pytest
-from httpx import AsyncClient
+from httpx import AsyncClient, ASGITransport
 
 from backend.src.main import app
 
@@ -16,7 +16,7 @@ class TestHealthCheck:
 
     async def test_root_endpoint(self):
         """测试根路径"""
-        async with AsyncClient(app=app, base_url="http://test") as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             response = await client.get("/")
 
             assert response.status_code == 200
@@ -31,20 +31,18 @@ class TestHealthCheck:
             assert result["version"] == "1.0.0"
 
     async def test_health_endpoint(self):
-        """测试健康检查端点"""
-        async with AsyncClient(app=app, base_url="http://test") as client:
+        """Test health check endpoint"""
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             response = await client.get("/health")
 
             assert response.status_code == 200
             result = response.json()
 
-            # 验证响应结构
             assert "status" in result
             assert "version" in result
             assert "timestamp" in result
             assert "services" in result
 
-            # 验证服务状态
             services = result["services"]
             assert "api" in services
             assert "session_manager" in services
@@ -53,17 +51,15 @@ class TestHealthCheck:
             assert services["api"] == "running"
 
     async def test_health_status_values(self):
-        """测试健康状态值"""
-        async with AsyncClient(app=app, base_url="http://test") as client:
+        """Test health status values"""
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             response = await client.get("/health")
 
             assert response.status_code == 200
             result = response.json()
 
-            # 状态应该是有效值
             assert result["status"] in ["healthy", "degraded", "unhealthy"]
 
-            # 各服务状态应该是有效值
             services = result["services"]
             valid_statuses = ["running", "degraded", "configured", "missing_keys"]
 
@@ -76,36 +72,32 @@ class TestAPIDocumentation:
     """API 文档测试"""
 
     async def test_openapi_json(self):
-        """测试 OpenAPI JSON 可访问"""
-        async with AsyncClient(app=app, base_url="http://test") as client:
+        """Test OpenAPI JSON is accessible"""
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             response = await client.get("/api/openapi.json")
 
             assert response.status_code == 200
             openapi_spec = response.json()
 
-            # 验证 OpenAPI 规范
             assert "openapi" in openapi_spec
             assert "info" in openapi_spec
             assert "paths" in openapi_spec
 
-            # 验证基本信息
             assert openapi_spec["info"]["title"] == "Creative Agent API"
             assert openapi_spec["info"]["version"] == "1.0.0"
 
     async def test_swagger_ui_accessible(self):
-        """测试 Swagger UI 可访问"""
-        async with AsyncClient(app=app, base_url="http://test") as client:
+        """Test Swagger UI is accessible"""
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             response = await client.get("/api/docs")
 
-            # Swagger UI 返回 HTML
             assert response.status_code == 200
             assert "text/html" in response.headers["content-type"]
 
     async def test_redoc_accessible(self):
-        """测试 ReDoc 可访问"""
-        async with AsyncClient(app=app, base_url="http://test") as client:
+        """Test ReDoc is accessible"""
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             response = await client.get("/api/redoc")
 
-            # ReDoc 返回 HTML
             assert response.status_code == 200
             assert "text/html" in response.headers["content-type"]

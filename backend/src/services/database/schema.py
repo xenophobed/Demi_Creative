@@ -240,6 +240,10 @@ async def init_schema(db: "DatabaseManager") -> None:
 
     await db.commit()
 
+    # Initialize artifact graph schema (Phase 2 of Issue #13)
+    from .schema_artifacts import init_artifact_schema
+    await init_artifact_schema(db)
+
     print("Database schema initialized")
 
 

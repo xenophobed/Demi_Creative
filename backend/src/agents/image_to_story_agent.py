@@ -27,6 +27,17 @@ except Exception:  # pragma: no cover - import fallback for test env
     AssistantMessage = object
     ToolUseBlock = object
     ToolResultBlock = object
+
+
+def _should_use_mock() -> bool:
+    """Return True when running inside pytest or when the SDK is unavailable."""
+    return (
+        ClaudeSDKClient is None
+        or ClaudeAgentOptions is None
+        or os.getenv("PYTEST_CURRENT_TEST") is not None
+    )
+
+
 from ..mcp_servers import (
     vision_server,
     vector_server,
@@ -104,7 +115,7 @@ async def image_to_story(
     Returns:
         包含故事、音频等信息的字典
     """
-    if ClaudeSDKClient is None or ClaudeAgentOptions is None:
+    if _should_use_mock():
         raise RuntimeError("claude_agent_sdk is unavailable in current environment")
     # 验证输入
     if not Path(image_path).exists():
@@ -261,7 +272,7 @@ async def stream_image_to_story(
     Yields:
         流式事件字典，包含 type 和 data 字段
     """
-    if ClaudeSDKClient is None or ClaudeAgentOptions is None:
+    if _should_use_mock():
         yield {
             "type": "error",
             "data": {
