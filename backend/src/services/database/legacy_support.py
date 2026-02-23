@@ -248,12 +248,12 @@ async def create_story_with_artifacts(
         )
     """
     import uuid
-    from datetime import datetime
+    from datetime import datetime, timezone
 
     story_id = story_data.get("story_id") or str(uuid.uuid4())
 
     # Create story record
-    now = datetime.utcnow().isoformat() + "Z"
+    now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
     # Build insert statement with all provided fields
     fields = ["story_id", "created_at", "stored_at"]

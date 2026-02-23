@@ -15,7 +15,7 @@ Design Principles:
 from enum import Enum
 from typing import Optional, Dict, Any, List
 from datetime import datetime
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 # ============================================================================
@@ -117,16 +117,14 @@ class ArtifactMetadata(BaseModel):
     # Custom metadata
     custom: Optional[Dict[str, Any]] = Field(None, description="Custom metadata")
 
-    class Config:
-        """Pydantic config"""
-        json_schema_extra = {
-            "example": {
-                "duration": 120,
-                "codec": "mp3",
-                "channels": 2,
-                "file_size": 1024000
-            }
+    model_config = ConfigDict(json_schema_extra={
+        "example": {
+            "duration": 120,
+            "codec": "mp3",
+            "channels": 2,
+            "file_size": 1024000
         }
+    })
 
 
 # ============================================================================
@@ -167,27 +165,41 @@ class Artifact(BaseModel):
     created_by_step_id: Optional[str] = Field(
         None, description="Agent step that created this artifact"
     )
+    mime_type: Optional[str] = Field(
+        None, description="MIME type (e.g. audio/mpeg, image/png)"
+    )
+    file_size: Optional[int] = Field(
+        None, description="File size in bytes"
+    )
+    safety_score: Optional[float] = Field(
+        None, description="Content safety score (0.0-1.0)"
+    )
+    created_by_agent: Optional[str] = Field(
+        None, description="Agent name that created this artifact"
+    )
     created_at: datetime = Field(..., description="Immutable creation timestamp")
     stored_at: datetime = Field(..., description="Storage update timestamp")
 
-    class Config:
-        """Pydantic config"""
-        frozen = False  # Allow setting fields during creation
-        json_schema_extra = {
-            "example": {
-                "artifact_id": "550e8400-e29b-41d4-a716-446655440000",
-                "artifact_type": "audio",
-                "lifecycle_state": "intermediate",
-                "artifact_path": "./data/audio/story_abc123.mp3",
-                "artifact_url": "https://cdn.example.com/audio/story_abc123.mp3",
-                "metadata": {"duration": 120, "codec": "mp3"},
-                "description": "Story narration",
-                "created_at": "2026-02-23T10:00:00Z",
-                "stored_at": "2026-02-23T10:00:00Z"
-            }
+    model_config = ConfigDict(frozen=False, json_schema_extra={
+        "example": {
+            "artifact_id": "550e8400-e29b-41d4-a716-446655440000",
+            "artifact_type": "audio",
+            "lifecycle_state": "intermediate",
+            "artifact_path": "./data/audio/story_abc123.mp3",
+            "artifact_url": "https://cdn.example.com/audio/story_abc123.mp3",
+            "metadata": {"duration": 120, "codec": "mp3"},
+            "description": "Story narration",
+            "mime_type": "audio/mpeg",
+            "file_size": 1024000,
+            "safety_score": 0.95,
+            "created_by_agent": "story_agent",
+            "created_at": "2026-02-23T10:00:00Z",
+            "stored_at": "2026-02-23T10:00:00Z"
         }
+    })
 
-    @validator("created_at", "stored_at", pre=True)
+    @field_validator("created_at", "stored_at", mode="before")
+    @classmethod
     def parse_datetime(cls, v):
         """Parse ISO 8601 datetime strings"""
         if isinstance(v, str):
@@ -207,17 +219,23 @@ class ArtifactCreate(BaseModel):
     metadata: Optional[ArtifactMetadata] = None
     description: Optional[str] = None
     created_by_step_id: Optional[str] = None
+    mime_type: Optional[str] = None
+    file_size: Optional[int] = None
+    safety_score: Optional[float] = None
+    created_by_agent: Optional[str] = None
 
-    class Config:
-        """Pydantic config"""
-        json_schema_extra = {
-            "example": {
-                "artifact_type": "audio",
-                "artifact_path": "./data/audio/story_abc123.mp3",
-                "metadata": {"duration": 120},
-                "description": "Story narration"
-            }
+    model_config = ConfigDict(json_schema_extra={
+        "example": {
+            "artifact_type": "audio",
+            "artifact_path": "./data/audio/story_abc123.mp3",
+            "metadata": {"duration": 120},
+            "description": "Story narration",
+            "mime_type": "audio/mpeg",
+            "file_size": 1024000,
+            "safety_score": 0.95,
+            "created_by_agent": "story_agent"
         }
+    })
 
 
 class ArtifactUpdateState(BaseModel):
@@ -227,11 +245,9 @@ class ArtifactUpdateState(BaseModel):
     """
     new_state: LifecycleState = Field(..., description="New lifecycle state")
 
-    class Config:
-        """Pydantic config"""
-        json_schema_extra = {
-            "example": {"new_state": "published"}
-        }
+    model_config = ConfigDict(json_schema_extra={
+        "example": {"new_state": "published"}
+    })
 
 
 # ============================================================================
@@ -252,31 +268,31 @@ class ArtifactRelation(BaseModel):
     )
     created_at: datetime = Field(..., description="Creation timestamp")
 
-    @validator("created_at", pre=True)
+    model_config = ConfigDict(json_schema_extra={
+        "example": {
+            "relation_id": "550e8400-e29b-41d4-a716-446655440001",
+            "from_artifact_id": "550e8400-e29b-41d4-a716-446655440000",
+            "to_artifact_id": "550e8400-e29b-41d4-a716-446655440002",
+            "relation_type": "derived_from",
+            "created_at": "2026-02-23T10:00:00Z"
+        }
+    })
+
+    @field_validator("created_at", mode="before")
+    @classmethod
     def parse_datetime(cls, v):
         """Parse ISO 8601 datetime strings"""
         if isinstance(v, str):
             return datetime.fromisoformat(v.replace("Z", "+00:00"))
         return v
 
-    @validator("from_artifact_id", "to_artifact_id")
-    def validate_different_artifacts(cls, v, values):
+    @field_validator("to_artifact_id")
+    @classmethod
+    def validate_different_artifacts(cls, v, info):
         """Prevent self-references"""
-        if "from_artifact_id" in values and v == values["from_artifact_id"]:
+        if "from_artifact_id" in info.data and v == info.data["from_artifact_id"]:
             raise ValueError("Cannot create relation from artifact to itself")
         return v
-
-    class Config:
-        """Pydantic config"""
-        json_schema_extra = {
-            "example": {
-                "relation_id": "550e8400-e29b-41d4-a716-446655440001",
-                "from_artifact_id": "550e8400-e29b-41d4-a716-446655440000",
-                "to_artifact_id": "550e8400-e29b-41d4-a716-446655440002",
-                "relation_type": "derived_from",
-                "created_at": "2026-02-23T10:00:00Z"
-            }
-        }
 
 
 class ArtifactRelationCreate(BaseModel):
@@ -289,15 +305,13 @@ class ArtifactRelationCreate(BaseModel):
     relation_type: RelationType
     metadata: Optional[Dict[str, Any]] = None
 
-    class Config:
-        """Pydantic config"""
-        json_schema_extra = {
-            "example": {
-                "from_artifact_id": "550e8400-e29b-41d4-a716-446655440000",
-                "to_artifact_id": "550e8400-e29b-41d4-a716-446655440002",
-                "relation_type": "derived_from"
-            }
+    model_config = ConfigDict(json_schema_extra={
+        "example": {
+            "from_artifact_id": "550e8400-e29b-41d4-a716-446655440000",
+            "to_artifact_id": "550e8400-e29b-41d4-a716-446655440002",
+            "relation_type": "derived_from"
         }
+    })
 
 
 # ============================================================================
@@ -320,26 +334,25 @@ class StoryArtifactLink(BaseModel):
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
 
-    @validator("created_at", "updated_at", pre=True)
+    model_config = ConfigDict(json_schema_extra={
+        "example": {
+            "link_id": "550e8400-e29b-41d4-a716-446655440003",
+            "story_id": "story-uuid-1",
+            "artifact_id": "550e8400-e29b-41d4-a716-446655440000",
+            "role": "final_audio",
+            "is_primary": True,
+            "created_at": "2026-02-23T10:00:00Z",
+            "updated_at": "2026-02-23T10:00:00Z"
+        }
+    })
+
+    @field_validator("created_at", "updated_at", mode="before")
+    @classmethod
     def parse_datetime(cls, v):
         """Parse ISO 8601 datetime strings"""
         if isinstance(v, str):
             return datetime.fromisoformat(v.replace("Z", "+00:00"))
         return v
-
-    class Config:
-        """Pydantic config"""
-        json_schema_extra = {
-            "example": {
-                "link_id": "550e8400-e29b-41d4-a716-446655440003",
-                "story_id": "story-uuid-1",
-                "artifact_id": "550e8400-e29b-41d4-a716-446655440000",
-                "role": "final_audio",
-                "is_primary": True,
-                "created_at": "2026-02-23T10:00:00Z",
-                "updated_at": "2026-02-23T10:00:00Z"
-            }
-        }
 
 
 class StoryArtifactLinkCreate(BaseModel):
@@ -352,16 +365,14 @@ class StoryArtifactLinkCreate(BaseModel):
     is_primary: bool = True
     position: Optional[int] = None
 
-    class Config:
-        """Pydantic config"""
-        json_schema_extra = {
-            "example": {
-                "story_id": "story-uuid-1",
-                "artifact_id": "550e8400-e29b-41d4-a716-446655440000",
-                "role": "final_audio",
-                "is_primary": True
-            }
+    model_config = ConfigDict(json_schema_extra={
+        "example": {
+            "story_id": "story-uuid-1",
+            "artifact_id": "550e8400-e29b-41d4-a716-446655440000",
+            "role": "final_audio",
+            "is_primary": True
         }
+    })
 
 
 # ============================================================================
@@ -387,7 +398,18 @@ class Run(BaseModel):
     started_at: Optional[datetime] = Field(None, description="Start timestamp")
     completed_at: Optional[datetime] = Field(None, description="Completion timestamp")
 
-    @validator("created_at", "started_at", "completed_at", pre=True)
+    model_config = ConfigDict(json_schema_extra={
+        "example": {
+            "run_id": "550e8400-e29b-41d4-a716-446655440004",
+            "story_id": "story-uuid-1",
+            "workflow_type": "image_to_story",
+            "status": "pending",
+            "created_at": "2026-02-23T10:00:00Z"
+        }
+    })
+
+    @field_validator("created_at", "started_at", "completed_at", mode="before")
+    @classmethod
     def parse_datetime(cls, v):
         """Parse ISO 8601 datetime strings"""
         if v is None:
@@ -395,18 +417,6 @@ class Run(BaseModel):
         if isinstance(v, str):
             return datetime.fromisoformat(v.replace("Z", "+00:00"))
         return v
-
-    class Config:
-        """Pydantic config"""
-        json_schema_extra = {
-            "example": {
-                "run_id": "550e8400-e29b-41d4-a716-446655440004",
-                "story_id": "story-uuid-1",
-                "workflow_type": "image_to_story",
-                "status": "pending",
-                "created_at": "2026-02-23T10:00:00Z"
-            }
-        }
 
 
 class RunCreate(BaseModel):
@@ -417,14 +427,12 @@ class RunCreate(BaseModel):
     session_id: Optional[str] = None
     workflow_type: WorkflowType
 
-    class Config:
-        """Pydantic config"""
-        json_schema_extra = {
-            "example": {
-                "story_id": "story-uuid-1",
-                "workflow_type": "image_to_story"
-            }
+    model_config = ConfigDict(json_schema_extra={
+        "example": {
+            "story_id": "story-uuid-1",
+            "workflow_type": "image_to_story"
         }
+    })
 
 
 class AgentStep(BaseModel):
@@ -445,7 +453,19 @@ class AgentStep(BaseModel):
     created_at: datetime = Field(..., description="Creation timestamp")
     completed_at: Optional[datetime] = Field(None, description="Completion timestamp")
 
-    @validator("created_at", "completed_at", pre=True)
+    model_config = ConfigDict(json_schema_extra={
+        "example": {
+            "agent_step_id": "550e8400-e29b-41d4-a716-446655440005",
+            "run_id": "550e8400-e29b-41d4-a716-446655440004",
+            "step_name": "vision_analysis",
+            "step_order": 1,
+            "status": "pending",
+            "created_at": "2026-02-23T10:00:00Z"
+        }
+    })
+
+    @field_validator("created_at", "completed_at", mode="before")
+    @classmethod
     def parse_datetime(cls, v):
         """Parse ISO 8601 datetime strings"""
         if v is None:
@@ -453,19 +473,6 @@ class AgentStep(BaseModel):
         if isinstance(v, str):
             return datetime.fromisoformat(v.replace("Z", "+00:00"))
         return v
-
-    class Config:
-        """Pydantic config"""
-        json_schema_extra = {
-            "example": {
-                "agent_step_id": "550e8400-e29b-41d4-a716-446655440005",
-                "run_id": "550e8400-e29b-41d4-a716-446655440004",
-                "step_name": "vision_analysis",
-                "step_order": 1,
-                "status": "pending",
-                "created_at": "2026-02-23T10:00:00Z"
-            }
-        }
 
 
 class AgentStepCreate(BaseModel):
@@ -477,16 +484,14 @@ class AgentStepCreate(BaseModel):
     step_order: int
     input_data: Optional[Dict[str, Any]] = None
 
-    class Config:
-        """Pydantic config"""
-        json_schema_extra = {
-            "example": {
-                "run_id": "550e8400-e29b-41d4-a716-446655440004",
-                "step_name": "vision_analysis",
-                "step_order": 1,
-                "input_data": {"image_path": "./data/uploads/drawing.png"}
-            }
+    model_config = ConfigDict(json_schema_extra={
+        "example": {
+            "run_id": "550e8400-e29b-41d4-a716-446655440004",
+            "step_name": "vision_analysis",
+            "step_order": 1,
+            "input_data": {"image_path": "./data/uploads/drawing.png"}
         }
+    })
 
 
 class AgentStepComplete(BaseModel):
@@ -499,14 +504,12 @@ class AgentStepComplete(BaseModel):
     )
     error_message: Optional[str] = Field(None, description="Error message if failed")
 
-    class Config:
-        """Pydantic config"""
-        json_schema_extra = {
-            "example": {
-                "output_data": {"artifact_id": "550e8400-e29b-41d4-a716-446655440000"},
-                "status": "completed"
-            }
+    model_config = ConfigDict(json_schema_extra={
+        "example": {
+            "output_data": {"artifact_id": "550e8400-e29b-41d4-a716-446655440000"},
+            "status": "completed"
         }
+    })
 
 
 # ============================================================================
@@ -524,24 +527,23 @@ class RunArtifactLink(BaseModel):
     stage: RunArtifactStage = Field(..., description="Generation stage")
     created_at: datetime = Field(..., description="Creation timestamp")
 
-    @validator("created_at", pre=True)
+    model_config = ConfigDict(json_schema_extra={
+        "example": {
+            "link_id": "550e8400-e29b-41d4-a716-446655440006",
+            "run_id": "550e8400-e29b-41d4-a716-446655440004",
+            "artifact_id": "550e8400-e29b-41d4-a716-446655440000",
+            "stage": "generated",
+            "created_at": "2026-02-23T10:00:00Z"
+        }
+    })
+
+    @field_validator("created_at", mode="before")
+    @classmethod
     def parse_datetime(cls, v):
         """Parse ISO 8601 datetime strings"""
         if isinstance(v, str):
             return datetime.fromisoformat(v.replace("Z", "+00:00"))
         return v
-
-    class Config:
-        """Pydantic config"""
-        json_schema_extra = {
-            "example": {
-                "link_id": "550e8400-e29b-41d4-a716-446655440006",
-                "run_id": "550e8400-e29b-41d4-a716-446655440004",
-                "artifact_id": "550e8400-e29b-41d4-a716-446655440000",
-                "stage": "generated",
-                "created_at": "2026-02-23T10:00:00Z"
-            }
-        }
 
 
 class RunArtifactLinkCreate(BaseModel):
@@ -552,15 +554,13 @@ class RunArtifactLinkCreate(BaseModel):
     artifact_id: str
     stage: RunArtifactStage
 
-    class Config:
-        """Pydantic config"""
-        json_schema_extra = {
-            "example": {
-                "run_id": "550e8400-e29b-41d4-a716-446655440004",
-                "artifact_id": "550e8400-e29b-41d4-a716-446655440000",
-                "stage": "generated"
-            }
+    model_config = ConfigDict(json_schema_extra={
+        "example": {
+            "run_id": "550e8400-e29b-41d4-a716-446655440004",
+            "artifact_id": "550e8400-e29b-41d4-a716-446655440000",
+            "stage": "generated"
         }
+    })
 
 
 # ============================================================================
@@ -581,11 +581,9 @@ class ArtifactLineage(BaseModel):
     )
     total_count: int = Field(..., description="Total artifacts in lineage")
 
-    class Config:
-        """Pydantic config"""
-        json_schema_extra = {
-            "description": "Complete artifact lineage with ancestry and descendants"
-        }
+    model_config = ConfigDict(json_schema_extra={
+        "description": "Complete artifact lineage with ancestry and descendants"
+    })
 
 
 class RunWithArtifacts(BaseModel):
@@ -600,8 +598,67 @@ class RunWithArtifacts(BaseModel):
         default_factory=list, description="Run-artifact mappings"
     )
 
-    class Config:
-        """Pydantic config"""
-        json_schema_extra = {
-            "description": "Run with complete execution context and artifacts"
-        }
+    model_config = ConfigDict(json_schema_extra={
+        "description": "Run with complete execution context and artifacts"
+    })
+
+
+# ============================================================================
+# Migration Status Models
+# ============================================================================
+
+class MigrationStatusEnum(str, Enum):
+    """Migration record status"""
+    PENDING = "pending"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    SKIPPED = "skipped"
+
+
+class MigrationRecord(BaseModel):
+    """
+    Per-source migration tracking record.
+    Used for resume/retry of backfill migrations.
+    """
+    migration_id: str = Field(..., description="Unique UUID identifier")
+    migration_name: str = Field(..., description="Migration name (e.g. stories_to_artifacts_v2)")
+    source_type: str = Field(..., description="Source entity type (e.g. story)")
+    source_id: str = Field(..., description="Source entity ID")
+    status: MigrationStatusEnum = Field(
+        default=MigrationStatusEnum.PENDING, description="Migration status"
+    )
+    error_message: Optional[str] = Field(None, description="Error message if failed")
+    artifacts_created: int = Field(default=0, description="Number of artifacts created")
+    links_created: int = Field(default=0, description="Number of links created")
+    started_at: Optional[datetime] = Field(None, description="Start timestamp")
+    completed_at: Optional[datetime] = Field(None, description="Completion timestamp")
+    retry_count: int = Field(default=0, description="Number of retries")
+
+    @field_validator("started_at", "completed_at", mode="before")
+    @classmethod
+    def parse_datetime(cls, v):
+        """Parse ISO 8601 datetime strings"""
+        if v is None:
+            return v
+        if isinstance(v, str):
+            return datetime.fromisoformat(v.replace("Z", "+00:00"))
+        return v
+
+
+class MigrationReport(BaseModel):
+    """
+    Summary report for a migration run.
+    """
+    migration_name: str = Field(..., description="Migration name")
+    total_records: int = Field(default=0, description="Total source records")
+    completed: int = Field(default=0, description="Successfully migrated")
+    failed: int = Field(default=0, description="Failed migrations")
+    skipped: int = Field(default=0, description="Skipped (already migrated)")
+    pending: int = Field(default=0, description="Remaining pending")
+    total_artifacts_created: int = Field(default=0, description="Total artifacts created")
+    total_links_created: int = Field(default=0, description="Total links created")
+    success_rate: float = Field(default=0.0, description="Success rate (0.0-1.0)")
+    unresolved_records: List[MigrationRecord] = Field(
+        default_factory=list, description="Failed/pending records needing attention"
+    )

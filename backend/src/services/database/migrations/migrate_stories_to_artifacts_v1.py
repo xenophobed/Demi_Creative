@@ -22,7 +22,7 @@ Safety:
 
 import json
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional, Tuple
 from pathlib import Path
 
@@ -101,8 +101,8 @@ class StoriesToArtifactsMigration:
         except Exception as e:
             print(f"\n❌ MIGRATION FAILED: {e}")
             if not self.dry_run:
-                # In real scenario, would rollback
-                pass
+                await self.db.connection.rollback()
+                print("⏮️  Transaction rolled back")
             raise
 
     async def _migrate_story(self, story: Dict[str, Any]) -> None:
@@ -129,7 +129,7 @@ class StoriesToArtifactsMigration:
 
         # Create run for legacy story
         run_id = str(uuid.uuid4())
-        now = datetime.utcnow().isoformat() + "Z"
+        now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
         if not self.dry_run:
             await self.db.execute(
@@ -237,7 +237,7 @@ class StoriesToArtifactsMigration:
         """Create artifact for legacy story"""
 
         artifact_id = str(uuid.uuid4())
-        now = datetime.utcnow().isoformat() + "Z"
+        now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
         try:
             if not self.dry_run:
@@ -278,7 +278,7 @@ class StoriesToArtifactsMigration:
         """Create story-artifact link"""
 
         link_id = str(uuid.uuid4())
-        now = datetime.utcnow().isoformat() + "Z"
+        now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
         try:
             if not self.dry_run:

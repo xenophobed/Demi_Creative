@@ -8,11 +8,11 @@ REST endpoints for artifact graph system:
 - GET/POST story-artifact links
 """
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
-from ...services.database.connection import DatabaseManager
+from ...services.database.connection import DatabaseManager, db_manager
 from ...services.database.artifact_repository import (
     ArtifactRepository, ArtifactRelationRepository,
     StoryArtifactLinkRepository, RunRepository,
@@ -28,12 +28,36 @@ from ...services.models.artifact_models import (
 router = APIRouter(prefix="/api/v1/artifacts", tags=["artifacts"])
 
 
+def get_db() -> DatabaseManager:
+    """Dependency that provides the singleton DatabaseManager."""
+    return db_manager
+
+
+# ============================================================================
+# Health Check (must be before /{artifact_id} to avoid path conflicts)
+# ============================================================================
+
+@router.get("/health")
+async def health():
+    """
+    Health check for artifact system.
+
+    Returns:
+        Service status
+    """
+    return {
+        "status": "healthy",
+        "service": "artifacts",
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
+
+
 # ============================================================================
 # Artifact Endpoints
 # ============================================================================
 
 @router.get("/{artifact_id}", response_model=Artifact)
-async def get_artifact(artifact_id: str, db: DatabaseManager):
+async def get_artifact(artifact_id: str, db: DatabaseManager = Depends(get_db)):
     """
     Get artifact by ID.
 
@@ -50,7 +74,7 @@ async def get_artifact(artifact_id: str, db: DatabaseManager):
 
 
 @router.post("", response_model=Artifact)
-async def create_artifact(artifact_data: ArtifactCreate, db: DatabaseManager):
+async def create_artifact(artifact_data: ArtifactCreate, db: DatabaseManager = Depends(get_db)):
     """
     Create a new artifact.
 
@@ -76,7 +100,7 @@ async def list_artifacts(
     artifact_type: Optional[str] = Query(None, description="Filter by type"),
     limit: int = Query(100, ge=1, le=1000),
     offset: int = Query(0, ge=0),
-    db: DatabaseManager = None
+    db: DatabaseManager = Depends(get_db),
 ):
     """
     List artifacts with optional filters.
@@ -92,13 +116,15 @@ async def list_artifacts(
     """
     repo = ArtifactRepository(db)
 
-    if state:
-        artifacts = await repo.list_by_lifecycle_state(state, limit, offset)
-    else:
-        # Default: list all published artifacts
-        artifacts = await repo.list_by_lifecycle_state(
-            "published", limit, offset
+    filter_state = state or "published"
+
+    if artifact_type:
+        # Filter by both state and type
+        artifacts = await repo.list_by_lifecycle_state_and_type(
+            filter_state, artifact_type, limit, offset
         )
+    else:
+        artifacts = await repo.list_by_lifecycle_state(filter_state, limit, offset)
 
     return artifacts
 
@@ -107,7 +133,7 @@ async def list_artifacts(
 async def update_artifact_state(
     artifact_id: str,
     new_state: str = Query(..., description="New lifecycle state"),
-    db: DatabaseManager = None
+    db: DatabaseManager = Depends(get_db),
 ):
     """
     Update artifact lifecycle state.
@@ -133,7 +159,7 @@ async def update_artifact_state(
 
 
 @router.get("/{artifact_id}/lineage", response_model=ArtifactLineage)
-async def get_artifact_lineage(artifact_id: str, db: DatabaseManager):
+async def get_artifact_lineage(artifact_id: str, db: DatabaseManager = Depends(get_db)):
     """
     Get complete artifact lineage (ancestors, descendants, relations).
 
@@ -155,7 +181,7 @@ async def get_artifact_lineage(artifact_id: str, db: DatabaseManager):
 # ============================================================================
 
 @router.get("/runs/{run_id}", response_model=RunWithArtifacts)
-async def get_run(run_id: str, db: DatabaseManager):
+async def get_run(run_id: str, db: DatabaseManager = Depends(get_db)):
     """
     Get run with all generated artifacts and steps.
 
@@ -194,7 +220,7 @@ async def get_run(run_id: str, db: DatabaseManager):
 
 
 @router.post("/runs", response_model=Run)
-async def create_run(run_data: RunCreate, db: DatabaseManager):
+async def create_run(run_data: RunCreate, db: DatabaseManager = Depends(get_db)):
     """
     Create a new run (execution workflow).
 
@@ -219,7 +245,7 @@ async def create_run(run_data: RunCreate, db: DatabaseManager):
 # ============================================================================
 
 @router.get("/stories/{story_id}/artifacts", response_model=List[StoryArtifactLink])
-async def list_story_artifacts(story_id: str, db: DatabaseManager):
+async def list_story_artifacts(story_id: str, db: DatabaseManager = Depends(get_db)):
     """
     Get all artifacts linked to a story.
 
@@ -231,7 +257,7 @@ async def list_story_artifacts(story_id: str, db: DatabaseManager):
 
 
 @router.get("/stories/{story_id}/artifacts/{role}", response_model=Artifact)
-async def get_story_canonical_artifact(story_id: str, role: str, db: DatabaseManager):
+async def get_story_canonical_artifact(story_id: str, role: str, db: DatabaseManager = Depends(get_db)):
     """
     Get primary (canonical) artifact for a story role.
 
@@ -258,7 +284,7 @@ async def get_story_canonical_artifact(story_id: str, role: str, db: DatabaseMan
 async def link_story_artifact(
     story_id: str,
     link_data: StoryArtifactLinkCreate,
-    db: DatabaseManager
+    db: DatabaseManager = Depends(get_db),
 ):
     """
     Link an artifact to a story with a canonical role.
@@ -286,22 +312,3 @@ async def link_story_artifact(
         raise HTTPException(status_code=400, detail=str(e))
 
     raise HTTPException(status_code=500, detail="Failed to create link")
-
-
-# ============================================================================
-# Health Check
-# ============================================================================
-
-@router.get("/health")
-async def health():
-    """
-    Health check for artifact system.
-
-    Returns:
-        Service status
-    """
-    return {
-        "status": "healthy",
-        "service": "artifacts",
-        "timestamp": datetime.utcnow().isoformat() + "Z"
-    }

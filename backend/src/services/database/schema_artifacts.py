@@ -255,6 +255,15 @@ async def init_artifact_schema(db: "DatabaseManager") -> None:
             except Exception:
                 pass
 
+    # Create run_artifact_links table (after runs table due to FK)
+    await db.execute(RUN_ARTIFACT_LINKS_TABLE)
+    for stmt in RUN_ARTIFACT_LINKS_INDEXES.strip().split(";"):
+        if stmt.strip():
+            try:
+                await db.execute(stmt)
+            except Exception:
+                pass
+
     # Create agent_steps table
     await db.execute(AGENT_STEPS_TABLE)
     for stmt in AGENT_STEPS_INDEXES.strip().split(";"):
@@ -268,6 +277,9 @@ async def init_artifact_schema(db: "DatabaseManager") -> None:
 
     # Run migrations to add columns to existing stories table
     await _migrate_add_artifact_columns_to_stories(db)
+
+    # Run v2 migration: add new columns and indexes to artifacts table
+    await _migrate_add_artifact_columns_v2(db)
 
     print("✅ Artifact schema initialized")
 
@@ -316,6 +328,92 @@ async def _migrate_add_artifact_columns_to_stories(db: "DatabaseManager") -> Non
 
     await db.commit()
     print("✅ Stories table migration completed")
+
+
+# ============================================================================
+# Migration Status Table (for resume/retry tracking)
+# ============================================================================
+
+MIGRATION_STATUS_TABLE = """
+CREATE TABLE IF NOT EXISTS migration_status (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    migration_id TEXT UNIQUE NOT NULL,
+    migration_name TEXT NOT NULL,
+    source_type TEXT NOT NULL,
+    source_id TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    error_message TEXT,
+    artifacts_created INTEGER DEFAULT 0,
+    links_created INTEGER DEFAULT 0,
+    started_at TEXT,
+    completed_at TEXT,
+    retry_count INTEGER DEFAULT 0,
+    UNIQUE(migration_name, source_type, source_id)
+);
+"""
+
+MIGRATION_STATUS_INDEXES = """
+CREATE INDEX IF NOT EXISTS idx_migration_status ON migration_status(status);
+CREATE INDEX IF NOT EXISTS idx_migration_name ON migration_status(migration_name);
+CREATE INDEX IF NOT EXISTS idx_migration_source ON migration_status(source_type, source_id);
+"""
+
+
+async def _migrate_add_artifact_columns_v2(db: "DatabaseManager") -> None:
+    """
+    Migration v2: Add new columns, compound indexes, and migration_status table.
+
+    Adds to artifacts table:
+    - mime_type TEXT
+    - file_size INTEGER
+    - safety_score REAL
+    - created_by_agent TEXT
+
+    Adds compound indexes for common query patterns.
+    Creates migration_status table for resume/retry tracking.
+    """
+    # Check existing columns on artifacts table
+    artifacts_info = await db.fetchall("PRAGMA table_info(artifacts)")
+    artifacts_columns = {col['name'] for col in artifacts_info}
+
+    new_columns = [
+        ("mime_type", "TEXT"),
+        ("file_size", "INTEGER"),
+        ("safety_score", "REAL"),
+        ("created_by_agent", "TEXT"),
+    ]
+
+    for col_name, col_def in new_columns:
+        if col_name not in artifacts_columns:
+            print(f"📝 Migrating artifacts table: adding {col_name} column...")
+            await db.execute(f"ALTER TABLE artifacts ADD COLUMN {col_name} {col_def}")
+
+    # Add compound indexes
+    compound_indexes = [
+        "CREATE INDEX IF NOT EXISTS idx_artifacts_type_lifecycle ON artifacts(artifact_type, lifecycle_state)",
+        "CREATE INDEX IF NOT EXISTS idx_artifacts_safety_flagged ON artifacts(safety_score) WHERE safety_score IS NOT NULL AND safety_score < 0.85",
+        "CREATE INDEX IF NOT EXISTS idx_artifacts_created_by_agent ON artifacts(created_by_agent)",
+        "CREATE INDEX IF NOT EXISTS idx_link_story_role_primary ON story_artifact_links(story_id, role, is_primary)",
+        "CREATE INDEX IF NOT EXISTS idx_run_link_run_stage ON run_artifact_links(run_id, stage)",
+    ]
+
+    for stmt in compound_indexes:
+        try:
+            await db.execute(stmt)
+        except Exception:
+            pass  # Index might already exist
+
+    # Create migration_status table
+    await db.execute(MIGRATION_STATUS_TABLE)
+    for stmt in MIGRATION_STATUS_INDEXES.strip().split(";"):
+        if stmt.strip():
+            try:
+                await db.execute(stmt)
+            except Exception:
+                pass
+
+    await db.commit()
+    print("✅ Artifact schema v2 migration completed")
 
 
 # ============================================================================

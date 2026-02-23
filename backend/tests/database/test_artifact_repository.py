@@ -10,11 +10,11 @@ import uuid
 from datetime import datetime
 
 from src.services.database.connection import DatabaseManager
-from src.services.database.schema_artifacts import init_artifact_schema
+from src.services.database.schema import init_schema
 from src.services.database.artifact_repository import (
     ArtifactRepository, ArtifactRelationRepository,
     StoryArtifactLinkRepository, RunRepository,
-    AgentStepRepository
+    AgentStepRepository, MigrationStatusRepository
 )
 from src.services.models.artifact_models import (
     ArtifactCreate, ArtifactType, LifecycleState,
@@ -27,14 +27,32 @@ from src.services.models.artifact_models import (
 
 
 @pytest.fixture
-async def db():
-    """Create in-memory test database"""
-    # This would use test database setup
-    # For actual tests, you'd use a test fixture that:
-    # 1. Creates in-memory SQLite `:memory:`
-    # 2. Initializes schema
-    # 3. Returns DatabaseManager instance
-    pass
+async def db(tmp_path):
+    """Create test database with full schema"""
+    db_path = str(tmp_path / "test.db")
+    manager = DatabaseManager(db_path=db_path)
+    await manager.connect()
+    await init_schema(manager)
+    yield manager
+    await manager.disconnect()
+
+
+async def create_test_story(db, story_id: str = None) -> str:
+    """Helper: insert a minimal story record to satisfy FK constraints."""
+    from datetime import datetime, timezone
+    sid = story_id or str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    await db.execute(
+        """
+        INSERT INTO stories (
+            story_id, child_id, age_group, story_text, word_count,
+            created_at, stored_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        (sid, "child-1", "6-8", "Test story text.", 3, now, now)
+    )
+    await db.commit()
+    return sid
 
 
 @pytest.mark.asyncio
@@ -198,7 +216,7 @@ async def test_story_artifact_link_one_primary_per_role(db):
         ArtifactCreate(artifact_type=ArtifactType.AUDIO)
     )
 
-    story_id = str(uuid.uuid4())
+    story_id = await create_test_story(db)
 
     # Create first primary link
     link_data_1 = StoryArtifactLinkCreate(
@@ -235,7 +253,7 @@ async def test_run_creation_and_status_tracking(db):
     """Test run creation and status updates"""
     run_repo = RunRepository(db)
 
-    story_id = str(uuid.uuid4())
+    story_id = await create_test_story(db)
 
     run_data = RunCreate(
         story_id=story_id,
@@ -264,8 +282,8 @@ async def test_agent_step_creation_and_completion(db):
     run_repo = RunRepository(db)
     step_repo = AgentStepRepository(db)
 
-    # Create run first
-    story_id = str(uuid.uuid4())
+    # Create run first (needs a story for FK)
+    story_id = await create_test_story(db)
     run_data = RunCreate(
         story_id=story_id,
         workflow_type=WorkflowType.IMAGE_TO_STORY
@@ -310,8 +328,8 @@ async def test_end_to_end_artifact_workflow(db):
     run_repo = RunRepository(db)
     step_repo = AgentStepRepository(db)
 
-    # 1. Create run
-    story_id = str(uuid.uuid4())
+    # 1. Create run (needs a story for FK)
+    story_id = await create_test_story(db)
     run_data = RunCreate(
         story_id=story_id,
         workflow_type=WorkflowType.IMAGE_TO_STORY
@@ -359,6 +377,12 @@ async def test_end_to_end_artifact_workflow(db):
     )
     await step_repo.complete(step_id, completion)
 
+    # Transition through valid states: intermediate → candidate → published
+    success = await artifact_repo.update_lifecycle_state(
+        artifact_id, LifecycleState.CANDIDATE.value
+    )
+    assert success is True
+
     success = await artifact_repo.update_lifecycle_state(
         artifact_id, LifecycleState.PUBLISHED.value
     )
@@ -366,3 +390,140 @@ async def test_end_to_end_artifact_workflow(db):
 
     final_artifact = await artifact_repo.get_by_id(artifact_id)
     assert final_artifact.lifecycle_state == LifecycleState.PUBLISHED
+
+
+# ============================================================================
+# New Column Tests (Issue #14)
+# ============================================================================
+
+@pytest.mark.asyncio
+async def test_artifact_create_with_new_columns(db):
+    """Test creating artifacts with mime_type, file_size, safety_score, created_by_agent"""
+    repo = ArtifactRepository(db)
+
+    artifact_data = ArtifactCreate(
+        artifact_type=ArtifactType.AUDIO,
+        artifact_path="./data/audio/story.mp3",
+        mime_type="audio/mpeg",
+        file_size=512000,
+        safety_score=0.92,
+        created_by_agent="tts_agent",
+    )
+
+    artifact_id = await repo.create(artifact_data)
+    artifact = await repo.get_by_id(artifact_id)
+
+    assert artifact.mime_type == "audio/mpeg"
+    assert artifact.file_size == 512000
+    assert artifact.safety_score == 0.92
+    assert artifact.created_by_agent == "tts_agent"
+
+
+@pytest.mark.asyncio
+async def test_artifact_new_columns_default_none(db):
+    """Test new columns default to None when not provided"""
+    repo = ArtifactRepository(db)
+
+    artifact_id = await repo.create(ArtifactCreate(
+        artifact_type=ArtifactType.TEXT,
+        artifact_payload="test"
+    ))
+
+    artifact = await repo.get_by_id(artifact_id)
+    assert artifact.mime_type is None
+    assert artifact.file_size is None
+    assert artifact.safety_score is None
+    assert artifact.created_by_agent is None
+
+
+@pytest.mark.asyncio
+async def test_get_by_content_hash(db):
+    """Test dedup lookup by content hash"""
+    repo = ArtifactRepository(db)
+
+    artifact_id = await repo.create(ArtifactCreate(
+        artifact_type=ArtifactType.TEXT,
+        artifact_payload="unique story text"
+    ))
+
+    artifact = await repo.get_by_id(artifact_id)
+    existing = await repo.get_by_content_hash(artifact.content_hash)
+    assert existing is not None
+    assert existing.artifact_id == artifact_id
+
+    # Non-existent hash returns None
+    none_result = await repo.get_by_content_hash("nonexistent_hash")
+    assert none_result is None
+
+
+@pytest.mark.asyncio
+async def test_list_by_type_and_state(db):
+    """Test compound index query: type + lifecycle state"""
+    repo = ArtifactRepository(db)
+
+    await repo.create(ArtifactCreate(artifact_type=ArtifactType.AUDIO))
+    await repo.create(ArtifactCreate(artifact_type=ArtifactType.TEXT, artifact_payload="t"))
+    await repo.create(ArtifactCreate(artifact_type=ArtifactType.AUDIO))
+
+    results = await repo.list_by_type_and_state("audio", "intermediate")
+    assert len(results) == 2
+
+
+@pytest.mark.asyncio
+async def test_list_safety_flagged(db):
+    """Test partial index query: safety flagged artifacts"""
+    repo = ArtifactRepository(db)
+
+    await repo.create(ArtifactCreate(
+        artifact_type=ArtifactType.TEXT,
+        artifact_payload="safe",
+        safety_score=0.95,
+    ))
+    await repo.create(ArtifactCreate(
+        artifact_type=ArtifactType.TEXT,
+        artifact_payload="flagged",
+        safety_score=0.50,
+    ))
+
+    flagged = await repo.list_safety_flagged()
+    assert len(flagged) == 1
+    assert flagged[0].safety_score == 0.50
+
+
+# ============================================================================
+# Migration Status Repository Tests (Issue #15)
+# ============================================================================
+
+@pytest.mark.asyncio
+async def test_migration_status_upsert_and_get(db):
+    """Test migration status record creation and retrieval"""
+    repo = MigrationStatusRepository(db)
+
+    migration_id = await repo.upsert(
+        migration_name="v2",
+        source_type="story",
+        source_id="s1",
+        status="completed",
+        artifacts_created=3,
+        links_created=2,
+    )
+
+    record = await repo.get("v2", "story", "s1")
+    assert record is not None
+    assert record.migration_id == migration_id
+    assert record.artifacts_created == 3
+
+
+@pytest.mark.asyncio
+async def test_migration_status_report(db):
+    """Test migration report generation"""
+    repo = MigrationStatusRepository(db)
+
+    for i in range(5):
+        await repo.upsert("v2", "story", f"s{i}", "completed", artifacts_created=1)
+    await repo.upsert("v2", "story", "sfail", "failed", error_message="err")
+
+    report = await repo.get_report("v2")
+    assert report.completed == 5
+    assert report.failed == 1
+    assert report.success_rate == pytest.approx(5 / 6)

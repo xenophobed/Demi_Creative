@@ -15,14 +15,15 @@ Key Principles:
 import uuid
 import json
 import hashlib
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 from .connection import DatabaseManager
 from ...services.models.artifact_models import (
     Artifact, ArtifactCreate, ArtifactRelation, ArtifactRelationCreate,
     StoryArtifactLink, StoryArtifactLinkCreate, Run, RunCreate,
     AgentStep, AgentStepCreate, AgentStepComplete, RunArtifactLink,
-    RunArtifactLinkCreate, ArtifactLineage, RunWithArtifacts
+    RunArtifactLinkCreate, ArtifactLineage, RunWithArtifacts,
+    MigrationRecord, MigrationStatusEnum, MigrationReport
 )
 
 
@@ -53,7 +54,7 @@ class ArtifactRepository:
             artifact_id (UUID string)
         """
         artifact_id = str(uuid.uuid4())
-        now = datetime.utcnow().isoformat() + "Z"
+        now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
         # Compute content hash if payload provided
         content_hash = None
@@ -65,7 +66,7 @@ class ArtifactRepository:
         # Serialize metadata
         metadata_json = None
         if artifact_data.metadata:
-            metadata_json = artifact_data.metadata.json()
+            metadata_json = artifact_data.metadata.model_dump_json()
 
         # Insert artifact
         await self.db.execute(
@@ -73,8 +74,10 @@ class ArtifactRepository:
             INSERT INTO artifacts (
                 artifact_id, artifact_type, lifecycle_state, content_hash,
                 artifact_path, artifact_url, artifact_payload, metadata,
-                description, created_by_step_id, created_at, stored_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                description, created_by_step_id,
+                mime_type, file_size, safety_score, created_by_agent,
+                created_at, stored_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 artifact_id,
@@ -87,6 +90,10 @@ class ArtifactRepository:
                 metadata_json,
                 artifact_data.description,
                 artifact_data.created_by_step_id,
+                artifact_data.mime_type,
+                artifact_data.file_size,
+                artifact_data.safety_score,
+                artifact_data.created_by_agent,
                 now,
                 now
             )
@@ -137,6 +144,33 @@ class ArtifactRepository:
             LIMIT ? OFFSET ?
             """,
             (state, limit, offset)
+        )
+
+        return [self._row_to_artifact(row) for row in results]
+
+    async def list_by_lifecycle_state_and_type(
+        self, state: str, artifact_type: str, limit: int = 100, offset: int = 0
+    ) -> List[Artifact]:
+        """
+        List artifacts by lifecycle state and artifact type.
+
+        Args:
+            state: Lifecycle state
+            artifact_type: Artifact type
+            limit: Maximum results
+            offset: Pagination offset
+
+        Returns:
+            List of artifacts
+        """
+        results = await self.db.fetchall(
+            """
+            SELECT * FROM artifacts
+            WHERE lifecycle_state = ? AND artifact_type = ?
+            ORDER BY created_at DESC
+            LIMIT ? OFFSET ?
+            """,
+            (state, artifact_type, limit, offset)
         )
 
         return [self._row_to_artifact(row) for row in results]
@@ -196,10 +230,11 @@ class ArtifactRepository:
                 f"Invalid state transition: {current_state} → {new_state}"
             )
 
-        # Update state
+        # Update state and stored_at timestamp
+        now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
         await self.db.execute(
-            "UPDATE artifacts SET lifecycle_state = ? WHERE artifact_id = ?",
-            (new_state, artifact_id)
+            "UPDATE artifacts SET lifecycle_state = ?, stored_at = ? WHERE artifact_id = ?",
+            (new_state, now, artifact_id)
         )
 
         await self.db.commit()
@@ -222,9 +257,80 @@ class ArtifactRepository:
             metadata=metadata,
             description=row["description"],
             created_by_step_id=row["created_by_step_id"],
+            mime_type=row.get("mime_type"),
+            file_size=row.get("file_size"),
+            safety_score=row.get("safety_score"),
+            created_by_agent=row.get("created_by_agent"),
             created_at=row["created_at"],
             stored_at=row["stored_at"]
         )
+
+    async def get_by_content_hash(self, content_hash: str) -> Optional[Artifact]:
+        """
+        Get artifact by content hash (for checksum dedup).
+
+        Args:
+            content_hash: SHA256 hash of content
+
+        Returns:
+            Artifact object or None if not found
+        """
+        result = await self.db.fetchone(
+            "SELECT * FROM artifacts WHERE content_hash = ?",
+            (content_hash,)
+        )
+
+        if not result:
+            return None
+
+        return self._row_to_artifact(result)
+
+    async def list_by_type_and_state(
+        self, artifact_type: str, lifecycle_state: str,
+        limit: int = 100, offset: int = 0
+    ) -> List[Artifact]:
+        """
+        List artifacts by type and lifecycle state (uses compound index).
+
+        Args:
+            artifact_type: Artifact type
+            lifecycle_state: Lifecycle state
+            limit: Maximum results
+            offset: Pagination offset
+
+        Returns:
+            List of artifacts
+        """
+        results = await self.db.fetchall(
+            """
+            SELECT * FROM artifacts
+            WHERE artifact_type = ? AND lifecycle_state = ?
+            ORDER BY created_at DESC
+            LIMIT ? OFFSET ?
+            """,
+            (artifact_type, lifecycle_state, limit, offset)
+        )
+
+        return [self._row_to_artifact(row) for row in results]
+
+    async def list_safety_flagged(self, limit: int = 100) -> List[Artifact]:
+        """
+        List artifacts with safety scores below threshold (uses partial index).
+
+        Returns:
+            List of artifacts with safety_score < 0.85
+        """
+        results = await self.db.fetchall(
+            """
+            SELECT * FROM artifacts
+            WHERE safety_score IS NOT NULL AND safety_score < 0.85
+            ORDER BY safety_score ASC
+            LIMIT ?
+            """,
+            (limit,)
+        )
+
+        return [self._row_to_artifact(row) for row in results]
 
 
 # ============================================================================
@@ -269,7 +375,7 @@ class ArtifactRelationRepository:
 
         # Create relation
         relation_id = str(uuid.uuid4())
-        now = datetime.utcnow().isoformat() + "Z"
+        now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
         metadata_json = None
         if relation_data.metadata:
@@ -306,12 +412,15 @@ class ArtifactRelationRepository:
 
         return relation_id
 
-    async def get_artifact_lineage(self, artifact_id: str) -> ArtifactLineage:
+    async def get_artifact_lineage(
+        self, artifact_id: str, max_depth: int = 20
+    ) -> ArtifactLineage:
         """
         Get complete artifact lineage (ancestors, descendants, relations).
 
         Args:
             artifact_id: Artifact UUID
+            max_depth: Maximum traversal depth (default 20)
 
         Returns:
             ArtifactLineage object with all related artifacts and relations
@@ -322,14 +431,20 @@ class ArtifactRelationRepository:
         if not artifact:
             raise ValueError(f"Artifact {artifact_id} not found")
 
-        # Get ancestors (incoming relations)
-        ancestors = await self._get_ancestors(artifact_id)
+        # Collect all artifact IDs in the lineage for complete relation lookup
+        ancestor_ids: set = set()
+        descendant_ids: set = set()
 
-        # Get descendants (outgoing relations)
-        descendants = await self._get_descendants(artifact_id)
+        ancestors = await self._get_ancestors(
+            artifact_id, collected_ids=ancestor_ids, max_depth=max_depth
+        )
+        descendants = await self._get_descendants(
+            artifact_id, collected_ids=descendant_ids, max_depth=max_depth
+        )
 
-        # Get all relations in lineage
-        relations = await self._get_lineage_relations(artifact_id)
+        # Get all relations between any artifacts in the full lineage
+        all_ids = ancestor_ids | descendant_ids | {artifact_id}
+        relations = await self._get_lineage_relations(all_ids)
 
         total_count = len(ancestors) + len(descendants) + 1  # +1 for self
 
@@ -342,18 +457,26 @@ class ArtifactRelationRepository:
             total_count=total_count
         )
 
-    async def _get_ancestors(self, artifact_id: str, visited: set = None) -> List[Artifact]:
-        """Recursively get ancestor artifacts"""
+    async def _get_ancestors(
+        self,
+        artifact_id: str,
+        visited: set = None,
+        collected_ids: set = None,
+        depth: int = 0,
+        max_depth: int = 20,
+    ) -> List[Artifact]:
+        """Recursively get ancestor artifacts with depth limit"""
         if visited is None:
             visited = set()
+        if collected_ids is None:
+            collected_ids = set()
 
-        if artifact_id in visited:
-            return []  # Prevent cycles
+        if artifact_id in visited or depth >= max_depth:
+            return []
 
         visited.add(artifact_id)
         ancestors = []
 
-        # Get direct parents (incoming relations)
         results = await self.db.fetchall(
             """
             SELECT from_artifact_id FROM artifact_relations
@@ -369,24 +492,35 @@ class ArtifactRelationRepository:
             parent = await artifact_repo.get_by_id(parent_id)
             if parent:
                 ancestors.append(parent)
-                # Recursively get grandparents
-                grandparents = await self._get_ancestors(parent_id, visited)
+                collected_ids.add(parent_id)
+                grandparents = await self._get_ancestors(
+                    parent_id, visited, collected_ids,
+                    depth=depth + 1, max_depth=max_depth
+                )
                 ancestors.extend(grandparents)
 
         return ancestors
 
-    async def _get_descendants(self, artifact_id: str, visited: set = None) -> List[Artifact]:
-        """Recursively get descendant artifacts"""
+    async def _get_descendants(
+        self,
+        artifact_id: str,
+        visited: set = None,
+        collected_ids: set = None,
+        depth: int = 0,
+        max_depth: int = 20,
+    ) -> List[Artifact]:
+        """Recursively get descendant artifacts with depth limit"""
         if visited is None:
             visited = set()
+        if collected_ids is None:
+            collected_ids = set()
 
-        if artifact_id in visited:
-            return []  # Prevent cycles
+        if artifact_id in visited or depth >= max_depth:
+            return []
 
         visited.add(artifact_id)
         descendants = []
 
-        # Get direct children (outgoing relations)
         results = await self.db.fetchall(
             """
             SELECT to_artifact_id FROM artifact_relations
@@ -402,20 +536,30 @@ class ArtifactRelationRepository:
             child = await artifact_repo.get_by_id(child_id)
             if child:
                 descendants.append(child)
-                # Recursively get grandchildren
-                grandchildren = await self._get_descendants(child_id, visited)
+                collected_ids.add(child_id)
+                grandchildren = await self._get_descendants(
+                    child_id, visited, collected_ids,
+                    depth=depth + 1, max_depth=max_depth
+                )
                 descendants.extend(grandchildren)
 
         return descendants
 
-    async def _get_lineage_relations(self, artifact_id: str) -> List[ArtifactRelation]:
-        """Get all relations involving this artifact"""
+    async def _get_lineage_relations(self, artifact_ids: set) -> List[ArtifactRelation]:
+        """Get all relations between artifacts in the lineage"""
+        if not artifact_ids:
+            return []
+
+        placeholders = ", ".join(["?"] * len(artifact_ids))
+        id_list = list(artifact_ids)
+
         results = await self.db.fetchall(
-            """
+            f"""
             SELECT * FROM artifact_relations
-            WHERE from_artifact_id = ? OR to_artifact_id = ?
+            WHERE from_artifact_id IN ({placeholders})
+               OR to_artifact_id IN ({placeholders})
             """,
-            (artifact_id, artifact_id)
+            (*id_list, *id_list)
         )
 
         return [self._row_to_relation(row) for row in results]
@@ -468,7 +612,7 @@ class StoryArtifactLinkRepository:
             (link_data.story_id, link_data.artifact_id, link_data.role.value)
         )
 
-        now = datetime.utcnow().isoformat() + "Z"
+        now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
         if existing:
             # Update existing link
@@ -618,7 +762,7 @@ class RunRepository:
             run_id (UUID string)
         """
         run_id = str(uuid.uuid4())
-        now = datetime.utcnow().isoformat() + "Z"
+        now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
         await self.db.execute(
             """
@@ -668,7 +812,7 @@ class RunRepository:
         if not run:
             return False
 
-        now = datetime.utcnow().isoformat() + "Z"
+        now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
         started_at = run.started_at
         completed_at = run.completed_at
 
@@ -729,7 +873,7 @@ class AgentStepRepository:
             agent_step_id (UUID string)
         """
         agent_step_id = str(uuid.uuid4())
-        now = datetime.utcnow().isoformat() + "Z"
+        now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
         input_json = None
         if step_data.input_data:
@@ -797,7 +941,7 @@ class AgentStepRepository:
         if not step_result:
             return False
 
-        now = datetime.utcnow().isoformat() + "Z"
+        now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
         output_json = None
         if completion_data.output_data:
@@ -866,7 +1010,7 @@ class RunArtifactLinkRepository:
             link_id (UUID string)
         """
         link_id = str(uuid.uuid4())
-        now = datetime.utcnow().isoformat() + "Z"
+        now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
         await self.db.execute(
             """
@@ -915,4 +1059,234 @@ class RunArtifactLinkRepository:
             artifact_id=row["artifact_id"],
             stage=row["stage"],
             created_at=row["created_at"]
+        )
+
+
+# ============================================================================
+# Migration Status Repository
+# ============================================================================
+
+class MigrationStatusRepository:
+    """Repository for migration status tracking (resume/retry support)"""
+
+    def __init__(self, db: DatabaseManager):
+        self.db = db
+
+    async def upsert(
+        self,
+        migration_name: str,
+        source_type: str,
+        source_id: str,
+        status: str,
+        error_message: Optional[str] = None,
+        artifacts_created: int = 0,
+        links_created: int = 0,
+    ) -> str:
+        """
+        Create or update a migration status record.
+
+        Uses UNIQUE(migration_name, source_type, source_id) for idempotency.
+
+        Returns:
+            migration_id (UUID string)
+        """
+        now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+        # Check if record exists
+        existing = await self.db.fetchone(
+            """
+            SELECT migration_id, retry_count FROM migration_status
+            WHERE migration_name = ? AND source_type = ? AND source_id = ?
+            """,
+            (migration_name, source_type, source_id)
+        )
+
+        if existing:
+            # Update existing record
+            await self.db.execute(
+                """
+                UPDATE migration_status
+                SET status = ?, error_message = ?,
+                    artifacts_created = ?, links_created = ?,
+                    completed_at = CASE WHEN ? IN ('completed', 'failed') THEN ? ELSE completed_at END
+                WHERE migration_id = ?
+                """,
+                (
+                    status, error_message,
+                    artifacts_created, links_created,
+                    status, now,
+                    existing["migration_id"]
+                )
+            )
+            await self.db.commit()
+            return existing["migration_id"]
+
+        # Create new record
+        migration_id = str(uuid.uuid4())
+
+        await self.db.execute(
+            """
+            INSERT INTO migration_status (
+                migration_id, migration_name, source_type, source_id,
+                status, error_message, artifacts_created, links_created,
+                started_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                migration_id, migration_name, source_type, source_id,
+                status, error_message, artifacts_created, links_created,
+                now
+            )
+        )
+
+        await self.db.commit()
+        return migration_id
+
+    async def get(
+        self, migration_name: str, source_type: str, source_id: str
+    ) -> Optional[MigrationRecord]:
+        """Get migration status for a specific source record."""
+        result = await self.db.fetchone(
+            """
+            SELECT * FROM migration_status
+            WHERE migration_name = ? AND source_type = ? AND source_id = ?
+            """,
+            (migration_name, source_type, source_id)
+        )
+
+        if not result:
+            return None
+
+        return self._row_to_record(result)
+
+    async def list_by_status(
+        self, migration_name: str, status: str
+    ) -> List[MigrationRecord]:
+        """List migration records by status."""
+        results = await self.db.fetchall(
+            """
+            SELECT * FROM migration_status
+            WHERE migration_name = ? AND status = ?
+            ORDER BY started_at ASC
+            """,
+            (migration_name, status)
+        )
+
+        return [self._row_to_record(row) for row in results]
+
+    async def list_failed(self, migration_name: str) -> List[MigrationRecord]:
+        """List failed migration records."""
+        return await self.list_by_status(migration_name, "failed")
+
+    async def increment_retry(
+        self, migration_name: str, source_type: str, source_id: str
+    ) -> bool:
+        """Increment retry count and reset status to in_progress."""
+        now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+        result = await self.db.fetchone(
+            """
+            SELECT migration_id FROM migration_status
+            WHERE migration_name = ? AND source_type = ? AND source_id = ?
+            """,
+            (migration_name, source_type, source_id)
+        )
+
+        if not result:
+            return False
+
+        await self.db.execute(
+            """
+            UPDATE migration_status
+            SET retry_count = retry_count + 1,
+                status = 'in_progress',
+                error_message = NULL,
+                started_at = ?
+            WHERE migration_id = ?
+            """,
+            (now, result["migration_id"])
+        )
+
+        await self.db.commit()
+        return True
+
+    async def get_report(self, migration_name: str) -> MigrationReport:
+        """Generate a migration report with aggregated stats."""
+        # Count by status
+        status_counts = await self.db.fetchall(
+            """
+            SELECT status, COUNT(*) as cnt,
+                   SUM(artifacts_created) as total_artifacts,
+                   SUM(links_created) as total_links
+            FROM migration_status
+            WHERE migration_name = ?
+            GROUP BY status
+            """,
+            (migration_name,)
+        )
+
+        completed = 0
+        failed = 0
+        skipped = 0
+        pending = 0
+        total_artifacts = 0
+        total_links = 0
+        total = 0
+
+        for row in status_counts:
+            cnt = row["cnt"]
+            total += cnt
+            total_artifacts += row["total_artifacts"] or 0
+            total_links += row["total_links"] or 0
+
+            if row["status"] == "completed":
+                completed = cnt
+            elif row["status"] == "failed":
+                failed = cnt
+            elif row["status"] == "skipped":
+                skipped = cnt
+            elif row["status"] in ("pending", "in_progress"):
+                pending += cnt
+
+        success_rate = completed / total if total > 0 else 0.0
+
+        # Get unresolved records
+        unresolved_rows = await self.db.fetchall(
+            """
+            SELECT * FROM migration_status
+            WHERE migration_name = ? AND status IN ('failed', 'pending', 'in_progress')
+            ORDER BY started_at ASC
+            """,
+            (migration_name,)
+        )
+
+        unresolved = [self._row_to_record(row) for row in unresolved_rows]
+
+        return MigrationReport(
+            migration_name=migration_name,
+            total_records=total,
+            completed=completed,
+            failed=failed,
+            skipped=skipped,
+            pending=pending,
+            total_artifacts_created=total_artifacts,
+            total_links_created=total_links,
+            success_rate=success_rate,
+            unresolved_records=unresolved
+        )
+
+    def _row_to_record(self, row: Dict[str, Any]) -> MigrationRecord:
+        """Convert database row to MigrationRecord model"""
+        return MigrationRecord(
+            migration_id=row["migration_id"],
+            migration_name=row["migration_name"],
+            source_type=row["source_type"],
+            source_id=row["source_id"],
+            status=row["status"],
+            error_message=row.get("error_message"),
+            artifacts_created=row.get("artifacts_created", 0),
+            links_created=row.get("links_created", 0),
+            started_at=row.get("started_at"),
+            completed_at=row.get("completed_at"),
+            retry_count=row.get("retry_count", 0)
         )
