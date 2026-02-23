@@ -10,7 +10,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from openai import OpenAI
+try:
+    from openai import OpenAI
+except Exception:  # pragma: no cover - import fallback for test env
+    OpenAI = None
 
 
 def get_audio_output_path() -> str:
@@ -60,6 +63,13 @@ async def generate_story_audio_file(
     resolved_speed = _resolve_speed(speed, child_age)
 
     try:
+        if OpenAI is None:
+            return {
+                "success": False,
+                "error": "OpenAI SDK is unavailable in current environment",
+                "audio_path": None,
+            }
+
         client = OpenAI(api_key=api_key)
 
         timestamp = datetime.now().isoformat()

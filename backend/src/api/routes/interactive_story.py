@@ -318,7 +318,7 @@ async def choose_story_branch_stream(
     if session.status != "active":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Session is {session.status}, cannot continue"
+            detail=f"会话状态为 {session.status}，无法继续"
         )
 
     async def event_generator() -> AsyncGenerator[str, None]:
@@ -446,7 +446,7 @@ async def choose_story_branch(
         if session.status != "active":
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Session is {session.status}, cannot continue"
+                detail=f"会话状态为 {session.status}，无法继续"
             )
 
         # Get audio strategy for the age group

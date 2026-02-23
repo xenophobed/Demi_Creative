@@ -11,8 +11,21 @@ from typing import Any, Dict
 from pathlib import Path
 
 import anyio
-from anthropic import AsyncAnthropic
-from claude_agent_sdk import tool, create_sdk_mcp_server
+try:
+    from anthropic import AsyncAnthropic
+except Exception:  # pragma: no cover - import fallback for test env
+    AsyncAnthropic = None
+
+try:
+    from claude_agent_sdk import tool, create_sdk_mcp_server
+except Exception:  # pragma: no cover - import fallback for test env
+    def tool(*_args, **_kwargs):
+        def decorator(func):
+            return func
+        return decorator
+
+    def create_sdk_mcp_server(**kwargs):
+        return kwargs
 
 
 @tool(
@@ -67,6 +80,20 @@ async def analyze_children_drawing(args: Dict[str, Any]) -> Dict[str, Any]:
     media_type = media_type_map.get(file_extension, "image/jpeg")
 
     # 调用 Claude Vision API
+    if AsyncAnthropic is None:
+        return {
+            "content": [{
+                "type": "text",
+                "text": json.dumps({
+                    "error": "Anthropic SDK is unavailable in current environment",
+                    "objects": [],
+                    "scene": "未知",
+                    "mood": "未知",
+                    "confidence_score": 0.0,
+                }, ensure_ascii=False),
+            }]
+        }
+
     client = AsyncAnthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
     # 根据年龄调整分析提示
