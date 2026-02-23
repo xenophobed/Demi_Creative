@@ -13,10 +13,6 @@ from backend.src.main import app
 from backend.src.services.database import session_repo
 
 
-# ---------------------------------------------------------------------------
-# Helper — fresh client per test (lifespan handled once by ASGITransport)
-# ---------------------------------------------------------------------------
-
 def _client() -> AsyncClient:
     return AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
 
@@ -27,7 +23,7 @@ def _client() -> AsyncClient:
 
 @pytest.fixture(autouse=True)
 async def cleanup_sessions():
-    """Clean up test sessions after each test."""
+    """每个测试后清理会话"""
     yield
     try:
         sessions = await session_repo.list_sessions(child_id="test_child_001")
@@ -46,7 +42,7 @@ class TestStartInteractiveStory:
     """Start interactive story tests"""
 
     async def test_start_story_success(self):
-        """Test successfully starting a story."""
+        """测试成功开始故事"""
         async with _client() as client:
             payload = {
                 "child_id": "test_child_001",
@@ -81,7 +77,7 @@ class TestStartInteractiveStory:
                 assert "emoji" in choice
 
     async def test_start_story_missing_interests(self):
-        """Test request with empty interests list returns 422."""
+        """测试缺少兴趣标签"""
         async with _client() as client:
             payload = {
                 "child_id": "test_child_001",
@@ -99,7 +95,7 @@ class TestStartInteractiveStory:
             assert error["error"] == "ValidationError"
 
     async def test_start_story_too_many_interests(self):
-        """Test request with >5 interests returns 422."""
+        """测试兴趣标签过多"""
         async with _client() as client:
             payload = {
                 "child_id": "test_child_001",
@@ -115,7 +111,7 @@ class TestStartInteractiveStory:
             assert response.status_code == 422
 
     async def test_start_story_invalid_age_group(self):
-        """Test invalid age_group returns 422."""
+        """测试无效年龄组"""
         async with _client() as client:
             payload = {
                 "child_id": "test_child_001",
@@ -141,7 +137,7 @@ class TestChooseStoryBranch:
 
     @pytest_asyncio.fixture
     async def active_session_id(self):
-        """Create an active session and return its ID."""
+        """创建活跃会话"""
         async with _client() as client:
             payload = {
                 "child_id": "test_child_001",
@@ -158,7 +154,7 @@ class TestChooseStoryBranch:
             return response.json()["session_id"]
 
     async def test_choose_branch_success(self, active_session_id):
-        """Test successfully choosing a branch."""
+        """测试成功选择分支"""
         async with _client() as client:
             choice_id = "choice_0_a"
 
@@ -180,7 +176,7 @@ class TestChooseStoryBranch:
             assert 0.0 <= result["progress"] <= 1.0
 
     async def test_choose_branch_invalid_session(self):
-        """Test choosing a branch on a non-existent session returns 404."""
+        """测试无效会话ID"""
         async with _client() as client:
             response = await client.post(
                 "/api/v1/story/interactive/invalid_session/choose",
@@ -215,7 +211,7 @@ class TestGetSessionStatus:
 
     @pytest_asyncio.fixture
     async def test_session_id(self):
-        """Create a test session and return its ID."""
+        """创建测试会话"""
         async with _client() as client:
             payload = {
                 "child_id": "test_child_001",
@@ -232,7 +228,7 @@ class TestGetSessionStatus:
             return response.json()["session_id"]
 
     async def test_get_status_success(self, test_session_id):
-        """Test successfully getting session status."""
+        """测试成功获取状态"""
         async with _client() as client:
             response = await client.get(
                 f"/api/v1/story/interactive/{test_session_id}/status",
@@ -257,7 +253,7 @@ class TestGetSessionStatus:
             assert result["child_id"] == "test_child_001"
 
     async def test_get_status_invalid_session(self):
-        """Test getting status for non-existent session returns 404."""
+        """测试获取不存在的会话状态"""
         async with _client() as client:
             response = await client.get(
                 "/api/v1/story/interactive/invalid_session/status",
@@ -275,9 +271,9 @@ class TestStoryProgression:
     """Full story flow tests"""
 
     async def test_full_story_flow(self):
-        """Test a complete story flow: start -> choose x3 -> check status."""
+        """测试完整故事流程"""
         async with _client() as client:
-            # 1. Start a story
+            # 1. 开始故事
             start_payload = {
                 "child_id": "test_child_001",
                 "age_group": "6-8",
