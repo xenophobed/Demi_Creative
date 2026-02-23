@@ -144,88 +144,24 @@ class StoriesToArtifactsMigrationV2:
         links_created = 0
 
         try:
-            # Create run for legacy story
-            run_id = str(uuid.uuid4())
-            now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-
-            if not self.dry_run:
-                await self.db.execute(
-                    """
-                    INSERT INTO runs (
-                        run_id, story_id, workflow_type, status, created_at
-                    ) VALUES (?, ?, ?, ?, ?)
-                    """,
-                    (run_id, story_id, "image_to_story", "completed", now)
-                )
-
-            # Migrate cover image
-            cover_artifact_id = None
-            if story.get("image_url") or story.get("image_path"):
-                cover_artifact_id, created = await self._create_artifact_with_dedup(
-                    artifact_type="image",
-                    artifact_path=story.get("image_path"),
-                    artifact_url=story.get("image_url"),
-                    description="Cover image from legacy story",
-                )
-                if created:
-                    artifacts_created += 1
-
-                if cover_artifact_id:
-                    link_created = await self._create_story_artifact_link(
-                        story_id, cover_artifact_id, "cover"
+            if self.dry_run:
+                await self._migrate_story_inner(story, artifacts_created, links_created)
+            else:
+                # Wrap all DB writes for this story in a transaction
+                # On failure, all writes for THIS story are rolled back
+                async with self.db.transaction():
+                    artifacts_created, links_created = await self._migrate_story_inner(
+                        story, artifacts_created, links_created
                     )
-                    if link_created:
-                        links_created += 1
 
-            # Migrate audio
-            canonical_audio_id = None
-            if story.get("audio_url"):
-                canonical_audio_id, created = await self._create_artifact_with_dedup(
-                    artifact_type="audio",
-                    artifact_url=story.get("audio_url"),
-                    description="Narration audio from legacy story",
-                )
-                if created:
-                    artifacts_created += 1
-
-                if canonical_audio_id:
-                    link_created = await self._create_story_artifact_link(
-                        story_id, canonical_audio_id, "final_audio"
-                    )
-                    if link_created:
-                        links_created += 1
-
-            # Migrate text with safety score
-            if story.get("story_text"):
-                text_artifact_id, created = await self._create_artifact_with_dedup(
-                    artifact_type="text",
-                    artifact_payload=story.get("story_text"),
-                    description="Story text from legacy story",
-                    safety_score=story.get("safety_score"),
-                )
-                if created:
-                    artifacts_created += 1
-
-            # Update stories table with artifact references
-            if not self.dry_run:
-                await self.db.execute(
-                    """
-                    UPDATE stories
-                    SET cover_artifact_id = ?, canonical_audio_id = ?,
-                        current_run_id = ?
-                    WHERE story_id = ?
-                    """,
-                    (cover_artifact_id, canonical_audio_id, run_id, story_id)
-                )
-                await self.db.commit()
-
-            # Mark completed
+            # Mark completed (outside transaction — status tracking is separate)
             if not self.dry_run:
                 await self.migration_repo.upsert(
                     MIGRATION_NAME, "story", story_id, "completed",
                     artifacts_created=artifacts_created,
                     links_created=links_created,
                 )
+                await self.db.commit()
 
             print(f"    ✅ Migrated: {artifacts_created} artifacts, {links_created} links")
 
@@ -240,6 +176,98 @@ class StoriesToArtifactsMigrationV2:
                     artifacts_created=artifacts_created,
                     links_created=links_created,
                 )
+                await self.db.commit()
+
+    async def _migrate_story_inner(
+        self, story: Dict[str, Any],
+        artifacts_created: int, links_created: int
+    ) -> tuple[int, int]:
+        """Inner migration logic for a single story (runs inside transaction)"""
+        story_id = story["story_id"]
+
+        # Create run for legacy story
+        run_id = str(uuid.uuid4())
+        now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+        if not self.dry_run:
+            await self.db.execute(
+                """
+                INSERT INTO runs (
+                    run_id, story_id, workflow_type, status, created_at
+                ) VALUES (?, ?, ?, ?, ?)
+                """,
+                (run_id, story_id, "image_to_story", "completed", now)
+            )
+
+        # Migrate cover image
+        cover_artifact_id = None
+        if story.get("image_url") or story.get("image_path"):
+            cover_artifact_id, created = await self._create_artifact_with_dedup(
+                artifact_type="image",
+                artifact_path=story.get("image_path"),
+                artifact_url=story.get("image_url"),
+                description="Cover image from legacy story",
+            )
+            if created:
+                artifacts_created += 1
+
+            if cover_artifact_id:
+                link_created = await self._create_story_artifact_link(
+                    story_id, cover_artifact_id, "cover"
+                )
+                if link_created:
+                    links_created += 1
+
+        # Migrate audio
+        canonical_audio_id = None
+        if story.get("audio_url"):
+            canonical_audio_id, created = await self._create_artifact_with_dedup(
+                artifact_type="audio",
+                artifact_url=story.get("audio_url"),
+                description="Narration audio from legacy story",
+            )
+            if created:
+                artifacts_created += 1
+
+            if canonical_audio_id:
+                link_created = await self._create_story_artifact_link(
+                    story_id, canonical_audio_id, "final_audio"
+                )
+                if link_created:
+                    links_created += 1
+
+        # Migrate text with safety score
+        text_artifact_id = None
+        if story.get("story_text"):
+            text_artifact_id, created = await self._create_artifact_with_dedup(
+                artifact_type="text",
+                artifact_payload=story.get("story_text"),
+                description="Story text from legacy story",
+                safety_score=story.get("safety_score"),
+            )
+            if created:
+                artifacts_created += 1
+
+            if text_artifact_id:
+                link_created = await self._create_story_artifact_link(
+                    story_id, text_artifact_id, "story_text"
+                )
+                if link_created:
+                    links_created += 1
+
+        # Update stories table with artifact references
+        if not self.dry_run:
+            await self.db.execute(
+                """
+                UPDATE stories
+                SET cover_artifact_id = ?, canonical_audio_id = ?,
+                    current_run_id = ?
+                WHERE story_id = ?
+                """,
+                (cover_artifact_id, canonical_audio_id, run_id, story_id)
+            )
+
+        return artifacts_created, links_created
 
     async def _create_artifact_with_dedup(
         self,
@@ -386,12 +414,27 @@ async def rollback_migration_v2(db: "DatabaseManager") -> Dict[str, Any]:
                 (aid,)
             )
 
-        # Delete the artifacts themselves
+        # Delete run artifact links referencing these artifacts
+        for aid in artifact_ids:
+            await db.execute(
+                "DELETE FROM run_artifact_links WHERE artifact_id = ?",
+                (aid,)
+            )
+
+        # Delete the artifacts themselves (CASCADE handles agent_steps FK)
         for aid in artifact_ids:
             await db.execute(
                 "DELETE FROM artifacts WHERE artifact_id = ?",
                 (aid,)
             )
+
+        # Delete runs created by migration (linked via current_run_id on stories)
+        migrated_runs = await db.fetchall(
+            "SELECT current_run_id FROM stories WHERE current_run_id IS NOT NULL"
+        )
+        for run_row in migrated_runs:
+            run_id = run_row["current_run_id"]
+            await db.execute("DELETE FROM runs WHERE run_id = ?", (run_id,))
 
         # Clear story references
         await db.execute(
