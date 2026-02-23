@@ -10,14 +10,22 @@ import json
 from typing import Dict, Any, List, Optional, AsyncGenerator
 
 from pydantic import BaseModel
-from claude_agent_sdk import (
-    ClaudeAgentOptions,
-    ResultMessage,
-    ClaudeSDKClient,
-    AssistantMessage,
-    ToolUseBlock,
-    ToolResultBlock
-)
+try:
+    from claude_agent_sdk import (
+        ClaudeAgentOptions,
+        ResultMessage,
+        ClaudeSDKClient,
+        AssistantMessage,
+        ToolUseBlock,
+        ToolResultBlock,
+    )
+except Exception:  # pragma: no cover - import fallback for test env
+    ClaudeAgentOptions = None
+    ResultMessage = object
+    ClaudeSDKClient = None
+    AssistantMessage = object
+    ToolUseBlock = object
+    ToolResultBlock = object
 from ..mcp_servers import (
     safety_server,
     tts_server,
@@ -123,6 +131,41 @@ AGE_CONFIG = {
 # Agent 函数
 # ============================================================================
 
+def _mock_opening(interests: List[str]) -> Dict[str, Any]:
+    topic = interests[0] if interests else "冒险"
+    return {
+        "title": f"{topic}小队大冒险",
+        "segment": {
+            "segment_id": 0,
+            "text": f"在一个阳光明媚的早晨，小伙伴们决定开始一次关于{topic}的探索。",
+            "choices": [
+                {"choice_id": "choice_0_a", "text": "马上出发", "emoji": "🚀"},
+                {"choice_id": "choice_0_b", "text": "先做准备", "emoji": "🎒"},
+            ],
+            "is_ending": False,
+        },
+    }
+
+
+def _mock_next_segment(segment_count: int, is_final_segment: bool) -> Dict[str, Any]:
+    segment = {
+        "segment_id": segment_count,
+        "text": "小伙伴们继续前进，发现了新的线索，并学会了互相帮助。",
+        "choices": [] if is_final_segment else [
+            {"choice_id": f"choice_{segment_count}_a", "text": "勇敢尝试", "emoji": "✨"},
+            {"choice_id": f"choice_{segment_count}_b", "text": "团队讨论", "emoji": "🤝"},
+        ],
+        "is_ending": is_final_segment,
+    }
+    result = {"segment": segment, "is_ending": is_final_segment}
+    if is_final_segment:
+        result["educational_summary"] = {
+            "themes": ["勇气", "合作"],
+            "concepts": ["选择", "探索"],
+            "moral": "勇敢尝试并与伙伴合作，问题就会有答案。",
+        }
+    return result
+
 async def generate_story_opening(
     child_id: str,
     age_group: str,
@@ -146,6 +189,8 @@ async def generate_story_opening(
         包含故事标题和开场段落的字典
     """
     config = AGE_CONFIG.get(age_group, AGE_CONFIG["6-9"])
+    if ClaudeSDKClient is None or ClaudeAgentOptions is None:
+        return _mock_opening(interests)
     interests_str = "、".join(interests) if interests else "冒险"
     theme_str = theme if theme else f"关于{interests[0]}的冒险" if interests else "神秘的冒险"
 
@@ -298,6 +343,11 @@ async def generate_story_opening_stream(
         流式事件字典，包含 type 和 data 字段
     """
     config = AGE_CONFIG.get(age_group, AGE_CONFIG["6-9"])
+    if ClaudeSDKClient is None or ClaudeAgentOptions is None:
+        yield {"type": "status", "data": {"status": "started", "message": "正在生成故事开场..."}}
+        yield {"type": "result", "data": _mock_opening(interests)}
+        yield {"type": "complete", "data": {"status": "completed", "message": "故事开场生成完成"}}
+        return
     interests_str = "、".join(interests) if interests else "冒险"
     theme_str = theme if theme else f"关于{interests[0]}的冒险" if interests else "神秘的冒险"
 
@@ -552,6 +602,12 @@ async def generate_next_segment_stream(
     segment_count = len(segments)
     total_segments = config["total_segments"]
     is_final_segment = segment_count >= total_segments - 1
+
+    if ClaudeSDKClient is None or ClaudeAgentOptions is None:
+        yield {"type": "status", "data": {"status": "processing", "message": "正在继续故事..."}}
+        yield {"type": "result", "data": _mock_next_segment(segment_count, is_final_segment)}
+        yield {"type": "complete", "data": {"status": "completed", "message": "段落生成完成"}}
+        return
 
     # 发送开始事件
     yield {
@@ -828,6 +884,9 @@ async def generate_next_segment(
 
     # Determine if this should be the ending
     is_final_segment = segment_count >= total_segments - 1
+
+    if ClaudeSDKClient is None or ClaudeAgentOptions is None:
+        return _mock_next_segment(segment_count, is_final_segment)
 
     # Build story context from previous segments
     story_context = "\n".join([

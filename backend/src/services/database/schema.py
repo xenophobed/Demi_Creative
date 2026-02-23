@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS stories (
     image_path TEXT,
     image_url TEXT,
     audio_url TEXT,
+    story_type TEXT DEFAULT 'image_to_story',
     created_at TEXT NOT NULL,
     stored_at TEXT NOT NULL,
     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE SET NULL
@@ -150,6 +151,20 @@ CREATE INDEX IF NOT EXISTS idx_tokens_user_id ON tokens(user_id);
 CREATE INDEX IF NOT EXISTS idx_tokens_expires_at ON tokens(expires_at);
 """
 
+CHILD_PREFERENCES_TABLE = """
+CREATE TABLE IF NOT EXISTS child_preferences (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    child_id TEXT UNIQUE NOT NULL,
+    profile_json TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+"""
+
+CHILD_PREFERENCES_INDEXES = """
+CREATE INDEX IF NOT EXISTS idx_child_preferences_child_id ON child_preferences(child_id);
+CREATE INDEX IF NOT EXISTS idx_child_preferences_updated_at ON child_preferences(updated_at DESC);
+"""
+
 
 # ============================================================================
 # Schema Initialization
@@ -193,10 +208,20 @@ async def init_schema(db: "DatabaseManager") -> None:
             except Exception:
                 pass
 
+    # Create child preferences table
+    await db.execute(CHILD_PREFERENCES_TABLE)
+    for stmt in CHILD_PREFERENCES_INDEXES.strip().split(";"):
+        if stmt.strip():
+            try:
+                await db.execute(stmt)
+            except Exception:
+                pass
+
     await db.commit()
 
     # Run migrations FIRST to add user_id columns if they don't exist
     await _migrate_add_user_id(db)
+    await _migrate_add_story_type(db)
 
     # Now create all indexes (including user_id indexes) after migration
     for stmt in STORIES_INDEXES.strip().split(";"):
@@ -246,6 +271,16 @@ async def _migrate_add_user_id(db: "DatabaseManager") -> None:
         await db.execute("CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id)")
         await db.commit()
         print("Sessions table migration completed")
+
+
+async def _migrate_add_story_type(db: "DatabaseManager") -> None:
+    """Migration: Add story_type column to stories table."""
+    stories_info = await db.fetchall("PRAGMA table_info(stories)")
+    stories_columns = [col['name'] for col in stories_info]
+
+    if 'story_type' not in stories_columns:
+        await db.execute("ALTER TABLE stories ADD COLUMN story_type TEXT DEFAULT 'image_to_story'")
+        await db.commit()
 
 
 # ============================================================================

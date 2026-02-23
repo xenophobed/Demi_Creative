@@ -69,7 +69,7 @@ def validate_image_file(file: UploadFile) -> None:
     if file_ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Unsupported file format. Allowed formats: {', '.join(ALLOWED_EXTENSIONS)}"
+            detail="文件必须是图片类型"
         )
 
     # Check MIME type
@@ -144,7 +144,7 @@ async def save_upload_file(file: UploadFile, child_id: str) -> Path:
     if len(content) > MAX_FILE_SIZE:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=f"File size exceeds the limit (max {MAX_FILE_SIZE / 1024 / 1024}MB)"
+            detail="文件大小超过限制"
         )
 
     with open(file_path, "wb") as f:
@@ -222,7 +222,7 @@ async def create_story_from_image(
             if len(interests_list) > 5:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Maximum 5 interest tags allowed"
+                    detail="兴趣标签最多5个"
                 )
 
         # 4. Call Agent to generate story
@@ -416,7 +416,7 @@ async def create_story_from_image_stream(
         interests_list = [i.strip() for i in interests.split(",") if i.strip()]
         if len(interests_list) > 5:
             async def error_generator():
-                yield f"event: error\ndata: {json.dumps({'error': 'ValidationError', 'message': 'Maximum 5 interest tags allowed'}, ensure_ascii=False)}\n\n"
+                yield f"event: error\ndata: {json.dumps({'error': 'ValidationError', 'message': '兴趣标签最多5个'}, ensure_ascii=False)}\n\n"
             return StreamingResponse(error_generator(), media_type="text/event-stream")
 
     # Build image URL (relative to static file server)

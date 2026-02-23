@@ -5,10 +5,12 @@ Tests for Interactive Story API
 """
 
 import pytest
+import pytest_asyncio
 from httpx import AsyncClient
 
 from backend.src.main import app
 from backend.src.services import session_manager
+from backend.src.services.database import session_repo
 
 
 @pytest.fixture(autouse=True)
@@ -117,7 +119,7 @@ class TestStartInteractiveStory:
 class TestChooseStoryBranch:
     """选择故事分支测试"""
 
-    @pytest.fixture
+    @pytest_asyncio.fixture
     async def active_session_id(self):
         """创建活跃会话"""
         async with AsyncClient(app=app, base_url="http://test") as client:
@@ -184,7 +186,7 @@ class TestChooseStoryBranch:
     async def test_choose_branch_completed_session(self, active_session_id):
         """测试已完成的会话"""
         # 先将会话标记为完成
-        session_manager.update_session(
+        await session_repo.update_session(
             session_id=active_session_id,
             status="completed"
         )
@@ -207,7 +209,7 @@ class TestChooseStoryBranch:
 class TestGetSessionStatus:
     """获取会话状态测试"""
 
-    @pytest.fixture
+    @pytest_asyncio.fixture
     async def test_session_id(self):
         """创建测试会话"""
         async with AsyncClient(app=app, base_url="http://test") as client:

@@ -11,14 +11,29 @@ from datetime import datetime
 import hashlib
 
 import anyio
-import chromadb
-from chromadb.config import Settings
-from claude_agent_sdk import tool, create_sdk_mcp_server
+try:
+    import chromadb
+except Exception:  # pragma: no cover - import fallback for test env
+    chromadb = None
+
+try:
+    from claude_agent_sdk import tool, create_sdk_mcp_server
+except Exception:  # pragma: no cover - import fallback for test env
+    def tool(*_args, **_kwargs):
+        def decorator(func):
+            return func
+        return decorator
+
+    def create_sdk_mcp_server(**kwargs):
+        return kwargs
 
 
 # 初始化 ChromaDB 客户端
 def get_chroma_client():
     """获取 ChromaDB 客户端"""
+    if chromadb is None:
+        raise RuntimeError("ChromaDB SDK is unavailable in current environment")
+
     # 使用持久化存储
     persist_directory = os.getenv("CHROMA_PATH", "./data/vectors")
     return chromadb.PersistentClient(path=persist_directory)

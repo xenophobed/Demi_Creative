@@ -243,6 +243,16 @@ function HomePage() {
                     Interactive Tales
                   </Button>
                 </Link>
+                <Link to="/news">
+                  <Button
+                    size="lg"
+                    variant="outline"
+                    rightIcon={<span>📰</span>}
+                    className="shadow-lg hover:shadow-xl transition-shadow w-full sm:w-auto"
+                  >
+                    News to Kids
+                  </Button>
+                </Link>
               </motion.div>
             </div>
           </div>

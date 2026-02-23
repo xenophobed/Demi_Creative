@@ -11,15 +11,22 @@ from pathlib import Path
 from typing import Dict, Any, AsyncIterator, AsyncGenerator, Optional, List
 
 from pydantic import BaseModel
-from claude_agent_sdk import (
-    query,
-    ClaudeAgentOptions,
-    ResultMessage,
-    ClaudeSDKClient,
-    AssistantMessage,
-    ToolUseBlock,
-    ToolResultBlock
-)
+try:
+    from claude_agent_sdk import (
+        ClaudeAgentOptions,
+        ResultMessage,
+        ClaudeSDKClient,
+        AssistantMessage,
+        ToolUseBlock,
+        ToolResultBlock,
+    )
+except Exception:  # pragma: no cover - import fallback for test env
+    ClaudeAgentOptions = None
+    ResultMessage = object
+    ClaudeSDKClient = None
+    AssistantMessage = object
+    ToolUseBlock = object
+    ToolResultBlock = object
 from ..mcp_servers import (
     vision_server,
     vector_server,
@@ -97,6 +104,8 @@ async def image_to_story(
     Returns:
         包含故事、音频等信息的字典
     """
+    if ClaudeSDKClient is None or ClaudeAgentOptions is None:
+        raise RuntimeError("claude_agent_sdk is unavailable in current environment")
     # 验证输入
     if not Path(image_path).exists():
         raise FileNotFoundError(f"图片文件不存在: {image_path}")
@@ -197,7 +206,6 @@ async def image_to_story(
                             result_content = getattr(block, 'content', None)
                             if result_content and isinstance(result_content, str):
                                 try:
-                                    import json
                                     result_json = json.loads(result_content)
                                     if 'audio_path' in result_json:
                                         audio_path = result_json['audio_path']
@@ -253,6 +261,15 @@ async def stream_image_to_story(
     Yields:
         流式事件字典，包含 type 和 data 字段
     """
+    if ClaudeSDKClient is None or ClaudeAgentOptions is None:
+        yield {
+            "type": "error",
+            "data": {
+                "error": "RuntimeError",
+                "message": "claude_agent_sdk is unavailable in current environment",
+            },
+        }
+        return
     # 验证输入
     if not Path(image_path).exists():
         yield {
