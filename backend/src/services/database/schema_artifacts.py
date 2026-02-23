@@ -90,8 +90,7 @@ CREATE TABLE IF NOT EXISTS story_artifact_links (
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     FOREIGN KEY (story_id) REFERENCES stories(story_id) ON DELETE CASCADE,
-    FOREIGN KEY (artifact_id) REFERENCES artifacts(artifact_id) ON DELETE CASCADE,
-    UNIQUE(story_id, role) WHERE is_primary=1
+    FOREIGN KEY (artifact_id) REFERENCES artifacts(artifact_id) ON DELETE CASCADE
 );
 """
 
@@ -101,6 +100,7 @@ CREATE INDEX IF NOT EXISTS idx_link_artifact ON story_artifact_links(artifact_id
 CREATE INDEX IF NOT EXISTS idx_link_role ON story_artifact_links(role);
 CREATE INDEX IF NOT EXISTS idx_link_is_primary ON story_artifact_links(is_primary);
 CREATE INDEX IF NOT EXISTS idx_link_story_role ON story_artifact_links(story_id, role);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_link_primary_per_story_role ON story_artifact_links(story_id, role) WHERE is_primary=1;
 """
 
 # ============================================================================
