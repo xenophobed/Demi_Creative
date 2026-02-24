@@ -146,16 +146,28 @@ Agents must use services/repositories — never query SQLite directly.
 
 ## Available Claude Code Skills
 
+### Product Skills
 | Command | Use When |
 |---------|---------|
+| `/product-audit [area]` | Find gaps between PRD and actual implementation |
+| `/feature-spec [idea]` | Design a new feature before engineering |
+| `/prd [action]` | Update the Product Requirements Document |
+
+### Engineering Skills
+| Command | Use When |
+|---------|---------|
+| `/issues [filter]` | See open issues, plan what to work on |
 | `/investigate [topic]` | Before starting any unfamiliar work |
-| `/debug [error]` | Something is broken |
+| `/plan [issue/description]` | Design implementation for multi-file changes |
+| `/create-issue [description]` | Filing a GitHub issue |
+| `/fix-issue [number]` | Resolving a GitHub issue end-to-end |
 | `/codegen [description]` | Creating new code |
 | `/test [file]` | Adding test coverage |
+| `/debug [error]` | Something is broken |
 | `/refactor [area]` | Improving code quality |
 | `/review [PR/branch]` | Before merging |
 | `/commit` | Creating a git commit |
 | `/pr` | Opening a pull request |
-| `/create-issue [description]` | Filing a GitHub issue |
-| `/fix-issue [number]` | Resolving a GitHub issue |
+| `/dev [start/stop/status]` | Start or stop dev servers |
+| `/release [version]` | Cut a versioned release |
 | `/docs [file/topic]` | Writing documentation |

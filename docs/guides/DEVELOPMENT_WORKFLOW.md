@@ -14,21 +14,29 @@ Everything you need to know about the software engineering process for this proj
                                  (you never need to invoke this — it's always active)
 
 .claude/skills/               ← DEVELOPER TOOLS (slash commands you type)
-    issues/                   ← /issues       (see what needs doing)
-    investigate/              ← /investigate   (understand code before changing it)
-    plan/                     ← /plan         (design before coding)
+    # ── Product skills ──
+    product-audit/            ← /product-audit (find gaps between PRD and code)
+    feature-spec/             ← /feature-spec  (design a new feature before coding)
+    prd/                      ← /prd           (update the PRD document)
+    # ── Planning skills ──
+    issues/                   ← /issues        (see what needs doing)
     create-issue/             ← /create-issue  (track new work)
+    # ── Design skills ──
+    investigate/              ← /investigate   (understand code before changing it)
+    plan/                     ← /plan          (design before coding)
+    # ── Build skills ──
     fix-issue/                ← /fix-issue     (pick up and complete an issue)
     codegen/                  ← /codegen       (write new code)
     test/                     ← /test          (add tests)
     debug/                    ← /debug         (fix broken things)
     refactor/                 ← /refactor      (improve existing code)
+    docs/                     ← /docs          (write documentation)
+    # ── Ship skills ──
     review/                   ← /review        (check code quality)
     commit/                   ← /commit        (save your work to git)
     pr/                       ← /pr            (submit your work for review)
     dev/                      ← /dev           (start/stop dev servers)
     release/                  ← /release       (cut a versioned release)
-    docs/                     ← /docs          (write documentation)
 
 backend/src/prompts/          ← APPLICATION PROMPTS (not for you — for the AI agents)
     story-generation.md       ← Instructions the app's story agent reads at runtime
@@ -55,18 +63,118 @@ Some skills trigger automatically when Claude recognizes your intent. Skills wit
 Every piece of work follows this cycle. The sections below cover each phase.
 
 ```
-  PLAN            DESIGN         BUILD          VERIFY         SHIP           MAINTAIN
-  ────            ──────         ─────          ──────         ────           ────────
-  /issues         /investigate   /dev           /test          /commit        /debug
-  /create-issue   /plan          /codegen       /review        /pr            /fix-issue
-                                 /debug                        /release       /refactor
-                                 /refactor
-                                 /docs
+  DISCOVER        DEFINE         PLAN           DESIGN         BUILD          VERIFY         SHIP           MAINTAIN
+  ────────        ──────         ────           ──────         ─────          ──────         ────           ────────
+  /product-audit  /feature-spec  /issues        /investigate   /dev           /test          /commit        /debug
+                  /prd           /create-issue  /plan          /codegen       /review        /pr            /fix-issue
+                                                               /debug                        /release       /refactor
+                                                               /refactor
+                                                               /docs
 ```
+
+The first two phases (DISCOVER, DEFINE) are **product** work. The rest are **engineering**.
 
 ---
 
-## Phase 1: PLAN — Decide What to Work On
+## Phase 1: DISCOVER — Find What's Missing or Wrong
+
+### "I think something in the app doesn't match what we planned"
+
+```
+/product-audit My Stories page
+/product-audit the upload flow
+/product-audit navigation and page naming
+```
+
+This runs in an isolated subagent. It:
+1. Reads the PRD and domain model to understand what the product *should* be
+2. Examines the actual code (frontend pages, backend routes, data models)
+3. Compares the two and finds gaps: naming mismatches, missing features, wrong scope
+4. Cross-checks against existing GitHub issues to avoid duplicates
+5. Returns a structured list of gaps with suggested issues to file
+
+### "I want a full audit of the entire product"
+
+```
+/product-audit full audit
+```
+
+This systematically checks each PRD section (§3.1–§3.5) against the implementation.
+
+### When to use `/product-audit`
+
+| Situation | Use it? |
+|-----------|---------|
+| Something feels wrong in the UI | yes |
+| You're about to start a new milestone | yes (audit everything first) |
+| You just finished an epic and want to verify completeness | yes |
+| You're fixing a specific bug | no — use `/fix-issue` |
+
+---
+
+## Phase 2: DEFINE — Design New Features
+
+### "I have an idea for a new feature"
+
+```
+/feature-spec my library page that shows all artifact types not just stories
+/feature-spec parent dashboard to see what kids created
+/feature-spec drawing upload with AI suggestions
+```
+
+This runs in an isolated subagent. It:
+1. Reads the PRD and domain model to understand the product context
+2. Checks what already exists in the code
+3. Designs the feature at the **product level** (not engineering):
+   - User stories ("As a child, I can...")
+   - Acceptance criteria (testable conditions)
+   - Age adaptation rules (how 3-5 vs 6-8 vs 9-12 experience differs)
+   - Content safety requirements
+   - Edge cases (empty state, errors, first use)
+4. Drafts a PRD section ready to paste
+5. Proposes an epic and stories for GitHub
+
+**After reviewing the spec:**
+```
+/prd add <feature name>       ← add the approved section to the PRD
+/create-issue <epic>          ← create the GitHub epic
+/create-issue <story 1>       ← create each story
+```
+
+### "I need to update the PRD"
+
+```
+/prd add My Library feature
+/prd update §3.1 to include multi-image upload
+/prd sync progress
+/prd retire news-to-kids to phase 3
+```
+
+What each action does:
+- **add**: Writes a new feature section matching the PRD format
+- **update**: Modifies an existing section
+- **sync progress**: Cross-references all GitHub epics/stories and updates status markers
+- **retire/defer**: Marks a feature as deferred (never deletes — preserves history)
+
+Always shows you a diff before finalizing. Reminds you to `/commit` after.
+
+### The product workflow end-to-end
+
+```
+/product-audit full audit          ← find gaps
+/feature-spec <new feature>        ← design the feature
+  (review and refine)
+/prd add <feature>                 ← update the PRD
+/create-issue <epic>               ← create GitHub tracking
+/create-issue <story 1>            ← create stories
+/create-issue <story 2>
+```
+
+Then hand off to engineering (Phase 3+).
+
+---
+
+## Phase 3: PLAN — Decide What to Work On
 
 ### "I just sat down. What should I work on?"
 
@@ -106,7 +214,7 @@ Read these docs:
 
 ---
 
-## Phase 2: DESIGN — Think Before You Code
+## Phase 4: DESIGN — Think Before You Code
 
 This phase is the difference between "coding yourself into a corner" and "getting it right the first time." Skip it for tiny fixes. Use it for anything that touches more than one or two files.
 
@@ -154,7 +262,7 @@ This runs in an isolated subagent and returns:
 
 ---
 
-## Phase 3: BUILD — Do the Work
+## Phase 5: BUILD — Do the Work
 
 There are several scenarios. Pick the one that matches what you're doing.
 
@@ -337,7 +445,7 @@ What happens:
 
 ---
 
-## Phase 4: VERIFY — Make Sure It Works
+## Phase 6: VERIFY — Make Sure It Works
 
 ### Before you commit
 
@@ -370,7 +478,7 @@ Every review automatically checks:
 
 ---
 
-## Phase 5: SHIP — Save, Submit, and Release
+## Phase 7: SHIP — Save, Submit, and Release
 
 ### Commit your changes
 
@@ -430,7 +538,7 @@ This will:
 
 ---
 
-## Phase 6: MAINTAIN — After Your PR Is Submitted
+## Phase 8: MAINTAIN — After Your PR Is Submitted
 
 This is what happens after `/pr`. Most beginners don't know these steps exist.
 
@@ -530,6 +638,10 @@ Useful when you need to switch branches temporarily.
 
 | I want to... | Do this |
 |--------------|---------|
+| Find product gaps or naming issues | `/product-audit <area>` |
+| Design a new feature idea | `/feature-spec <idea>` |
+| Update the PRD | `/prd <action>` |
+| Check PRD progress against GitHub | `/prd sync progress` |
 | Start dev servers | `/dev` or `/dev start` |
 | Stop dev servers | `/dev stop` |
 | Check if servers are running | `/dev status` |
@@ -613,6 +725,9 @@ docs/
 
 | Command | What it does | Side effects? | Isolated? |
 |---------|-------------|---------------|-----------|
+| `/product-audit` | Find gaps between PRD and code | No | Yes (fork) |
+| `/feature-spec` | Design a new product feature | No | Yes (fork) |
+| `/prd` | Update the PRD document | Yes (edits files) | No |
 | `/dev` | Start/stop/restart dev servers | Yes (processes) | No |
 | `/issues` | Show open issues, priorities, epics | No | No |
 | `/investigate` | Explore and explain code | No | Yes (fork) |
