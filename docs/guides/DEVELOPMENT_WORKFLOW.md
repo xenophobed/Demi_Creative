@@ -1,0 +1,663 @@
+# Development Workflow — Complete Guide
+
+Everything you need to know about the software engineering process for this project, using Claude Code skills.
+
+---
+
+## Before You Start: How This Project Is Organized
+
+### Three layers of configuration
+
+```
+.claude/rules/                ← ALWAYS-LOADED CONVENTIONS
+    github-conventions.md     ← Label taxonomy, epics, branch naming, PR rules
+                                 (you never need to invoke this — it's always active)
+
+.claude/skills/               ← DEVELOPER TOOLS (slash commands you type)
+    issues/                   ← /issues       (see what needs doing)
+    investigate/              ← /investigate   (understand code before changing it)
+    plan/                     ← /plan         (design before coding)
+    create-issue/             ← /create-issue  (track new work)
+    fix-issue/                ← /fix-issue     (pick up and complete an issue)
+    codegen/                  ← /codegen       (write new code)
+    test/                     ← /test          (add tests)
+    debug/                    ← /debug         (fix broken things)
+    refactor/                 ← /refactor      (improve existing code)
+    review/                   ← /review        (check code quality)
+    commit/                   ← /commit        (save your work to git)
+    pr/                       ← /pr            (submit your work for review)
+    dev/                      ← /dev           (start/stop dev servers)
+    release/                  ← /release       (cut a versioned release)
+    docs/                     ← /docs          (write documentation)
+
+backend/src/prompts/          ← APPLICATION PROMPTS (not for you — for the AI agents)
+    story-generation.md       ← Instructions the app's story agent reads at runtime
+    interactive-story.md      ← Instructions the interactive story agent reads
+    age-adapter.md            ← Age adaptation rules
+```
+
+### How to invoke a skill
+
+Type `/` followed by the skill name in Claude Code:
+
+```
+/issues
+/investigate how does the safety check work
+/fix-issue 46
+```
+
+Some skills trigger automatically when Claude recognizes your intent. Skills with side effects (git, GitHub) only run when you explicitly type them.
+
+---
+
+## The Complete Software Engineering Lifecycle
+
+Every piece of work follows this cycle. The sections below cover each phase.
+
+```
+  PLAN            DESIGN         BUILD          VERIFY         SHIP           MAINTAIN
+  ────            ──────         ─────          ──────         ────           ────────
+  /issues         /investigate   /dev           /test          /commit        /debug
+  /create-issue   /plan          /codegen       /review        /pr            /fix-issue
+                                 /debug                        /release       /refactor
+                                 /refactor
+                                 /docs
+```
+
+---
+
+## Phase 1: PLAN — Decide What to Work On
+
+### "I just sat down. What should I work on?"
+
+```
+/issues
+```
+
+This shows all open issues grouped by milestone and epic, with priorities. It ends with a suggested next action.
+
+You can filter:
+```
+/issues mvp          ← only MVP milestone
+/issues bugs         ← only bugs
+/issues P1           ← only high-priority items
+/issues 40           ← only issues under epic #40
+```
+
+### "I found a bug / I have a feature idea"
+
+```
+/create-issue the progress bar is stuck at 0% during interactive stories
+/create-issue add support for uploading multiple drawings at once
+```
+
+This will:
+1. Search the codebase for relevant files
+2. Check if a similar issue already exists
+3. Create a properly labeled issue with the right milestone, priority, domain, and parent epic
+4. Return the issue URL
+
+### "I want to understand the big picture before planning"
+
+Read these docs:
+- `docs/product/PRD.md` — what features we're building and why
+- `docs/product/DOMAIN.md` — age groups, safety rules, educational goals
+- `docs/architecture/ARCHITECTURE.md` — how the system is designed
+
+---
+
+## Phase 2: DESIGN — Think Before You Code
+
+This phase is the difference between "coding yourself into a corner" and "getting it right the first time." Skip it for tiny fixes. Use it for anything that touches more than one or two files.
+
+### "I need to understand how the code works first"
+
+```
+/investigate how does the image-to-story agent call MCP tools
+/investigate the streaming SSE event flow from backend to frontend
+/investigate how session state is managed in the interactive story
+```
+
+This runs in an isolated subagent so it doesn't clutter your conversation. It returns:
+- Summary of how the code works
+- Key files and their roles
+- Architecture diagram
+- Data flow
+- Risks and recommendations
+
+### "I need to plan my approach before writing code"
+
+```
+/plan 46
+/plan add character growth tracking to the memory system
+```
+
+This runs in an isolated subagent and returns:
+- **Files to change** — listed in dependency order (change this first, then that)
+- **New interfaces / models** — what new schemas or contracts to define
+- **Step-by-step implementation** — each step independently testable
+- **Test strategy** — what contract, API, and integration tests to write
+- **Risks** — what could break, what to watch out for
+- **Scope estimate** — how many files, how complex
+
+### When to use `/plan` vs just starting
+
+| Situation | Skip `/plan` | Use `/plan` |
+|-----------|-------------|------------|
+| 1-file bug fix | yes | |
+| Change a single function | yes | |
+| New API route + model + tests | | yes |
+| Touches backend AND frontend | | yes |
+| New MCP tool server | | yes |
+| Database schema change | | yes |
+| You're unsure where to start | | yes |
+
+---
+
+## Phase 3: BUILD — Do the Work
+
+There are several scenarios. Pick the one that matches what you're doing.
+
+---
+
+### Scenario A: Fix an existing GitHub issue
+
+**This is the most common workflow.** One command does everything.
+
+```
+/fix-issue 46
+```
+
+This will:
+1. Read the issue from GitHub (title, body, labels, comments)
+2. Investigate the relevant code
+3. Create a branch (`fix/46-word-count-chars` or `feat/46-...`)
+4. Write a failing test first (TDD)
+5. Implement the fix
+6. Run all tests to verify
+7. Commit with the issue reference
+8. Open a PR with `Fixes #46` in the body
+
+**You don't need to do anything else.** Just review the PR it creates.
+
+---
+
+### Scenario B: Build a new feature from scratch
+
+When the work is bigger and you want to control each step:
+
+**Step 1 — Understand the area**
+```
+/investigate how does the memory system store character vectors
+```
+
+**Step 2 — Plan the approach**
+```
+/plan add character growth tracking to memory system
+```
+
+Review the plan. If it looks right, proceed. If not, discuss with Claude what to change.
+
+**Step 3 — Create an issue to track the work**
+```
+/create-issue add character growth tracking to memory system
+```
+
+**Step 4 — Write tests first (TDD)**
+```
+/test backend/src/mcp_servers/vector_search_server.py
+```
+
+This reads the code, studies existing test patterns, and writes:
+- Happy path tests
+- Edge case tests (empty input, boundary values)
+- Error case tests (SDK unavailable, network failure)
+
+Test locations in this project:
+- `backend/tests/contracts/` — MCP tool input/output schema tests
+- `backend/tests/api/` — FastAPI route tests
+- `backend/tests/integration/` — end-to-end flow tests
+
+**Step 5 — Generate the implementation**
+```
+/codegen add character_growth field to vector embeddings and update search
+```
+
+This reads similar existing code first, matches the project's patterns, generates the implementation, and runs the tests.
+
+**Step 6 — Review your own changes**
+```
+/review
+```
+
+Gives feedback organized by severity: Must Fix, Should Fix, Suggestion, Looks Good. Checks for child content safety issues.
+
+**Step 7 — Commit and open a PR**
+```
+/commit
+/pr
+```
+
+---
+
+### Scenario C: Fix a bug you just discovered (not yet tracked)
+
+**Option 1 — Quick fix** (small, obvious bug):
+```
+/debug the word_count is counting characters instead of words
+```
+
+Then commit:
+```
+/commit
+```
+
+**Option 2 — Track it first** (if you want a paper trail):
+```
+/create-issue word_count counts characters instead of words in image_to_story route
+/fix-issue <the number it gives you>
+```
+
+---
+
+### Scenario D: Something is broken and you don't know why
+
+```
+/debug TypeError: 'NoneType' object is not subscriptable in image_to_story_agent.py
+/debug the safety check is returning 0.0 for all content
+/debug tests are hanging and never finishing
+/debug frontend not receiving SSE events from the streaming endpoint
+```
+
+What happens:
+1. Searches the codebase for the error pattern
+2. Forms 2-3 hypotheses about the root cause
+3. Checks recent git changes
+4. Narrows down to the exact line and condition
+5. Applies a minimal fix
+6. Runs tests to verify
+7. Adds a regression test
+
+Project-specific things it knows to check:
+- `claude_agent_sdk` not installed → mock mode silently activated
+- MCP tool name mismatch (`mcp__server-name__tool_name` format)
+- Missing `await` on async calls
+- Blocking calls inside `async` functions
+
+---
+
+### Scenario E: Improve existing code (refactoring)
+
+```
+/refactor backend/src/agents/ extract duplicated TTS audio path extraction into a helper
+/refactor backend/src/agents/ move AGE_CONFIG to a shared utility module
+/refactor frontend/src/store/useInteractiveStoryStore.ts simplify the choice handling
+```
+
+What happens:
+1. Reads the target code
+2. Runs all existing tests first (safety net)
+3. Makes one small change at a time
+4. Runs tests after each change
+5. Reports what improved
+
+**Important**: Never refactor without tests. If there are no tests, run `/test` first.
+
+---
+
+### Scenario F: Add test coverage
+
+```
+/test backend/src/mcp_servers/safety_check_server.py
+/test backend/src/agents/image_to_story_agent.py
+/test frontend/src/hooks/useStoryGeneration.ts
+```
+
+What happens:
+1. Reads the code to understand its behavior
+2. Studies existing tests to match the style
+3. Writes tests for: happy path, edge cases, error cases
+4. Runs them and verifies they pass
+5. Checks that they fail when the code is broken
+
+---
+
+### Scenario G: Write documentation
+
+```
+/docs backend/src/mcp_servers/safety_check_server.py
+/docs the image-to-story agent workflow
+/docs backend/src/api/routes/interactive_story.py
+```
+
+What happens:
+1. Reads the code
+2. Checks `docs/` for existing docs to avoid duplication
+3. Writes appropriate docs (docstrings, API docs, or feature docs)
+
+---
+
+## Phase 4: VERIFY — Make Sure It Works
+
+### Before you commit
+
+Run `/review` to check your own changes:
+
+```
+/review                ← review staged changes
+/review main           ← review your branch vs main
+```
+
+Feedback categories:
+- **Must Fix**: bugs, security issues, data loss risks, child safety violations
+- **Should Fix**: performance issues, missing edge cases, missing tests
+- **Suggestion**: style, readability improvements
+- **Looks Good**: things done well
+
+### Before you merge a PR
+
+```
+/review 42             ← review GitHub PR #42
+```
+
+### Project-specific safety checks (from `SECURITY_CHECKLIST.md`)
+
+Every review automatically checks:
+- Does any new content generation bypass `check_content_safety`?
+- Are `child_id` queries properly scoped (no cross-user data leakage)?
+- Are file upload paths sanitized (no path traversal)?
+- Are API keys in env vars, never in code?
+
+---
+
+## Phase 5: SHIP — Save, Submit, and Release
+
+### Commit your changes
+
+```
+/commit
+```
+
+This will:
+1. Show what changed (`git status` + `git diff`)
+2. Generate a conventional commit message automatically:
+   ```
+   feat(agent): add character growth tracking to memory system
+
+   - Add growth_level field to character embeddings
+   - Update vector search to include growth context
+   - Add contract tests for growth tracking
+   ```
+3. Create the commit
+
+Commit types used:
+- `feat` — new feature
+- `fix` — bug fix
+- `refactor` — code improvement, no behavior change
+- `test` — adding/improving tests
+- `docs` — documentation
+- `chore` — build, config, tooling
+
+Scopes: `agent`, `mcp`, `api`, `prompts`, `db`, `frontend`, `skills`
+
+### Open a pull request
+
+```
+/pr
+/pr Add character growth tracking to memory system
+```
+
+This will:
+1. Push your branch to GitHub
+2. Read all commits since you branched from main
+3. Look up the linked issue to find its milestone and parent epic
+4. Generate a structured PR with Summary, Changes, Testing, Related Issues
+5. Create the PR and return the URL
+
+### Cut a release
+
+When you've merged several PRs and want to mark a version:
+
+```
+/release v0.1.0
+```
+
+This will:
+1. Gather all merged PRs and commits since the last tag
+2. Generate a changelog grouped by type (features, fixes, improvements)
+3. Create a git tag
+4. Create a GitHub release with the changelog
+
+---
+
+## Phase 6: MAINTAIN — After Your PR Is Submitted
+
+This is what happens after `/pr`. Most beginners don't know these steps exist.
+
+### "My PR has review comments — how do I address them?"
+
+1. Read the comments on GitHub, or ask Claude: "show me the comments on PR #42"
+2. You're still on your feature branch. Make the requested changes:
+   ```
+   /debug <the reviewer's concern>
+   ```
+   or just edit the code directly.
+3. Commit the fix:
+   ```
+   /commit
+   ```
+4. Push the update (Claude will push to the same branch — the PR updates automatically):
+   ```
+   git push
+   ```
+5. Reply to the review comment on GitHub if needed.
+
+### "My PR has merge conflicts"
+
+This happens when someone else changed the same files while you were working.
+
+1. Ask Claude: "my PR has merge conflicts, help me resolve them"
+2. Claude will:
+   - Fetch the latest main: `git fetch origin main`
+   - Rebase your branch: `git rebase origin/main`
+   - Show you each conflict and help resolve it
+   - Continue the rebase after each resolution
+3. Push the resolved branch:
+   ```
+   git push --force-with-lease
+   ```
+   (This is the one case where force-pushing is OK — it's your own feature branch.)
+
+### "My PR is approved — how do I merge?"
+
+```
+gh pr merge <PR number> --squash --delete-branch
+```
+
+- `--squash` combines all your commits into one clean commit on main
+- `--delete-branch` cleans up the feature branch
+
+Or just click "Squash and merge" on GitHub.
+
+### "There's an urgent bug in production (hotfix)"
+
+When something is broken and needs fixing immediately:
+
+```
+1. /create-issue <describe the urgent bug>           ← track it
+2. /fix-issue <number>                               ← fix it (creates branch, tests, PR)
+3. Ask Claude: "this is urgent, help me merge PR #N" ← merge it
+```
+
+The `/fix-issue` skill creates the branch from main, so your hotfix is isolated from any in-progress work.
+
+### "I need to pick up someone else's unfinished work"
+
+```
+1. git fetch origin
+2. git checkout <their-branch-name>
+3. /investigate what was this branch trying to do
+4. Continue the work normally with /codegen, /test, /commit
+```
+
+### "I want to throw away my current work and start over"
+
+If you haven't committed yet:
+```
+git checkout -- .                ← undo all file changes
+git clean -fd                    ← remove new untracked files
+```
+
+If you committed but haven't pushed:
+```
+git reset --soft HEAD~1          ← undo last commit, keep changes staged
+```
+
+Ask Claude if you're unsure: "I want to undo my last 3 commits but keep the code changes"
+
+### "I want to save my work-in-progress without a proper commit"
+
+```
+git stash                        ← save current changes
+git stash pop                    ← restore them later
+```
+
+Useful when you need to switch branches temporarily.
+
+---
+
+## Common Scenarios Quick Reference
+
+| I want to... | Do this |
+|--------------|---------|
+| Start dev servers | `/dev` or `/dev start` |
+| Stop dev servers | `/dev stop` |
+| Check if servers are running | `/dev status` |
+| See server logs | `/dev logs` |
+| See what needs doing | `/issues` |
+| See only MVP bugs | `/issues bugs` then filter for `phase:mvp` |
+| Understand unfamiliar code | `/investigate <topic>` |
+| Plan a multi-file feature | `/plan <issue number or description>` |
+| Track a new bug or idea | `/create-issue <description>` |
+| Pick up and complete an issue | `/fix-issue <number>` |
+| Build something new | `/investigate` → `/plan` → `/create-issue` → `/test` → `/codegen` → `/review` → `/commit` → `/pr` |
+| Fix a bug I just found | `/debug <error>` → `/commit` |
+| Something is broken, I'm stuck | `/debug <symptom or error message>` |
+| Add tests to existing code | `/test <file path>` |
+| Clean up messy code | `/test <file>` first, then `/refactor <file> <goal>` |
+| Check my work before committing | `/review` |
+| Review someone's PR | `/review <PR number>` |
+| Save my changes | `/commit` |
+| Submit my work | `/pr` |
+| Address PR review comments | edit code → `/commit` → `git push` |
+| Resolve merge conflicts | ask Claude: "my PR has merge conflicts" |
+| Merge an approved PR | `gh pr merge <number> --squash --delete-branch` |
+| Handle an urgent production bug | `/create-issue` → `/fix-issue` → merge immediately |
+| Cut a release | `/release v0.1.0` |
+| Document a function or feature | `/docs <file or topic>` |
+
+---
+
+## Branch and Issue Naming Conventions
+
+These are enforced automatically by the skills, but good to know:
+
+### Branch names
+```
+feat/46-add-character-memory       ← for stories (new features)
+fix/47-progress-bar-math           ← for bugs
+chore/48-readme-qdrant-chromadb    ← for chores (cleanup, docs)
+spike/50-evaluate-tts-providers    ← for research/investigation
+```
+
+### Issue titles
+```
+"Add character growth tracking"              ← story (verb phrase)
+"Bug: progress bar stuck at 0%"              ← bug
+"Chore: update README vector DB reference"   ← chore
+"Spike: evaluate TTS provider alternatives"  ← research
+"Epic: Memory System — Character Recall"     ← epic (groups stories)
+```
+
+### Commit messages
+```
+feat(agent): add character growth tracking
+fix(api): correct word_count to count words not characters (#46)
+refactor(mcp): extract shared TTS path helper
+test(contracts): add safety check edge case coverage
+docs: update development workflow guide
+chore(skills): add /issues command
+```
+
+---
+
+## Project Documentation Map
+
+```
+docs/
+├── product/                          # WHAT we're building
+│   ├── PRD.md                        # Features, user journeys, KPIs
+│   └── DOMAIN.md                     # Age groups, safety rules, education goals
+├── architecture/                     # HOW it's built
+│   ├── ARCHITECTURE.md               # System design, MCP tools, agent SDK
+│   ├── ARTIFACT_GRAPH_MODEL.md       # Artifact lifecycle, schema, lineage
+│   └── decisions/                    # Completed feature implementation records
+│       └── 001-artifact-graph-model.md
+└── guides/                           # HOW to work on it
+    └── DEVELOPMENT_WORKFLOW.md       # This file
+```
+
+---
+
+## Quick Reference Card
+
+| Command | What it does | Side effects? | Isolated? |
+|---------|-------------|---------------|-----------|
+| `/dev` | Start/stop/restart dev servers | Yes (processes) | No |
+| `/issues` | Show open issues, priorities, epics | No | No |
+| `/investigate` | Explore and explain code | No | Yes (fork) |
+| `/plan` | Design implementation approach | No | Yes (fork) |
+| `/create-issue` | File a GitHub issue | Yes (GitHub) | No |
+| `/fix-issue` | Resolve an issue end-to-end | Yes (git + GitHub) | No |
+| `/codegen` | Generate new code | Yes (writes files) | No |
+| `/test` | Write tests | Yes (writes files) | No |
+| `/debug` | Diagnose and fix errors | Yes (edits files) | No |
+| `/refactor` | Improve code quality | Yes (edits files) | No |
+| `/review` | Review code for issues | No | Yes (fork) |
+| `/commit` | Create a git commit | Yes (git) | No |
+| `/pr` | Open a pull request | Yes (git + GitHub) | No |
+| `/release` | Tag and publish a release | Yes (git + GitHub) | No |
+| `/docs` | Write documentation | Yes (writes files) | No |
+
+**Side effects?** = creates commits, pushes code, or creates GitHub issues/PRs.
+**Isolated?** = runs in a separate subagent so it doesn't affect your conversation context.
+
+---
+
+## Troubleshooting
+
+**Skill not showing up when I type `/`?**
+- Make sure you're in the project directory
+- Try typing the full name: `/issues`
+
+**`gh: command not found`?**
+- Install: `brew install gh`
+- Authenticate: `gh auth login`
+
+**Tests are hanging?**
+- `/debug tests are hanging and never finishing`
+
+**I made a mess and want to start over on a file?**
+- `git checkout -- path/to/file` to undo uncommitted changes
+- Or ask Claude: "undo my changes to this file"
+
+**I committed something wrong?**
+- Don't panic. Ask Claude: "I need to undo my last commit"
+- Claude will guide you through `git reset` safely
+
+**I don't understand an error message?**
+- Just paste it: `/debug <paste the error>`
+- Claude will find the root cause and fix it
+
+**I don't know which skill to use?**
+- Just describe what you want in plain English. Claude will suggest the right skill or handle it directly.

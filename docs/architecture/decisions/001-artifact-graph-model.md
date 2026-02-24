@@ -23,7 +23,7 @@ This implementation introduces a first-class immutable artifact system to the Ki
 
 | Criterion | Status | Evidence |
 |-----------|--------|----------|
-| Architecture decision documented | ✅ | `docs/ARTIFACT_GRAPH_MODEL.md` |
+| Architecture decision documented | ✅ | `docs/architecture/ARTIFACT_GRAPH_MODEL.md` |
 | ERD/model diagram committed | ✅ | ERD in ARTIFACT_GRAPH_MODEL.md, Pydantic models |
 | Naming conventions finalized | ✅ | Enums and models in artifact_models.py |
 | Story direct fields reduced to curated references | ✅ | Schema with cover_artifact_id, canonical_audio_id, etc |
@@ -471,7 +471,7 @@ await validate_migration(db)  # Checks referential integrity
 
 | Criterion | Implementation | Evidence |
 |-----------|---|---|
-| **Architecture decision documented and approved** | ✅ | `docs/ARTIFACT_GRAPH_MODEL.md` with full design |
+| **Architecture decision documented and approved** | ✅ | `docs/architecture/ARTIFACT_GRAPH_MODEL.md` with full design |
 | **ERD/model diagram committed** | ✅ | ERD in markdown + 17 Pydantic models |
 | **Naming conventions and relation semantics finalized** | ✅ | 7 enums + relation types documented |
 | **Story direct fields reduced to curated canonical references only** | ✅ | 4 artifact_id fields in stories table |

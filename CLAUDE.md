@@ -40,6 +40,7 @@ React SPA (frontend/src/)
 ```
 creative_agent/
 ├── .claude/
+│   ├── rules/               # Always-loaded conventions (label taxonomy, epics)
 │   └── skills/              # Claude Code developer skills (slash commands)
 ├── backend/
 │   └── src/
@@ -49,7 +50,10 @@ creative_agent/
 │       ├── prompts/         # Application-level agent prompts (markdown)
 │       └── services/        # Session mgmt, database, TTS
 ├── frontend/src/            # React SPA
-├── docs/                    # Architecture, PRD, domain docs
+├── docs/
+│   ├── product/             # PRD, domain knowledge
+│   ├── architecture/        # System design, artifact graph model
+│   └── guides/              # Development workflow guide
 └── data/                    # Runtime: uploads/, audio/, sessions/
 ```
 

@@ -390,9 +390,10 @@ Month 3: 儿童创作了 20+ 个故事，形成自己的"故事宇宙"
 ## 附录
 
 ### A. 相关文档
-- [DOMAIN.md](DOMAIN.md) - 领域背景和核心概念
-- [ARCHITECTURE.md](ARCHITECTURE.md) - 技术架构设计
-- [README.md](README.md) - 项目简介和快速开始
+- [DOMAIN.md](./DOMAIN.md) - 领域背景和核心概念
+- [ARCHITECTURE.md](../architecture/ARCHITECTURE.md) - 技术架构设计
+- [DEVELOPMENT_WORKFLOW.md](../guides/DEVELOPMENT_WORKFLOW.md) - 开发工作流
+- [README.md](../../README.md) - 项目简介和快速开始
 
 ### B. 参考标准
 - COPPA (儿童在线隐私保护法)

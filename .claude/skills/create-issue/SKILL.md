@@ -1,6 +1,6 @@
 ---
 name: create-issue
-description: Create a well-structured GitHub issue from a description or bug report. Use when filing new bugs, feature requests, or tasks for the Kids Creative Workshop project.
+description: Create a well-structured GitHub issue following project conventions. Use when filing new bugs, feature requests, or tasks.
 allowed-tools: Bash(gh:*), Read, Grep, Glob
 argument-hint: [issue title or description]
 disable-model-invocation: true
@@ -10,80 +10,89 @@ disable-model-invocation: true
 
 Create issue: $ARGUMENTS
 
+## Conventions (auto-loaded)
+
+!`cat .claude/rules/github-conventions.md`
+
 ## Process
 
-1. **Analyze the request**: Determine if this is a bug, feature, task, or improvement
+1. **Analyze the request**: Determine the type (`type:bug`, `type:story`, `type:chore`, `type:spike`)
 
 2. **Research context**:
    - Search codebase for relevant files and current behaviour
    - Check for existing related issues: `gh issue list --search "$ARGUMENTS"`
-   - Identify affected components (backend/frontend/agent/MCP/database)
+   - Identify the parent epic from the Epic Registry above
+   - Identify affected layers and product domain
 
-3. **Draft the issue**:
+3. **Determine all labels**: Apply one from each required category (type, layer, domain, priority, phase) per the conventions above
 
-### For Bugs:
+4. **Determine milestone**: Derive from the phase label
+
+5. **Draft the issue body** using the appropriate template:
+
+### For Bugs (`type:bug`):
 ```
-Title: [Bug] <concise description>
-
 ## Description
 <What's happening vs what should happen>
 
+**Parent Epic**: #<epic number>
+**Source**: <how discovered — user report, test failure, code review, etc.>
+
+## Affected Files
+- `path/to/file.py:line` — <why relevant>
+
 ## Steps to Reproduce
 1. ...
-2. ...
 
 ## Expected Behavior
 <What should happen>
 
 ## Actual Behavior
-<What actually happens, including any error messages>
+<What actually happens>
 
-## Affected Component
-- [ ] FastAPI routes (backend/src/api/routes/)
-- [ ] Agent orchestration (backend/src/agents/)
-- [ ] MCP tool server (backend/src/mcp_servers/)
-- [ ] Database/services (backend/src/services/)
-- [ ] Frontend (frontend/src/)
-- [ ] Application prompts (backend/src/prompts/)
-
-## Affected Files
-- `path/to/file.py` — <why relevant>
-
-## Possible Fix
-<If you have an idea>
+## Impact
+<How this affects the product / users>
 ```
 
-### For Features:
+### For Stories (`type:story`):
 ```
-Title: [Feature] <concise description>
+## Description
+<What this delivers and why — reference PRD section if applicable>
 
-## Summary
-<What and why>
+**Parent Epic**: #<epic number>
+**PRD Reference**: §<section> (if applicable)
 
-## Motivation
-<Problem this solves for the children / parents using the platform>
+## Scope
+- [ ] Task 1
+- [ ] Task 2
 
-## Proposed Solution
-<How to implement, referencing the agent-first architecture>
-
-## Alternatives Considered
-<Other approaches>
+## Acceptance Criteria
+- [ ] Criterion 1
+- [ ] Criterion 2
 
 ## Affected Areas
-- <component/module>
+- `path/to/relevant/code`
 ```
 
-4. **Create**: Use `gh issue create` with the drafted content
-5. **Add labels**: Apply appropriate labels based on type and priority
-6. **Report**: Show the created issue URL
+### For Chores (`type:chore`):
+```
+## Description
+<What needs cleaning up and why>
 
-## Labels Guide
+## Affected Files
+- `path/to/file`
 
-- `bug` — something is broken
-- `enhancement` — new feature or improvement
-- `agent` — relates to Claude Agent SDK or MCP tools
-- `content-safety` — relates to children's content safety system
-- `documentation` — docs needed
-- `good first issue` — beginner friendly
-- `priority:high` / `priority:low` — urgency
-- `backend` / `frontend` — layer affected
+## Definition of Done
+- [ ] ...
+```
+
+6. **Create the issue** with all labels and milestone:
+   ```bash
+   gh issue create \
+     --title "<title per naming convention>" \
+     --label "type:...,domain:...,layer:...,P...:...,phase:..." \
+     --milestone "<milestone name>" \
+     --body "..."
+   ```
+
+7. **Report**: Show the created issue URL and summarize labels/milestone assigned.
