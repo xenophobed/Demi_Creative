@@ -9,9 +9,8 @@ Issue #17: Pipeline provenance — every artifact traceable to run/step/agent.
 """
 
 import hashlib
+import logging
 import time
-import uuid
-from datetime import datetime, timezone
 from typing import Optional, Dict, Any, List
 
 from .database.connection import DatabaseManager
@@ -39,6 +38,8 @@ from .models.artifact_models import (
     RunArtifactStage,
     ArtifactMetadata,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class ProvenanceTracker:
@@ -93,17 +94,9 @@ class ProvenanceTracker:
         result_summary: Optional[Dict[str, Any]] = None,
     ) -> None:
         """Mark a Run as completed with optional summary."""
-        if result_summary:
-            now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-            import json
-
-            await self.db.execute(
-                "UPDATE runs SET result_summary = ?, completed_at = ?, status = ? WHERE run_id = ?",
-                (json.dumps(result_summary), now, "completed", run_id),
-            )
-            await self.db.commit()
-        else:
-            await self._run_repo.update_status(run_id, "completed")
+        await self._run_repo.update_status(
+            run_id, "completed", result_summary=result_summary
+        )
 
     async def fail_run(
         self,
@@ -111,15 +104,10 @@ class ProvenanceTracker:
         error_message: Optional[str] = None,
     ) -> None:
         """Mark a Run as failed."""
-        import json
-
-        now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
         summary = {"error": error_message} if error_message else None
-        await self.db.execute(
-            "UPDATE runs SET result_summary = ?, completed_at = ?, status = ? WHERE run_id = ?",
-            (json.dumps(summary) if summary else None, now, "failed", run_id),
+        await self._run_repo.update_status(
+            run_id, "failed", result_summary=summary
         )
-        await self.db.commit()
 
     # ------------------------------------------------------------------
     # Step lifecycle
@@ -156,13 +144,8 @@ class ProvenanceTracker:
         # Track wall-clock start for duration_ms
         self._step_start_times[step_id] = time.monotonic()
 
-        # Mark running
-        now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-        await self.db.execute(
-            "UPDATE agent_steps SET status = ? WHERE agent_step_id = ?",
-            ("running", step_id),
-        )
-        await self.db.commit()
+        # Mark running via repository
+        await self._step_repo.update_status(step_id, "running")
 
         return step_id
 
@@ -266,7 +249,9 @@ class ProvenanceTracker:
                         )
                     )
                 except ValueError:
-                    pass  # Relation already exists or invalid
+                    logger.debug(
+                        "Relation %s -> %s already exists", input_id, artifact_id
+                    )
 
         return artifact_id
 

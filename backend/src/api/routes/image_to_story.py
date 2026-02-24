@@ -6,6 +6,8 @@ Supports streaming responses (SSE) for a better user experience
 """
 
 import json
+import logging
+import mimetypes
 import re
 import uuid
 from datetime import datetime
@@ -32,6 +34,8 @@ from ...services.models.artifact_models import (
     ArtifactType, WorkflowType, StoryArtifactRole,
     ArtifactMetadata, RunArtifactStage,
 )
+
+logger = logging.getLogger(__name__)
 
 
 router = APIRouter(
@@ -238,7 +242,7 @@ async def create_story_from_image(
         try:
             run_id = await tracker.start_run(story_id, WorkflowType.IMAGE_TO_STORY)
         except Exception:
-            pass  # Non-critical: provenance failure shouldn't block story generation
+            logger.warning("Failed to start provenance run", exc_info=True)
 
         # Step 1: Record uploaded image as artifact
         image_artifact_id = None
@@ -248,7 +252,6 @@ async def create_story_from_image(
                     run_id, "image_upload", 1,
                     input_data={"image_path": str(image_path), "child_id": safe_child_id},
                 )
-                import mimetypes
                 mime, _ = mimetypes.guess_type(str(image_path))
                 file_size = image_path.stat().st_size if image_path.exists() else None
                 image_artifact_id = await tracker.record_artifact(
@@ -263,7 +266,7 @@ async def create_story_from_image(
                 )
                 await tracker.complete_step(upload_step_id, output_data={"artifact_id": image_artifact_id})
             except Exception:
-                pass
+                logger.warning("Failed to record image artifact", exc_info=True)
 
         # 4. Call Agent to generate story
         agent_step_id = None
@@ -282,7 +285,7 @@ async def create_story_from_image(
                     ),
                 )
             except Exception:
-                pass
+                logger.warning("Failed to start story generation step", exc_info=True)
 
         result = await image_to_story(
             image_path=str(image_path),
@@ -300,13 +303,13 @@ async def create_story_from_image(
                     output_data={"story_keys": list(result.keys())},
                 )
             except Exception:
-                pass
+                logger.warning("Failed to complete story generation step", exc_info=True)
 
         # 5. Parse result and build response
 
         # Extract story text
         story_text = result.get("story", "")
-        word_count = len(story_text)
+        word_count = len(story_text.split())
 
         # Extract educational value
         educational_value = EducationalValue(
@@ -357,7 +360,7 @@ async def create_story_from_image(
                 )
                 await tracker.complete_step(text_step_id, output_data={"artifact_id": text_artifact_id})
             except Exception:
-                pass
+                logger.warning("Failed to record text artifact", exc_info=True)
 
         # --- Record audio as artifact (Issue #17) ---
         audio_artifact_id = None
@@ -367,8 +370,7 @@ async def create_story_from_image(
                     run_id, "tts_artifact", 4,
                     input_data={"audio_path": result["audio_path"]},
                 )
-                import mimetypes as mt
-                audio_mime, _ = mt.guess_type(result["audio_path"])
+                audio_mime, _ = mimetypes.guess_type(result["audio_path"])
                 audio_artifact_id = await tracker.record_artifact(
                     audio_step_id,
                     ArtifactType.AUDIO,
@@ -382,35 +384,32 @@ async def create_story_from_image(
                 )
                 await tracker.complete_step(audio_step_id, output_data={"artifact_id": audio_artifact_id})
             except Exception:
-                pass
+                logger.warning("Failed to record audio artifact", exc_info=True)
 
         # --- Link artifacts to story and complete run (Issue #17 + #18) ---
         if run_id:
             try:
-                if image_artifact_id:
-                    await tracker.link_to_story(story_id, image_artifact_id, StoryArtifactRole.COVER)
-                if text_artifact_id:
-                    # Promote text to candidate then published
-                    from ...services.database.artifact_repository import ArtifactRepository
-                    art_repo = ArtifactRepository(db_manager)
-                    await art_repo.update_lifecycle_state(text_artifact_id, "candidate")
-                    await art_repo.update_lifecycle_state(text_artifact_id, "published")
-                if audio_artifact_id:
-                    await tracker.link_to_story(story_id, audio_artifact_id, StoryArtifactRole.FINAL_AUDIO)
-                    art_repo = ArtifactRepository(db_manager)
-                    await art_repo.update_lifecycle_state(audio_artifact_id, "candidate")
-                    await art_repo.update_lifecycle_state(audio_artifact_id, "published")
-                if image_artifact_id:
-                    art_repo = ArtifactRepository(db_manager)
-                    await art_repo.update_lifecycle_state(image_artifact_id, "candidate")
-                    await art_repo.update_lifecycle_state(image_artifact_id, "published")
+                art_repo = tracker._artifact_repo
+
+                # Promote and link all created artifacts
+                for artifact_id, role in [
+                    (image_artifact_id, StoryArtifactRole.COVER),
+                    (text_artifact_id, None),
+                    (audio_artifact_id, StoryArtifactRole.FINAL_AUDIO),
+                ]:
+                    if not artifact_id:
+                        continue
+                    await art_repo.update_lifecycle_state(artifact_id, "candidate")
+                    await art_repo.update_lifecycle_state(artifact_id, "published")
+                    if role:
+                        await tracker.link_to_story(story_id, artifact_id, role)
 
                 await tracker.complete_run(run_id, result_summary={
                     "artifacts_created": sum(1 for a in [image_artifact_id, text_artifact_id, audio_artifact_id] if a),
                     "story_id": story_id,
                 })
             except Exception:
-                pass
+                logger.warning("Failed to link artifacts and complete run", exc_info=True)
 
         # Build response
         created_at = datetime.now()
@@ -493,13 +492,11 @@ async def create_story_from_image(
         # Mark run as failed if provenance was started
         if run_id:
             try:
-                tracker = ProvenanceTracker(db_manager)
                 await tracker.fail_run(run_id, str(e))
             except Exception:
-                pass
+                logger.warning("Failed to mark run as failed", exc_info=True)
 
-        # Log error
-        print(f"Error in image-to-story: {e}")
+        logger.error("Error in image-to-story: %s", e, exc_info=True)
 
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -595,7 +592,7 @@ async def create_story_from_image_stream(
 
                     # Extract story text
                     story_text = result_data.get("story", "")
-                    word_count = len(story_text)
+                    word_count = len(story_text.split())
 
                     # Handle audio URL from agent result
                     audio_url = None

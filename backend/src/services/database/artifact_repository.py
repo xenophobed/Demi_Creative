@@ -796,13 +796,19 @@ class RunRepository:
 
         return self._row_to_run(result)
 
-    async def update_status(self, run_id: str, status: str) -> bool:
+    async def update_status(
+        self,
+        run_id: str,
+        status: str,
+        result_summary: Optional[Dict[str, Any]] = None,
+    ) -> bool:
         """
-        Update run status.
+        Update run status and optionally set result_summary.
 
         Args:
             run_id: Run UUID
             status: New status
+            result_summary: Optional summary dict (stored as JSON)
 
         Returns:
             True if successful
@@ -821,13 +827,15 @@ class RunRepository:
         elif status in ["completed", "failed"] and not completed_at:
             completed_at = now
 
+        summary_json = json.dumps(result_summary) if result_summary else None
+
         await self.db.execute(
             """
             UPDATE runs
-            SET status = ?, started_at = ?, completed_at = ?
+            SET status = ?, started_at = ?, completed_at = ?, result_summary = ?
             WHERE run_id = ?
             """,
-            (status, started_at, completed_at, run_id)
+            (status, started_at, completed_at, summary_json, run_id)
         )
 
         await self.db.commit()
@@ -920,6 +928,31 @@ class AgentStepRepository:
         )
 
         return [self._row_to_step(row) for row in results]
+
+    async def update_status(self, agent_step_id: str, status: str) -> bool:
+        """
+        Update step status (e.g. pending -> running).
+
+        Args:
+            agent_step_id: Step UUID
+            status: New status string
+
+        Returns:
+            True if successful
+        """
+        result = await self.db.fetchone(
+            "SELECT agent_step_id FROM agent_steps WHERE agent_step_id = ?",
+            (agent_step_id,)
+        )
+        if not result:
+            return False
+
+        await self.db.execute(
+            "UPDATE agent_steps SET status = ? WHERE agent_step_id = ?",
+            (status, agent_step_id),
+        )
+        await self.db.commit()
+        return True
 
     async def complete(self, agent_step_id: str, completion_data: AgentStepComplete) -> bool:
         """
