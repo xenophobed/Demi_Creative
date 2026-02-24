@@ -181,7 +181,7 @@ function InteractiveStoryPage() {
   }, [sessionId, saveStatus])
 
   // Calculate total segments (estimate based on progress)
-  const totalSegments = progress > 0 ? Math.round((choiceHistory.length + 1) / (progress / 100)) : 5
+  const totalSegments = progress > 0 ? Math.round((choiceHistory.length + 1) / progress) : 5
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">

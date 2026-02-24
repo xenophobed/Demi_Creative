@@ -243,7 +243,7 @@ async def create_story_from_image(
 
         # Extract story text
         story_text = result.get("story", "")
-        word_count = len(story_text)
+        word_count = len(story_text.split())
 
         # Extract educational value
         educational_value = EducationalValue(
@@ -445,7 +445,7 @@ async def create_story_from_image_stream(
 
                     # Extract story text
                     story_text = result_data.get("story", "")
-                    word_count = len(story_text)
+                    word_count = len(story_text.split())
 
                     # Handle audio URL from agent result
                     audio_url = None
