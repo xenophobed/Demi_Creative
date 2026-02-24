@@ -58,6 +58,65 @@ Some skills trigger automatically when Claude recognizes your intent. Skills wit
 
 ---
 
+## Phase 0: SETUP — First Time Getting Started
+
+If you just cloned the repo and need to get everything running:
+
+### 1. Prerequisites
+
+Ask Claude directly:
+```
+check if I have python 3.11+, node 18+, npm, and gh CLI installed
+```
+
+If anything is missing, Claude will tell you how to install it.
+
+### 2. Install dependencies
+
+```
+install the backend and frontend dependencies for me
+```
+
+Claude will set up the Python virtual environment, install pip packages, and run `npm install` in the frontend.
+
+### 3. Environment variables
+
+```
+help me set up the .env file for this project
+```
+
+You'll need two API keys:
+- `ANTHROPIC_API_KEY` — for Claude Agent SDK + Vision
+- `OPENAI_API_KEY` — for TTS audio
+
+Claude will guide you through creating the `.env` file safely.
+
+### 4. Start the servers
+
+```
+/dev start
+```
+
+### 5. Verify everything works
+
+```
+/dev status
+```
+
+### 6. Orient yourself
+
+```
+/issues                    ← see what needs doing
+/investigate <any topic>   ← explore the codebase
+```
+
+Read these docs:
+- `docs/product/PRD.md` — what we're building
+- `docs/guides/DEVELOPMENT_WORKFLOW.md` — this file (how to work)
+- `CLAUDE.md` — project rules and conventions
+
+---
+
 ## The Complete Software Engineering Lifecycle
 
 Every piece of work follows this cycle. The sections below cover each phase.
@@ -158,15 +217,35 @@ What each action does:
 
 Always shows you a diff before finalizing. Reminds you to `/commit` after.
 
+### "I ran a product audit — now what?"
+
+The audit gives you a list of gaps. Here's how to process them:
+
+1. **Review the gaps** — not everything needs immediate action. Prioritize by impact.
+2. **For the main finding** (e.g. "My Stories → My Library"):
+   ```
+   /feature-spec <the core redesign idea>    ← design it properly
+   /prd add <feature>                        ← update the PRD
+   /create-issue <epic>                      ← create GitHub epic
+   /create-issue <story 1>                   ← create individual stories
+   /create-issue <story 2>
+   ```
+3. **For small, obvious gaps** (e.g. wrong label, missing badge): skip the feature spec and file issues directly:
+   ```
+   /create-issue <description>
+   ```
+4. **For things already tracked**: the audit tells you — skip them.
+5. **For Phase 2+ items**: file them with the right phase label so they go to the backlog, not your current sprint.
+
 ### The product workflow end-to-end
 
 ```
-/product-audit full audit          ← find gaps
-/feature-spec <new feature>        ← design the feature
-  (review and refine)
-/prd add <feature>                 ← update the PRD
-/create-issue <epic>               ← create GitHub tracking
-/create-issue <story 1>            ← create stories
+/product-audit <area or "full audit">  ← find gaps
+/feature-spec <new feature>            ← design the big ones
+  (review and refine the spec)
+/prd add <feature>                     ← update the PRD
+/create-issue <epic>                   ← create GitHub tracking
+/create-issue <story 1>               ← create stories
 /create-issue <story 2>
 ```
 
@@ -204,6 +283,23 @@ This will:
 2. Check if a similar issue already exists
 3. Create a properly labeled issue with the right milestone, priority, domain, and parent epic
 4. Return the issue URL
+
+### "I have a bunch of issues to file (from an audit or brainstorm)"
+
+File them one at a time with `/create-issue`. Each invocation creates one issue with proper labels:
+
+```
+/create-issue Epic: My Library — Unified Content Library
+/create-issue Expand My Stories page into My Library with multi-content-type tabs
+/create-issue Display meaningful titles on story cards instead of truncated UUIDs
+/create-issue Add content type badges to library cards
+```
+
+**Tips for batch filing:**
+- Create the **epic first**, so child stories can reference it
+- Claude remembers the epic number from the previous command — it will link them automatically
+- File P1 items first, P3 items last — you can always stop partway
+- If you have a `/product-audit` result open, just say `/create-issue based on the product audit result` and Claude will extract the issues from it
 
 ### "I want to understand the big picture before planning"
 
@@ -445,6 +541,104 @@ What happens:
 
 ---
 
+### Scenario H: Switch to a hotfix mid-feature
+
+You're working on a feature branch but need to fix something urgent on main.
+
+**Step 1 — Save your current work**
+```
+save my current changes so I can switch branches
+```
+Claude will stash your uncommitted changes.
+
+**Step 2 — Fix the urgent issue**
+```
+switch to main and pull latest
+/fix-issue <urgent issue number>
+```
+This creates a new branch from main, fixes the issue, and opens a PR.
+
+**Step 3 — Go back to your feature**
+```
+switch back to my feature branch and restore my saved changes
+```
+Claude will checkout your branch and pop the stash.
+
+If the hotfix touched the same files, ask:
+```
+rebase my feature branch on top of the latest main first, then restore my changes
+```
+
+---
+
+### Scenario I: Add or update a dependency
+
+Just tell Claude what you need:
+```
+add the python package "httpx" to the backend
+add "framer-motion" to the frontend
+remove "old-package" from the backend
+```
+
+Claude will install it, update the lock/requirements files, and you just commit:
+```
+/commit
+```
+
+---
+
+### Scenario J: Run specific tests
+
+Just ask Claude:
+```
+run all the tests
+run only the contract tests
+run only the safety check tests
+run the tests for image_to_story_agent
+run the frontend tests
+```
+
+Claude knows the test directory structure and will run the right command. If a test fails:
+```
+/debug <paste the test failure output>
+```
+
+---
+
+### Scenario K: Database schema changed
+
+This project uses SQLite with a repository pattern. There's no migration framework (like Alembic) yet.
+
+**If you changed a Pydantic model or added a table:**
+
+1. Understand the current schema:
+   ```
+   /investigate how does the database schema get created
+   ```
+
+2. Tell Claude what you need:
+   ```
+   add a "title" column to the stories table and update the repository
+   ```
+
+3. If you don't need to keep existing data (dev environment):
+   ```
+   delete the dev database and restart the servers so it gets recreated
+   /dev restart
+   ```
+
+4. If you need to keep data, ask for a migration:
+   ```
+   /codegen write a SQLite migration script that adds column title to the stories table
+   ```
+
+5. Add tests for the new schema:
+   ```
+   /test backend/src/services/database/
+   ```
+
+---
+
 ## Phase 6: VERIFY — Make Sure It Works
 
 ### Before you commit
@@ -475,6 +669,36 @@ Every review automatically checks:
 - Are `child_id` queries properly scoped (no cross-user data leakage)?
 - Are file upload paths sanitized (no path traversal)?
 - Are API keys in env vars, never in code?
+
+### "CI failed on my PR — what do I do?"
+
+Just ask Claude:
+```
+CI failed on PR #50, help me fix it
+```
+
+Claude will:
+1. Check what failed on the PR
+2. Read the error log
+3. Diagnose the root cause
+4. Fix it locally
+
+If you already see the error, you can go straight to:
+```
+/debug <paste the CI error message>
+/commit
+push my changes
+```
+The PR updates automatically when you push.
+
+**Common CI failures:**
+
+| Failure | What to say |
+|---------|------------|
+| Test failure | `/debug <paste the test error>` |
+| Lint/format error | `fix the lint errors in my code` |
+| Missing dependency | `I forgot to update requirements.txt, fix it` |
+| Type error (frontend) | `fix the TypeScript type errors` |
 
 ---
 
@@ -544,57 +768,43 @@ This is what happens after `/pr`. Most beginners don't know these steps exist.
 
 ### "My PR has review comments — how do I address them?"
 
-1. Read the comments on GitHub, or ask Claude: "show me the comments on PR #42"
-2. You're still on your feature branch. Make the requested changes:
-   ```
-   /debug <the reviewer's concern>
-   ```
-   or just edit the code directly.
-3. Commit the fix:
-   ```
-   /commit
-   ```
-4. Push the update (Claude will push to the same branch — the PR updates automatically):
-   ```
-   git push
-   ```
-5. Reply to the review comment on GitHub if needed.
+```
+show me the comments on PR #42
+```
+
+Then fix what they asked for:
+```
+/debug <the reviewer's concern>
+/commit
+push my changes
+```
+
+The PR updates automatically when you push.
 
 ### "My PR has merge conflicts"
 
 This happens when someone else changed the same files while you were working.
 
-1. Ask Claude: "my PR has merge conflicts, help me resolve them"
-2. Claude will:
-   - Fetch the latest main: `git fetch origin main`
-   - Rebase your branch: `git rebase origin/main`
-   - Show you each conflict and help resolve it
-   - Continue the rebase after each resolution
-3. Push the resolved branch:
-   ```
-   git push --force-with-lease
-   ```
-   (This is the one case where force-pushing is OK — it's your own feature branch.)
+```
+my PR has merge conflicts, help me resolve them
+```
+
+Claude will fetch the latest main, rebase your branch, walk you through each conflict, and push the resolved branch.
 
 ### "My PR is approved — how do I merge?"
 
 ```
-gh pr merge <PR number> --squash --delete-branch
+merge PR #50 with squash and delete the branch
 ```
-
-- `--squash` combines all your commits into one clean commit on main
-- `--delete-branch` cleans up the feature branch
 
 Or just click "Squash and merge" on GitHub.
 
 ### "There's an urgent bug in production (hotfix)"
 
-When something is broken and needs fixing immediately:
-
 ```
-1. /create-issue <describe the urgent bug>           ← track it
-2. /fix-issue <number>                               ← fix it (creates branch, tests, PR)
-3. Ask Claude: "this is urgent, help me merge PR #N" ← merge it
+/create-issue <describe the urgent bug>
+/fix-issue <number>
+this is urgent, help me merge PR #N
 ```
 
 The `/fix-issue` skill creates the branch from main, so your hotfix is isolated from any in-progress work.
@@ -602,35 +812,33 @@ The `/fix-issue` skill creates the branch from main, so your hotfix is isolated 
 ### "I need to pick up someone else's unfinished work"
 
 ```
-1. git fetch origin
-2. git checkout <their-branch-name>
-3. /investigate what was this branch trying to do
-4. Continue the work normally with /codegen, /test, /commit
+fetch and switch to the branch called feat/50-my-library
+/investigate what was this branch trying to do
 ```
+
+Then continue the work normally with `/codegen`, `/test`, `/commit`.
 
 ### "I want to throw away my current work and start over"
 
-If you haven't committed yet:
 ```
-git checkout -- .                ← undo all file changes
-git clean -fd                    ← remove new untracked files
+undo all my uncommitted changes
 ```
 
-If you committed but haven't pushed:
+If you already committed but haven't pushed:
 ```
-git reset --soft HEAD~1          ← undo last commit, keep changes staged
+undo my last commit but keep the code changes
 ```
-
-Ask Claude if you're unsure: "I want to undo my last 3 commits but keep the code changes"
 
 ### "I want to save my work-in-progress without a proper commit"
 
 ```
-git stash                        ← save current changes
-git stash pop                    ← restore them later
+stash my current changes so I can switch branches
 ```
 
-Useful when you need to switch branches temporarily.
+Later, when you're back:
+```
+restore my stashed changes
+```
 
 ---
 
@@ -638,35 +846,53 @@ Useful when you need to switch branches temporarily.
 
 | I want to... | Do this |
 |--------------|---------|
+| **Product** | |
 | Find product gaps or naming issues | `/product-audit <area>` |
 | Design a new feature idea | `/feature-spec <idea>` |
 | Update the PRD | `/prd <action>` |
 | Check PRD progress against GitHub | `/prd sync progress` |
+| Process audit results into issues | `/create-issue` for each gap |
+| **Plan** | |
+| See what needs doing | `/issues` |
+| See only MVP bugs | `/issues bugs` |
+| Track a new bug or idea | `/create-issue <description>` |
+| File multiple issues from an audit | `/create-issue` one at a time (epic first) |
+| Understand unfamiliar code | `/investigate <topic>` |
+| Plan a multi-file feature | `/plan <issue number or description>` |
+| **Build** | |
 | Start dev servers | `/dev` or `/dev start` |
 | Stop dev servers | `/dev stop` |
 | Check if servers are running | `/dev status` |
 | See server logs | `/dev logs` |
-| See what needs doing | `/issues` |
-| See only MVP bugs | `/issues bugs` then filter for `phase:mvp` |
-| Understand unfamiliar code | `/investigate <topic>` |
-| Plan a multi-file feature | `/plan <issue number or description>` |
-| Track a new bug or idea | `/create-issue <description>` |
 | Pick up and complete an issue | `/fix-issue <number>` |
 | Build something new | `/investigate` → `/plan` → `/create-issue` → `/test` → `/codegen` → `/review` → `/commit` → `/pr` |
 | Fix a bug I just found | `/debug <error>` → `/commit` |
 | Something is broken, I'm stuck | `/debug <symptom or error message>` |
 | Add tests to existing code | `/test <file path>` |
 | Clean up messy code | `/test <file>` first, then `/refactor <file> <goal>` |
+| Add or update a dependency | tell Claude: `add <package> to the backend/frontend` |
+| Run specific tests | tell Claude: `run the contract tests` |
+| Database schema changed | tell Claude: `add column X to table Y` |
+| Switch to a hotfix mid-feature | tell Claude: `stash my changes` → `/fix-issue` → `restore my changes` |
+| **Verify** | |
 | Check my work before committing | `/review` |
 | Review someone's PR | `/review <PR number>` |
+| CI failed on my PR | tell Claude: `CI failed on PR #N, help me fix it` |
+| **Ship** | |
 | Save my changes | `/commit` |
 | Submit my work | `/pr` |
-| Address PR review comments | edit code → `/commit` → `git push` |
-| Resolve merge conflicts | ask Claude: "my PR has merge conflicts" |
-| Merge an approved PR | `gh pr merge <number> --squash --delete-branch` |
-| Handle an urgent production bug | `/create-issue` → `/fix-issue` → merge immediately |
 | Cut a release | `/release v0.1.0` |
 | Document a function or feature | `/docs <file or topic>` |
+| **Maintain** | |
+| Address PR review comments | `/debug <concern>` → `/commit` → `push my changes` |
+| Resolve merge conflicts | tell Claude: `my PR has merge conflicts` |
+| Merge an approved PR | tell Claude: `merge PR #N with squash` |
+| Handle an urgent production bug | `/create-issue` → `/fix-issue` → merge immediately |
+| Pick up someone else's work | tell Claude: `switch to branch X` → `/investigate` |
+| Undo my changes | tell Claude: `undo my uncommitted changes` |
+| Save work-in-progress | tell Claude: `stash my changes` |
+| **Setup** | |
+| First time getting started | See Phase 0 above |
 
 ---
 
