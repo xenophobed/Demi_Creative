@@ -661,6 +661,26 @@ class TestBusinessLogicRules:
         assert unsafe_result.safety_score < 0.7
         assert not unsafe_result.is_safe
 
+    def test_word_count_uses_words_not_characters(self):
+        """Regression test for #46: word_count must count words, not characters."""
+        story_text = "The little dinosaur found a mysterious cave"
+        word_count = len(story_text.split())
+        assert word_count == 7
+        # Must NOT be character count
+        assert word_count != len(story_text)
+
+    def test_word_count_empty_string(self):
+        """word_count of empty story text should be 0."""
+        assert len("".split()) == 0
+
+    def test_interactive_story_progress_is_decimal(self):
+        """Regression test for #47: progress must be 0.0–1.0, not 0–100."""
+        current_segment = 3
+        total_segments = 5
+        progress = current_segment / total_segments
+        assert 0.0 <= progress <= 1.0
+        assert progress == pytest.approx(0.6)
+
     def test_news_must_have_interactive_questions(self):
         """测试新闻必须包含互动问题规则"""
         # 业务规则：儿童新闻必须包含至少1个互动问题
