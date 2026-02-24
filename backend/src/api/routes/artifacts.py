@@ -2,14 +2,17 @@
 Artifact System API Routes
 
 REST endpoints for artifact graph system:
-- GET/POST artifacts
-- GET artifact lineage
+- GET/POST artifacts with pagination & filtering
+- Publish workflow (candidate → published)
+- GET artifact lineage (provenance graph)
 - GET runs and execution steps
-- GET/POST story-artifact links
+- GET/POST story-artifact links with role filtering
+- GET curated story artifacts (published/canonical only)
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from typing import List, Optional
+from pydantic import BaseModel
+from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone
 
 from ...services.database.connection import DatabaseManager, db_manager
@@ -19,11 +22,12 @@ from ...services.database.artifact_repository import (
     AgentStepRepository, RunArtifactLinkRepository
 )
 from ...services.models.artifact_models import (
-    Artifact, ArtifactCreate, ArtifactType,
-    Run, RunCreate, AgentStep,
+    Artifact, ArtifactCreate, ArtifactType, LifecycleState,
+    Run, RunCreate, AgentStep, StoryArtifactRole,
     StoryArtifactLink, StoryArtifactLinkCreate,
     ArtifactLineage, RunWithArtifacts
 )
+from ...services.provenance_tracker import ProvenanceTracker
 
 router = APIRouter(prefix="/api/v1/artifacts", tags=["artifacts"])
 
@@ -158,6 +162,48 @@ async def update_artifact_state(
     return {"status": "success", "message": f"State updated to {new_state}"}
 
 
+class PublishRequest(BaseModel):
+    """Request body for publishing an artifact."""
+    story_id: Optional[str] = None
+    role: Optional[StoryArtifactRole] = None
+
+
+@router.post("/{artifact_id}/publish")
+async def publish_artifact(
+    artifact_id: str,
+    body: Optional[PublishRequest] = None,
+    db: DatabaseManager = Depends(get_db),
+):
+    """
+    Publish a candidate artifact.
+
+    Validates the artifact is in 'candidate' state, transitions to 'published',
+    and optionally links it as the canonical artifact for a story role.
+
+    Args:
+        artifact_id: Artifact UUID
+        body: Optional story_id and role for canonical linking
+
+    Returns:
+        Published artifact
+    """
+    tracker = ProvenanceTracker(db)
+
+    story_id = body.story_id if body else None
+    role = body.role if body else None
+
+    try:
+        success = await tracker.publish_artifact(artifact_id, story_id, role)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to publish artifact")
+
+    artifact = await ArtifactRepository(db).get_by_id(artifact_id)
+    return artifact
+
+
 @router.get("/{artifact_id}/lineage", response_model=ArtifactLineage)
 async def get_artifact_lineage(artifact_id: str, db: DatabaseManager = Depends(get_db)):
     """
@@ -245,15 +291,68 @@ async def create_run(run_data: RunCreate, db: DatabaseManager = Depends(get_db))
 # ============================================================================
 
 @router.get("/stories/{story_id}/artifacts", response_model=List[StoryArtifactLink])
-async def list_story_artifacts(story_id: str, db: DatabaseManager = Depends(get_db)):
+async def list_story_artifacts(
+    story_id: str,
+    role: Optional[str] = Query(None, description="Filter by role (cover|final_audio|final_video|scene_image)"),
+    state: Optional[str] = Query(None, description="Filter by artifact lifecycle state"),
+    db: DatabaseManager = Depends(get_db),
+):
     """
-    Get all artifacts linked to a story.
+    Get artifacts linked to a story, with optional role/state filtering.
+
+    Query Parameters:
+        role: Filter by canonical role
+        state: Filter by artifact lifecycle state (e.g. published)
 
     Returns:
         List of story-artifact links with canonical roles
     """
-    repo = StoryArtifactLinkRepository(db)
-    return await repo.list_by_story(story_id)
+    link_repo = StoryArtifactLinkRepository(db)
+    links = await link_repo.list_by_story(story_id)
+
+    if role:
+        links = [l for l in links if l.role.value == role]
+
+    if state:
+        artifact_repo = ArtifactRepository(db)
+        filtered = []
+        for link in links:
+            artifact = await artifact_repo.get_by_id(link.artifact_id)
+            if artifact and artifact.lifecycle_state.value == state:
+                filtered.append(link)
+        links = filtered
+
+    return links
+
+
+@router.get("/stories/{story_id}/curated")
+async def get_story_curated_artifacts(
+    story_id: str,
+    db: DatabaseManager = Depends(get_db),
+) -> Dict[str, Any]:
+    """
+    Get only curated (published/canonical) artifacts for a story.
+
+    Returns a map of role → primary artifact for the story,
+    including only published artifacts by default.
+
+    Returns:
+        Dict with role keys and Artifact values
+    """
+    link_repo = StoryArtifactLinkRepository(db)
+    artifact_repo = ArtifactRepository(db)
+
+    curated: Dict[str, Any] = {"story_id": story_id, "artifacts": {}}
+
+    for role in StoryArtifactRole:
+        artifact = await link_repo.get_canonical_artifact(story_id, role.value)
+        if artifact and artifact.lifecycle_state in (
+            LifecycleState.PUBLISHED,
+            LifecycleState.CANDIDATE,
+        ):
+            curated["artifacts"][role.value] = artifact.model_dump(mode="json")
+
+    return curated
 
 
 @router.get("/stories/{story_id}/artifacts/{role}", response_model=Artifact)

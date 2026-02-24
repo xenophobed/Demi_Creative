@@ -225,7 +225,7 @@ app.mount("/data/videos", StaticFiles(directory=str(VIDEO_DIR)), name="videos")
 # API Routes
 # ============================================================================
 
-from .api.routes import image_to_story, interactive_story, audio, video, users, news_to_kids
+from .api.routes import image_to_story, interactive_story, audio, video, users, news_to_kids, artifacts
 
 app.include_router(image_to_story.router)
 app.include_router(interactive_story.router)
@@ -233,6 +233,7 @@ app.include_router(audio.router)
 app.include_router(video.router)
 app.include_router(users.router)
 app.include_router(news_to_kids.router)
+app.include_router(artifacts.router)
 
 
 # ============================================================================

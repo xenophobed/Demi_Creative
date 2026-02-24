@@ -25,8 +25,13 @@ from ..models import (
 from ..deps import get_current_user, get_story_for_owner
 from ...agents.image_to_story_agent import image_to_story, stream_image_to_story
 from ...utils.audio_strategy import get_audio_strategy
-from ...services.database import story_repo, preference_repo
+from ...services.database import story_repo, preference_repo, db_manager
 from ...services.user_service import UserData
+from ...services.provenance_tracker import ProvenanceTracker
+from ...services.models.artifact_models import (
+    ArtifactType, WorkflowType, StoryArtifactRole,
+    ArtifactMetadata, RunArtifactStage,
+)
 
 
 router = APIRouter(
@@ -225,7 +230,60 @@ async def create_story_from_image(
                     detail="兴趣标签最多5个"
                 )
 
+        story_id = str(uuid.uuid4())
+
+        # --- Provenance tracking (Issue #17) ---
+        tracker = ProvenanceTracker(db_manager)
+        run_id = None
+        try:
+            run_id = await tracker.start_run(story_id, WorkflowType.IMAGE_TO_STORY)
+        except Exception:
+            pass  # Non-critical: provenance failure shouldn't block story generation
+
+        # Step 1: Record uploaded image as artifact
+        image_artifact_id = None
+        if run_id:
+            try:
+                upload_step_id = await tracker.start_step(
+                    run_id, "image_upload", 1,
+                    input_data={"image_path": str(image_path), "child_id": safe_child_id},
+                )
+                import mimetypes
+                mime, _ = mimetypes.guess_type(str(image_path))
+                file_size = image_path.stat().st_size if image_path.exists() else None
+                image_artifact_id = await tracker.record_artifact(
+                    upload_step_id,
+                    ArtifactType.IMAGE,
+                    run_id=run_id,
+                    artifact_path=str(image_path),
+                    description="Uploaded child drawing",
+                    mime_type=mime,
+                    file_size=file_size,
+                    agent_name="image_upload",
+                )
+                await tracker.complete_step(upload_step_id, output_data={"artifact_id": image_artifact_id})
+            except Exception:
+                pass
+
         # 4. Call Agent to generate story
+        agent_step_id = None
+        if run_id:
+            try:
+                agent_step_id = await tracker.start_step(
+                    run_id, "story_generation", 2,
+                    input_data={
+                        "child_age": child_age,
+                        "interests": interests_list or [],
+                        "enable_audio": enable_audio,
+                    },
+                    model_name="claude-agent-sdk",
+                    prompt_hash=ProvenanceTracker.compute_prompt_hash(
+                        f"image_to_story:{safe_child_id}:{child_age}"
+                    ),
+                )
+            except Exception:
+                pass
+
         result = await image_to_story(
             image_path=str(image_path),
             child_id=safe_child_id,
@@ -235,11 +293,16 @@ async def create_story_from_image(
             voice=voice
         )
 
-        # 5. Parse result and build response
-        # Note: This assumes the agent returns a result containing the required fields
-        # Adjust according to the agent's return format in actual usage
+        if agent_step_id:
+            try:
+                await tracker.complete_step(
+                    agent_step_id,
+                    output_data={"story_keys": list(result.keys())},
+                )
+            except Exception:
+                pass
 
-        story_id = str(uuid.uuid4())
+        # 5. Parse result and build response
 
         # Extract story text
         story_text = result.get("story", "")
@@ -269,6 +332,85 @@ async def create_story_from_image(
         if result.get("audio_path"):
             audio_filename = Path(result["audio_path"]).name
             audio_url = f"/data/audio/{audio_filename}"
+
+        # --- Record story text as artifact (Issue #17) ---
+        text_artifact_id = None
+        if run_id:
+            try:
+                text_step_id = await tracker.start_step(
+                    run_id, "text_artifact", 3,
+                    input_data={"story_id": story_id},
+                )
+                text_artifact_id = await tracker.record_artifact(
+                    text_step_id,
+                    ArtifactType.TEXT,
+                    run_id=run_id,
+                    artifact_payload=story_text,
+                    description="Generated story text",
+                    safety_score=result.get("safety_score", 0.9),
+                    agent_name="story_generation",
+                    input_artifact_ids=[image_artifact_id] if image_artifact_id else None,
+                    metadata=ArtifactMetadata(
+                        char_count=len(story_text),
+                        word_count=word_count,
+                    ),
+                )
+                await tracker.complete_step(text_step_id, output_data={"artifact_id": text_artifact_id})
+            except Exception:
+                pass
+
+        # --- Record audio as artifact (Issue #17) ---
+        audio_artifact_id = None
+        if run_id and audio_url and result.get("audio_path"):
+            try:
+                audio_step_id = await tracker.start_step(
+                    run_id, "tts_artifact", 4,
+                    input_data={"audio_path": result["audio_path"]},
+                )
+                import mimetypes as mt
+                audio_mime, _ = mt.guess_type(result["audio_path"])
+                audio_artifact_id = await tracker.record_artifact(
+                    audio_step_id,
+                    ArtifactType.AUDIO,
+                    run_id=run_id,
+                    artifact_path=result["audio_path"],
+                    artifact_url=audio_url,
+                    description="TTS narration audio",
+                    mime_type=audio_mime,
+                    agent_name="tts_generation",
+                    input_artifact_ids=[text_artifact_id] if text_artifact_id else None,
+                )
+                await tracker.complete_step(audio_step_id, output_data={"artifact_id": audio_artifact_id})
+            except Exception:
+                pass
+
+        # --- Link artifacts to story and complete run (Issue #17 + #18) ---
+        if run_id:
+            try:
+                if image_artifact_id:
+                    await tracker.link_to_story(story_id, image_artifact_id, StoryArtifactRole.COVER)
+                if text_artifact_id:
+                    # Promote text to candidate then published
+                    from ...services.database.artifact_repository import ArtifactRepository
+                    art_repo = ArtifactRepository(db_manager)
+                    await art_repo.update_lifecycle_state(text_artifact_id, "candidate")
+                    await art_repo.update_lifecycle_state(text_artifact_id, "published")
+                if audio_artifact_id:
+                    await tracker.link_to_story(story_id, audio_artifact_id, StoryArtifactRole.FINAL_AUDIO)
+                    art_repo = ArtifactRepository(db_manager)
+                    await art_repo.update_lifecycle_state(audio_artifact_id, "candidate")
+                    await art_repo.update_lifecycle_state(audio_artifact_id, "published")
+                if image_artifact_id:
+                    art_repo = ArtifactRepository(db_manager)
+                    await art_repo.update_lifecycle_state(image_artifact_id, "candidate")
+                    await art_repo.update_lifecycle_state(image_artifact_id, "published")
+
+                await tracker.complete_run(run_id, result_summary={
+                    "artifacts_created": sum(1 for a in [image_artifact_id, text_artifact_id, audio_artifact_id] if a),
+                    "story_id": story_id,
+                })
+            except Exception:
+                pass
 
         # Build response
         created_at = datetime.now()
@@ -348,6 +490,14 @@ async def create_story_from_image(
         )
 
     except Exception as e:
+        # Mark run as failed if provenance was started
+        if run_id:
+            try:
+                tracker = ProvenanceTracker(db_manager)
+                await tracker.fail_run(run_id, str(e))
+            except Exception:
+                pass
+
         # Log error
         print(f"Error in image-to-story: {e}")
 
