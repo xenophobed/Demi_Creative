@@ -662,3 +662,126 @@ class MigrationReport(BaseModel):
     unresolved_records: List[MigrationRecord] = Field(
         default_factory=list, description="Failed/pending records needing attention"
     )
+
+
+# ============================================================================
+# Admin Search & Audit Models (Issue #16)
+# ============================================================================
+
+class ArtifactSearchResult(BaseModel):
+    """
+    Result of an admin artifact search.
+    Returned by GET /admin/artifacts/search
+    """
+    artifacts: List[Artifact] = Field(default_factory=list, description="Matching artifacts")
+    total_count: int = Field(default=0, description="Total matching (before pagination)")
+    query: Dict[str, Any] = Field(default_factory=dict, description="Search query used")
+
+
+class StoryLineage(BaseModel):
+    """
+    Full story → run → step → artifact lineage chain.
+    Returned by GET /admin/artifacts/stories/{story_id}/lineage
+    """
+    story_id: str = Field(..., description="Story UUID")
+    runs: List[RunWithArtifacts] = Field(
+        default_factory=list, description="All runs for this story"
+    )
+    story_artifacts: List[StoryArtifactLink] = Field(
+        default_factory=list, description="Direct story-artifact links"
+    )
+    total_artifacts: int = Field(default=0, description="Total artifacts across all runs")
+    total_runs: int = Field(default=0, description="Total runs for this story")
+
+
+class LineageExport(BaseModel):
+    """
+    Exportable lineage record for incident review.
+    Returned by GET /admin/artifacts/{artifact_id}/export
+    """
+    artifact_id: str = Field(..., description="Root artifact UUID")
+    lineage: ArtifactLineage = Field(..., description="Complete lineage graph")
+    run_context: Optional[RunWithArtifacts] = Field(
+        None, description="Run that produced this artifact (if available)"
+    )
+    safety_flags: List[Artifact] = Field(
+        default_factory=list, description="Artifacts in lineage with safety_score < 0.85"
+    )
+    exported_at: datetime = Field(..., description="Export timestamp")
+
+
+# ============================================================================
+# Storage & Retention Models (Issue #19)
+# ============================================================================
+
+class StorageStats(BaseModel):
+    """
+    Artifact storage usage statistics.
+    Returned by GET /admin/artifacts/storage-stats
+    """
+    total_artifacts: int = Field(default=0, description="Total artifact count")
+    by_state: Dict[str, int] = Field(
+        default_factory=dict, description="Count per lifecycle state"
+    )
+    by_type: Dict[str, int] = Field(
+        default_factory=dict, description="Count per artifact type"
+    )
+    total_file_size_bytes: int = Field(
+        default=0, description="Sum of file_size across all artifacts"
+    )
+    by_state_size: Dict[str, int] = Field(
+        default_factory=dict, description="Total file_size per lifecycle state"
+    )
+
+
+class RetentionPolicy(BaseModel):
+    """
+    Retention policy for a lifecycle class.
+    """
+    lifecycle_state: LifecycleState = Field(..., description="Target lifecycle state")
+    retention_days: int = Field(
+        ..., description="Days to retain (-1 = indefinite, never delete)"
+    )
+    description: str = Field(..., description="Human-readable policy description")
+
+
+class RetentionCandidate(BaseModel):
+    """An artifact identified for cleanup, with reason."""
+    artifact: Artifact = Field(..., description="The artifact")
+    reason: str = Field(..., description="Why this artifact is a candidate")
+    is_canonical: bool = Field(
+        default=False, description="Whether artifact is canonical for a story"
+    )
+    safeguarded: bool = Field(
+        default=False, description="Whether artifact is protected from deletion"
+    )
+
+
+class RetentionReport(BaseModel):
+    """
+    Result of a retention cleanup run.
+    Returned by POST /admin/artifacts/retention/run
+    """
+    dry_run: bool = Field(..., description="Whether this was a dry run")
+    policies_applied: List[RetentionPolicy] = Field(
+        default_factory=list, description="Policies that were applied"
+    )
+    candidates_found: int = Field(
+        default=0, description="Total artifacts matching retention criteria"
+    )
+    safeguarded_count: int = Field(
+        default=0, description="Canonical/published artifacts protected"
+    )
+    archived_count: int = Field(
+        default=0, description="Artifacts transitioned to archived"
+    )
+    deleted_count: int = Field(
+        default=0, description="Artifacts deleted from storage"
+    )
+    by_type: Dict[str, int] = Field(
+        default_factory=dict, description="Archived/deleted counts by artifact_type"
+    )
+    candidates: List[RetentionCandidate] = Field(
+        default_factory=list, description="Details of affected artifacts (limited)"
+    )
+    executed_at: datetime = Field(..., description="Execution timestamp")
