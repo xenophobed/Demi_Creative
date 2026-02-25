@@ -225,10 +225,10 @@ function StoryPage() {
           variant="outline"
           size="lg"
           className="flex-1"
-          onClick={() => navigate('/history')}
+          onClick={() => navigate('/library')}
           leftIcon={<span>📚</span>}
         >
-          View History
+          My Library
         </Button>
       </motion.div>
 

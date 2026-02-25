@@ -1,4 +1,4 @@
-import { Routes, Route } from 'react-router-dom'
+import { Routes, Route, Navigate } from 'react-router-dom'
 import { Suspense, lazy } from 'react'
 import PageContainer from './components/layout/PageContainer'
 import Loading from './components/common/Loading'
@@ -7,7 +7,7 @@ import Loading from './components/common/Loading'
 const HomePage = lazy(() => import('./pages/HomePage'))
 const UploadPage = lazy(() => import('./pages/UploadPage'))
 const StoryPage = lazy(() => import('./pages/StoryPage'))
-const HistoryPage = lazy(() => import('./pages/HistoryPage'))
+const LibraryPage = lazy(() => import('./pages/LibraryPage'))
 const InteractiveStoryPage = lazy(() => import('./pages/InteractiveStoryPage'))
 const LoginPage = lazy(() => import('./pages/LoginPage'))
 const ProfilePage = lazy(() => import('./pages/ProfilePage'))
@@ -25,7 +25,9 @@ function App() {
           <Route index element={<HomePage />} />
           <Route path="upload" element={<UploadPage />} />
           <Route path="story/:storyId" element={<StoryPage />} />
-          <Route path="history" element={<HistoryPage />} />
+          {/* /history redirects to /library for backwards compatibility */}
+          <Route path="history" element={<Navigate to="/library" replace />} />
+          <Route path="library" element={<LibraryPage />} />
           <Route path="interactive" element={<InteractiveStoryPage />} />
           <Route path="news" element={<NewsPage />} />
           <Route path="profile" element={<ProfilePage />} />
