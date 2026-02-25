@@ -35,6 +35,7 @@ Everything you need to know about the software engineering process for this proj
     review/                   ← /review        (check code quality)
     commit/                   ← /commit        (save your work to git)
     pr/                       ← /pr            (submit your work for review)
+    merge/                    ← /merge         (merge an approved PR)
     dev/                      ← /dev           (start/stop dev servers)
     release/                  ← /release       (cut a versioned release)
 
@@ -126,8 +127,8 @@ Every piece of work follows this cycle. The sections below cover each phase.
   ────────        ──────         ────           ──────         ─────          ──────         ────           ────────
   /product-audit  /feature-spec  /issues        /investigate   /dev           /test          /commit        /debug
                   /prd           /create-issue  /plan          /codegen       /review        /pr            /fix-issue
-                                                               /debug                        /release       /refactor
-                                                               /refactor
+                                                               /debug                        /merge         /refactor
+                                                               /refactor                     /release
                                                                /docs
 ```
 
@@ -746,6 +747,21 @@ This will:
 4. Generate a structured PR with Summary, Changes, Testing, Related Issues
 5. Create the PR and return the URL
 
+### Merge an approved PR
+
+```
+/merge 50
+```
+
+This will:
+1. Check the PR is approved and CI passes
+2. Verify there are no merge conflicts
+3. Squash merge into main (clean, linear history)
+4. Delete the remote branch
+5. Switch to main, pull latest, and clean up the local branch
+
+If any pre-merge check fails (not approved, CI red, conflicts), it stops and tells you what to fix first.
+
 ### Cut a release
 
 When you've merged several PRs and want to mark a version:
@@ -794,17 +810,17 @@ Claude will fetch the latest main, rebase your branch, walk you through each con
 ### "My PR is approved — how do I merge?"
 
 ```
-merge PR #50 with squash and delete the branch
+/merge 50
 ```
 
-Or just click "Squash and merge" on GitHub.
+This verifies the PR is approved, CI passes, and there are no conflicts before squash-merging. It also cleans up the branch and pulls latest main.
 
 ### "There's an urgent bug in production (hotfix)"
 
 ```
 /create-issue <describe the urgent bug>
 /fix-issue <number>
-this is urgent, help me merge PR #N
+/merge <PR number>
 ```
 
 The `/fix-issue` skill creates the branch from main, so your hotfix is isolated from any in-progress work.
@@ -886,8 +902,8 @@ restore my stashed changes
 | **Maintain** | |
 | Address PR review comments | `/debug <concern>` → `/commit` → `push my changes` |
 | Resolve merge conflicts | tell Claude: `my PR has merge conflicts` |
-| Merge an approved PR | tell Claude: `merge PR #N with squash` |
-| Handle an urgent production bug | `/create-issue` → `/fix-issue` → merge immediately |
+| Merge an approved PR | `/merge <PR number>` |
+| Handle an urgent production bug | `/create-issue` → `/fix-issue` → `/merge <PR number>` |
 | Pick up someone else's work | tell Claude: `switch to branch X` → `/investigate` |
 | Undo my changes | tell Claude: `undo my uncommitted changes` |
 | Save work-in-progress | tell Claude: `stash my changes` |
@@ -967,6 +983,7 @@ docs/
 | `/review` | Review code for issues | No | Yes (fork) |
 | `/commit` | Create a git commit | Yes (git) | No |
 | `/pr` | Open a pull request | Yes (git + GitHub) | No |
+| `/merge` | Merge an approved PR | Yes (git + GitHub) | No |
 | `/release` | Tag and publish a release | Yes (git + GitHub) | No |
 | `/docs` | Write documentation | Yes (writes files) | No |
 

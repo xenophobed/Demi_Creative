@@ -168,6 +168,7 @@ Agents must use services/repositories — never query SQLite directly.
 | `/review [PR/branch]` | Before merging |
 | `/commit` | Creating a git commit |
 | `/pr` | Opening a pull request |
+| `/merge [PR number]` | Merging an approved PR |
 | `/dev [start/stop/status]` | Start or stop dev servers |
 | `/release [version]` | Cut a versioned release |
 | `/docs [file/topic]` | Writing documentation |
