@@ -12,7 +12,7 @@ Merge PR: $ARGUMENTS
 ## Context
 
 - Current branch: !`git branch --show-current`
-- PR status: !`gh pr view $ARGUMENTS --json state,reviewDecision,statusCheckRollup,mergeable,headRefName,baseRefName,title --jq '{state,reviewDecision,mergeable,title,head:.headRefName,base:.baseRefName,checks:(.statusCheckRollup // [] | length)}'`
+- PR info: !`gh pr view $ARGUMENTS --json state,reviewDecision,mergeable,headRefName,baseRefName,title`
 
 ## Conventions (auto-loaded)
 
