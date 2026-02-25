@@ -274,7 +274,7 @@ function HomePage() {
               Recent Stories
             </h2>
             <Link
-              to="/history"
+              to="/library"
               className="text-primary hover:underline text-sm font-medium"
             >
               View all →
