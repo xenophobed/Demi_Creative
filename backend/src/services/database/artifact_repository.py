@@ -15,7 +15,7 @@ Key Principles:
 import uuid
 import json
 import hashlib
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Dict, Any
 from .connection import DatabaseManager
 from ...services.models.artifact_models import (
@@ -495,18 +495,38 @@ class ArtifactRepository:
         Returns:
             Artifacts past their retention period.
         """
+        cutoff = (
+            datetime.now(timezone.utc) - timedelta(days=older_than_days)
+        ).isoformat().replace("+00:00", "Z")
+
         results = await self.db.fetchall(
             """
             SELECT * FROM artifacts
             WHERE lifecycle_state = ?
-              AND created_at < datetime('now', '-' || ? || ' days')
+              AND created_at < ?
             ORDER BY created_at ASC
             LIMIT ?
             """,
-            (state, older_than_days, limit),
+            (state, cutoff, limit),
         )
 
         return [self._row_to_artifact(row) for row in results]
+
+    async def delete(self, artifact_id: str) -> bool:
+        """
+        Delete an artifact by ID.
+
+        CASCADE removes related rows (relations, links).
+
+        Returns:
+            True if a row was deleted, False if not found.
+        """
+        cursor = await self.db.execute(
+            "DELETE FROM artifacts WHERE artifact_id = ?",
+            (artifact_id,),
+        )
+        await self.db.commit()
+        return cursor.rowcount > 0
 
     async def is_canonical(self, artifact_id: str) -> bool:
         """

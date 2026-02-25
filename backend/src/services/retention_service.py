@@ -205,11 +205,10 @@ class RetentionService:
 
             file_path = artifact.artifact_path
 
-            # Delete DB row first (CASCADE removes relations and links)
-            await self.db.execute(
-                "DELETE FROM artifacts WHERE artifact_id = ?", (aid,)
-            )
-            await self.db.commit()
+            # Delete DB row first via repository (CASCADE removes relations and links)
+            was_deleted = await self._artifact_repo.delete(aid)
+            if not was_deleted:
+                continue
             deleted += 1
 
             # Then remove file from disk (orphan file is harmless on failure)
