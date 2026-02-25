@@ -17,7 +17,7 @@ Investigate: $ARGUMENTS
 3. **Trace the flow**: Follow the code path from entry to exit
    - Data flow: where data comes from, how it's transformed, where it goes
    - Control flow: what triggers this code, what decisions are made
-   - Dependencies: what external services/libraries are involved (Claude Agent SDK, MCP servers, Qdrant, OpenAI TTS)
+   - Dependencies: what external services/libraries are involved (Claude Agent SDK, MCP servers, ChromaDB, OpenAI TTS)
 4. **Check history**: Use `git log` and `git blame` on key files to understand evolution
 5. **Identify risks**: Note any code smells, tech debt, or potential issues
 6. **Document findings**: Produce a clear summary

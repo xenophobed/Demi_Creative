@@ -10,7 +10,7 @@ FastAPI (backend/src/api/)
             └─► Claude Agent SDK
                     ├─► MCP Tool Servers (backend/src/mcp_servers/)
                     │       ├── vision_analysis_server    — Claude Vision API
-                    │       ├── vector_search_server      — Qdrant embeddings
+                    │       ├── vector_search_server      — ChromaDB embeddings
                     │       ├── safety_check_server       — Content safety (required)
                     │       ├── tts_generator_server      — OpenAI TTS
                     │       └── video_generator_server    — Video generation
@@ -31,7 +31,7 @@ React SPA (frontend/src/)
 | AI Engine | Claude Agent SDK (`claude_agent_sdk`), Anthropic API |
 | MCP Tools | Custom Python MCP servers |
 | Database | SQLite (via repository pattern) |
-| Vector DB | Qdrant (local) |
+| Vector DB | ChromaDB (local) |
 | TTS | OpenAI TTS API |
 | Frontend | React 18, TypeScript, Vite, Tailwind CSS, Zustand |
 
@@ -105,7 +105,7 @@ python -m pytest tests/integration/ -v     # integration tests only
 ```env
 ANTHROPIC_API_KEY=...     # Required for Claude Agent SDK + Vision
 OPENAI_API_KEY=...        # Required for TTS
-QDRANT_PATH=./data/vectors
+CHROMA_PATH=./data/vectors
 ```
 
 ## Critical Project Rules

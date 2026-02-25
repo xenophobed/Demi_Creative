@@ -57,7 +57,7 @@ Debug: $ARGUMENTS
 | MCP servers | Tool name mismatch (`mcp__server-name__tool_name` format), server not in `mcp_servers` dict |
 | Database | Missing schema migration, repository method not found |
 | TTS | OpenAI API key missing, audio path not returned correctly |
-| Vector search | Qdrant not running, embedding dimension mismatch |
+| Vector search | ChromaDB not initialized, embedding dimension mismatch |
 | Frontend | API URL mismatch, SSE event type not handled in store |
 
 ## Output
