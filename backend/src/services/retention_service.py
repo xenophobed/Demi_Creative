@@ -174,7 +174,11 @@ class RetentionService:
 
     async def _delete_artifacts(self, artifact_ids: List[str]) -> int:
         """
-        Delete artifacts: remove files from disk, then delete DB rows.
+        Delete artifacts: delete DB row first (with commit), then remove file.
+
+        Order matters for crash safety: if the process dies after DB delete
+        but before file removal, we get an orphan file (harmless) rather than
+        a DB row pointing to a missing file (broken reference).
 
         Only deletes artifacts that are:
             - In 'archived' state
@@ -199,24 +203,24 @@ class RetentionService:
                 logger.warning("Skipping canonical artifact %s", aid)
                 continue
 
-            # Remove file from disk if it exists
-            if artifact.artifact_path:
-                try:
-                    if os.path.exists(artifact.artifact_path):
-                        os.remove(artifact.artifact_path)
-                        logger.debug("Removed file: %s", artifact.artifact_path)
-                except OSError as e:
-                    logger.error(
-                        "Failed to remove file %s: %s",
-                        artifact.artifact_path,
-                        e,
-                    )
+            file_path = artifact.artifact_path
 
-            # Delete DB row (CASCADE removes relations and links)
+            # Delete DB row first (CASCADE removes relations and links)
             await self.db.execute(
                 "DELETE FROM artifacts WHERE artifact_id = ?", (aid,)
             )
+            await self.db.commit()
             deleted += 1
 
-        await self.db.commit()
+            # Then remove file from disk (orphan file is harmless on failure)
+            if file_path:
+                try:
+                    if os.path.exists(file_path):
+                        os.remove(file_path)
+                        logger.debug("Removed file: %s", file_path)
+                except OSError as e:
+                    logger.error(
+                        "Failed to remove file %s: %s", file_path, e
+                    )
+
         return deleted

@@ -499,11 +499,11 @@ class ArtifactRepository:
             """
             SELECT * FROM artifacts
             WHERE lifecycle_state = ?
-              AND created_at < datetime('now', ? || ' days')
+              AND created_at < datetime('now', '-' || ? || ' days')
             ORDER BY created_at ASC
             LIMIT ?
             """,
-            (state, f"-{older_than_days}", limit),
+            (state, older_than_days, limit),
         )
 
         return [self._row_to_artifact(row) for row in results]
@@ -1149,6 +1149,26 @@ class AgentStepRepository:
 
         await self.db.commit()
         return agent_step_id
+
+    async def get_by_id(self, agent_step_id: str) -> Optional[AgentStep]:
+        """
+        Get agent step by ID.
+
+        Args:
+            agent_step_id: Agent step UUID
+
+        Returns:
+            AgentStep object or None if not found
+        """
+        result = await self.db.fetchone(
+            "SELECT * FROM agent_steps WHERE agent_step_id = ?",
+            (agent_step_id,)
+        )
+
+        if not result:
+            return None
+
+        return self._row_to_step(result)
 
     async def list_by_run(self, run_id: str) -> List[AgentStep]:
         """

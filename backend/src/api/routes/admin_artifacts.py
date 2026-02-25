@@ -32,6 +32,8 @@ from ...services.models.artifact_models import (
     LifecycleState,
 )
 from ...services.retention_service import RetentionService, DEFAULT_POLICIES
+from ...api.deps import get_current_user
+from ...services.user_service import UserData
 
 router = APIRouter(prefix="/api/v1/admin/artifacts", tags=["admin-artifacts"])
 
@@ -53,6 +55,7 @@ async def search_artifacts(
     run_id: Optional[str] = Query(None, description="Run UUID (via run-artifact links)"),
     limit: int = Query(100, ge=1, le=1000),
     offset: int = Query(0, ge=0),
+    user: UserData = Depends(get_current_user),
     db: DatabaseManager = Depends(get_db),
 ):
     """
@@ -86,6 +89,7 @@ async def search_artifacts(
 @router.get("/stories/{story_id}/lineage", response_model=StoryLineage)
 async def get_story_lineage(
     story_id: str,
+    user: UserData = Depends(get_current_user),
     db: DatabaseManager = Depends(get_db),
 ):
     """
@@ -157,6 +161,7 @@ async def get_story_lineage(
 @router.get("/{artifact_id}/export", response_model=LineageExport)
 async def export_artifact_lineage(
     artifact_id: str,
+    user: UserData = Depends(get_current_user),
     db: DatabaseManager = Depends(get_db),
 ):
     """
@@ -183,12 +188,9 @@ async def export_artifact_lineage(
         run_repo = RunRepository(db)
         link_repo = RunArtifactLinkRepository(db)
 
-        step_row = await db.fetchone(
-            "SELECT run_id FROM agent_steps WHERE agent_step_id = ?",
-            (artifact.created_by_step_id,),
-        )
-        if step_row:
-            run_id = step_row["run_id"]
+        step = await step_repo.get_by_id(artifact.created_by_step_id)
+        if step:
+            run_id = step.run_id
             run = await run_repo.get_by_id(run_id)
             if run:
                 steps = await step_repo.list_by_run(run_id)
@@ -229,6 +231,7 @@ async def export_artifact_lineage(
 @router.get("/safety-flagged", response_model=List[Artifact])
 async def list_safety_flagged_artifacts(
     limit: int = Query(100, ge=1, le=1000),
+    user: UserData = Depends(get_current_user),
     db: DatabaseManager = Depends(get_db),
 ):
     """
@@ -246,6 +249,7 @@ async def list_safety_flagged_artifacts(
 
 @router.get("/storage-stats", response_model=StorageStats)
 async def get_storage_stats(
+    user: UserData = Depends(get_current_user),
     db: DatabaseManager = Depends(get_db),
 ):
     """
@@ -262,7 +266,9 @@ async def get_storage_stats(
 # ============================================================================
 
 @router.get("/retention/policies", response_model=List[RetentionPolicy])
-async def get_retention_policies():
+async def get_retention_policies(
+    user: UserData = Depends(get_current_user),
+):
     """
     Get current retention policies.
 
@@ -275,6 +281,7 @@ async def get_retention_policies():
 async def run_retention_cleanup(
     dry_run: bool = Query(True, description="If true, report only — no changes"),
     candidate_limit: int = Query(500, ge=1, le=5000, description="Max artifacts per state"),
+    user: UserData = Depends(get_current_user),
     db: DatabaseManager = Depends(get_db),
 ):
     """
