@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useQuery } from '@tanstack/react-query'
@@ -10,7 +10,7 @@ import useChildStore from '@/store/useChildStore'
 import { authService } from '@/api/services/authService'
 import { storyService } from '@/api/services/storyService'
 import SafetyBadge from '@/components/story/SafetyBadge'
-import type { UserSessionSummary } from '@/types/auth'
+import type { UserStorySummary, UserSessionSummary } from '@/types/auth'
 import type { NewsToKidsResponse } from '@/types/api'
 
 // Content type tabs
@@ -64,24 +64,28 @@ function sessionProgress(session: UserSessionSummary): number {
   return Math.round((session.current_segment / session.total_segments) * 100)
 }
 
+function truncatePreview(text: string, maxLen = 120): string {
+  if (!text) return ''
+  return text.length > maxLen ? `${text.slice(0, maxLen)}...` : text
+}
+
 // ---- subcomponents ----
 
 function ArtStoryCard({ item, onClick }: { item: LibraryItem; onClick: () => void }) {
+  // Use state for image error to avoid direct DOM mutation via parentElement!.innerHTML
+  const [imgError, setImgError] = useState(false)
+
   return (
     <Card className="cursor-pointer" onClick={onClick}>
       <div className="flex gap-4">
         {/* Thumbnail */}
         <div className="flex-shrink-0 w-20 h-20 rounded-lg bg-gradient-to-br from-primary/20 via-secondary/10 to-accent/20 flex items-center justify-center overflow-hidden">
-          {item.image_url ? (
+          {item.image_url && !imgError ? (
             <img
               src={item.image_url.startsWith('/') ? item.image_url : '/' + item.image_url}
               alt="Artwork"
               className="w-full h-full object-cover"
-              onError={(e) => {
-                const target = e.currentTarget
-                target.style.display = 'none'
-                target.parentElement!.innerHTML = '<span style="font-size:2.25rem">📖</span>'
-              }}
+              onError={() => setImgError(true)}
             />
           ) : (
             <motion.span
@@ -111,7 +115,7 @@ function ArtStoryCard({ item, onClick }: { item: LibraryItem; onClick: () => voi
           </div>
 
           <p className="text-gray-500 text-sm mt-1 line-clamp-2">
-            {item.preview.slice(0, 120)}...
+            {truncatePreview(item.preview)}
           </p>
 
           <div className="flex items-center gap-4 mt-2 text-xs text-gray-400">
@@ -258,7 +262,7 @@ function NewsCard({ item }: { item: LibraryItem }) {
         {/* Content */}
         <div className="flex-1 min-w-0">
           <div>
-            <span className="text-xs font-medium px-2 py-0.5 bg-accent/10 text-accent-700 rounded-full mb-1 inline-block">
+            <span className="text-xs font-medium px-2 py-0.5 bg-accent/10 text-accent rounded-full mb-1 inline-block">
               {item.category
                 ? item.category.charAt(0).toUpperCase() + item.category.slice(1)
                 : 'News'}
@@ -267,7 +271,7 @@ function NewsCard({ item }: { item: LibraryItem }) {
           </div>
 
           <p className="text-gray-500 text-sm mt-1 line-clamp-2">
-            {item.preview.slice(0, 120)}...
+            {truncatePreview(item.preview)}
           </p>
 
           <div className="flex items-center gap-4 mt-2 text-xs text-gray-400">
@@ -299,17 +303,30 @@ function LibraryPage() {
   const [activeTab, setActiveTab] = useState<ContentTab>('all')
   const [pageSize] = useState(20)
   const [artOffset, setArtOffset] = useState(0)
+  // Accumulate art story pages so "Load More" appends rather than replaces
+  const [accumulatedServerArt, setAccumulatedServerArt] = useState<UserStorySummary[]>([])
 
   const childId = currentChild?.child_id || defaultChildId
 
   // ---- data fetching ----
 
-  // Art stories (authenticated)
+  // Art stories (authenticated) — fetches one page at a time
   const { data: serverArtData, isLoading: artLoading } = useQuery({
     queryKey: ['library-art-stories', artOffset, pageSize],
     queryFn: () => authService.getMyStories({ limit: pageSize, offset: artOffset }),
     enabled: isAuthenticated,
   })
+
+  // Append newly fetched page into the accumulator so prior pages are preserved
+  useEffect(() => {
+    if (serverArtData?.stories && serverArtData.stories.length > 0) {
+      setAccumulatedServerArt((prev) => {
+        const existingIds = new Set(prev.map((s) => s.story_id))
+        const newItems = serverArtData.stories.filter((s) => !existingIds.has(s.story_id))
+        return newItems.length > 0 ? [...prev, ...newItems] : prev
+      })
+    }
+  }, [serverArtData])
 
   // Art stories by child_id (unauthenticated)
   const { data: childArtStories } = useQuery({
@@ -335,10 +352,12 @@ function LibraryPage() {
   // ---- build unified art story items ----
 
   const artItems: LibraryItem[] = (() => {
-    if (isAuthenticated && serverArtData?.stories) {
-      const serverIds = new Set(serverArtData.stories.map((s) => s.story_id))
+    if (isAuthenticated && accumulatedServerArt.length > 0) {
+      const serverIds = new Set(accumulatedServerArt.map((s) => s.story_id))
 
-      const serverItems: LibraryItem[] = serverArtData.stories.map((s) => ({
+      // UserStorySummary does not include safety_score; SafetyBadge will not render
+      // for server-side items until the API is extended to return it.
+      const serverItems: LibraryItem[] = accumulatedServerArt.map((s) => ({
         id: s.story_id,
         type: 'art-story',
         title: `Story #${s.story_id.slice(0, 8)}`,
@@ -375,7 +394,7 @@ function LibraryPage() {
         id: s.story_id,
         type: 'art-story',
         title: `Story #${s.story_id.slice(0, 8)}`,
-        preview: s.story?.text?.slice(0, 200) + '...' || '',
+        preview: s.story?.text ? s.story.text.slice(0, 200) : '',
         image_url: s.image_url ?? null,
         audio_url: s.audio_url ?? null,
         created_at: s.created_at,
@@ -447,20 +466,23 @@ function LibraryPage() {
 
   // ---- merge + filter ----
 
-  const allItems = [...artItems, ...interactiveItems, ...newsItems].sort(
-    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-  )
+  const dateSorter = (a: LibraryItem, b: LibraryItem) =>
+    new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
 
+  const allItems = [...artItems, ...interactiveItems, ...newsItems].sort(dateSorter)
+
+  // Use .slice() before sorting to avoid mutating the source arrays in-place
   const visibleItems =
     activeTab === 'all'
       ? allItems
       : activeTab === 'art-stories'
-      ? artItems.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      ? artItems.slice().sort(dateSorter)
       : activeTab === 'interactive'
-      ? interactiveItems.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-      : newsItems.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      ? interactiveItems.slice().sort(dateSorter)
+      : newsItems.slice().sort(dateSorter)
 
-  const hasMoreArt = isAuthenticated && serverArtData && artOffset + pageSize < serverArtData.total
+  const hasMoreArt =
+    isAuthenticated && serverArtData && artOffset + pageSize < serverArtData.total
 
   const isLoading = artLoading || sessionsLoading || newsLoading
 
@@ -483,6 +505,7 @@ function LibraryPage() {
         'Are you sure you want to clear all local story history? This cannot be undone.'
       )
     ) {
+      // Clears only the local Zustand store; server-side data is unaffected
       clearHistory()
     }
   }
@@ -585,7 +608,7 @@ function LibraryPage() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, x: -100 }}
-                transition={{ delay: index * 0.04 }}
+                transition={{ delay: Math.min(index * 0.04, 0.3) }}
               >
                 {item.type === 'art-story' && (
                   <ArtStoryCard item={item} onClick={() => handleItemClick(item)} />
