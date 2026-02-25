@@ -3,6 +3,7 @@ name: merge
 description: Merge a pull request after verifying it is approved, CI passes, and there are no conflicts. Squash-merges by default, cleans up remote and local branches, and pulls latest main.
 allowed-tools: Bash(git:*), Bash(gh:*)
 argument-hint: [PR number]
+disable-model-invocation: true
 ---
 
 # Merge Skill
