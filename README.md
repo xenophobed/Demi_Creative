@@ -39,7 +39,7 @@ result = await agent.run(input_data)  # 符合契约才能通过
 
 ### 3. 简化的存储设计
 - JSON 文件存储用户数据和配置
-- Qdrant 本地向量数据库（记忆系统）
+- ChromaDB 本地向量数据库（记忆系统）
 - 避免复杂的关系型数据库
 
 ## 文档结构
@@ -78,8 +78,8 @@ ANTHROPIC_API_KEY=your_api_key_here
 # OpenAI TTS (可选)
 OPENAI_API_KEY=your_api_key_here
 
-# 向量数据库（本地 Qdrant）
-QDRANT_PATH=./data/vectors
+# 向量数据库（本地 ChromaDB）
+CHROMA_PATH=./data/vectors
 ```
 
 ### 3. 运行契约测试
@@ -97,8 +97,7 @@ pytest tests/contracts/ -v
 ### 4. 启动开发环境
 
 ```bash
-# 启动本地向量数据库
-docker run -d -p 6333:6333 qdrant/qdrant
+# ChromaDB 为内嵌式 Python 库，无需单独启动
 
 # 启动 FastAPI 开发服务器
 uvicorn src.main:app --reload --port 8000
@@ -302,7 +301,7 @@ creative_agent/
 ├── data/                      # 数据存储（本地）
 │   ├── users/                 # 用户数据（JSON）
 │   ├── content/               # 内容数据（JSON）
-│   └── vectors/               # 向量数据（Qdrant）
+│   └── vectors/               # 向量数据（ChromaDB）
 │
 └── tools/                     # 开发工具
     └── generate_skills.py     # 从契约生成 Skills
@@ -319,7 +318,7 @@ creative_agent/
 ### AI & 存储
 - **Claude API**: GPT-4 级别的 AI 能力
 - **OpenAI TTS**: 语音合成
-- **Qdrant**: 本地向量数据库
+- **ChromaDB**: 本地向量数据库
 
 ### 开发工具
 - **pytest**: 测试框架
@@ -374,8 +373,7 @@ test: 添加故事生成契约测试
 
 ### 本地开发
 ```bash
-# 启动 Qdrant
-docker run -d -p 6333:6333 qdrant/qdrant
+# ChromaDB 为内嵌式 Python 库，无需单独启动
 
 # 启动 API
 uvicorn src.main:app --reload

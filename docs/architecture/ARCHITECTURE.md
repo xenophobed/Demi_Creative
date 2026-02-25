@@ -84,7 +84,7 @@ Artifact 系统采用 Story 容器 + Artifact 一等实体的混合模型，详�
 |------|---------|----------------|
 | 画作分析 | MCP Tool (Vision API) | `mcp__vision__analyze` |
 | 故事生成 | Agent Prompt + Skills | `.claude/skills/story-generation/` |
-| 向量搜索 | MCP Tool (Qdrant) | `mcp__qdrant__search` |
+| 向量搜索 | MCP Tool (ChromaDB) | `mcp__vector-search__search_similar_drawings` |
 | 内容安全审查 | Custom MCP Tool | SDK MCP Server |
 | 年龄适配 | Skill (Markdown) | `.claude/skills/age-adapter/` |
 | TTS 生成 | MCP Tool (OpenAI) | `mcp__openai__tts` |
@@ -191,7 +191,7 @@ vision_server = create_sdk_mcp_server(
 ```python
 # src/mcp_servers/vector_search_server.py
 from claude_agent_sdk import tool, create_sdk_mcp_server
-from qdrant_client import QdrantClient
+import chromadb
 from typing import Any
 import json
 
@@ -216,7 +216,7 @@ import json
 )
 async def search_similar_drawings(args: dict[str, Any]) -> dict[str, Any]:
     """搜索相似画作"""
-    client = QdrantClient(path="./data/vectors")
+    client = chromadb.PersistentClient(path="./data/vectors")
 
     # 生成查询向量（使用 Claude 的嵌入功能）
     from anthropic import Anthropic
@@ -1186,7 +1186,7 @@ creative_agent/
 │   ├── uploads/                     # 上传的图片
 │   ├── audio/                       # 生成的音频
 │   ├── sessions/                    # 互动故事会话
-│   └── vectors/                     # Qdrant 向量数据库
+│   └── vectors/                     # ChromaDB 向量数据库
 │
 ├── DOMAIN.md                        # 领域文档
 ├── PRD.md                           # 产品需求
@@ -1234,7 +1234,7 @@ Step 6: 运行 Agent 集成测试
 | 手动管理工具执行循环 | SDK 自动处理 |
 | Skill = Python 类 | Skill = Markdown 文件 |
 | 需要实现 `to_claude_tool()` | 使用 `@tool` 装饰器 |
-| 复杂的数据库设计 | 简单的 JSON + Qdrant |
+| 复杂的数据库设计 | 简单的 JSON + ChromaDB |
 | ContractSkill 作为运行时验证 | 契约测试 + MCP Tool 输入验证 |
 
 ---
@@ -1248,7 +1248,7 @@ Step 6: 运行 Agent 集成测试
 claude-agent-sdk==1.0.0
 anthropic==0.18.1
 openai==1.12.0
-qdrant-client==1.7.0
+chromadb==1.4.1
 fastapi==0.110.0
 pydantic==2.6.1
 pytest==8.0.0
@@ -1259,14 +1259,14 @@ pytest==8.0.0
 ```env
 ANTHROPIC_API_KEY=your_key
 OPENAI_API_KEY=your_key
-QDRANT_PATH=./data/vectors
+CHROMA_PATH=./data/vectors
 ```
 
 ### C. 快速开始
 
 ```bash
 # 1. 安装依赖
-pip install claude-agent-sdk anthropic openai qdrant-client fastapi
+pip install claude-agent-sdk anthropic openai chromadb fastapi
 
 # 2. 设置 API Key
 export ANTHROPIC_API_KEY=your_key
