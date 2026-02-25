@@ -9,11 +9,6 @@ argument-hint: [PR number]
 
 Merge PR: $ARGUMENTS
 
-## Context
-
-- Current branch: !`git branch --show-current`
-- PR info: !`gh pr view $ARGUMENTS --json state,reviewDecision,mergeable,headRefName,baseRefName,title`
-
 ## Conventions (auto-loaded)
 
 !`cat .claude/rules/github-conventions.md`
