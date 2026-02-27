@@ -244,6 +244,10 @@ async def init_schema(db: "DatabaseManager") -> None:
     from .schema_artifacts import init_artifact_schema
     await init_artifact_schema(db)
 
+    # Initialize favorites schema (#49 My Library)
+    from .schema_favorites import init_favorites_schema
+    await init_favorites_schema(db)
+
     print("Database schema initialized")
 
 

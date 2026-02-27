@@ -523,3 +523,56 @@ class UpdateProfileRequest(BaseModel):
         None,
         description="头像URL"
     )
+
+
+# ============================================================================
+# Library API Models (#49 My Library)
+# ============================================================================
+
+class LibraryItemType(str, Enum):
+    """Library content type"""
+    ART_STORY = "art-story"
+    INTERACTIVE = "interactive"
+    NEWS = "news"
+
+
+class LibraryItem(BaseModel):
+    """Unified library item returned by the library API."""
+    id: str = Field(..., description="Item ID")
+    type: LibraryItemType = Field(..., description="Content type")
+    title: str = Field(..., description="Display title")
+    preview: str = Field(..., description="Content preview (first ~100 chars)")
+    image_url: Optional[str] = Field(None, description="Thumbnail/cover image URL")
+    audio_url: Optional[str] = Field(None, description="Audio narration URL")
+    created_at: str = Field(..., description="Creation timestamp (ISO 8601)")
+    is_favorited: bool = Field(False, description="Whether user has favorited this item")
+    # Art-story specific
+    safety_score: Optional[float] = Field(None, description="Content safety score")
+    word_count: Optional[int] = Field(None, description="Story word count")
+    themes: Optional[List[str]] = Field(None, description="Story themes")
+    # Interactive specific
+    progress: Optional[int] = Field(None, description="Story progress percentage")
+    status: Optional[str] = Field(None, description="Session status")
+    # News specific
+    category: Optional[str] = Field(None, description="News category")
+
+
+class LibraryResponse(BaseModel):
+    """Paginated library response."""
+    items: List[LibraryItem] = Field(..., description="Library items")
+    total: int = Field(..., description="Total items matching filters")
+    limit: int = Field(..., description="Page size")
+    offset: int = Field(..., description="Current offset")
+
+
+class FavoriteRequest(BaseModel):
+    """Add/remove favorite request."""
+    item_id: str = Field(..., description="ID of the item")
+    item_type: LibraryItemType = Field(..., description="Type of the item")
+
+
+class FavoriteResponse(BaseModel):
+    """Add favorite response."""
+    status: str = Field(..., description="Result status")
+    item_id: str = Field(..., description="Item ID")
+    item_type: str = Field(..., description="Item type")

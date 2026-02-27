@@ -41,7 +41,7 @@
 
 ## 3. 核心功能
 
-### 3.1 画作转故事 (Image-to-Story)
+### 3.1 画作转故事 (Image-to-Story) [Complete]
 
 #### 功能描述
 儿童上传画作，AI Agent 分析画作内容，生成个性化故事。
@@ -76,7 +76,7 @@ AI 发现：小明上周也画过这只狗，叫"闪电"
 
 ---
 
-### 3.2 互动故事生成器 (Interactive Story)
+### 3.2 互动故事生成器 (Interactive Story) [In Progress]
 
 #### 功能描述
 基于儿童兴趣生成多分支互动故事，让儿童在关键点做出选择，影响故事走向。
@@ -102,15 +102,19 @@ AI 生成下一段："小恐龙走进山洞，发现了发光的化石..."
 
 #### 两种模式
 
-**线性模式** (Traditional)
+**线性模式** (Traditional) [Not Started]
 - 一次性生成完整故事
 - 适合睡前故事、阅读练习
 - 300-800字
 
-**互动模式** (Interactive)
+**互动模式** (Interactive) [Complete — core flow]
 - 分段生成，每段 100-300字
 - 2-4 个决策点，每次 2-3 个选项
 - 所有分支都是"好结局"（不惩罚儿童的选择）
+- SSE streaming for opening and choices
+- Age-based audio strategy (audio-first for 3-5, simultaneous for 6-9, text-first for 10-12)
+- Preference tracking on story completion
+- Save completed stories to My Library
 
 #### 输入
 - **必填**: 儿童年龄、兴趣标签（1-5个）
@@ -127,9 +131,42 @@ AI 生成下一段："小恐龙走进山洞，发现了发光的化石..."
 - **教育融合**: 自然融入 STEAM 和品德教育
 - **语言适配**: 根据年龄自动调整词汇和句式复杂度
 
+#### 已实现 (What's Built)
+- ✅ Core interactive mode: start → choose → progress → ending
+- ✅ SSE streaming for all generation endpoints
+- ✅ Age-based configuration (word count, complexity, segment count, audio mode)
+- ✅ Safety check integration via MCP tool
+- ✅ TTS audio generation with age-appropriate voice/speed
+- ✅ Vector search for similar content
+- ✅ Preference storage on completion (themes, concepts, interests, choices)
+- ✅ Session management (create, track progress, expire)
+- ✅ Full frontend: setup → playing → completed states with 2.5D visual effects
+- ✅ Story save to My Library on completion
+- ✅ Educational summary display with tags
+
+#### Phase 2 增强 (Planned Enhancements)
+- 🔲 **偏好感知生成**: 将儿童累积偏好 (themes, concepts, recent_choices) 注入开篇提示词，目前偏好仅在完成时存储但不在创建时读取
+- 🔲 **角色延续**: 跨会话搜索和重用重复角色（如"闪电小狗"在互动故事中继续出现），目前仅画作转故事有角色记忆
+- 🔲 **主题推荐**: 基于偏好历史推荐故事主题，替代当前的纯手动输入
+- 🔲 **会话恢复**: 列出活跃会话并支持中断后继续，后端 `list_sessions` 已存在但无 API 路由暴露
+- 🔲 **故事回放**: 重新阅读已完成的互动故事（含完整分支路径），目前保存的仅为拼接文本
+- 🔲 **选择特质追踪**: 追踪选择揭示的性格特质（勇气、友谊等），提示词已定义但 Pydantic 模型缺少 `trait` 字段
+- 🔲 **线性模式**: 添加一键生成完整故事模式，适合睡前阅读
+- 🔲 **故事地图可视化**: 展示选择的分支树，让儿童看到自己的冒险路径
+- 🔲 **跨会话故事宇宙**: 引用前次会话中的角色和事件（"还记得上次闪电小狗的冒险吗？"）
+
+#### 已知技术债
+- 年龄组定义不一致：PRD 定义 3-5/6-8/9-12，后端枚举包含 6-8 和 6-9 两个重叠组，前端仅显示 3-5/6-9/10-12
+- `_should_use_mock()` 在 agent 中重复定义两次
+- 开篇和续段的提示词在普通/流式函数间重复，应提取为共享函数
+- 保存互动故事时 `safety_score` 硬编码为 0.9，未使用实际安全检查分数
+- 互动故事领域缺少契约测试 (`backend/tests/contracts/`)
+
+> **GitHub Epic**: #41 | **Phase**: 2 (core flow complete, enhancements in Phase 2) | **Milestone**: Phase 2 — Interactive + Memory + News
+
 ---
 
-### 3.3 新闻儿童化转换器 (News-to-Kids)
+### 3.3 新闻儿童化转换器 (News-to-Kids) [Deferred to Phase 2]
 
 #### 功能描述
 将成人新闻转化为适合儿童理解的有趣资讯。
@@ -176,7 +213,7 @@ AI 生成下一段："小恐龙走进山洞，发现了发光的化石..."
 
 ---
 
-### 3.4 内容安全系统 (Safety Check)
+### 3.4 内容安全系统 (Safety Check) [Complete]
 
 #### 功能描述
 对所有生成内容进行自动安全审查，确保符合儿童内容标准。
@@ -207,7 +244,7 @@ AI 生成下一段："小恐龙走进山洞，发现了发光的化石..."
 
 ---
 
-### 3.5 记忆管理系统 (Memory System)
+### 3.5 记忆管理系统 (Memory System) [In Progress]
 
 #### 功能描述
 记住每个孩子的创作历史和偏好，实现内容连续性。
@@ -367,10 +404,11 @@ Month 3: 儿童创作了 20+ 个故事，形成自己的"故事宇宙"
 ### Phase 2 - 第二阶段
 
 **应该有**:
-- 互动故事生成（多分支）
-- 新闻转儿童资讯
-- 高级记忆（偏好追踪、故事关联）
-- 多种语音选择
+- ✅ 互动故事生成（多分支）— 核心流程已完成，增强功能见 §3.2
+- 🔲 互动故事增强（偏好感知生成、角色延续、会话恢复、故事回放）
+- 🔲 新闻转儿童资讯
+- 🔲 高级记忆（偏好追踪、故事关联、跨会话角色延续）
+- 🔲 多种语音选择
 
 ### Phase 3 - 第三阶段
 
