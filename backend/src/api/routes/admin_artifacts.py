@@ -126,12 +126,9 @@ async def get_story_lineage(
         steps = await step_repo.list_by_run(run.run_id)
         run_links = await link_repo.list_by_run(run.run_id)
 
-        artifacts = []
-        for rl in run_links:
-            artifact = await artifact_repo.get_by_id(rl.artifact_id)
-            if artifact:
-                artifacts.append(artifact)
-
+        artifacts = await artifact_repo.get_by_ids(
+            [rl.artifact_id for rl in run_links]
+        )
         total_artifacts += len(artifacts)
 
         runs_with_artifacts.append(
@@ -195,11 +192,9 @@ async def export_artifact_lineage(
             if run:
                 steps = await step_repo.list_by_run(run_id)
                 run_links = await link_repo.list_by_run(run_id)
-                run_artifacts = []
-                for rl in run_links:
-                    a = await artifact_repo.get_by_id(rl.artifact_id)
-                    if a:
-                        run_artifacts.append(a)
+                run_artifacts = await artifact_repo.get_by_ids(
+                    [rl.artifact_id for rl in run_links]
+                )
 
                 run_context = RunWithArtifacts(
                     run=run,

@@ -528,6 +528,59 @@ class ArtifactRepository:
         await self.db.commit()
         return cursor.rowcount > 0
 
+    async def get_by_ids(self, artifact_ids: List[str]) -> List[Artifact]:
+        """
+        Batch-fetch artifacts by a list of IDs.
+
+        Args:
+            artifact_ids: List of artifact UUIDs
+
+        Returns:
+            List of found artifacts (missing IDs are silently skipped).
+        """
+        if not artifact_ids:
+            return []
+
+        BATCH_SIZE = 500
+        results: List[Artifact] = []
+        for i in range(0, len(artifact_ids), BATCH_SIZE):
+            chunk = artifact_ids[i:i + BATCH_SIZE]
+            placeholders = ", ".join(["?"] * len(chunk))
+            rows = await self.db.fetchall(
+                f"SELECT * FROM artifacts WHERE artifact_id IN ({placeholders})",
+                tuple(chunk),
+            )
+            results.extend(self._row_to_artifact(row) for row in rows)
+        return results
+
+    async def get_canonical_ids(self, artifact_ids: List[str]) -> set:
+        """
+        Batch-check which artifact IDs are canonical (primary story-linked).
+
+        Args:
+            artifact_ids: List of artifact UUIDs to check
+
+        Returns:
+            Set of artifact IDs that are canonical.
+        """
+        if not artifact_ids:
+            return set()
+
+        BATCH_SIZE = 500
+        canonical: set = set()
+        for i in range(0, len(artifact_ids), BATCH_SIZE):
+            chunk = artifact_ids[i:i + BATCH_SIZE]
+            placeholders = ", ".join(["?"] * len(chunk))
+            rows = await self.db.fetchall(
+                f"""
+                SELECT DISTINCT artifact_id FROM story_artifact_links
+                WHERE artifact_id IN ({placeholders}) AND is_primary = 1
+                """,
+                tuple(chunk),
+            )
+            canonical.update(row["artifact_id"] for row in rows)
+        return canonical
+
     async def is_canonical(self, artifact_id: str) -> bool:
         """
         Check if an artifact is the primary/canonical artifact for any story.

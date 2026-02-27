@@ -19,10 +19,7 @@ from datetime import datetime, timezone
 from typing import List, Optional
 
 from .database.connection import DatabaseManager
-from .database.artifact_repository import (
-    ArtifactRepository,
-    StoryArtifactLinkRepository,
-)
+from .database.artifact_repository import ArtifactRepository
 from .models.artifact_models import (
     Artifact,
     LifecycleState,
@@ -75,7 +72,6 @@ class RetentionService:
     ):
         self.db = db
         self._artifact_repo = ArtifactRepository(db)
-        self._link_repo = StoryArtifactLinkRepository(db)
         self.policies = policies or DEFAULT_POLICIES
 
     async def run_cleanup(
@@ -110,10 +106,12 @@ class RetentionService:
                 state, policy.retention_days, limit=candidate_limit
             )
 
+            canonical_ids = await self._artifact_repo.get_canonical_ids(
+                [a.artifact_id for a in expired]
+            )
+
             for artifact in expired:
-                canonical = await self._artifact_repo.is_canonical(
-                    artifact.artifact_id
-                )
+                canonical = artifact.artifact_id in canonical_ids
                 # Safeguard: never touch published or canonical artifacts
                 protected = (
                     artifact.lifecycle_state == LifecycleState.PUBLISHED

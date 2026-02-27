@@ -5,6 +5,7 @@ Consolidated authentication and ownership verification for all protected routes.
 """
 
 from typing import Optional
+import hmac
 import os
 
 from fastapi import Header, HTTPException, status
@@ -116,7 +117,7 @@ async def get_admin_user(
             detail="Admin access is not configured",
         )
 
-    if not x_admin_key or x_admin_key != admin_key:
+    if not x_admin_key or not hmac.compare_digest(x_admin_key, admin_key):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin privileges required",
