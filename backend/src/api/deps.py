@@ -5,6 +5,7 @@ Consolidated authentication and ownership verification for all protected routes.
 """
 
 from typing import Optional
+import hmac
 import os
 
 from fastapi import Header, HTTPException, status
@@ -87,6 +88,39 @@ async def get_current_user(authorization: Optional[str] = Header(None)) -> UserD
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired authentication token",
+        )
+
+    return user
+
+
+async def get_admin_user(
+    authorization: Optional[str] = Header(None),
+    x_admin_key: Optional[str] = Header(None),
+) -> UserData:
+    """
+    Verify admin access via X-Admin-Key header + valid auth token.
+
+    Requires both a valid user session (Bearer token) and a matching
+    X-Admin-Key header checked against the ADMIN_API_KEY env var.
+
+    Raises 401 if unauthenticated, 403 if admin key is missing or wrong.
+    """
+    if _allow_test_auth_bypass():
+        return await get_current_user(authorization)
+
+    user = await get_current_user(authorization)
+
+    admin_key = os.getenv("ADMIN_API_KEY")
+    if not admin_key:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access is not configured",
+        )
+
+    if not x_admin_key or not hmac.compare_digest(x_admin_key, admin_key):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin privileges required",
         )
 
     return user

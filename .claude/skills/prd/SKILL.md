@@ -1,7 +1,7 @@
 ---
 name: prd
 description: Update the Product Requirements Document. Add new feature sections, update existing features, mark progress, retire deprecated features, or reorganize sections. Use after a feature spec is approved or when product decisions change.
-allowed-tools: Read, Edit, Grep, Glob, Bash(gh issue list:*), Bash(git diff:*)
+allowed-tools: Read, Edit, Grep, Glob, Bash(gh issue list:*), Bash(gh api:*), Bash(git diff:*)
 argument-hint: [action, e.g. "add My Library feature", "update §3.1 status to complete", "retire news-to-kids", "sync progress"]
 ---
 
@@ -19,7 +19,7 @@ Update the PRD: $ARGUMENTS
 !`gh issue list --label type:epic --state all --json number,title,state --jq '.[] | "#\(.number) [\(.state)] \(.title)"' 2>/dev/null || echo "none"`
 
 ## Milestone Progress
-!`gh api repos/:owner/:repo/milestones --jq '.[] | "\(.title): \(.closed_issues)/\(.open_issues + .closed_issues) done"' 2>/dev/null || echo "none"`
+!`gh api repos/:owner/:repo/milestones --jq '.[] | .title + ": " + (.closed_issues|tostring) + "/" + ((.open_issues + .closed_issues)|tostring) + " done"' 2>/dev/null`
 
 ## Process
 

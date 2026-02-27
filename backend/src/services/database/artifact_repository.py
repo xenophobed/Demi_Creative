@@ -15,7 +15,7 @@ Key Principles:
 import uuid
 import json
 import hashlib
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Dict, Any
 from .connection import DatabaseManager
 from ...services.models.artifact_models import (
@@ -23,7 +23,8 @@ from ...services.models.artifact_models import (
     StoryArtifactLink, StoryArtifactLinkCreate, Run, RunCreate,
     AgentStep, AgentStepCreate, AgentStepComplete, RunArtifactLink,
     RunArtifactLinkCreate, ArtifactLineage, RunWithArtifacts,
-    MigrationRecord, MigrationStatusEnum, MigrationReport
+    MigrationRecord, MigrationStatusEnum, MigrationReport,
+    ArtifactSearchResult, StorageStats,
 )
 
 
@@ -331,6 +332,299 @@ class ArtifactRepository:
         )
 
         return [self._row_to_artifact(row) for row in results]
+
+    # ------------------------------------------------------------------
+    # Admin Search (Issue #16)
+    # ------------------------------------------------------------------
+
+    async def search(
+        self,
+        artifact_id: Optional[str] = None,
+        content_hash: Optional[str] = None,
+        story_id: Optional[str] = None,
+        run_id: Optional[str] = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> ArtifactSearchResult:
+        """
+        Multi-field admin search across artifacts.
+
+        Searches by artifact_id (exact), content_hash (exact),
+        story_id (via story_artifact_links), or run_id (via run_artifact_links).
+
+        Returns:
+            ArtifactSearchResult with matching artifacts and total count.
+        """
+        query_info = {}
+        conditions = []
+        params: list = []
+        joins = []
+
+        if artifact_id:
+            conditions.append("a.artifact_id = ?")
+            params.append(artifact_id)
+            query_info["artifact_id"] = artifact_id
+
+        if content_hash:
+            conditions.append("a.content_hash = ?")
+            params.append(content_hash)
+            query_info["content_hash"] = content_hash
+
+        if story_id:
+            joins.append(
+                "JOIN story_artifact_links sal ON a.artifact_id = sal.artifact_id"
+            )
+            conditions.append("sal.story_id = ?")
+            params.append(story_id)
+            query_info["story_id"] = story_id
+
+        if run_id:
+            joins.append(
+                "JOIN run_artifact_links ral ON a.artifact_id = ral.artifact_id"
+            )
+            conditions.append("ral.run_id = ?")
+            params.append(run_id)
+            query_info["run_id"] = run_id
+
+        if not conditions:
+            # No filters — return empty
+            return ArtifactSearchResult(
+                artifacts=[], total_count=0, query=query_info
+            )
+
+        join_clause = " ".join(joins)
+        where_clause = " AND ".join(conditions)
+
+        # Count query
+        count_sql = f"""
+            SELECT COUNT(DISTINCT a.artifact_id)
+            FROM artifacts a {join_clause}
+            WHERE {where_clause}
+        """
+        count_row = await self.db.fetchone(count_sql, tuple(params))
+        total_count = list(count_row.values())[0] if count_row else 0
+
+        # Data query
+        data_sql = f"""
+            SELECT DISTINCT a.* FROM artifacts a {join_clause}
+            WHERE {where_clause}
+            ORDER BY a.created_at DESC
+            LIMIT ? OFFSET ?
+        """
+        results = await self.db.fetchall(
+            data_sql, tuple(params) + (limit, offset)
+        )
+
+        artifacts = [self._row_to_artifact(row) for row in results]
+
+        return ArtifactSearchResult(
+            artifacts=artifacts,
+            total_count=total_count,
+            query=query_info,
+        )
+
+    # ------------------------------------------------------------------
+    # Storage Stats (Issue #19)
+    # ------------------------------------------------------------------
+
+    async def get_storage_stats(self) -> StorageStats:
+        """
+        Compute storage usage statistics across all artifacts.
+
+        Returns:
+            StorageStats with counts by state/type and file sizes.
+        """
+        # Total count
+        total_row = await self.db.fetchone(
+            "SELECT COUNT(*) as cnt FROM artifacts"
+        )
+        total = total_row["cnt"] if total_row else 0
+
+        # Count by state
+        state_rows = await self.db.fetchall(
+            "SELECT lifecycle_state, COUNT(*) as cnt FROM artifacts GROUP BY lifecycle_state"
+        )
+        by_state = {row["lifecycle_state"]: row["cnt"] for row in state_rows}
+
+        # Count by type
+        type_rows = await self.db.fetchall(
+            "SELECT artifact_type, COUNT(*) as cnt FROM artifacts GROUP BY artifact_type"
+        )
+        by_type = {row["artifact_type"]: row["cnt"] for row in type_rows}
+
+        # Total file size
+        size_row = await self.db.fetchone(
+            "SELECT COALESCE(SUM(file_size), 0) as total FROM artifacts WHERE file_size IS NOT NULL"
+        )
+        total_size = size_row["total"] if size_row else 0
+
+        # File size by state
+        state_size_rows = await self.db.fetchall(
+            """
+            SELECT lifecycle_state, COALESCE(SUM(file_size), 0) as total
+            FROM artifacts
+            WHERE file_size IS NOT NULL
+            GROUP BY lifecycle_state
+            """
+        )
+        by_state_size = {row["lifecycle_state"]: row["total"] for row in state_size_rows}
+
+        return StorageStats(
+            total_artifacts=total,
+            by_state=by_state,
+            by_type=by_type,
+            total_file_size_bytes=total_size,
+            by_state_size=by_state_size,
+        )
+
+    # ------------------------------------------------------------------
+    # Retention Queries (Issue #19)
+    # ------------------------------------------------------------------
+
+    async def list_expired(
+        self, state: str, older_than_days: int, limit: int = 1000
+    ) -> List[Artifact]:
+        """
+        List artifacts in a given state older than N days.
+
+        Args:
+            state: Lifecycle state to filter
+            older_than_days: Age threshold in days
+            limit: Max results
+
+        Returns:
+            Artifacts past their retention period.
+        """
+        cutoff = (
+            datetime.now(timezone.utc) - timedelta(days=older_than_days)
+        ).isoformat().replace("+00:00", "Z")
+
+        results = await self.db.fetchall(
+            """
+            SELECT * FROM artifacts
+            WHERE lifecycle_state = ?
+              AND created_at < ?
+            ORDER BY created_at ASC
+            LIMIT ?
+            """,
+            (state, cutoff, limit),
+        )
+
+        return [self._row_to_artifact(row) for row in results]
+
+    async def delete(self, artifact_id: str) -> bool:
+        """
+        Delete an artifact by ID.
+
+        CASCADE removes related rows (relations, links).
+
+        Returns:
+            True if a row was deleted, False if not found.
+        """
+        cursor = await self.db.execute(
+            "DELETE FROM artifacts WHERE artifact_id = ?",
+            (artifact_id,),
+        )
+        await self.db.commit()
+        return cursor.rowcount > 0
+
+    async def get_by_ids(self, artifact_ids: List[str]) -> List[Artifact]:
+        """
+        Batch-fetch artifacts by a list of IDs.
+
+        Args:
+            artifact_ids: List of artifact UUIDs
+
+        Returns:
+            List of found artifacts (missing IDs are silently skipped).
+        """
+        if not artifact_ids:
+            return []
+
+        BATCH_SIZE = 500
+        results: List[Artifact] = []
+        for i in range(0, len(artifact_ids), BATCH_SIZE):
+            chunk = artifact_ids[i:i + BATCH_SIZE]
+            placeholders = ", ".join(["?"] * len(chunk))
+            rows = await self.db.fetchall(
+                f"SELECT * FROM artifacts WHERE artifact_id IN ({placeholders})",
+                tuple(chunk),
+            )
+            results.extend(self._row_to_artifact(row) for row in rows)
+        return results
+
+    async def get_canonical_ids(self, artifact_ids: List[str]) -> set:
+        """
+        Batch-check which artifact IDs are canonical (primary story-linked).
+
+        Args:
+            artifact_ids: List of artifact UUIDs to check
+
+        Returns:
+            Set of artifact IDs that are canonical.
+        """
+        if not artifact_ids:
+            return set()
+
+        BATCH_SIZE = 500
+        canonical: set = set()
+        for i in range(0, len(artifact_ids), BATCH_SIZE):
+            chunk = artifact_ids[i:i + BATCH_SIZE]
+            placeholders = ", ".join(["?"] * len(chunk))
+            rows = await self.db.fetchall(
+                f"""
+                SELECT DISTINCT artifact_id FROM story_artifact_links
+                WHERE artifact_id IN ({placeholders}) AND is_primary = 1
+                """,
+                tuple(chunk),
+            )
+            canonical.update(row["artifact_id"] for row in rows)
+        return canonical
+
+    async def is_canonical(self, artifact_id: str) -> bool:
+        """
+        Check if an artifact is the primary/canonical artifact for any story.
+
+        Returns:
+            True if the artifact is linked as primary to any story.
+        """
+        row = await self.db.fetchone(
+            """
+            SELECT 1 FROM story_artifact_links
+            WHERE artifact_id = ? AND is_primary = 1
+            LIMIT 1
+            """,
+            (artifact_id,),
+        )
+        return row is not None
+
+    async def bulk_archive(self, artifact_ids: List[str]) -> int:
+        """
+        Transition a batch of artifacts to 'archived' state.
+
+        Only transitions artifacts currently in intermediate or candidate state.
+
+        Returns:
+            Number of artifacts actually archived.
+        """
+        if not artifact_ids:
+            return 0
+
+        now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        placeholders = ", ".join(["?"] * len(artifact_ids))
+
+        cursor = await self.db.execute(
+            f"""
+            UPDATE artifacts
+            SET lifecycle_state = 'archived', stored_at = ?
+            WHERE artifact_id IN ({placeholders})
+              AND lifecycle_state IN ('intermediate', 'candidate')
+            """,
+            (now, *artifact_ids),
+        )
+
+        await self.db.commit()
+        return cursor.rowcount
 
 
 # ============================================================================
@@ -841,6 +1135,27 @@ class RunRepository:
         await self.db.commit()
         return True
 
+    async def list_by_story(self, story_id: str) -> List[Run]:
+        """
+        List all runs for a story.
+
+        Args:
+            story_id: Story UUID
+
+        Returns:
+            List of runs ordered by created_at DESC
+        """
+        results = await self.db.fetchall(
+            """
+            SELECT * FROM runs
+            WHERE story_id = ?
+            ORDER BY created_at DESC
+            """,
+            (story_id,),
+        )
+
+        return [self._row_to_run(row) for row in results]
+
     def _row_to_run(self, row: Dict[str, Any]) -> Run:
         """Convert database row to Run model"""
         result_summary = None
@@ -907,6 +1222,26 @@ class AgentStepRepository:
 
         await self.db.commit()
         return agent_step_id
+
+    async def get_by_id(self, agent_step_id: str) -> Optional[AgentStep]:
+        """
+        Get agent step by ID.
+
+        Args:
+            agent_step_id: Agent step UUID
+
+        Returns:
+            AgentStep object or None if not found
+        """
+        result = await self.db.fetchone(
+            "SELECT * FROM agent_steps WHERE agent_step_id = ?",
+            (agent_step_id,)
+        )
+
+        if not result:
+            return None
+
+        return self._row_to_step(result)
 
     async def list_by_run(self, run_id: str) -> List[AgentStep]:
         """

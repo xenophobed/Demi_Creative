@@ -27,6 +27,7 @@ Every issue gets **one label from each required category**.
 - `domain:memory` — PRD §3.5
 - `domain:tts-audio` — TTS narration and sound design
 - `domain:artifacts` — Artifact graph, provenance, lifecycle
+- `domain:library` — PRD §3.6 — My Library, unified content library
 - `domain:video` — Phase 3 video / dynamic picture book
 
 ### Priority (required)
@@ -58,6 +59,7 @@ Every issue MUST be assigned to a milestone.
 | #43 | Artifact Lifecycle                | domain:artifacts      | mvp   |
 | #44 | News-to-Kids — Deferred          | domain:news-to-kids   | 2     |
 | #45 | TTS & Audio Pipeline Upgrade     | domain:tts-audio      | 2     |
+| #49 | My Library — Unified Content Library | domain:library     | mvp   |
 
 Every story/bug body MUST include `**Parent Epic**: #<number>`.
 
