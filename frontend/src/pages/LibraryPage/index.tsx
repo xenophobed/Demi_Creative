@@ -395,14 +395,19 @@ function NewsCard({
               </span>
               <h3 className="font-bold text-gray-800 truncate">{item.title}</h3>
             </div>
-            {showFavorite && (
-              <FavoriteButton
-                itemId={item.id}
-                itemType="news"
-                isFavorited={item.is_favorited}
-                onToggled={onFavoriteToggled}
-              />
-            )}
+            <div className="flex items-center gap-2 flex-shrink-0">
+              {item.safety_score !== undefined && (
+                <SafetyBadge score={item.safety_score} />
+              )}
+              {showFavorite && (
+                <FavoriteButton
+                  itemId={item.id}
+                  itemType="news"
+                  isFavorited={item.is_favorited}
+                  onToggled={onFavoriteToggled}
+                />
+              )}
+            </div>
           </div>
 
           <p className="text-gray-500 text-sm mt-1 line-clamp-2">
@@ -410,6 +415,12 @@ function NewsCard({
           </p>
 
           <div className="flex items-center gap-4 mt-2 text-xs text-gray-400">
+            {item.word_count !== undefined && item.word_count > 0 && (
+              <span className="flex items-center gap-1">
+                <span>📝</span>
+                {item.word_count} words
+              </span>
+            )}
             <span className="flex items-center gap-1">
               <span>🕐</span>
               {formatDate(item.created_at)}
@@ -421,6 +432,16 @@ function NewsCard({
               </span>
             )}
           </div>
+        </div>
+
+        {/* Arrow */}
+        <div className="flex-shrink-0 flex items-center text-gray-400">
+          <motion.span
+            animate={{ x: [0, 4, 0] }}
+            transition={{ duration: 1.5, repeat: Infinity }}
+          >
+            →
+          </motion.span>
         </div>
       </div>
     </Card>
