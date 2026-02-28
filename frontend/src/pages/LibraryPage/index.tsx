@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { BookOpen, Palette, Map, Newspaper, Compass, Globe } from 'lucide-react'
 import Button from '@/components/common/Button'
 import Card from '@/components/common/Card'
 import useStoryStore from '@/store/useStoryStore'
@@ -16,11 +17,11 @@ import type { NewsToKidsResponse } from '@/types/api'
 // Content type tabs
 type ContentTab = 'all' | 'art-stories' | 'interactive' | 'news'
 
-const TABS: { id: ContentTab; label: string; icon: string }[] = [
-  { id: 'all', label: 'All', icon: '📚' },
-  { id: 'art-stories', label: 'Art Stories', icon: '🎨' },
-  { id: 'interactive', label: 'Interactive', icon: '🌿' },
-  { id: 'news', label: 'News', icon: '📰' },
+const TABS: { id: ContentTab; label: string; icon: React.ReactNode }[] = [
+  { id: 'all', label: 'All', icon: <BookOpen size={16} /> },
+  { id: 'art-stories', label: 'Art Stories', icon: <Palette size={16} /> },
+  { id: 'interactive', label: 'Interactive', icon: <Map size={16} /> },
+  { id: 'news', label: 'News', icon: <Newspaper size={16} /> },
 ]
 
 function tabToApiType(tab: ContentTab): LibraryItemType | undefined {
@@ -177,20 +178,19 @@ function ArtStoryCard({
               onError={() => setImgError(true)}
             />
           ) : (
-            <motion.span
-              className="text-4xl"
+            <motion.div
               whileHover={{ rotate: [0, -10, 10, 0] }}
               transition={{ duration: 0.5 }}
             >
-              📖
-            </motion.span>
+              <Palette size={36} className="text-primary/60" strokeWidth={1.5} />
+            </motion.div>
           )}
         </div>
 
         {/* Content */}
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2">
-            <div>
+            <div className="min-w-0 flex-1">
               <span className="text-xs font-medium px-2 py-0.5 bg-primary/10 text-primary rounded-full mb-1 inline-block">
                 Art Story
               </span>
@@ -198,7 +198,7 @@ function ArtStoryCard({
                 {item.title}
               </h3>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-shrink-0">
               {item.safety_score !== undefined && (
                 <SafetyBadge score={item.safety_score} />
               )}
@@ -282,25 +282,24 @@ function InteractiveStoryCard({
       <div className="flex gap-4">
         {/* Icon */}
         <div className="flex-shrink-0 w-20 h-20 rounded-lg bg-gradient-to-br from-secondary/20 via-accent/10 to-primary/20 flex items-center justify-center">
-          <motion.span
-            className="text-4xl"
+          <motion.div
             whileHover={{ scale: 1.1 }}
             transition={{ duration: 0.3 }}
           >
-            🌿
-          </motion.span>
+            <Compass size={36} className="text-secondary/60" strokeWidth={1.5} />
+          </motion.div>
         </div>
 
         {/* Content */}
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2">
-            <div>
+            <div className="min-w-0 flex-1">
               <span className="text-xs font-medium px-2 py-0.5 bg-secondary/10 text-secondary rounded-full mb-1 inline-block">
                 Interactive Story
               </span>
               <h3 className="font-bold text-gray-800 truncate">{item.title}</h3>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-shrink-0">
               {item.status && (
                 <span
                   className={`text-xs px-2 py-0.5 rounded-full font-medium ${
@@ -377,19 +376,18 @@ function NewsCard({
       <div className="flex gap-4">
         {/* Icon */}
         <div className="flex-shrink-0 w-20 h-20 rounded-lg bg-gradient-to-br from-accent/20 via-primary/10 to-secondary/20 flex items-center justify-center">
-          <motion.span
-            className="text-4xl"
+          <motion.div
             whileHover={{ rotate: [0, -5, 5, 0] }}
             transition={{ duration: 0.5 }}
           >
-            📰
-          </motion.span>
+            <Globe size={36} className="text-accent/60" strokeWidth={1.5} />
+          </motion.div>
         </div>
 
         {/* Content */}
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2">
-            <div>
+            <div className="min-w-0 flex-1">
               <span className="text-xs font-medium px-2 py-0.5 bg-accent/10 text-accent rounded-full mb-1 inline-block">
                 {item.category
                   ? item.category.charAt(0).toUpperCase() + item.category.slice(1)
@@ -565,7 +563,7 @@ function LibraryPage() {
         animate={{ opacity: 1, y: 0 }}
       >
         <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-          <span className="text-3xl">📚</span>
+          <BookOpen size={28} className="text-primary" />
           My Library
         </h1>
         {storyHistory.length > 0 && !isAuthenticated && (
@@ -608,7 +606,7 @@ function LibraryPage() {
             whileHover={{ scale: 1.03 }}
             whileTap={{ scale: 0.97 }}
           >
-            <span>{tab.icon}</span>
+            {tab.icon}
             <span>{tab.label}</span>
           </motion.button>
         ))}

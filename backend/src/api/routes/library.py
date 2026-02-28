@@ -35,15 +35,27 @@ router = APIRouter(
 # Helpers
 # ============================================================================
 
+def _resolve_story_type(story: dict) -> LibraryItemType:
+    """Map the story_type DB field to a LibraryItemType."""
+    story_type = story.get("story_type", "image_to_story")
+    if story_type == "news_to_kids":
+        return LibraryItemType.NEWS
+    return LibraryItemType.ART_STORY
+
+
 def _story_to_library_item(story: dict, is_favorited: bool = False) -> LibraryItem:
     """Convert a story dict from StoryRepository to a LibraryItem."""
     story_content = story.get("story", {})
     ed_value = story.get("educational_value", {})
     text = story_content.get("text", "")
+    item_type = _resolve_story_type(story)
+
+    # Compute word count from actual text to ensure accuracy (#76)
+    word_count = len(text.split()) if text else 0
 
     return LibraryItem(
         id=story["story_id"],
-        type=LibraryItemType.ART_STORY,
+        type=item_type,
         title=_extract_title(text),
         preview=text[:150] if text else "",
         image_url=story.get("image_url"),
@@ -51,7 +63,7 @@ def _story_to_library_item(story: dict, is_favorited: bool = False) -> LibraryIt
         created_at=story.get("created_at", ""),
         is_favorited=is_favorited,
         safety_score=story.get("safety_score"),
-        word_count=story_content.get("word_count"),
+        word_count=word_count,
         themes=ed_value.get("themes", []),
     )
 
@@ -80,12 +92,12 @@ def _session_to_library_item(session, is_favorited: bool = False) -> LibraryItem
     )
 
 
-def _extract_title(text: str, max_len: int = 50) -> str:
+def _extract_title(text: str, max_len: int = 35) -> str:
     """Extract a display title from story text (first sentence or truncated)."""
     if not text:
         return "Untitled Story"
     # Take first sentence
-    for sep in ["。", ".", "！", "!", "\n"]:
+    for sep in ["\u3002", ".", "\uff01", "!", "\n"]:
         idx = text.find(sep)
         if 0 < idx < max_len:
             return text[:idx]
@@ -112,18 +124,27 @@ async def get_library(
     """Unified library endpoint. Aggregates stories, sessions, and news."""
     all_items: List[LibraryItem] = []
 
-    # Fetch stories
-    if type is None or type == LibraryItemType.ART_STORY:
+    # Fetch stories (includes both art-story and news types)
+    if type is None or type in (LibraryItemType.ART_STORY, LibraryItemType.NEWS):
         stories = await story_repo.list_by_user(user.user_id, limit=200, offset=0)
-        story_ids = [s["story_id"] for s in stories]
-        fav_story_ids = await favorite_repo.get_favorited_ids(
-            user.user_id, "art-story", story_ids
-        ) if story_ids else set()
+
+        # Separate favorites lookups by resolved type
+        art_ids = [s["story_id"] for s in stories if _resolve_story_type(s) == LibraryItemType.ART_STORY]
+        news_ids = [s["story_id"] for s in stories if _resolve_story_type(s) == LibraryItemType.NEWS]
+        fav_art_ids = await favorite_repo.get_favorited_ids(
+            user.user_id, "art-story", art_ids
+        ) if art_ids else set()
+        fav_news_ids = await favorite_repo.get_favorited_ids(
+            user.user_id, "news", news_ids
+        ) if news_ids else set()
+        fav_story_ids = fav_art_ids | fav_news_ids
 
         for s in stories:
-            all_items.append(
-                _story_to_library_item(s, is_favorited=s["story_id"] in fav_story_ids)
-            )
+            item = _story_to_library_item(s, is_favorited=s["story_id"] in fav_story_ids)
+            # Apply type filter
+            if type is not None and item.type != type:
+                continue
+            all_items.append(item)
 
     # Fetch interactive sessions
     if type is None or type == LibraryItemType.INTERACTIVE:
@@ -177,24 +198,33 @@ async def search_library(
     all_items: List[LibraryItem] = []
     query_lower = q.lower()
 
-    # Search stories
-    if type is None or type == LibraryItemType.ART_STORY:
+    # Search stories (includes both art-story and news types)
+    if type is None or type in (LibraryItemType.ART_STORY, LibraryItemType.NEWS):
         stories = await story_repo.list_by_user(user.user_id, limit=200, offset=0)
-        story_ids = [s["story_id"] for s in stories]
-        fav_ids = await favorite_repo.get_favorited_ids(
-            user.user_id, "art-story", story_ids
-        ) if story_ids else set()
+
+        art_ids = [s["story_id"] for s in stories if _resolve_story_type(s) == LibraryItemType.ART_STORY]
+        news_ids = [s["story_id"] for s in stories if _resolve_story_type(s) == LibraryItemType.NEWS]
+        fav_art = await favorite_repo.get_favorited_ids(
+            user.user_id, "art-story", art_ids
+        ) if art_ids else set()
+        fav_news = await favorite_repo.get_favorited_ids(
+            user.user_id, "news", news_ids
+        ) if news_ids else set()
+        fav_ids = fav_art | fav_news
 
         for s in stories:
+            item = _story_to_library_item(s, is_favorited=s["story_id"] in fav_ids)
+            # Apply type filter
+            if type is not None and item.type != type:
+                continue
+
             text = s.get("story", {}).get("text", "")
             themes = json.dumps(s.get("educational_value", {}).get("themes", []))
             characters = json.dumps(s.get("characters", []))
             searchable = f"{text} {themes} {characters}".lower()
 
             if query_lower in searchable:
-                all_items.append(
-                    _story_to_library_item(s, is_favorited=s["story_id"] in fav_ids)
-                )
+                all_items.append(item)
 
     # Search sessions
     if type is None or type == LibraryItemType.INTERACTIVE:
