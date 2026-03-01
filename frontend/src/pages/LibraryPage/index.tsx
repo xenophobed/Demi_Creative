@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import Button from '@/components/common/Button'
 import Card from '@/components/common/Card'
 import useStoryStore from '@/store/useStoryStore'
@@ -71,7 +71,26 @@ function truncatePreview(text: string, maxLen = 120): string {
 
 // ---- subcomponents ----
 
-function ArtStoryCard({ item, onClick }: { item: LibraryItem; onClick: () => void }) {
+function DeleteButton({ onDelete }: { onDelete: () => void }) {
+  return (
+    <motion.button
+      className="flex-shrink-0 p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+      onClick={(e) => {
+        e.stopPropagation()
+        onDelete()
+      }}
+      whileHover={{ scale: 1.1 }}
+      whileTap={{ scale: 0.9 }}
+      title="Delete"
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+        <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+      </svg>
+    </motion.button>
+  )
+}
+
+function ArtStoryCard({ item, onClick, onDelete }: { item: LibraryItem; onClick: () => void; onDelete: () => void }) {
   // Use state for image error to avoid direct DOM mutation via parentElement!.innerHTML
   const [imgError, setImgError] = useState(false)
 
@@ -151,9 +170,11 @@ function ArtStoryCard({ item, onClick }: { item: LibraryItem; onClick: () => voi
           )}
         </div>
 
-        {/* Arrow */}
-        <div className="flex-shrink-0 flex items-center text-gray-400">
+        {/* Actions */}
+        <div className="flex-shrink-0 flex flex-col items-center justify-between py-1">
+          <DeleteButton onDelete={onDelete} />
           <motion.span
+            className="text-gray-400"
             animate={{ x: [0, 4, 0] }}
             transition={{ duration: 1.5, repeat: Infinity }}
           >
@@ -165,7 +186,7 @@ function ArtStoryCard({ item, onClick }: { item: LibraryItem; onClick: () => voi
   )
 }
 
-function InteractiveStoryCard({ item, onClick }: { item: LibraryItem; onClick: () => void }) {
+function InteractiveStoryCard({ item, onClick, onDelete }: { item: LibraryItem; onClick: () => void; onDelete: () => void }) {
   const progress = item.progress ?? 0
 
   return (
@@ -230,9 +251,11 @@ function InteractiveStoryCard({ item, onClick }: { item: LibraryItem; onClick: (
           </div>
         </div>
 
-        {/* Arrow */}
-        <div className="flex-shrink-0 flex items-center text-gray-400">
+        {/* Actions */}
+        <div className="flex-shrink-0 flex flex-col items-center justify-between py-1">
+          <DeleteButton onDelete={onDelete} />
           <motion.span
+            className="text-gray-400"
             animate={{ x: [0, 4, 0] }}
             transition={{ duration: 1.5, repeat: Infinity }}
           >
@@ -244,7 +267,7 @@ function InteractiveStoryCard({ item, onClick }: { item: LibraryItem; onClick: (
   )
 }
 
-function NewsCard({ item }: { item: LibraryItem }) {
+function NewsCard({ item, onDelete }: { item: LibraryItem; onDelete: () => void }) {
   return (
     <Card>
       <div className="flex gap-4">
@@ -287,6 +310,11 @@ function NewsCard({ item }: { item: LibraryItem }) {
             )}
           </div>
         </div>
+
+        {/* Delete */}
+        <div className="flex-shrink-0 flex items-center">
+          <DeleteButton onDelete={onDelete} />
+        </div>
       </div>
     </Card>
   )
@@ -296,11 +324,13 @@ function NewsCard({ item }: { item: LibraryItem }) {
 
 function LibraryPage() {
   const navigate = useNavigate()
-  const { storyHistory, clearHistory, setCurrentStory } = useStoryStore()
+  const queryClient = useQueryClient()
+  const { storyHistory, clearHistory, setCurrentStory, removeStory } = useStoryStore()
   const { isAuthenticated } = useAuthStore()
   const { currentChild, defaultChildId } = useChildStore()
 
   const [activeTab, setActiveTab] = useState<ContentTab>('all')
+  const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set())
   const [pageSize] = useState(20)
   const [artOffset, setArtOffset] = useState(0)
   // Accumulate art story pages so "Load More" appends rather than replaces
@@ -472,7 +502,11 @@ function LibraryPage() {
   const allItems = [...artItems, ...interactiveItems, ...newsItems].sort(dateSorter)
 
   // Use .slice() before sorting to avoid mutating the source arrays in-place
-  const visibleItems =
+  // Filter out items currently being deleted for optimistic UI
+  const filterDeleting = (items: LibraryItem[]) =>
+    items.filter((i) => !deletingIds.has(i.id))
+
+  const visibleItems = filterDeleting(
     activeTab === 'all'
       ? allItems
       : activeTab === 'art-stories'
@@ -480,6 +514,7 @@ function LibraryPage() {
       : activeTab === 'interactive'
       ? interactiveItems.slice().sort(dateSorter)
       : newsItems.slice().sort(dateSorter)
+  )
 
   const hasMoreArt =
     isAuthenticated && serverArtData && artOffset + pageSize < serverArtData.total
@@ -507,6 +542,40 @@ function LibraryPage() {
     ) {
       // Clears only the local Zustand store; server-side data is unaffected
       clearHistory()
+    }
+  }
+
+  const handleDeleteItem = async (item: LibraryItem) => {
+    const label =
+      item.type === 'art-story' ? 'art story' :
+      item.type === 'interactive' ? 'interactive story' : 'news article'
+
+    if (!window.confirm(`Delete this ${label}? This cannot be undone.`)) return
+
+    setDeletingIds((prev) => new Set(prev).add(item.id))
+
+    try {
+      if (item.type === 'interactive') {
+        await storyService.deleteSession(item.id)
+        queryClient.invalidateQueries({ queryKey: ['library-sessions'] })
+      } else {
+        await storyService.deleteStory(item.id)
+        // Remove from local store too
+        removeStory(item.id)
+        // Remove from accumulated server art
+        setAccumulatedServerArt((prev) => prev.filter((s) => s.story_id !== item.id))
+        queryClient.invalidateQueries({ queryKey: ['library-art-stories'] })
+        queryClient.invalidateQueries({ queryKey: ['library-child-art-stories'] })
+        queryClient.invalidateQueries({ queryKey: ['library-news-history'] })
+      }
+    } catch {
+      // Deletion failed — remove from deleting set to restore the card
+    } finally {
+      setDeletingIds((prev) => {
+        const next = new Set(prev)
+        next.delete(item.id)
+        return next
+      })
     }
   }
 
@@ -611,12 +680,12 @@ function LibraryPage() {
                 transition={{ delay: Math.min(index * 0.04, 0.3) }}
               >
                 {item.type === 'art-story' && (
-                  <ArtStoryCard item={item} onClick={() => handleItemClick(item)} />
+                  <ArtStoryCard item={item} onClick={() => handleItemClick(item)} onDelete={() => handleDeleteItem(item)} />
                 )}
                 {item.type === 'interactive' && (
-                  <InteractiveStoryCard item={item} onClick={() => handleItemClick(item)} />
+                  <InteractiveStoryCard item={item} onClick={() => handleItemClick(item)} onDelete={() => handleDeleteItem(item)} />
                 )}
-                {item.type === 'news' && <NewsCard item={item} />}
+                {item.type === 'news' && <NewsCard item={item} onDelete={() => handleDeleteItem(item)} />}
               </motion.div>
             ))}
 

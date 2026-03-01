@@ -51,6 +51,7 @@ interface StoryState {
   setSelectedVoice: (voice: VoiceType) => void
   setEnableAudio: (enable: boolean) => void
   addToHistory: (story: ImageToStoryResponse) => void
+  removeStory: (storyId: string) => void
   clearHistory: () => void
   reset: () => void
 
@@ -129,6 +130,12 @@ const useStoryStore = create<StoryState>((set, get) => ({
         storyHistory: [story, ...history].slice(0, 50), // 保留最近50个
       })
     }
+  },
+
+  removeStory: (storyId) => {
+    set((state) => ({
+      storyHistory: state.storyHistory.filter((s) => s.story_id !== storyId),
+    }))
   },
 
   clearHistory: () => set({ storyHistory: [] }),
