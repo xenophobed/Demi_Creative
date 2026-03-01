@@ -10,6 +10,9 @@ import useChildStore from '@/store/useChildStore'
 import { authService } from '@/api/services/authService'
 import { storyService } from '@/api/services/storyService'
 import SafetyBadge from '@/components/story/SafetyBadge'
+import { useLibraryPreferences } from '@/hooks/useLibraryPreferences'
+import MiniPlayer from '@/components/common/MiniPlayer'
+import { getAgeLayoutConfig } from '@/config/ageConfig'
 import type { UserStorySummary, UserSessionSummary } from '@/types/auth'
 import type { NewsToKidsResponse } from '@/types/api'
 
@@ -33,6 +36,7 @@ interface LibraryItem {
   title: string
   preview: string
   image_url: string | null
+  thumbnail_url?: string | null
   audio_url: string | null
   created_at: string
   // Art stories
@@ -154,7 +158,7 @@ function DeleteButton({ onDelete }: { onDelete: () => void }) {
   )
 }
 
-function ArtStoryCard({ item, onClick, onDelete }: { item: LibraryItem; onClick: () => void; onDelete: () => void }) {
+function ArtStoryCard({ item, onClick, onDelete, showWordCount = true }: { item: LibraryItem; onClick: () => void; onDelete: () => void; showWordCount?: boolean }) {
   // Use state for image error to avoid direct DOM mutation via parentElement!.innerHTML
   const [imgError, setImgError] = useState(false)
 
@@ -163,9 +167,9 @@ function ArtStoryCard({ item, onClick, onDelete }: { item: LibraryItem; onClick:
       <div className="flex gap-4">
         {/* Thumbnail */}
         <div className="flex-shrink-0 w-20 h-20 rounded-lg bg-gradient-to-br from-primary/20 via-secondary/10 to-accent/20 flex items-center justify-center overflow-hidden">
-          {item.image_url && !imgError ? (
+          {(item.thumbnail_url || item.image_url) && !imgError ? (
             <img
-              src={item.image_url.startsWith('/') ? item.image_url : '/' + item.image_url}
+              src={(() => { const url = item.thumbnail_url || item.image_url || ''; return url.startsWith('/') ? url : '/' + url })()}
               alt="Artwork"
               className="w-full h-full object-cover"
               onError={() => setImgError(true)}
@@ -202,7 +206,7 @@ function ArtStoryCard({ item, onClick, onDelete }: { item: LibraryItem; onClick:
           </p>
 
           <div className="flex items-center gap-4 mt-2 text-xs text-gray-400">
-            {item.word_count !== undefined && (
+            {showWordCount && item.word_count !== undefined && (
               <span className="flex items-center gap-1">
                 <span>📝</span>
                 {item.word_count} words
@@ -212,12 +216,6 @@ function ArtStoryCard({ item, onClick, onDelete }: { item: LibraryItem; onClick:
               <span>🕐</span>
               {formatDate(item.created_at)}
             </span>
-            {item.audio_url && (
-              <span className="flex items-center gap-1 text-secondary">
-                <span>🔊</span>
-                Audio
-              </span>
-            )}
           </div>
 
           {item.themes && item.themes.length > 0 && (
@@ -237,6 +235,9 @@ function ArtStoryCard({ item, onClick, onDelete }: { item: LibraryItem; onClick:
         {/* Actions */}
         <div className="flex-shrink-0 flex flex-col items-center justify-between py-1">
           <DeleteButton onDelete={onDelete} />
+          {item.audio_url && (
+            <MiniPlayer itemId={item.id} audioUrl={item.audio_url} />
+          )}
           <motion.span
             className="text-gray-400"
             animate={{ x: [0, 4, 0] }}
@@ -366,21 +367,84 @@ function NewsCard({ item, onDelete }: { item: LibraryItem; onDelete: () => void 
               <span>🕐</span>
               {formatDate(item.created_at)}
             </span>
-            {item.audio_url && (
-              <span className="flex items-center gap-1 text-secondary">
-                <span>🔊</span>
-                Audio
-              </span>
-            )}
           </div>
         </div>
 
-        {/* Delete */}
-        <div className="flex-shrink-0 flex items-center">
+        {/* Actions */}
+        <div className="flex-shrink-0 flex flex-col items-center justify-between py-1">
           <DeleteButton onDelete={onDelete} />
+          {item.audio_url && (
+            <MiniPlayer itemId={item.id} audioUrl={item.audio_url} />
+          )}
         </div>
       </div>
     </Card>
+  )
+}
+
+// ---- list row (compact view) ----
+
+const TYPE_BADGE: Record<LibraryItemType, { label: string; color: string }> = {
+  'art-story': { label: 'Art Story', color: 'bg-primary/10 text-primary' },
+  interactive: { label: 'Interactive', color: 'bg-secondary/10 text-secondary' },
+  news: { label: 'News', color: 'bg-accent/10 text-accent' },
+}
+
+function ListRow({
+  item,
+  onClick,
+  onDelete,
+}: {
+  item: LibraryItem
+  onClick: () => void
+  onDelete: () => void
+}) {
+  const [imgError, setImgError] = useState(false)
+  const imgSrc = item.thumbnail_url || item.image_url
+  const badge = TYPE_BADGE[item.type]
+
+  return (
+    <motion.div
+      className="flex items-center gap-3 px-3 py-2 rounded-xl bg-white/80 hover:bg-white cursor-pointer transition-colors border border-gray-100"
+      onClick={onClick}
+      whileHover={{ x: 2 }}
+    >
+      {/* Mini thumbnail */}
+      <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center overflow-hidden">
+        {imgSrc && !imgError ? (
+          <img
+            src={imgSrc.startsWith('/') ? imgSrc : '/' + imgSrc}
+            alt=""
+            className="w-full h-full object-cover"
+            onError={() => setImgError(true)}
+          />
+        ) : (
+          <span className="text-lg">{item.type === 'art-story' ? '📖' : item.type === 'interactive' ? '🌿' : '📰'}</span>
+        )}
+      </div>
+
+      {/* Title + badge */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${badge.color}`}>
+            {badge.label}
+          </span>
+          <h4 className="text-sm font-semibold text-gray-800 truncate">{item.title}</h4>
+        </div>
+      </div>
+
+      {/* Meta */}
+      <div className="flex items-center gap-3 text-xs text-gray-400 flex-shrink-0">
+        {item.word_count !== undefined && <span>{item.word_count}w</span>}
+        <span className="hidden sm:inline">
+          {new Date(item.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+        </span>
+      </div>
+
+      {/* Audio + Delete */}
+      {item.audio_url && <MiniPlayer itemId={item.id} audioUrl={item.audio_url} />}
+      <DeleteButton onDelete={onDelete} />
+    </motion.div>
   )
 }
 
@@ -389,9 +453,11 @@ function NewsCard({ item, onDelete }: { item: LibraryItem; onDelete: () => void 
 function LibraryPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const { storyHistory, clearHistory, setCurrentStory, removeStory } = useStoryStore()
+  const { storyHistory, setCurrentStory, removeStory } = useStoryStore()
   const { isAuthenticated } = useAuthStore()
   const { currentChild, defaultChildId } = useChildStore()
+  const { viewMode, toggleViewMode } = useLibraryPreferences()
+  const ageLayout = getAgeLayoutConfig(currentChild?.age_group)
 
   const [activeTab, setActiveTab] = useState<ContentTab>('all')
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set())
@@ -599,17 +665,6 @@ function LibraryPage() {
     // News items are read-only in the library for now
   }
 
-  const handleClearHistory = () => {
-    if (
-      window.confirm(
-        'Are you sure you want to clear all local story history? This cannot be undone.'
-      )
-    ) {
-      // Clears only the local Zustand store; server-side data is unaffected
-      clearHistory()
-    }
-  }
-
   const handleDeleteItem = useCallback(async (item: LibraryItem) => {
     // Optimistically remove from all local data sources FIRST
     setDeletingIds((prev) => new Set(prev).add(item.id))
@@ -644,7 +699,7 @@ function LibraryPage() {
   // ---- render ----
 
   return (
-    <div className="space-y-6">
+    <div className={`space-y-6 ${ageLayout.fontSize}`}>
       {/* Page header */}
       <motion.div
         className="flex items-center justify-between"
@@ -655,16 +710,25 @@ function LibraryPage() {
           <span className="text-3xl">📚</span>
           My Library
         </h1>
-        {storyHistory.length > 0 && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleClearHistory}
-            className="text-gray-500"
-          >
-            Clear Local History
-          </Button>
-        )}
+        <motion.button
+          onClick={toggleViewMode}
+          className="p-2 rounded-lg text-gray-500 hover:text-primary hover:bg-primary/10 transition-colors"
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          title={viewMode === 'grid' ? 'Switch to list view' : 'Switch to grid view'}
+        >
+          {viewMode === 'grid' ? (
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" />
+              <line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" />
+            </svg>
+          ) : (
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" />
+              <rect x="3" y="14" width="7" height="7" /><rect x="14" y="14" width="7" height="7" />
+            </svg>
+          )}
+        </motion.button>
       </motion.div>
 
       {/* Tab bar */}
@@ -725,10 +789,10 @@ function LibraryPage() {
         </motion.div>
       )}
 
-      {/* Content list */}
+      {/* Content — grid or list */}
       <AnimatePresence mode="popLayout">
         {visibleItems.length > 0 ? (
-          <motion.div className="space-y-4">
+          <motion.div className={viewMode === 'grid' ? `grid ${ageLayout.gridClass} gap-4` : 'space-y-2'}>
             {visibleItems.map((item, index) => (
               <motion.div
                 key={`${item.type}-${item.id}`}
@@ -737,13 +801,19 @@ function LibraryPage() {
                 exit={{ opacity: 0, x: -100 }}
                 transition={{ delay: Math.min(index * 0.04, 0.3) }}
               >
-                {item.type === 'art-story' && (
-                  <ArtStoryCard item={item} onClick={() => handleItemClick(item)} onDelete={() => setDeleteTarget(item)} />
+                {viewMode === 'list' ? (
+                  <ListRow item={item} onClick={() => handleItemClick(item)} onDelete={() => setDeleteTarget(item)} />
+                ) : (
+                  <>
+                    {item.type === 'art-story' && (
+                      <ArtStoryCard item={item} onClick={() => handleItemClick(item)} onDelete={() => setDeleteTarget(item)} showWordCount={ageLayout.showWordCount} />
+                    )}
+                    {item.type === 'interactive' && (
+                      <InteractiveStoryCard item={item} onClick={() => handleItemClick(item)} onDelete={() => setDeleteTarget(item)} />
+                    )}
+                    {item.type === 'news' && <NewsCard item={item} onDelete={() => setDeleteTarget(item)} />}
+                  </>
                 )}
-                {item.type === 'interactive' && (
-                  <InteractiveStoryCard item={item} onClick={() => handleItemClick(item)} onDelete={() => setDeleteTarget(item)} />
-                )}
-                {item.type === 'news' && <NewsCard item={item} onDelete={() => setDeleteTarget(item)} />}
               </motion.div>
             ))}
 
