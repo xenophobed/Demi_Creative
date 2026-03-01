@@ -7,6 +7,7 @@ import apiClient from '../client'
 // ---- Types ----
 
 export type LibraryItemType = 'art-story' | 'interactive' | 'news'
+export type LibrarySortOrder = 'newest' | 'oldest' | 'word_count'
 
 export interface LibraryItem {
   id: string
@@ -51,6 +52,7 @@ export const libraryService = {
    */
   async getLibrary(params?: {
     type?: LibraryItemType
+    sort?: LibrarySortOrder
     limit?: number
     offset?: number
   }): Promise<LibraryResponse> {
@@ -64,6 +66,7 @@ export const libraryService = {
   async searchLibrary(params: {
     q: string
     type?: LibraryItemType
+    sort?: LibrarySortOrder
     limit?: number
     offset?: number
   }): Promise<LibraryResponse> {

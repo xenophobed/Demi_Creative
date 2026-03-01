@@ -10,7 +10,7 @@ import useAuthStore from '@/store/useAuthStore'
 import useChildStore from '@/store/useChildStore'
 import { storyService } from '@/api/services/storyService'
 import { libraryService } from '@/api/services/libraryService'
-import type { LibraryItem, LibraryItemType } from '@/api/services/libraryService'
+import type { LibraryItem, LibraryItemType, LibrarySortOrder } from '@/api/services/libraryService'
 import SafetyBadge from '@/components/story/SafetyBadge'
 import type { NewsToKidsResponse } from '@/types/api'
 
@@ -22,6 +22,12 @@ const TABS: { id: ContentTab; label: string; icon: React.ReactNode }[] = [
   { id: 'art-stories', label: 'Art Stories', icon: <Palette size={16} /> },
   { id: 'interactive', label: 'Interactive', icon: <Map size={16} /> },
   { id: 'news', label: 'News', icon: <Newspaper size={16} /> },
+]
+
+const SORT_OPTIONS: { value: LibrarySortOrder; label: string }[] = [
+  { value: 'newest', label: 'Newest First' },
+  { value: 'oldest', label: 'Oldest First' },
+  { value: 'word_count', label: 'Longest First' },
 ]
 
 function tabToApiType(tab: ContentTab): LibraryItemType | undefined {
@@ -364,15 +370,17 @@ function InteractiveStoryCard({
 
 function NewsCard({
   item,
+  onClick,
   showFavorite,
   onFavoriteToggled,
 }: {
   item: LibraryItem
+  onClick: () => void
   showFavorite: boolean
   onFavoriteToggled?: () => void
 }) {
   return (
-    <Card>
+    <Card className="cursor-pointer" onClick={onClick}>
       <div className="flex gap-4">
         {/* Icon */}
         <div className="flex-shrink-0 w-20 h-20 rounded-lg bg-gradient-to-br from-accent/20 via-primary/10 to-secondary/20 flex items-center justify-center">
@@ -458,6 +466,7 @@ function LibraryPage() {
   const { currentChild, defaultChildId } = useChildStore()
 
   const [activeTab, setActiveTab] = useState<ContentTab>('all')
+  const [sortOrder, setSortOrder] = useState<LibrarySortOrder>('newest')
   const [searchQuery, setSearchQuery] = useState('')
   const [pageSize] = useState(20)
   const [offset, setOffset] = useState(0)
@@ -465,10 +474,10 @@ function LibraryPage() {
   const childId = currentChild?.child_id || defaultChildId
   const isSearching = searchQuery.length >= 2
 
-  // Reset offset when tab or search changes
+  // Reset offset when tab, sort, or search changes
   useEffect(() => {
     setOffset(0)
-  }, [activeTab, searchQuery])
+  }, [activeTab, sortOrder, searchQuery])
 
   // ---- data fetching (#61 — unified API for authenticated users) ----
 
@@ -479,10 +488,11 @@ function LibraryPage() {
     data: libraryData,
     isLoading: libraryLoading,
   } = useQuery({
-    queryKey: ['library', activeTab, offset, pageSize],
+    queryKey: ['library', activeTab, sortOrder, offset, pageSize],
     queryFn: () =>
       libraryService.getLibrary({
         type: apiType,
+        sort: sortOrder,
         limit: pageSize,
         offset,
       }),
@@ -494,11 +504,12 @@ function LibraryPage() {
     data: searchData,
     isLoading: searchLoading,
   } = useQuery({
-    queryKey: ['library-search', searchQuery, activeTab, offset],
+    queryKey: ['library-search', searchQuery, activeTab, sortOrder, offset],
     queryFn: () =>
       libraryService.searchLibrary({
         q: searchQuery,
         type: apiType,
+        sort: sortOrder,
         limit: pageSize,
         offset,
       }),
@@ -550,6 +561,8 @@ function LibraryPage() {
       navigate(`/story/${item.id}`)
     } else if (item.type === 'interactive') {
       navigate(`/interactive?session=${item.id}`)
+    } else if (item.type === 'news') {
+      navigate(`/news`)
     }
   }
 
@@ -608,29 +621,43 @@ function LibraryPage() {
         <SearchBar onSearch={handleSearch} isLoading={searchLoading} />
       </motion.div>
 
-      {/* Tab bar */}
+      {/* Tab bar + sort dropdown (#65) */}
       <motion.div
-        className="flex gap-2 overflow-x-auto pb-1"
+        className="flex items-center justify-between gap-2"
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1 }}
       >
-        {TABS.map((tab) => (
-          <motion.button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={`flex items-center gap-1.5 px-4 py-2 rounded-btn font-medium whitespace-nowrap transition-colors ${
-              activeTab === tab.id
-                ? 'bg-primary text-white shadow-button'
-                : 'text-gray-600 bg-white/70 hover:bg-gray-100'
-            }`}
-            whileHover={{ scale: 1.03 }}
-            whileTap={{ scale: 0.97 }}
-          >
-            {tab.icon}
-            <span>{tab.label}</span>
-          </motion.button>
-        ))}
+        <div className="flex gap-2 overflow-x-auto pb-1">
+          {TABS.map((tab) => (
+            <motion.button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-btn font-medium whitespace-nowrap transition-colors ${
+                activeTab === tab.id
+                  ? 'bg-primary text-white shadow-button'
+                  : 'text-gray-600 bg-white/70 hover:bg-gray-100'
+              }`}
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
+            >
+              {tab.icon}
+              <span>{tab.label}</span>
+            </motion.button>
+          ))}
+        </div>
+
+        <select
+          value={sortOrder}
+          onChange={(e) => setSortOrder(e.target.value as LibrarySortOrder)}
+          className="flex-shrink-0 text-sm px-3 py-2 rounded-btn bg-white/80 border border-gray-200 text-gray-600 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none cursor-pointer"
+        >
+          {SORT_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
       </motion.div>
 
       {/* Loading indicator */}
@@ -675,6 +702,7 @@ function LibraryPage() {
                 {item.type === 'news' && (
                   <NewsCard
                     item={item}
+                    onClick={() => handleItemClick(item)}
                     showFavorite={isAuthenticated}
                     onFavoriteToggled={handleFavoriteToggled}
                   />

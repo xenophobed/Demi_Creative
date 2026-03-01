@@ -536,6 +536,13 @@ class LibraryItemType(str, Enum):
     NEWS = "news"
 
 
+class LibrarySortOrder(str, Enum):
+    """Library sort order (#83)"""
+    NEWEST = "newest"
+    OLDEST = "oldest"
+    WORD_COUNT = "word_count"
+
+
 class LibraryItem(BaseModel):
     """Unified library item returned by the library API."""
     id: str = Field(..., description="Item ID")

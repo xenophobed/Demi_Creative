@@ -4,7 +4,7 @@ Library API Routes
 Unified content library endpoints: browse, search, and favorite management.
 Aggregates stories, interactive sessions, and news into a single API.
 
-Implements: #58, #59, #60
+Implements: #58, #59, #60, #81, #83, #84
 """
 
 import json
@@ -16,6 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from ..models import (
     LibraryItemType,
+    LibrarySortOrder,
     LibraryItem,
     LibraryResponse,
     FavoriteRequest,
@@ -26,6 +27,8 @@ from ..deps import get_current_user
 from ...services.user_service import UserData
 from ...services.database import story_repo, session_repo, favorite_repo
 
+# Content safety threshold — items below this score are hidden (#81)
+SAFETY_THRESHOLD = 0.85
 
 router = APIRouter(
     prefix="/api/v1/library",
@@ -55,6 +58,10 @@ def _story_to_library_item(story: dict, is_favorited: bool = False) -> LibraryIt
     # Compute word count from actual text to ensure accuracy (#76)
     word_count = count_words(text)
 
+    # Extract news category from analysis metadata (#84)
+    analysis = story.get("analysis", {})
+    category = analysis.get("category") if item_type == LibraryItemType.NEWS else None
+
     return LibraryItem(
         id=story["story_id"],
         type=item_type,
@@ -67,7 +74,15 @@ def _story_to_library_item(story: dict, is_favorited: bool = False) -> LibraryIt
         safety_score=story.get("safety_score"),
         word_count=word_count,
         themes=ed_value.get("themes", []),
+        category=category,
     )
+
+
+def _is_safe(item: LibraryItem) -> bool:
+    """Return True if the item passes safety threshold (#81)."""
+    if item.safety_score is None:
+        return True  # No score = not yet checked, allow through
+    return item.safety_score >= SAFETY_THRESHOLD
 
 
 def _session_to_library_item(session, is_favorited: bool = False) -> LibraryItem:
@@ -106,6 +121,16 @@ def _extract_title(text: str, max_len: int = 35) -> str:
     return text[:max_len] + ("..." if len(text) > max_len else "")
 
 
+def _sort_items(items: List[LibraryItem], sort: LibrarySortOrder) -> None:
+    """Sort items in-place according to the requested order (#83)."""
+    if sort == LibrarySortOrder.OLDEST:
+        items.sort(key=lambda x: x.created_at)
+    elif sort == LibrarySortOrder.WORD_COUNT:
+        items.sort(key=lambda x: x.word_count or 0, reverse=True)
+    else:  # NEWEST (default)
+        items.sort(key=lambda x: x.created_at, reverse=True)
+
+
 # ============================================================================
 # GET /api/v1/library — Unified library endpoint (#58)
 # ============================================================================
@@ -119,6 +144,7 @@ def _extract_title(text: str, max_len: int = 35) -> str:
 )
 async def get_library(
     type: Optional[LibraryItemType] = Query(None, description="Filter by content type"),
+    sort: LibrarySortOrder = Query(LibrarySortOrder.NEWEST, description="Sort order"),
     limit: int = Query(20, ge=1, le=100, description="Items per page"),
     offset: int = Query(0, ge=0, description="Pagination offset"),
     user: UserData = Depends(get_current_user),
@@ -146,6 +172,9 @@ async def get_library(
             # Apply type filter
             if type is not None and item.type != type:
                 continue
+            # Apply safety filter (#81)
+            if not _is_safe(item):
+                continue
             all_items.append(item)
 
     # Fetch interactive sessions
@@ -161,8 +190,8 @@ async def get_library(
                 _session_to_library_item(s, is_favorited=s.session_id in fav_session_ids)
             )
 
-    # Sort by created_at descending
-    all_items.sort(key=lambda x: x.created_at, reverse=True)
+    # Sort (#83)
+    _sort_items(all_items, sort)
 
     total = len(all_items)
     paginated = all_items[offset:offset + limit]
@@ -192,6 +221,7 @@ async def get_library(
 async def search_library(
     q: str = Query(..., min_length=1, max_length=200, description="Search query"),
     type: Optional[LibraryItemType] = Query(None, description="Filter by content type"),
+    sort: LibrarySortOrder = Query(LibrarySortOrder.NEWEST, description="Sort order"),
     limit: int = Query(20, ge=1, le=100, description="Items per page"),
     offset: int = Query(0, ge=0, description="Pagination offset"),
     user: UserData = Depends(get_current_user),
@@ -219,6 +249,9 @@ async def search_library(
             # Apply type filter
             if type is not None and item.type != type:
                 continue
+            # Apply safety filter (#81)
+            if not _is_safe(item):
+                continue
 
             text = s.get("story", {}).get("text", "")
             themes = json.dumps(s.get("educational_value", {}).get("themes", []))
@@ -243,7 +276,8 @@ async def search_library(
                     _session_to_library_item(s, is_favorited=s.session_id in fav_ids)
                 )
 
-    all_items.sort(key=lambda x: x.created_at, reverse=True)
+    # Sort (#83)
+    _sort_items(all_items, sort)
 
     total = len(all_items)
     paginated = all_items[offset:offset + limit]
