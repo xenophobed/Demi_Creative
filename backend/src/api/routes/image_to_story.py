@@ -48,6 +48,7 @@ router = APIRouter(
 # Configuration
 # ============================================================================
 from ...paths import UPLOAD_DIR
+from ...utils.text import count_words
 
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -309,7 +310,7 @@ async def create_story_from_image(
 
         # Extract story text
         story_text = result.get("story", "")
-        word_count = len(story_text.split())
+        word_count = count_words(story_text)
 
         # Extract educational value
         educational_value = EducationalValue(
@@ -592,7 +593,7 @@ async def create_story_from_image_stream(
 
                     # Extract story text
                     story_text = result_data.get("story", "")
-                    word_count = len(story_text.split())
+                    word_count = count_words(story_text)
 
                     # Handle audio URL from agent result
                     audio_url = None

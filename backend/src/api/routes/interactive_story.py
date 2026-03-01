@@ -39,6 +39,7 @@ from ...agents.interactive_story_agent import (
     AGE_CONFIG
 )
 from ...utils.audio_strategy import get_audio_strategy
+from ...utils.text import count_words
 
 
 router = APIRouter(
@@ -700,7 +701,7 @@ async def save_interactive_story(
             "age_group": session.age_group,
             "story": {
                 "text": full_text,
-                "word_count": len(full_text.split()),
+                "word_count": count_words(full_text),
                 "age_adapted": True,
             },
             "educational_value": {
