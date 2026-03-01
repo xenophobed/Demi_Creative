@@ -11,6 +11,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import AsyncGenerator
 
+from ...utils.text import count_words
+
 from fastapi import APIRouter, Depends, HTTPException, status, Path as PathParam
 from fastapi.responses import JSONResponse, StreamingResponse
 
@@ -633,7 +635,7 @@ async def save_interactive_story(
             "age_group": session.age_group,
             "story": {
                 "text": full_text,
-                "word_count": len(full_text.split()),
+                "word_count": count_words(full_text),
                 "age_adapted": True,
             },
             "educational_value": {

@@ -8,8 +8,9 @@ Implements: #58, #59, #60
 """
 
 import json
-import re
 from typing import Optional, List
+
+from ...utils.text import count_words
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
@@ -52,7 +53,7 @@ def _story_to_library_item(story: dict, is_favorited: bool = False) -> LibraryIt
     item_type = _resolve_story_type(story)
 
     # Compute word count from actual text to ensure accuracy (#76)
-    word_count = _count_words(text)
+    word_count = count_words(text)
 
     return LibraryItem(
         id=story["story_id"],
@@ -103,24 +104,6 @@ def _extract_title(text: str, max_len: int = 35) -> str:
         if 0 < idx < max_len:
             return text[:idx]
     return text[:max_len] + ("..." if len(text) > max_len else "")
-
-
-# CJK Unicode ranges for word counting
-_CJK_RE = re.compile(
-    r'[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff'
-    r'\U00020000-\U0002a6df\U0002a700-\U0002b73f'
-    r'\U0002b740-\U0002b81f\U0002b820-\U0002ceaf]'
-)
-
-
-def _count_words(text: str) -> int:
-    """Count words, handling both CJK (character = word) and Latin (space-separated)."""
-    if not text:
-        return 0
-    cjk_chars = len(_CJK_RE.findall(text))
-    non_cjk = _CJK_RE.sub('', text)
-    latin_words = len(non_cjk.split())
-    return cjk_chars + latin_words
 
 
 # ============================================================================

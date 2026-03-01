@@ -222,6 +222,7 @@ async def init_schema(db: "DatabaseManager") -> None:
     # Run migrations FIRST to add user_id columns if they don't exist
     await _migrate_add_user_id(db)
     await _migrate_add_story_type(db)
+    await _migrate_backfill_word_counts(db)
 
     # Now create all indexes (including user_id indexes) after migration
     for stmt in STORIES_INDEXES.strip().split(";"):
@@ -289,6 +290,32 @@ async def _migrate_add_story_type(db: "DatabaseManager") -> None:
     if 'story_type' not in stories_columns:
         await db.execute("ALTER TABLE stories ADD COLUMN story_type TEXT DEFAULT 'image_to_story'")
         await db.commit()
+
+
+async def _migrate_backfill_word_counts(db: "DatabaseManager") -> None:
+    """Migration: Recompute word counts for CJK text (#78).
+
+    The original word count used len(text.split()) which produces wrong results
+    for Chinese/Japanese/Korean text. This migration recomputes word counts
+    using the CJK-aware count_words utility.
+    """
+    from ...utils.text import count_words
+
+    rows = await db.fetchall(
+        "SELECT story_id, story_text, word_count FROM stories WHERE story_text != ''"
+    )
+    updated = 0
+    for row in rows:
+        correct = count_words(row['story_text'])
+        if correct != row['word_count']:
+            await db.execute(
+                "UPDATE stories SET word_count = ? WHERE story_id = ?",
+                (correct, row['story_id'])
+            )
+            updated += 1
+    if updated > 0:
+        await db.commit()
+        print(f"📝 Backfilled word counts for {updated} stories")
 
 
 # ============================================================================

@@ -11,6 +11,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import AsyncGenerator
 
+from ...utils.text import count_words
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 
@@ -83,7 +85,7 @@ async def convert_news(
             "age_group": request.age_group.value,
             "story": {
                 "text": result.get("kid_content", ""),
-                "word_count": len(result.get("kid_content", "").split()),
+                "word_count": count_words(result.get("kid_content", "")),
                 "age_adapted": True,
             },
             "educational_value": {
@@ -206,7 +208,7 @@ async def convert_news_stream(
                         "age_group": request.age_group.value,
                         "story": {
                             "text": event_data.get("kid_content", ""),
-                            "word_count": len(event_data.get("kid_content", "").split()),
+                            "word_count": count_words(event_data.get("kid_content", "")),
                             "age_adapted": True,
                         },
                         "educational_value": {
