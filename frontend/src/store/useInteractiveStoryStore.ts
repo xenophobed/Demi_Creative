@@ -6,6 +6,7 @@ import type {
   EducationalValue,
   InteractiveStoryStartResponse,
   ChoiceResponse,
+  SessionResumeResponse,
   SSEStatusData,
   SSEThinkingData,
 } from '@/types/api'
@@ -38,6 +39,7 @@ interface InteractiveStoryState {
   // Actions
   setSession: (response: InteractiveStoryStartResponse, ageGroup?: AgeGroup) => void
   addSegment: (response: ChoiceResponse) => void
+  restoreSession: (response: SessionResumeResponse) => void
   complete: (summary: EducationalValue) => void
   setAgeGroup: (ageGroup: AgeGroup) => void
   reset: () => void
@@ -98,6 +100,22 @@ const useInteractiveStoryStore = create<InteractiveStoryState>()(
           progress: response.progress,
           streaming: initialStreamingState,
         }))
+      },
+
+      restoreSession: (response) => {
+        const lastSegment = response.segments[response.segments.length - 1] || null
+        set({
+          sessionId: response.session_id,
+          storyTitle: response.story_title,
+          ageGroup: response.age_group,
+          currentSegment: lastSegment,
+          segments: response.segments,
+          choiceHistory: response.choice_history,
+          progress: response.progress,
+          status: response.status === 'completed' ? 'completed' : 'playing',
+          educationalSummary: response.educational_summary,
+          streaming: initialStreamingState,
+        })
       },
 
       complete: (summary) => {

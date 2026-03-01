@@ -40,6 +40,7 @@ interface UseInteractiveStoryReturn {
   startStoryStream: (params: InteractiveStoryStartRequest) => Promise<void>
   makeChoice: (choiceId: string) => Promise<void>
   makeChoiceStream: (choiceId: string) => Promise<void>
+  resumeSession: (sessionId: string) => Promise<void>
   reset: () => void
 }
 
@@ -59,6 +60,7 @@ export function useInteractiveStory(): UseInteractiveStoryReturn {
     streaming,
     setSession,
     addSegment,
+    restoreSession,
     complete,
     setAgeGroup,
     reset: resetStore,
@@ -266,6 +268,26 @@ export function useInteractiveStory(): UseInteractiveStoryReturn {
     [sessionId, addSegment, complete, startStreaming, updateStreamStatus, updateThinking, stopStreaming]
   )
 
+  const resumeSession = useCallback(
+    async (resumeSessionId: string) => {
+      setIsLoading(true)
+      setError(null)
+
+      try {
+        const response = await storyService.resumeSession(resumeSessionId)
+        restoreSession(response)
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : 'Failed to resume story'
+        setError(message)
+        throw err
+      } finally {
+        setIsLoading(false)
+      }
+    },
+    [restoreSession]
+  )
+
   const reset = useCallback(() => {
     resetStore()
     setError(null)
@@ -287,6 +309,7 @@ export function useInteractiveStory(): UseInteractiveStoryReturn {
     startStoryStream,
     makeChoice,
     makeChoiceStream,
+    resumeSession,
     reset,
   }
 }

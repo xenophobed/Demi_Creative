@@ -6,6 +6,7 @@ import type {
   ChoiceRequest,
   ChoiceResponse,
   SessionStatusResponse,
+  SessionResumeResponse,
   HealthCheckResponse,
   AgeGroup,
   VoiceType,
@@ -166,6 +167,16 @@ export const storyService = {
   async getSessionStatus(sessionId: string): Promise<SessionStatusResponse> {
     const response = await apiClient.get<SessionStatusResponse>(
       `/story/interactive/${sessionId}/status`
+    )
+    return response.data
+  },
+
+  /**
+   * Resume an interactive story session (fetch full segment data)
+   */
+  async resumeSession(sessionId: string): Promise<SessionResumeResponse> {
+    const response = await apiClient.get<SessionResumeResponse>(
+      `/story/interactive/${sessionId}/resume`
     )
     return response.data
   },

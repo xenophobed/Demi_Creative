@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import Button from '@/components/common/Button'
 import Card from '@/components/common/Card'
@@ -28,6 +28,7 @@ const AGE_GROUPS: { value: AgeGroup; label: string; emoji: string }[] = [
 
 function InteractiveStoryPage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const { defaultChildId } = useChildStore()
 
   // Local form state
@@ -50,6 +51,7 @@ function InteractiveStoryPage() {
     streaming,
     startStoryStream,
     makeChoiceStream,
+    resumeSession,
     reset,
   } = useInteractiveStory()
 
@@ -77,30 +79,45 @@ function InteractiveStoryPage() {
   // Save state
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
 
-  // Validate persisted session on mount — if backend says expired/invalid, reset
+  // Resume from URL ?session= param (e.g. from My Library card click)
+  // or validate persisted session on mount
   const storeStatus = useInteractiveStoryStore((s) => s.status)
-  const [isValidating, setIsValidating] = useState(false)
+  const [isResuming, setIsResuming] = useState(false)
   useEffect(() => {
-    if (!sessionId || storeStatus === 'completed' || storeStatus === 'idle') return
-    let cancelled = false
-    setIsValidating(true)
-    storyService
-      .getSessionStatus(sessionId)
-      .then((res) => {
-        if (cancelled) return
-        // Session expired or completed on backend — reset frontend
-        if (res.status !== 'active') {
-          reset()
-        }
-      })
-      .catch(() => {
-        // Session not found on backend (404) — reset
-        if (!cancelled) reset()
-      })
-      .finally(() => {
-        if (!cancelled) setIsValidating(false)
-      })
-    return () => { cancelled = true }
+    const urlSessionId = searchParams.get('session')
+
+    // Case 1: URL has ?session= — resume from backend
+    if (urlSessionId && urlSessionId !== sessionId) {
+      let cancelled = false
+      setIsResuming(true)
+      resumeSession(urlSessionId)
+        .catch(() => {
+          // Session not found or expired — stay on setup page
+        })
+        .finally(() => {
+          if (!cancelled) setIsResuming(false)
+        })
+      return () => { cancelled = true }
+    }
+
+    // Case 2: No URL session but store has an active session — validate it
+    if (!urlSessionId && sessionId && storeStatus === 'playing') {
+      let cancelled = false
+      setIsResuming(true)
+      storyService
+        .getSessionStatus(sessionId)
+        .then((res) => {
+          if (cancelled) return
+          if (res.status !== 'active') reset()
+        })
+        .catch(() => {
+          if (!cancelled) reset()
+        })
+        .finally(() => {
+          if (!cancelled) setIsResuming(false)
+        })
+      return () => { cancelled = true }
+    }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Track segment changes for reveal animation
@@ -144,9 +161,9 @@ function InteractiveStoryPage() {
     }
   }, [isCompleted, triggerConfetti])
 
-  // Determine page state — show setup while validating a stale session
+  // Determine page state — show setup while resuming/validating
   const getPageState = (): PageState => {
-    if (isValidating) return 'setup'
+    if (isResuming) return 'setup'
     if (isCompleted) return 'completed'
     if (currentSegment) return 'playing'
     return 'setup'
