@@ -112,7 +112,7 @@ const useInteractiveStoryStore = create<InteractiveStoryState>()(
           segments: response.segments,
           choiceHistory: response.choice_history,
           progress: response.progress,
-          status: response.status === 'completed' ? 'completed' : 'playing',
+          status: (response.status === 'completed' || response.status === 'expired') ? 'completed' : 'playing',
           educationalSummary: response.educational_summary,
           streaming: initialStreamingState,
         })
