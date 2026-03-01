@@ -7,7 +7,7 @@ Supports streaming responses (SSE) for a better user experience
 
 import json
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import AsyncGenerator
 
@@ -563,6 +563,17 @@ async def resume_session(
     """
     try:
         session = await get_session_for_owner(session_id, user.user_id)
+
+        # Reactivate expired sessions so the user can continue playing
+        if session.status == "expired":
+            new_expiry = (datetime.now() + timedelta(hours=24)).isoformat()
+            await session_repo.update_session(session_id, status="active")
+            await session_repo._db.execute(
+                "UPDATE sessions SET expires_at = ? WHERE session_id = ?",
+                (new_expiry, session_id)
+            )
+            await session_repo._db.commit()
+            session.status = "active"
 
         # Parse stored segments into StorySegment models
         segments = []

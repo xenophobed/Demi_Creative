@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { BookOpen, Palette, Map, Newspaper, Compass, Globe } from 'lucide-react'
+import { BookOpen, Palette, Map, Newspaper, Compass, Globe, ChevronRight } from 'lucide-react'
 import Button from '@/components/common/Button'
 import Card from '@/components/common/Card'
 import useStoryStore from '@/store/useStoryStore'
@@ -11,7 +11,6 @@ import useChildStore from '@/store/useChildStore'
 import { storyService } from '@/api/services/storyService'
 import { libraryService } from '@/api/services/libraryService'
 import type { LibraryItem, LibraryItemType, LibrarySortOrder } from '@/api/services/libraryService'
-import SafetyBadge from '@/components/story/SafetyBadge'
 import { useLibraryPreferences } from '@/hooks/useLibraryPreferences'
 import MiniPlayer from '@/components/common/MiniPlayer'
 import { getAgeLayoutConfig } from '@/config/ageConfig'
@@ -240,9 +239,39 @@ function DeleteButton({ onDelete }: { onDelete: () => void }) {
   )
 }
 
-// ---- subcomponents ----
+// ---- card config ----
 
-function ArtStoryCard({
+const CARD_STYLES: Record<LibraryItemType, {
+  icon: React.ReactNode
+  gradient: string
+  badgeColor: string
+}> = {
+  'art-story': {
+    icon: <Palette size={28} className="text-primary/60" strokeWidth={1.5} />,
+    gradient: 'from-primary/20 via-secondary/10 to-accent/20',
+    badgeColor: 'bg-primary/10 text-primary',
+  },
+  interactive: {
+    icon: <Compass size={28} className="text-secondary/60" strokeWidth={1.5} />,
+    gradient: 'from-secondary/20 via-accent/10 to-primary/20',
+    badgeColor: 'bg-secondary/10 text-secondary',
+  },
+  news: {
+    icon: <Globe size={28} className="text-accent/60" strokeWidth={1.5} />,
+    gradient: 'from-accent/20 via-primary/10 to-secondary/20',
+    badgeColor: 'bg-accent/10 text-accent',
+  },
+}
+
+const STATUS_COLORS: Record<string, string> = {
+  completed: 'bg-green-100 text-green-700',
+  expired: 'bg-gray-100 text-gray-500',
+  active: 'bg-blue-100 text-blue-700',
+}
+
+// ---- unified card ----
+
+function LibraryCard({
   item,
   onClick,
   onDelete,
@@ -259,288 +288,117 @@ function ArtStoryCard({
 }) {
   const [imgError, setImgError] = useState(false)
   const imgSrc = (item as any).thumbnail_url || item.image_url
+  const style = CARD_STYLES[item.type]
+  const badge = TYPE_BADGE[item.type]
+  const progress = item.progress ?? 0
+
+  // Badge label: use category for news, status badge for interactive
+  const badgeLabel =
+    item.type === 'news' && item.category
+      ? item.category.charAt(0).toUpperCase() + item.category.slice(1)
+      : badge.label
 
   return (
-    <Card className="cursor-pointer" onClick={onClick}>
-      <div className="flex gap-4">
-        {/* Thumbnail */}
-        <div className="flex-shrink-0 w-20 h-20 rounded-lg bg-gradient-to-br from-primary/20 via-secondary/10 to-accent/20 flex items-center justify-center overflow-hidden">
+    <Card className="cursor-pointer h-full" padding="sm" onClick={onClick}>
+      <div className="flex gap-3 h-full">
+        {/* Thumbnail / Icon */}
+        <div className={`flex-shrink-0 w-16 h-16 rounded-lg bg-gradient-to-br ${style.gradient} flex items-center justify-center overflow-hidden`}>
           {imgSrc && !imgError ? (
             <img
               src={imgSrc.startsWith('/') ? imgSrc : '/' + imgSrc}
-              alt="Artwork"
+              alt=""
               className="w-full h-full object-cover"
               onError={() => setImgError(true)}
             />
           ) : (
-            <motion.div
-              whileHover={{ rotate: [0, -10, 10, 0] }}
-              transition={{ duration: 0.5 }}
-            >
-              <Palette size={36} className="text-primary/60" strokeWidth={1.5} />
-            </motion.div>
+            style.icon
           )}
         </div>
 
-        {/* Content */}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0 flex-1">
-              <span className="text-xs font-medium px-2 py-0.5 bg-primary/10 text-primary rounded-full mb-1 inline-block">
-                Art Story
-              </span>
-              <h3 className="font-bold text-gray-800 truncate">{item.title}</h3>
+        {/* Content column */}
+        <div className="flex-1 min-w-0 flex flex-col">
+          {/* Row 1: Badge + Title + Actions */}
+          <div className="flex items-start gap-2">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-1.5 mb-0.5">
+                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full leading-none ${style.badgeColor}`}>
+                  {badgeLabel}
+                </span>
+                {item.type === 'interactive' && item.status && (
+                  <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full leading-none ${STATUS_COLORS[item.status] || STATUS_COLORS.active}`}>
+                    {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
+                  </span>
+                )}
+              </div>
+              <h3 className="text-sm font-bold text-gray-800 truncate leading-tight">{item.title}</h3>
             </div>
-            <div className="flex items-center gap-2 flex-shrink-0">
-              {item.safety_score !== undefined && (
-                <SafetyBadge score={item.safety_score} />
-              )}
+            <div className="flex items-center gap-1 flex-shrink-0">
               {showFavorite && (
                 <FavoriteButton
                   itemId={item.id}
-                  itemType="art-story"
+                  itemType={item.type}
                   isFavorited={item.is_favorited}
                   onToggled={onFavoriteToggled}
                 />
               )}
+              <DeleteButton onDelete={onDelete} />
             </div>
           </div>
 
-          <p className="text-gray-500 text-sm mt-1 line-clamp-2">
-            {truncatePreview(item.preview)}
-          </p>
+          {/* Row 2: Preview text OR Progress bar */}
+          {item.type === 'interactive' ? (
+            <div className="mt-1.5">
+              <div className="flex items-center justify-between text-[10px] text-gray-500 mb-1">
+                <span>Progress</span>
+                <span>{progress}%</span>
+              </div>
+              <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                <motion.div
+                  className="h-full bg-secondary rounded-full"
+                  initial={{ width: 0 }}
+                  animate={{ width: `${progress}%` }}
+                  transition={{ duration: 0.6, ease: 'easeOut' }}
+                />
+              </div>
+            </div>
+          ) : item.preview ? (
+            <p className="text-gray-500 text-xs mt-1 line-clamp-2 leading-relaxed">
+              {truncatePreview(item.preview)}
+            </p>
+          ) : null}
 
-          <div className="flex items-center gap-4 mt-2 text-xs text-gray-400">
-            {showWordCount && item.word_count !== undefined && (
-              <span className="flex items-center gap-1">
-                <span>📝</span>
-                {item.word_count} words
-              </span>
-            )}
-            <span className="flex items-center gap-1">
-              <span>🕐</span>
-              {formatDate(item.created_at)}
-            </span>
-          </div>
-
+          {/* Row 3: Theme tags (art-story only) */}
           {item.themes && item.themes.length > 0 && (
-            <div className="flex flex-wrap gap-1 mt-2">
+            <div className="flex flex-wrap gap-1 mt-1.5">
               {item.themes.slice(0, 3).map((theme) => (
                 <span
                   key={theme}
-                  className="text-xs px-2 py-0.5 bg-primary/10 text-primary rounded-full"
+                  className="text-[10px] px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded-full leading-none"
                 >
                   {theme}
                 </span>
               ))}
             </div>
           )}
-        </div>
 
-        {/* Actions */}
-        <div className="flex-shrink-0 flex flex-col items-center justify-between py-1">
-          <DeleteButton onDelete={onDelete} />
-          {item.audio_url && (
-            <MiniPlayer itemId={item.id} audioUrl={item.audio_url} />
-          )}
-          <motion.span
-            className="text-gray-400"
-            animate={{ x: [0, 4, 0] }}
-            transition={{ duration: 1.5, repeat: Infinity }}
-          >
-            →
-          </motion.span>
-        </div>
-      </div>
-    </Card>
-  )
-}
+          {/* Spacer pushes footer to bottom */}
+          <div className="flex-1 min-h-1" />
 
-function InteractiveStoryCard({
-  item,
-  onClick,
-  onDelete,
-  showFavorite,
-  onFavoriteToggled,
-}: {
-  item: LibraryItem
-  onClick: () => void
-  onDelete: () => void
-  showFavorite: boolean
-  onFavoriteToggled?: () => void
-}) {
-  const progress = item.progress ?? 0
-
-  return (
-    <Card className="cursor-pointer" onClick={onClick}>
-      <div className="flex gap-4">
-        {/* Icon */}
-        <div className="flex-shrink-0 w-20 h-20 rounded-lg bg-gradient-to-br from-secondary/20 via-accent/10 to-primary/20 flex items-center justify-center">
-          <motion.div
-            whileHover={{ scale: 1.1 }}
-            transition={{ duration: 0.3 }}
-          >
-            <Compass size={36} className="text-secondary/60" strokeWidth={1.5} />
-          </motion.div>
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0 flex-1">
-              <span className="text-xs font-medium px-2 py-0.5 bg-secondary/10 text-secondary rounded-full mb-1 inline-block">
-                Interactive Story
-              </span>
-              <h3 className="font-bold text-gray-800 truncate">{item.title}</h3>
-            </div>
-            <div className="flex items-center gap-2 flex-shrink-0">
-              {item.status && (
-                <span
-                  className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                    item.status === 'completed'
-                      ? 'bg-green-100 text-green-700'
-                      : item.status === 'expired'
-                      ? 'bg-gray-100 text-gray-500'
-                      : 'bg-blue-100 text-blue-700'
-                  }`}
-                >
-                  {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
-                </span>
+          {/* Row 4: Footer — meta left, audio + chevron right */}
+          <div className="flex items-center justify-between mt-1.5 pt-1.5 border-t border-gray-50">
+            <div className="flex items-center gap-3 text-[10px] text-gray-400">
+              {showWordCount && item.word_count !== undefined && item.word_count > 0 && (
+                <span>{item.word_count}w</span>
               )}
-              {showFavorite && (
-                <FavoriteButton
-                  itemId={item.id}
-                  itemType="interactive"
-                  isFavorited={item.is_favorited}
-                  onToggled={onFavoriteToggled}
-                />
+              <span>{new Date(item.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              {item.audio_url && (
+                <MiniPlayer itemId={item.id} audioUrl={item.audio_url} />
               )}
+              <ChevronRight size={14} className="text-gray-300" />
             </div>
           </div>
-
-          {/* Progress bar */}
-          <div className="mt-2">
-            <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
-              <span>Progress</span>
-              <span>{progress}%</span>
-            </div>
-            <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-              <motion.div
-                className="h-full bg-secondary rounded-full"
-                initial={{ width: 0 }}
-                animate={{ width: `${progress}%` }}
-                transition={{ duration: 0.6, ease: 'easeOut' }}
-              />
-            </div>
-          </div>
-
-          <div className="flex items-center gap-4 mt-2 text-xs text-gray-400">
-            <span className="flex items-center gap-1">
-              <span>🕐</span>
-              {formatDate(item.created_at)}
-            </span>
-          </div>
-        </div>
-
-        {/* Actions */}
-        <div className="flex-shrink-0 flex flex-col items-center justify-between py-1">
-          <DeleteButton onDelete={onDelete} />
-          <motion.span
-            className="text-gray-400"
-            animate={{ x: [0, 4, 0] }}
-            transition={{ duration: 1.5, repeat: Infinity }}
-          >
-            →
-          </motion.span>
-        </div>
-      </div>
-    </Card>
-  )
-}
-
-function NewsCard({
-  item,
-  onClick,
-  onDelete,
-  showFavorite,
-  onFavoriteToggled,
-}: {
-  item: LibraryItem
-  onClick: () => void
-  onDelete: () => void
-  showFavorite: boolean
-  onFavoriteToggled?: () => void
-}) {
-  return (
-    <Card className="cursor-pointer" onClick={onClick}>
-      <div className="flex gap-4">
-        {/* Icon */}
-        <div className="flex-shrink-0 w-20 h-20 rounded-lg bg-gradient-to-br from-accent/20 via-primary/10 to-secondary/20 flex items-center justify-center">
-          <motion.div
-            whileHover={{ rotate: [0, -5, 5, 0] }}
-            transition={{ duration: 0.5 }}
-          >
-            <Globe size={36} className="text-accent/60" strokeWidth={1.5} />
-          </motion.div>
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0 flex-1">
-              <span className="text-xs font-medium px-2 py-0.5 bg-accent/10 text-accent rounded-full mb-1 inline-block">
-                {item.category
-                  ? item.category.charAt(0).toUpperCase() + item.category.slice(1)
-                  : 'News'}
-              </span>
-              <h3 className="font-bold text-gray-800 truncate">{item.title}</h3>
-            </div>
-            <div className="flex items-center gap-2 flex-shrink-0">
-              {item.safety_score !== undefined && (
-                <SafetyBadge score={item.safety_score} />
-              )}
-              {showFavorite && (
-                <FavoriteButton
-                  itemId={item.id}
-                  itemType="news"
-                  isFavorited={item.is_favorited}
-                  onToggled={onFavoriteToggled}
-                />
-              )}
-            </div>
-          </div>
-
-          <p className="text-gray-500 text-sm mt-1 line-clamp-2">
-            {truncatePreview(item.preview)}
-          </p>
-
-          <div className="flex items-center gap-4 mt-2 text-xs text-gray-400">
-            {item.word_count !== undefined && item.word_count > 0 && (
-              <span className="flex items-center gap-1">
-                <span>📝</span>
-                {item.word_count} words
-              </span>
-            )}
-            <span className="flex items-center gap-1">
-              <span>🕐</span>
-              {formatDate(item.created_at)}
-            </span>
-          </div>
-        </div>
-
-        {/* Actions */}
-        <div className="flex-shrink-0 flex flex-col items-center justify-between py-1">
-          <DeleteButton onDelete={onDelete} />
-          {item.audio_url && (
-            <MiniPlayer itemId={item.id} audioUrl={item.audio_url} />
-          )}
-          <motion.span
-            className="text-gray-400"
-            animate={{ x: [0, 4, 0] }}
-            transition={{ duration: 1.5, repeat: Infinity }}
-          >
-            →
-          </motion.span>
         </div>
       </div>
     </Card>
@@ -894,36 +752,14 @@ function LibraryPage() {
                 {viewMode === 'list' ? (
                   <ListRow item={item} onClick={() => handleItemClick(item)} onDelete={() => setDeleteTarget(item)} />
                 ) : (
-                  <>
-                    {item.type === 'art-story' && (
-                      <ArtStoryCard
-                        item={item}
-                        onClick={() => handleItemClick(item)}
-                        onDelete={() => setDeleteTarget(item)}
-                        showFavorite={isAuthenticated}
-                        onFavoriteToggled={handleFavoriteToggled}
-                        showWordCount={ageLayout.showWordCount}
-                      />
-                    )}
-                    {item.type === 'interactive' && (
-                      <InteractiveStoryCard
-                        item={item}
-                        onClick={() => handleItemClick(item)}
-                        onDelete={() => setDeleteTarget(item)}
-                        showFavorite={isAuthenticated}
-                        onFavoriteToggled={handleFavoriteToggled}
-                      />
-                    )}
-                    {item.type === 'news' && (
-                      <NewsCard
-                        item={item}
-                        onClick={() => handleItemClick(item)}
-                        onDelete={() => setDeleteTarget(item)}
-                        showFavorite={isAuthenticated}
-                        onFavoriteToggled={handleFavoriteToggled}
-                      />
-                    )}
-                  </>
+                  <LibraryCard
+                    item={item}
+                    onClick={() => handleItemClick(item)}
+                    onDelete={() => setDeleteTarget(item)}
+                    showFavorite={isAuthenticated}
+                    onFavoriteToggled={handleFavoriteToggled}
+                    showWordCount={ageLayout.showWordCount}
+                  />
                 )}
               </motion.div>
             ))}
