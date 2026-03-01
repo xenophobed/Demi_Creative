@@ -163,6 +163,26 @@ class TestUnifiedLibraryEndpoint:
         # Items should come back in reverse chronological order
         pass
 
+    def test_excludes_items_below_safety_threshold(self):
+        """
+        Contract: Items with safety_score < 0.85 MUST NOT appear
+        in the response. Content safety is non-negotiable (#81).
+
+        Threshold: SAFETY_THRESHOLD = 0.85
+        - safety_score >= 0.85 → included
+        - safety_score < 0.85  → excluded
+        - safety_score is None → included (not yet checked)
+        """
+        pass
+
+    def test_safety_threshold_is_0_85(self):
+        """
+        Contract: The safety threshold constant MUST be exactly 0.85.
+        Matches CLAUDE.md rule: "Safety score threshold: >= 0.85"
+        """
+        from backend.src.api.routes.library import SAFETY_THRESHOLD
+        assert SAFETY_THRESHOLD == 0.85
+
     def test_includes_is_favorited_flag(self):
         """
         Contract: Each item has is_favorited=true/false based on
@@ -217,6 +237,13 @@ class TestLibrarySearchEndpoint:
         """
         Contract: Search response is LibraryResponse
         (same shape as GET /library).
+        """
+        pass
+
+    def test_search_excludes_items_below_safety_threshold(self):
+        """
+        Contract: Search results with safety_score < 0.85 MUST NOT
+        appear in search results. Same safety filter as GET /library (#81).
         """
         pass
 
