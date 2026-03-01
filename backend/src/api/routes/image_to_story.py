@@ -48,6 +48,7 @@ router = APIRouter(
 # Configuration
 # ============================================================================
 from ...paths import UPLOAD_DIR
+from ...utils.text import count_words
 
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -309,7 +310,7 @@ async def create_story_from_image(
 
         # Extract story text
         story_text = result.get("story", "")
-        word_count = len(story_text.split())
+        word_count = count_words(story_text)
 
         # Extract educational value
         educational_value = EducationalValue(
@@ -592,7 +593,7 @@ async def create_story_from_image_stream(
 
                     # Extract story text
                     story_text = result_data.get("story", "")
-                    word_count = len(story_text.split())
+                    word_count = count_words(story_text)
 
                     # Handle audio URL from agent result
                     audio_url = None
@@ -700,3 +701,29 @@ async def get_child_story_history(
     """
     stories = await story_repo.list_by_user_and_child(user.user_id, child_id, limit)
     return JSONResponse(content=stories)
+
+
+@router.delete(
+    "/stories/{story_id}",
+    summary="Delete a story",
+    description="Delete a story (art story or news conversion) from the library"
+)
+async def delete_story(
+    story_id: str,
+    user: UserData = Depends(get_current_user),
+):
+    """
+    Delete a story by ID (requires authentication + ownership verification).
+    Covers both art stories and news conversions since they share the stories table.
+    """
+    # Verify ownership first
+    await get_story_for_owner(story_id, user.user_id)
+
+    deleted = await story_repo.delete(story_id)
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete story"
+        )
+
+    return {"message": "Story deleted successfully", "story_id": story_id}

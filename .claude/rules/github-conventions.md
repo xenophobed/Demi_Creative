@@ -57,7 +57,7 @@ Every issue MUST be assigned to a milestone.
 | #41 | Interactive Story — Branching     | domain:interactive-story | 2  |
 | #42 | Memory System — Recall & Prefs   | domain:memory         | 2     |
 | #43 | Artifact Lifecycle                | domain:artifacts      | mvp   |
-| #44 | News-to-Kids — Deferred          | domain:news-to-kids   | 2     |
+| #44 | Kids Morning Show — AI News Podcast with Visuals & Subscriptions | domain:news-to-kids | 2 |
 | #45 | TTS & Audio Pipeline Upgrade     | domain:tts-audio      | 2     |
 | #49 | My Library — Unified Content Library | domain:library     | mvp   |
 

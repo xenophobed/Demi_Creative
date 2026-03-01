@@ -126,6 +126,54 @@ class TestStartInteractiveStory:
 
             assert response.status_code == 422
 
+    async def test_start_story_with_empty_preferences(self):
+        """New child with no preference history still gets a story."""
+        async with _client() as client:
+            payload = {
+                "child_id": "brand_new_child_no_prefs",
+                "age_group": "6-8",
+                "interests": ["robots"],
+            }
+
+            response = await client.post(
+                "/api/v1/story/interactive/start",
+                json=payload,
+            )
+
+            assert response.status_code == 201
+            result = response.json()
+            assert "session_id" in result
+            assert "story_title" in result
+            assert "opening" in result
+
+    async def test_start_story_response_shape_unchanged(self):
+        """API response shape is unchanged after memory features."""
+        async with _client() as client:
+            payload = {
+                "child_id": "test_child_001",
+                "age_group": "3-5",
+                "interests": ["colors"],
+                "theme": "rainbow adventure",
+            }
+
+            response = await client.post(
+                "/api/v1/story/interactive/start",
+                json=payload,
+            )
+
+            assert response.status_code == 201
+            result = response.json()
+
+            # Top-level keys
+            assert set(result.keys()) >= {"session_id", "story_title", "opening"}
+
+            # Opening segment shape
+            opening = result["opening"]
+            assert "segment_id" in opening
+            assert "text" in opening
+            assert "choices" in opening
+            assert isinstance(opening["choices"], list)
+
 
 # ============================================================================
 # Choose Story Branch

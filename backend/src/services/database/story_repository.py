@@ -117,6 +117,8 @@ class StoryRepository:
         user_id: str,
         child_id: str,
         limit: int = 20,
+        offset: int = 0,
+        story_type: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """
         Get stories scoped to a specific user AND child profile.
@@ -125,20 +127,62 @@ class StoryRepository:
             user_id: Owner's user ID
             child_id: Child profile ID
             limit: Maximum number of stories to return
+            offset: Number of stories to skip (for pagination)
+            story_type: Optional filter by story_type (e.g. 'news_to_kids')
 
         Returns:
             List[Dict]: Stories matching both user_id and child_id
         """
-        rows = await self._db.fetchall(
-            """
-            SELECT * FROM stories
-            WHERE user_id = ? AND child_id = ?
-            ORDER BY created_at DESC
-            LIMIT ?
-            """,
-            (user_id, child_id, limit),
-        )
+        if story_type:
+            rows = await self._db.fetchall(
+                """
+                SELECT * FROM stories
+                WHERE user_id = ? AND child_id = ? AND story_type = ?
+                ORDER BY created_at DESC
+                LIMIT ? OFFSET ?
+                """,
+                (user_id, child_id, story_type, limit, offset),
+            )
+        else:
+            rows = await self._db.fetchall(
+                """
+                SELECT * FROM stories
+                WHERE user_id = ? AND child_id = ?
+                ORDER BY created_at DESC
+                LIMIT ? OFFSET ?
+                """,
+                (user_id, child_id, limit, offset),
+            )
         return [self._row_to_dict(row) for row in rows]
+
+    async def count_by_user_and_child(
+        self,
+        user_id: str,
+        child_id: str,
+        story_type: Optional[str] = None,
+    ) -> int:
+        """
+        Count stories for a user+child combination.
+
+        Args:
+            user_id: Owner's user ID
+            child_id: Child profile ID
+            story_type: Optional filter by story_type
+
+        Returns:
+            int: Total number of matching stories
+        """
+        if story_type:
+            row = await self._db.fetchone(
+                "SELECT COUNT(*) as count FROM stories WHERE user_id = ? AND child_id = ? AND story_type = ?",
+                (user_id, child_id, story_type),
+            )
+        else:
+            row = await self._db.fetchone(
+                "SELECT COUNT(*) as count FROM stories WHERE user_id = ? AND child_id = ?",
+                (user_id, child_id),
+            )
+        return row['count'] if row else 0
 
     async def list_all(self, limit: int = 20) -> List[Dict[str, Any]]:
         """

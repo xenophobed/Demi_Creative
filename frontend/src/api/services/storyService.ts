@@ -6,6 +6,7 @@ import type {
   ChoiceRequest,
   ChoiceResponse,
   SessionStatusResponse,
+  SessionResumeResponse,
   HealthCheckResponse,
   AgeGroup,
   VoiceType,
@@ -171,6 +172,16 @@ export const storyService = {
   },
 
   /**
+   * Resume an interactive story session (fetch full segment data)
+   */
+  async resumeSession(sessionId: string): Promise<SessionResumeResponse> {
+    const response = await apiClient.get<SessionResumeResponse>(
+      `/story/interactive/${sessionId}/resume`
+    )
+    return response.data
+  },
+
+  /**
    * Get story details
    */
   async getStory(storyId: string): Promise<ImageToStoryResponse> {
@@ -200,6 +211,20 @@ export const storyService = {
       `/story/interactive/${sessionId}/save`
     )
     return response.data
+  },
+
+  /**
+   * Delete a story (art story or news conversion)
+   */
+  async deleteStory(storyId: string): Promise<void> {
+    await apiClient.delete(`/stories/${storyId}`)
+  },
+
+  /**
+   * Delete an interactive story session
+   */
+  async deleteSession(sessionId: string): Promise<void> {
+    await apiClient.delete(`/story/interactive/${sessionId}`)
   },
 
   /**
@@ -277,10 +302,11 @@ export const storyService = {
    * Get news conversion history
    */
   async getNewsHistory(childId: string): Promise<NewsToKidsResponse[]> {
-    const response = await apiClient.get<NewsToKidsResponse[]>(
+    const response = await apiClient.get<{ items: NewsToKidsResponse[] }>(
       `/news-to-kids/history/${childId}`
     )
-    return response.data
+    // Backend returns paginated response { items, total, limit, offset }
+    return response.data.items ?? (response.data as unknown as NewsToKidsResponse[])
   },
 
   /**

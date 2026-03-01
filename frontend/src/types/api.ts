@@ -105,6 +105,19 @@ export interface ChoiceResponse {
   progress: number;
 }
 
+// Session resume response (full data for restoring story view)
+export interface SessionResumeResponse {
+  session_id: string;
+  status: SessionStatus;
+  story_title: string;
+  age_group: AgeGroup;
+  segments: StorySegment[];
+  choice_history: string[];
+  progress: number;
+  total_segments: number;
+  educational_summary: EducationalValue | null;
+}
+
 // Session status response
 export interface SessionStatusResponse {
   session_id: string;

@@ -11,7 +11,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import AsyncGenerator
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from ...utils.text import count_words
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 
 from ..models import (
@@ -19,6 +21,7 @@ from ..models import (
     NewsToKidsResponse,
     KeyConceptResponse,
     InteractiveQuestionResponse,
+    PaginatedNewsResponse,
 )
 from ..deps import get_current_user
 from ...services.database import story_repo, preference_repo
@@ -83,7 +86,7 @@ async def convert_news(
             "age_group": request.age_group.value,
             "story": {
                 "text": result.get("kid_content", ""),
-                "word_count": len(result.get("kid_content", "").split()),
+                "word_count": count_words(result.get("kid_content", "")),
                 "age_adapted": True,
             },
             "educational_value": {
@@ -206,7 +209,7 @@ async def convert_news_stream(
                         "age_group": request.age_group.value,
                         "story": {
                             "text": event_data.get("kid_content", ""),
-                            "word_count": len(event_data.get("kid_content", "").split()),
+                            "word_count": count_words(event_data.get("kid_content", "")),
                             "age_adapted": True,
                         },
                         "educational_value": {
@@ -263,14 +266,26 @@ async def convert_news_stream(
 
 @router.get(
     "/history/{child_id}",
+    response_model=PaginatedNewsResponse,
     summary="Get news conversion history",
-    description="Get past news-to-kids conversions for a child",
+    description="Get past news-to-kids conversions for a child (paginated)",
 )
 async def get_news_history(
     child_id: str,
+    limit: int = Query(20, ge=1, le=100, description="Items per page"),
+    offset: int = Query(0, ge=0, description="Pagination offset"),
     user: UserData = Depends(get_current_user),
 ):
-    """Get news conversion history for a child. Requires authentication."""
-    stories = await story_repo.list_by_user_and_child(user.user_id, child_id, limit=50)
-    news_stories = [s for s in stories if s.get("story_type") == "news_to_kids"]
-    return news_stories
+    """Get paginated news conversion history for a child. Requires authentication."""
+    total = await story_repo.count_by_user_and_child(
+        user.user_id, child_id, story_type="news_to_kids"
+    )
+    news_stories = await story_repo.list_by_user_and_child(
+        user.user_id, child_id, limit=limit, offset=offset, story_type="news_to_kids"
+    )
+    return PaginatedNewsResponse(
+        items=news_stories,
+        total=total,
+        limit=limit,
+        offset=offset,
+    )

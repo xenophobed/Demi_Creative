@@ -28,18 +28,12 @@ except Exception:  # pragma: no cover - import fallback for test env
     ToolResultBlock = object
 
 
-def _should_use_mock() -> bool:
-    """Return True when running inside pytest or when the SDK is unavailable."""
-    return (
-        ClaudeSDKClient is None
-        or ClaudeAgentOptions is None
-        or os.getenv("PYTEST_CURRENT_TEST") is not None
-    )
 from ..mcp_servers import (
     safety_server,
     tts_server,
     vector_server
 )
+from ..services.database import preference_repo
 
 
 def _should_use_mock() -> bool:
@@ -159,6 +153,197 @@ AGE_CONFIG = {
 
 
 # ============================================================================
+# Prompt Construction Helpers (#72, #73)
+# ============================================================================
+
+async def _fetch_preference_context(child_id: str) -> str:
+    """
+    Fetch child preference profile and format as prompt context.
+
+    Returns formatted string for injection into opening prompt,
+    or empty string if no meaningful preferences exist.
+    """
+    try:
+        profile = await preference_repo.get_profile(child_id)
+    except Exception:
+        return ""
+
+    sections = []
+
+    # Top 3 themes by frequency
+    themes = profile.get("themes", {})
+    if themes:
+        top_themes = sorted(themes.items(), key=lambda x: x[1], reverse=True)[:3]
+        sections.append(f"- 喜欢的主题: {', '.join(t[0] for t in top_themes)}")
+
+    # Top 3 interests
+    interests = profile.get("interests", {})
+    if interests:
+        top_interests = sorted(interests.items(), key=lambda x: x[1], reverse=True)[:3]
+        sections.append(f"- 兴趣偏好: {', '.join(t[0] for t in top_interests)}")
+
+    # Last 3 recent choices
+    recent = profile.get("recent_choices", [])
+    if recent:
+        last_3 = recent[-3:]
+        sections.append(f"- 最近选择: {', '.join(last_3)}")
+
+    if not sections:
+        return ""
+
+    return "**儿童偏好记忆**：\n" + "\n".join(sections) + "\n"
+
+
+def _build_opening_prompt(
+    child_id: str,
+    age_group: str,
+    interests_str: str,
+    theme_str: str,
+    config: Dict[str, Any],
+    preference_context: str = "",
+) -> str:
+    """
+    Build the full prompt for interactive story opening generation.
+
+    Includes preference context (#72) and character continuity instructions (#73).
+    """
+    prompt = f"""你是一位专业的儿童故事作家，擅长创作适合不同年龄段的互动故事。
+
+请为一个{age_group}岁的儿童创作一个互动故事的**开场**。
+
+**儿童信息**：
+- 儿童ID: {child_id}
+- 年龄组: {age_group}岁
+- 兴趣爱好: {interests_str}
+- 故事主题: {theme_str}
+
+**写作要求**（年龄适配）：
+- 每段字数: {config['word_count']}字
+- 句子长度: {config['sentence_length']}
+- 复杂度: {config['complexity']}
+- 词汇水平: {config['vocab_level']}
+- 主题深度: {config['theme_depth']}
+- 选项风格: {config['choices_style']}
+"""
+
+    # Inject preference context (#72)
+    if preference_context:
+        prompt += f"\n{preference_context}\n请根据上述儿童偏好，自然地融入他们喜欢的主题和元素。\n"
+
+    # Character continuity (#73)
+    prompt += f"""
+**角色连续性**：
+在创作故事前，请先使用 `mcp__vector-search__search_similar_drawings` 工具搜索该儿童之前的创作，查找是否有反复出现的角色。
+- 搜索参数: child_id="{child_id}", query="{interests_str}"
+- 如果发现 recurring_characters，自然地将这些角色融入新故事（不要强制，而是让角色自然出现）
+- 如果没有历史角色，正常创作全新故事
+
+**内容存储**：
+故事创作完成后，请使用 `mcp__vector-search__store_drawing_embedding` 工具存储本次创作的角色信息，以便未来的故事可以延续角色。
+
+**重要规则**：
+1. 故事必须温馨、积极、有教育意义
+2. 所有分支最终都应该是"好结局"（不惩罚儿童的选择）
+3. 自然融入 STEAM 或品德教育元素
+4. 开场需要吸引儿童的注意力，设置悬念
+5. 提供 2-3 个有趣的选项，每个选项配一个合适的 emoji
+6. 选项应该是平等的，没有"正确答案"
+
+**输出格式**：
+请直接返回 JSON 格式的故事开场，包含：
+- title: 故事标题（吸引人，与主题相关）
+- segment: 开场段落
+  - segment_id: 0
+  - text: 故事开场文本
+  - choices: 选项数组，每个选项包含 choice_id, text, emoji
+  - is_ending: false
+
+创作一个精彩的故事开场吧！
+"""
+    return prompt
+
+
+def _build_next_segment_prompt(
+    story_title: str,
+    age_group: str,
+    interests: List[str],
+    theme: str,
+    segment_count: int,
+    total_segments: int,
+    is_final_segment: bool,
+    story_context: str,
+    choice_id: str,
+    chosen_option: str,
+    config: Dict[str, Any],
+) -> str:
+    """Build prompt for generating the next story segment."""
+    return f"""你是一位专业的儿童故事作家，正在继续一个互动故事。
+
+**故事信息**：
+- 故事标题: {story_title}
+- 年龄组: {age_group}岁
+- 兴趣爱好: {', '.join(interests)}
+- 主题: {theme}
+- 当前段落: 第 {segment_count + 1} 段（共 {total_segments} 段）
+- 是否为结局: {'是' if is_final_segment else '否'}
+
+**之前的故事内容**：
+{story_context if story_context else "这是故事的开始"}
+
+**用户的选择**：
+选择ID: {choice_id}
+选择内容: {chosen_option or "继续故事"}
+
+**写作要求**（年龄适配）：
+- 每段字数: {config['word_count']}字
+- 句子长度: {config['sentence_length']}
+- 复杂度: {config['complexity']}
+- 词汇水平: {config['vocab_level']}
+- 选项风格: {config['choices_style']}
+
+**重要规则**：
+1. 根据用户的选择自然延续故事
+2. 保持故事的连贯性和吸引力
+3. {'这是结局段落，请给出一个温馨、积极的结局，总结故事的教育意义' if is_final_segment else '继续发展情节，提供 2-3 个新选项'}
+4. 所有内容必须适合儿童，积极向上
+5. {'不需要提供选项' if is_final_segment else '每个选项配一个合适的 emoji'}
+
+**输出格式**：
+请直接返回 JSON 格式，包含：
+- segment: 故事段落
+  - segment_id: {segment_count}
+  - text: 故事内容
+  - choices: {'空数组 []' if is_final_segment else '选项数组'}
+  - is_ending: {str(is_final_segment).lower()}
+- is_ending: {str(is_final_segment).lower()}
+{f'''- educational_summary: 教育总结（仅结局时提供）
+  - themes: 主题数组（如：["勇气", "友谊"]）
+  - concepts: 概念数组（如：["决策", "合作"]）
+  - moral: 道德寓意（一句话总结）''' if is_final_segment else ''}
+
+继续这个精彩的故事吧！
+"""
+
+
+def _append_tts_instructions(
+    prompt: str,
+    voice: str,
+    speed: float,
+    id_label: str,
+    id_value: str,
+) -> str:
+    """Append TTS generation instructions to a prompt."""
+    return prompt + f"""
+
+**语音生成**：
+故事创作完成后，请使用 `mcp__tts-generation__generate_story_audio` 工具为故事文本生成语音。
+- 语音类型: {voice}
+- 语速: {speed}
+- {id_label}: {id_value}
+"""
+
+
+# ============================================================================
 # Agent 函数
 # ============================================================================
 
@@ -225,43 +410,18 @@ async def generate_story_opening(
     interests_str = "、".join(interests) if interests else "冒险"
     theme_str = theme if theme else f"关于{interests[0]}的冒险" if interests else "神秘的冒险"
 
-    prompt = f"""你是一位专业的儿童故事作家，擅长创作适合不同年龄段的互动故事。
+    # Fetch preference context (#72)
+    preference_context = await _fetch_preference_context(child_id)
 
-请为一个{age_group}岁的儿童创作一个互动故事的**开场**。
-
-**儿童信息**：
-- 儿童ID: {child_id}
-- 年龄组: {age_group}岁
-- 兴趣爱好: {interests_str}
-- 故事主题: {theme_str}
-
-**写作要求**（年龄适配）：
-- 每段字数: {config['word_count']}字
-- 句子长度: {config['sentence_length']}
-- 复杂度: {config['complexity']}
-- 词汇水平: {config['vocab_level']}
-- 主题深度: {config['theme_depth']}
-- 选项风格: {config['choices_style']}
-
-**重要规则**：
-1. 故事必须温馨、积极、有教育意义
-2. 所有分支最终都应该是"好结局"（不惩罚儿童的选择）
-3. 自然融入 STEAM 或品德教育元素
-4. 开场需要吸引儿童的注意力，设置悬念
-5. 提供 2-3 个有趣的选项，每个选项配一个合适的 emoji
-6. 选项应该是平等的，没有"正确答案"
-
-**输出格式**：
-请直接返回 JSON 格式的故事开场，包含：
-- title: 故事标题（吸引人，与主题相关）
-- segment: 开场段落
-  - segment_id: 0
-  - text: 故事开场文本
-  - choices: 选项数组，每个选项包含 choice_id, text, emoji
-  - is_ending: false
-
-创作一个精彩的故事开场吧！
-"""
+    # Build prompt with preference + character continuity (#72, #73)
+    prompt = _build_opening_prompt(
+        child_id=child_id,
+        age_group=age_group,
+        interests_str=interests_str,
+        theme_str=theme_str,
+        config=config,
+        preference_context=preference_context,
+    )
 
     # Determine if we should generate audio based on age_group audio_mode
     audio_mode = config.get("audio_mode", "simultaneous")
@@ -271,14 +431,7 @@ async def generate_story_opening(
 
     # Add TTS instruction if audio should be generated
     if should_generate_audio:
-        prompt += f"""
-
-**语音生成**：
-故事创作完成后，请使用 `mcp__tts-generation__generate_story_audio` 工具为故事文本生成语音。
-- 语音类型: {actual_voice}
-- 语速: {audio_speed}
-- 儿童ID: {child_id}
-"""
+        prompt = _append_tts_instructions(prompt, actual_voice, audio_speed, "儿童ID", child_id)
 
     options = ClaudeAgentOptions(
         mcp_servers={
@@ -289,11 +442,12 @@ async def generate_story_opening(
         allowed_tools=[
             "mcp__safety-check__check_content_safety",
             "mcp__vector-search__search_similar_drawings",
+            "mcp__vector-search__store_drawing_embedding",
             "mcp__tts-generation__generate_story_audio"
         ],
         cwd=".",
         permission_mode="acceptEdits",
-        max_turns=10,  # Increased to allow for TTS generation
+        max_turns=12,  # Increased: search + store + TTS add extra turns
         output_format={
             "type": "json_schema",
             "schema": StoryOpeningOutput.model_json_schema()
@@ -391,43 +545,18 @@ async def generate_story_opening_stream(
         }
     }
 
-    prompt = f"""你是一位专业的儿童故事作家，擅长创作适合不同年龄段的互动故事。
+    # Fetch preference context (#72)
+    preference_context = await _fetch_preference_context(child_id)
 
-请为一个{age_group}岁的儿童创作一个互动故事的**开场**。
-
-**儿童信息**：
-- 儿童ID: {child_id}
-- 年龄组: {age_group}岁
-- 兴趣爱好: {interests_str}
-- 故事主题: {theme_str}
-
-**写作要求**（年龄适配）：
-- 每段字数: {config['word_count']}字
-- 句子长度: {config['sentence_length']}
-- 复杂度: {config['complexity']}
-- 词汇水平: {config['vocab_level']}
-- 主题深度: {config['theme_depth']}
-- 选项风格: {config['choices_style']}
-
-**重要规则**：
-1. 故事必须温馨、积极、有教育意义
-2. 所有分支最终都应该是"好结局"（不惩罚儿童的选择）
-3. 自然融入 STEAM 或品德教育元素
-4. 开场需要吸引儿童的注意力，设置悬念
-5. 提供 2-3 个有趣的选项，每个选项配一个合适的 emoji
-6. 选项应该是平等的，没有"正确答案"
-
-**输出格式**：
-请直接返回 JSON 格式的故事开场，包含：
-- title: 故事标题（吸引人，与主题相关）
-- segment: 开场段落
-  - segment_id: 0
-  - text: 故事开场文本
-  - choices: 选项数组，每个选项包含 choice_id, text, emoji
-  - is_ending: false
-
-创作一个精彩的故事开场吧！
-"""
+    # Build prompt with preference + character continuity (#72, #73)
+    prompt = _build_opening_prompt(
+        child_id=child_id,
+        age_group=age_group,
+        interests_str=interests_str,
+        theme_str=theme_str,
+        config=config,
+        preference_context=preference_context,
+    )
 
     # Determine if we should generate audio based on age_group audio_mode
     audio_mode = config.get("audio_mode", "simultaneous")
@@ -437,14 +566,7 @@ async def generate_story_opening_stream(
 
     # Add TTS instruction if audio should be generated
     if should_generate_audio:
-        prompt += f"""
-
-**语音生成**：
-故事创作完成后，请使用 `mcp__tts-generation__generate_story_audio` 工具为故事文本生成语音。
-- 语音类型: {actual_voice}
-- 语速: {audio_speed}
-- 儿童ID: {child_id}
-"""
+        prompt = _append_tts_instructions(prompt, actual_voice, audio_speed, "儿童ID", child_id)
 
     options = ClaudeAgentOptions(
         mcp_servers={
@@ -455,11 +577,12 @@ async def generate_story_opening_stream(
         allowed_tools=[
             "mcp__safety-check__check_content_safety",
             "mcp__vector-search__search_similar_drawings",
+            "mcp__vector-search__store_drawing_embedding",
             "mcp__tts-generation__generate_story_audio"
         ],
         cwd=".",
         permission_mode="acceptEdits",
-        max_turns=10,  # Increased to allow for TTS generation
+        max_turns=12,  # Increased: search + store + TTS add extra turns
         output_format={
             "type": "json_schema",
             "schema": StoryOpeningOutput.model_json_schema()
@@ -502,7 +625,8 @@ async def generate_story_opening_stream(
                                 # Friendly tool name mapping
                                 tool_messages = {
                                     "mcp__safety-check__check_content_safety": "正在检查内容安全...",
-                                    "mcp__vector-search__search_similar_drawings": "正在搜索相似画作...",
+                                    "mcp__vector-search__search_similar_drawings": "正在搜索历史角色...",
+                                    "mcp__vector-search__store_drawing_embedding": "正在存储角色记忆...",
                                     "mcp__tts-generation__generate_story_audio": "正在生成语音..."
                                 }
                                 yield {
@@ -665,52 +789,19 @@ async def generate_next_segment_stream(
             chosen_option = c.get("text", "")
             break
 
-    prompt = f"""你是一位专业的儿童故事作家，正在继续一个互动故事。
-
-**故事信息**：
-- 故事标题: {story_title}
-- 年龄组: {age_group}岁
-- 兴趣爱好: {', '.join(interests)}
-- 主题: {theme}
-- 当前段落: 第 {segment_count + 1} 段（共 {total_segments} 段）
-- 是否为结局: {'是' if is_final_segment else '否'}
-
-**之前的故事内容**：
-{story_context if story_context else "这是故事的开始"}
-
-**用户的选择**：
-选择ID: {choice_id}
-选择内容: {chosen_option or "继续故事"}
-
-**写作要求**（年龄适配）：
-- 每段字数: {config['word_count']}字
-- 句子长度: {config['sentence_length']}
-- 复杂度: {config['complexity']}
-- 词汇水平: {config['vocab_level']}
-- 选项风格: {config['choices_style']}
-
-**重要规则**：
-1. 根据用户的选择自然延续故事
-2. 保持故事的连贯性和吸引力
-3. {'这是结局段落，请给出一个温馨、积极的结局，总结故事的教育意义' if is_final_segment else '继续发展情节，提供 2-3 个新选项'}
-4. 所有内容必须适合儿童，积极向上
-5. {'不需要提供选项' if is_final_segment else '每个选项配一个合适的 emoji'}
-
-**输出格式**：
-请直接返回 JSON 格式，包含：
-- segment: 故事段落
-  - segment_id: {segment_count}
-  - text: 故事内容
-  - choices: {'空数组 []' if is_final_segment else '选项数组'}
-  - is_ending: {str(is_final_segment).lower()}
-- is_ending: {str(is_final_segment).lower()}
-{f'''- educational_summary: 教育总结（仅结局时提供）
-  - themes: 主题数组（如：["勇气", "友谊"]）
-  - concepts: 概念数组（如：["决策", "合作"]）
-  - moral: 道德寓意（一句话总结）''' if is_final_segment else ''}
-
-继续这个精彩的故事吧！
-"""
+    prompt = _build_next_segment_prompt(
+        story_title=story_title,
+        age_group=age_group,
+        interests=interests,
+        theme=theme,
+        segment_count=segment_count,
+        total_segments=total_segments,
+        is_final_segment=is_final_segment,
+        story_context=story_context,
+        choice_id=choice_id,
+        chosen_option=chosen_option,
+        config=config,
+    )
 
     # Determine if we should generate audio based on age_group audio_mode
     audio_mode = config.get("audio_mode", "simultaneous")
@@ -720,14 +811,7 @@ async def generate_next_segment_stream(
 
     # Add TTS instruction if audio should be generated
     if should_generate_audio:
-        prompt += f"""
-
-**语音生成**：
-故事创作完成后，请使用 `mcp__tts-generation__generate_story_audio` 工具为故事文本生成语音。
-- 语音类型: {actual_voice}
-- 语速: {audio_speed}
-- 会话ID: {session_id}
-"""
+        prompt = _append_tts_instructions(prompt, actual_voice, audio_speed, "会话ID", session_id)
 
     options = ClaudeAgentOptions(
         mcp_servers={
@@ -934,52 +1018,19 @@ async def generate_next_segment(
             chosen_option = c.get("text", "")
             break
 
-    prompt = f"""你是一位专业的儿童故事作家，正在继续一个互动故事。
-
-**故事信息**：
-- 故事标题: {story_title}
-- 年龄组: {age_group}岁
-- 兴趣爱好: {', '.join(interests)}
-- 主题: {theme}
-- 当前段落: 第 {segment_count + 1} 段（共 {total_segments} 段）
-- 是否为结局: {'是' if is_final_segment else '否'}
-
-**之前的故事内容**：
-{story_context if story_context else "这是故事的开始"}
-
-**用户的选择**：
-选择ID: {choice_id}
-选择内容: {chosen_option or "继续故事"}
-
-**写作要求**（年龄适配）：
-- 每段字数: {config['word_count']}字
-- 句子长度: {config['sentence_length']}
-- 复杂度: {config['complexity']}
-- 词汇水平: {config['vocab_level']}
-- 选项风格: {config['choices_style']}
-
-**重要规则**：
-1. 根据用户的选择自然延续故事
-2. 保持故事的连贯性和吸引力
-3. {'这是结局段落，请给出一个温馨、积极的结局，总结故事的教育意义' if is_final_segment else '继续发展情节，提供 2-3 个新选项'}
-4. 所有内容必须适合儿童，积极向上
-5. {'不需要提供选项' if is_final_segment else '每个选项配一个合适的 emoji'}
-
-**输出格式**：
-请直接返回 JSON 格式，包含：
-- segment: 故事段落
-  - segment_id: {segment_count}
-  - text: 故事内容
-  - choices: {'空数组 []' if is_final_segment else '选项数组'}
-  - is_ending: {str(is_final_segment).lower()}
-- is_ending: {str(is_final_segment).lower()}
-{f'''- educational_summary: 教育总结（仅结局时提供）
-  - themes: 主题数组（如：["勇气", "友谊"]）
-  - concepts: 概念数组（如：["决策", "合作"]）
-  - moral: 道德寓意（一句话总结）''' if is_final_segment else ''}
-
-继续这个精彩的故事吧！
-"""
+    prompt = _build_next_segment_prompt(
+        story_title=story_title,
+        age_group=age_group,
+        interests=interests,
+        theme=theme,
+        segment_count=segment_count,
+        total_segments=total_segments,
+        is_final_segment=is_final_segment,
+        story_context=story_context,
+        choice_id=choice_id,
+        chosen_option=chosen_option,
+        config=config,
+    )
 
     # Determine if we should generate audio based on age_group audio_mode
     audio_mode = config.get("audio_mode", "simultaneous")
@@ -989,14 +1040,7 @@ async def generate_next_segment(
 
     # Add TTS instruction if audio should be generated
     if should_generate_audio:
-        prompt += f"""
-
-**语音生成**：
-故事创作完成后，请使用 `mcp__tts-generation__generate_story_audio` 工具为故事文本生成语音。
-- 语音类型: {actual_voice}
-- 语速: {audio_speed}
-- 会话ID: {session_id}
-"""
+        prompt = _append_tts_instructions(prompt, actual_voice, audio_speed, "会话ID", session_id)
 
     options = ClaudeAgentOptions(
         mcp_servers={
