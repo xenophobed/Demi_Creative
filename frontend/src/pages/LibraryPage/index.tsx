@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -70,6 +70,70 @@ function truncatePreview(text: string, maxLen = 120): string {
 }
 
 // ---- subcomponents ----
+
+function ConfirmDeleteModal({
+  isOpen,
+  itemLabel,
+  onConfirm,
+  onCancel,
+}: {
+  isOpen: boolean
+  itemLabel: string
+  onConfirm: () => void
+  onCancel: () => void
+}) {
+  if (!isOpen) return null
+
+  return (
+    <AnimatePresence>
+      <motion.div
+        className="fixed inset-0 z-50 flex items-center justify-center p-4"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+      >
+        {/* Backdrop */}
+        <motion.div
+          className="absolute inset-0 bg-black/40"
+          onClick={onCancel}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+        />
+
+        {/* Modal */}
+        <motion.div
+          className="relative bg-white rounded-2xl shadow-xl max-w-sm w-full p-6"
+          initial={{ scale: 0.9, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+        >
+          <div className="text-center mb-5">
+            <span className="text-4xl block mb-3">🗑️</span>
+            <h3 className="text-lg font-bold text-gray-800 mb-2">Delete {itemLabel}?</h3>
+            <p className="text-gray-500 text-sm">
+              This will be permanently removed and cannot be undone.
+            </p>
+          </div>
+
+          <div className="flex gap-3">
+            <button
+              className="flex-1 px-4 py-2.5 rounded-xl border-2 border-gray-200 text-gray-700 font-medium hover:bg-gray-50 transition-colors"
+              onClick={onCancel}
+            >
+              Cancel
+            </button>
+            <button
+              className="flex-1 px-4 py-2.5 rounded-xl bg-red-500 text-white font-medium hover:bg-red-600 transition-colors"
+              onClick={onConfirm}
+            >
+              Delete
+            </button>
+          </div>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
+  )
+}
 
 function DeleteButton({ onDelete }: { onDelete: () => void }) {
   return (
@@ -331,6 +395,7 @@ function LibraryPage() {
 
   const [activeTab, setActiveTab] = useState<ContentTab>('all')
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set())
+  const [deleteTarget, setDeleteTarget] = useState<LibraryItem | null>(null)
   const [pageSize] = useState(20)
   const [artOffset, setArtOffset] = useState(0)
   // Accumulate art story pages so "Load More" appends rather than replaces
@@ -545,39 +610,32 @@ function LibraryPage() {
     }
   }
 
-  const handleDeleteItem = async (item: LibraryItem) => {
-    const label =
-      item.type === 'art-story' ? 'art story' :
-      item.type === 'interactive' ? 'interactive story' : 'news article'
-
-    if (!window.confirm(`Delete this ${label}? This cannot be undone.`)) return
-
+  const handleDeleteItem = useCallback(async (item: LibraryItem) => {
+    // Optimistically remove from all local data sources FIRST
     setDeletingIds((prev) => new Set(prev).add(item.id))
 
+    if (item.type !== 'interactive') {
+      removeStory(item.id)
+      setAccumulatedServerArt((prev) => prev.filter((s) => s.story_id !== item.id))
+    }
+
+    // Then try server deletion (best effort — may fail for unauthenticated users)
     try {
       if (item.type === 'interactive') {
         await storyService.deleteSession(item.id)
-        queryClient.invalidateQueries({ queryKey: ['library-sessions'] })
       } else {
         await storyService.deleteStory(item.id)
-        // Remove from local store too
-        removeStory(item.id)
-        // Remove from accumulated server art
-        setAccumulatedServerArt((prev) => prev.filter((s) => s.story_id !== item.id))
-        queryClient.invalidateQueries({ queryKey: ['library-art-stories'] })
-        queryClient.invalidateQueries({ queryKey: ['library-child-art-stories'] })
-        queryClient.invalidateQueries({ queryKey: ['library-news-history'] })
       }
     } catch {
-      // Deletion failed — remove from deleting set to restore the card
-    } finally {
-      setDeletingIds((prev) => {
-        const next = new Set(prev)
-        next.delete(item.id)
-        return next
-      })
+      // Server deletion failed — local removal already happened, which is fine
     }
-  }
+
+    // Refresh queries so server-side lists stay in sync
+    queryClient.invalidateQueries({ queryKey: ['library-sessions'] })
+    queryClient.invalidateQueries({ queryKey: ['library-art-stories'] })
+    queryClient.invalidateQueries({ queryKey: ['library-child-art-stories'] })
+    queryClient.invalidateQueries({ queryKey: ['library-news-history'] })
+  }, [queryClient, removeStory])
 
   const handleLoadMoreArt = () => {
     setArtOffset((prev) => prev + pageSize)
@@ -680,12 +738,12 @@ function LibraryPage() {
                 transition={{ delay: Math.min(index * 0.04, 0.3) }}
               >
                 {item.type === 'art-story' && (
-                  <ArtStoryCard item={item} onClick={() => handleItemClick(item)} onDelete={() => handleDeleteItem(item)} />
+                  <ArtStoryCard item={item} onClick={() => handleItemClick(item)} onDelete={() => setDeleteTarget(item)} />
                 )}
                 {item.type === 'interactive' && (
-                  <InteractiveStoryCard item={item} onClick={() => handleItemClick(item)} onDelete={() => handleDeleteItem(item)} />
+                  <InteractiveStoryCard item={item} onClick={() => handleItemClick(item)} onDelete={() => setDeleteTarget(item)} />
                 )}
-                {item.type === 'news' && <NewsCard item={item} onDelete={() => handleDeleteItem(item)} />}
+                {item.type === 'news' && <NewsCard item={item} onDelete={() => setDeleteTarget(item)} />}
               </motion.div>
             ))}
 
@@ -773,6 +831,22 @@ function LibraryPage() {
           </p>
         </motion.div>
       )}
+
+      {/* Delete confirmation modal */}
+      <ConfirmDeleteModal
+        isOpen={deleteTarget !== null}
+        itemLabel={
+          deleteTarget?.type === 'art-story' ? 'this art story' :
+          deleteTarget?.type === 'interactive' ? 'this interactive story' : 'this news article'
+        }
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={() => {
+          if (deleteTarget) {
+            handleDeleteItem(deleteTarget)
+            setDeleteTarget(null)
+          }
+        }}
+      />
     </div>
   )
 }
