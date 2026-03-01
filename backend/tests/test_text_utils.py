@@ -20,7 +20,7 @@ class TestCountWords:
 
     def test_chinese_characters(self):
         # Each CJK character = 1 word
-        assert count_words("从前有一个小女孩") == 7
+        assert count_words("从前有一个小女孩") == 8
 
     def test_chinese_story(self):
         text = "从前有一个勇敢的小女孩，她住在一个美丽的村庄里。"

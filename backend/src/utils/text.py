@@ -18,6 +18,16 @@ _CJK_RE = re.compile(
     r'\U0002b820-\U0002ceaf]' # CJK Unified Ideographs Extension E
 )
 
+# CJK and fullwidth punctuation — stripped before Latin word count
+_CJK_PUNCT_RE = re.compile(
+    r'[\u3000-\u303f'         # CJK Symbols and Punctuation
+    r'\uff00-\uff0f'          # Fullwidth digits/punctuation
+    r'\uff1a-\uff20'          # Fullwidth colon to at-sign
+    r'\uff3b-\uff40'          # Fullwidth brackets
+    r'\uff5b-\uff65'          # Fullwidth braces, halfwidth forms
+    r'\ufe30-\ufe4f]'         # CJK Compatibility Forms
+)
+
 
 def count_words(text: str) -> int:
     """Count words in multilingual text.
@@ -30,5 +40,6 @@ def count_words(text: str) -> int:
         return 0
     cjk_chars = len(_CJK_RE.findall(text))
     non_cjk = _CJK_RE.sub('', text)
+    non_cjk = _CJK_PUNCT_RE.sub(' ', non_cjk)
     latin_words = len(non_cjk.split())
     return cjk_chars + latin_words
