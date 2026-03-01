@@ -12,6 +12,7 @@ import { StreamingVisualizer } from '@/components/streaming/StreamingVisualizer'
 import { PerspectiveContainer } from '@/components/depth/PerspectiveContainer'
 import { storyService } from '@/api/services/storyService'
 import useInteractiveStory from '@/hooks/useInteractiveStory'
+import useInteractiveStoryStore from '@/store/useInteractiveStoryStore'
 import useStreamVisualization from '@/hooks/useStreamVisualization'
 import useChildStore, { DEFAULT_INTERESTS } from '@/store/useChildStore'
 import type { AgeGroup } from '@/types/api'
@@ -76,6 +77,32 @@ function InteractiveStoryPage() {
   // Save state
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
 
+  // Validate persisted session on mount — if backend says expired/invalid, reset
+  const storeStatus = useInteractiveStoryStore((s) => s.status)
+  const [isValidating, setIsValidating] = useState(false)
+  useEffect(() => {
+    if (!sessionId || storeStatus === 'completed' || storeStatus === 'idle') return
+    let cancelled = false
+    setIsValidating(true)
+    storyService
+      .getSessionStatus(sessionId)
+      .then((res) => {
+        if (cancelled) return
+        // Session expired or completed on backend — reset frontend
+        if (res.status !== 'active') {
+          reset()
+        }
+      })
+      .catch(() => {
+        // Session not found on backend (404) — reset
+        if (!cancelled) reset()
+      })
+      .finally(() => {
+        if (!cancelled) setIsValidating(false)
+      })
+    return () => { cancelled = true }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   // Track segment changes for reveal animation
   const [isRevealing, setIsRevealing] = useState(false)
 
@@ -117,8 +144,9 @@ function InteractiveStoryPage() {
     }
   }, [isCompleted, triggerConfetti])
 
-  // Determine page state
+  // Determine page state — show setup while validating a stale session
   const getPageState = (): PageState => {
+    if (isValidating) return 'setup'
     if (isCompleted) return 'completed'
     if (currentSegment) return 'playing'
     return 'setup'
