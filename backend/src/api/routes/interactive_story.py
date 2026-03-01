@@ -671,3 +671,28 @@ async def save_interactive_story(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to save interactive story"
         )
+
+
+@router.delete(
+    "/{session_id}",
+    summary="Delete an interactive story session",
+    description="Delete an interactive story session from the library"
+)
+async def delete_session(
+    session_id: str = PathParam(..., description="Session ID"),
+    user: UserData = Depends(get_current_user),
+):
+    """
+    Delete an interactive story session (requires authentication + ownership).
+    """
+    # Verify ownership first
+    await get_session_for_owner(session_id, user.user_id)
+
+    deleted = await session_repo.delete_session(session_id)
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete session"
+        )
+
+    return {"message": "Session deleted successfully", "session_id": session_id}

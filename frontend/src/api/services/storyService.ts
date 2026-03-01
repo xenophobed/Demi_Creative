@@ -203,6 +203,20 @@ export const storyService = {
   },
 
   /**
+   * Delete a story (art story or news conversion)
+   */
+  async deleteStory(storyId: string): Promise<void> {
+    await apiClient.delete(`/stories/${storyId}`)
+  },
+
+  /**
+   * Delete an interactive story session
+   */
+  async deleteSession(sessionId: string): Promise<void> {
+    await apiClient.delete(`/story/interactive/${sessionId}`)
+  },
+
+  /**
    * Health check
    */
   async healthCheck(): Promise<HealthCheckResponse> {
