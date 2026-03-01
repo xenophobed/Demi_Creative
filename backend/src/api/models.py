@@ -550,6 +550,7 @@ class LibraryItem(BaseModel):
     title: str = Field(..., description="Display title")
     preview: str = Field(..., description="Content preview (first ~100 chars)")
     image_url: Optional[str] = Field(None, description="Thumbnail/cover image URL")
+    thumbnail_url: Optional[str] = Field(None, description="Artifact thumbnail URL (preferred over image_url)")
     audio_url: Optional[str] = Field(None, description="Audio narration URL")
     created_at: str = Field(..., description="Creation timestamp (ISO 8601)")
     is_favorited: bool = Field(False, description="Whether user has favorited this item")
@@ -583,3 +584,11 @@ class FavoriteResponse(BaseModel):
     status: str = Field(..., description="Result status")
     item_id: str = Field(..., description="Item ID")
     item_type: str = Field(..., description="Item type")
+
+
+class PaginatedNewsResponse(BaseModel):
+    """Paginated news history response (#69)."""
+    items: List[Dict[str, Any]] = Field(..., description="News story items")
+    total: int = Field(..., description="Total matching items")
+    limit: int = Field(..., description="Page size")
+    offset: int = Field(..., description="Current offset")

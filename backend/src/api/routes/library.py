@@ -26,6 +26,8 @@ from ..models import (
 from ..deps import get_current_user
 from ...services.user_service import UserData
 from ...services.database import story_repo, session_repo, favorite_repo
+from ...services.database.artifact_repository import StoryArtifactLinkRepository
+from ...services.database.connection import db_manager
 
 # Content safety threshold — items below this score are hidden (#81)
 SAFETY_THRESHOLD = 0.85
@@ -48,7 +50,11 @@ def _resolve_story_type(story: dict) -> LibraryItemType:
     return LibraryItemType.ART_STORY
 
 
-def _story_to_library_item(story: dict, is_favorited: bool = False) -> LibraryItem:
+def _story_to_library_item(
+    story: dict,
+    is_favorited: bool = False,
+    thumbnail_url: Optional[str] = None,
+) -> LibraryItem:
     """Convert a story dict from StoryRepository to a LibraryItem."""
     story_content = story.get("story", {})
     ed_value = story.get("educational_value", {})
@@ -68,6 +74,7 @@ def _story_to_library_item(story: dict, is_favorited: bool = False) -> LibraryIt
         title=_extract_title(text),
         preview=text[:150] if text else "",
         image_url=story.get("image_url"),
+        thumbnail_url=thumbnail_url or story.get("image_url"),
         audio_url=story.get("audio_url"),
         created_at=story.get("created_at", ""),
         is_favorited=is_favorited,
@@ -121,6 +128,18 @@ def _extract_title(text: str, max_len: int = 35) -> str:
     return text[:max_len] + ("..." if len(text) > max_len else "")
 
 
+async def _resolve_thumbnail(story_id: str) -> Optional[str]:
+    """Try to get a cover artifact URL for a story, return None on failure."""
+    try:
+        link_repo = StoryArtifactLinkRepository(db_manager)
+        artifact = await link_repo.get_canonical_artifact(story_id, "cover")
+        if artifact and artifact.storage_url:
+            return artifact.storage_url
+    except Exception:
+        pass
+    return None
+
+
 def _sort_items(items: List[LibraryItem], sort: LibrarySortOrder) -> None:
     """Sort items in-place according to the requested order (#83)."""
     if sort == LibrarySortOrder.OLDEST:
@@ -168,7 +187,10 @@ async def get_library(
         fav_story_ids = fav_art_ids | fav_news_ids
 
         for s in stories:
-            item = _story_to_library_item(s, is_favorited=s["story_id"] in fav_story_ids)
+            thumb = await _resolve_thumbnail(s["story_id"])
+            item = _story_to_library_item(
+                s, is_favorited=s["story_id"] in fav_story_ids, thumbnail_url=thumb
+            )
             # Apply type filter
             if type is not None and item.type != type:
                 continue
@@ -245,7 +267,10 @@ async def search_library(
         fav_ids = fav_art | fav_news
 
         for s in stories:
-            item = _story_to_library_item(s, is_favorited=s["story_id"] in fav_ids)
+            thumb = await _resolve_thumbnail(s["story_id"])
+            item = _story_to_library_item(
+                s, is_favorited=s["story_id"] in fav_ids, thumbnail_url=thumb
+            )
             # Apply type filter
             if type is not None and item.type != type:
                 continue
