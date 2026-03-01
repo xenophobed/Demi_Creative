@@ -272,6 +272,19 @@ class SessionStatusResponse(BaseModel):
     expires_at: datetime = Field(..., description="过期时间")
 
 
+class SessionResumeResponse(BaseModel):
+    """Resume an in-progress interactive story session."""
+    session_id: str = Field(..., description="会话ID")
+    status: SessionStatus = Field(..., description="会话状态")
+    story_title: str = Field(..., description="故事标题")
+    age_group: AgeGroup = Field(..., description="年龄组")
+    segments: List[StorySegment] = Field(..., description="所有已生成段落")
+    choice_history: List[str] = Field(..., description="选择历史")
+    progress: float = Field(..., ge=0.0, le=1.0, description="完成进度 0-1")
+    total_segments: int = Field(..., description="总段落数")
+    educational_summary: Optional[EducationalValue] = Field(None, description="教育总结")
+
+
 class SaveInteractiveStoryResponse(BaseModel):
     """保存互动故事响应"""
     story_id: str = Field(..., description="保存后的故事ID")
