@@ -2,51 +2,42 @@ import { useState, useEffect, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { BookOpen, Palette, Map, Newspaper, Compass, Globe } from 'lucide-react'
 import Button from '@/components/common/Button'
 import Card from '@/components/common/Card'
 import useStoryStore from '@/store/useStoryStore'
 import useAuthStore from '@/store/useAuthStore'
 import useChildStore from '@/store/useChildStore'
-import { authService } from '@/api/services/authService'
 import { storyService } from '@/api/services/storyService'
+import { libraryService } from '@/api/services/libraryService'
+import type { LibraryItem, LibraryItemType, LibrarySortOrder } from '@/api/services/libraryService'
 import SafetyBadge from '@/components/story/SafetyBadge'
 import { useLibraryPreferences } from '@/hooks/useLibraryPreferences'
 import MiniPlayer from '@/components/common/MiniPlayer'
 import { getAgeLayoutConfig } from '@/config/ageConfig'
-import type { UserStorySummary, UserSessionSummary } from '@/types/auth'
+import type { NewsToKidsResponse } from '@/types/api'
 
 // Content type tabs
 type ContentTab = 'all' | 'art-stories' | 'interactive' | 'news'
 
-const TABS: { id: ContentTab; label: string; icon: string }[] = [
-  { id: 'all', label: 'All', icon: '📚' },
-  { id: 'art-stories', label: 'Art Stories', icon: '🎨' },
-  { id: 'interactive', label: 'Interactive', icon: '🌿' },
-  { id: 'news', label: 'News', icon: '📰' },
+const TABS: { id: ContentTab; label: string; icon: React.ReactNode }[] = [
+  { id: 'all', label: 'All', icon: <BookOpen size={16} /> },
+  { id: 'art-stories', label: 'Art Stories', icon: <Palette size={16} /> },
+  { id: 'interactive', label: 'Interactive', icon: <Map size={16} /> },
+  { id: 'news', label: 'News', icon: <Newspaper size={16} /> },
 ]
 
-// ---- unified library item type ----
+const SORT_OPTIONS: { value: LibrarySortOrder; label: string }[] = [
+  { value: 'newest', label: 'Newest First' },
+  { value: 'oldest', label: 'Oldest First' },
+  { value: 'word_count', label: 'Longest First' },
+]
 
-type LibraryItemType = 'art-story' | 'interactive' | 'news'
-
-interface LibraryItem {
-  id: string
-  type: LibraryItemType
-  title: string
-  preview: string
-  image_url: string | null
-  thumbnail_url?: string | null
-  audio_url: string | null
-  created_at: string
-  // Art stories
-  safety_score?: number
-  word_count?: number
-  themes?: string[]
-  // Interactive sessions
-  progress?: number          // 0-100
-  status?: string
-  // News items
-  category?: string
+function tabToApiType(tab: ContentTab): LibraryItemType | undefined {
+  if (tab === 'art-stories') return 'art-story'
+  if (tab === 'interactive') return 'interactive'
+  if (tab === 'news') return 'news'
+  return undefined // 'all'
 }
 
 // ---- helpers ----
@@ -62,17 +53,113 @@ function formatDate(dateStr: string): string {
   })
 }
 
-function sessionProgress(session: UserSessionSummary): number {
-  if (!session.total_segments || session.total_segments === 0) return 0
-  return Math.round((session.current_segment / session.total_segments) * 100)
-}
-
 function truncatePreview(text: string, maxLen = 120): string {
   if (!text) return ''
   return text.length > maxLen ? `${text.slice(0, maxLen)}...` : text
 }
 
-// ---- subcomponents ----
+// ---- Favorite button (#63) ----
+
+function FavoriteButton({
+  itemId,
+  itemType,
+  isFavorited,
+  onToggled,
+}: {
+  itemId: string
+  itemType: LibraryItemType
+  isFavorited: boolean
+  onToggled?: () => void
+}) {
+  const [optimistic, setOptimistic] = useState(isFavorited)
+  const [pending, setPending] = useState(false)
+
+  useEffect(() => {
+    setOptimistic(isFavorited)
+  }, [isFavorited])
+
+  const handleClick = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    const next = !optimistic
+    setOptimistic(next)
+    setPending(true)
+    try {
+      if (next) {
+        await libraryService.addFavorite(itemId, itemType)
+      } else {
+        await libraryService.removeFavorite(itemId, itemType)
+      }
+      onToggled?.()
+    } catch {
+      setOptimistic(!next) // revert
+    } finally {
+      setPending(false)
+    }
+  }
+
+  return (
+    <motion.button
+      onClick={handleClick}
+      disabled={pending}
+      className="text-xl flex-shrink-0 focus:outline-none disabled:opacity-50"
+      whileTap={{ scale: 0.8 }}
+      title={optimistic ? 'Remove from favorites' : 'Add to favorites'}
+    >
+      {optimistic ? '★' : '☆'}
+    </motion.button>
+  )
+}
+
+// ---- Search bar (#62) ----
+
+function SearchBar({
+  onSearch,
+  isLoading,
+}: {
+  onSearch: (query: string) => void
+  isLoading: boolean
+}) {
+  const [query, setQuery] = useState('')
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (query.length >= 2) {
+        onSearch(query)
+      } else if (query.length === 0) {
+        onSearch('')
+      }
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [query, onSearch])
+
+  return (
+    <div className="relative">
+      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">🔍</span>
+      <input
+        type="text"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder="Search your library..."
+        className="w-full pl-10 pr-10 py-2.5 rounded-btn bg-white/80 border border-gray-200 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none text-sm"
+      />
+      {isLoading && (
+        <span className="absolute right-10 top-1/2 -translate-y-1/2 text-gray-400 animate-spin text-sm">
+          ⏳
+        </span>
+      )}
+      {query && (
+        <button
+          onClick={() => setQuery('')}
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+        >
+          ✕
+        </button>
+      )}
+    </div>
+  )
+}
+
+// ---- Delete modal + button ----
 
 function ConfirmDeleteModal({
   isOpen,
@@ -95,15 +182,12 @@ function ConfirmDeleteModal({
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
       >
-        {/* Backdrop */}
         <motion.div
           className="absolute inset-0 bg-black/40"
           onClick={onCancel}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
         />
-
-        {/* Modal */}
         <motion.div
           className="relative bg-white rounded-2xl shadow-xl max-w-sm w-full p-6"
           initial={{ scale: 0.9, opacity: 0 }}
@@ -117,7 +201,6 @@ function ConfirmDeleteModal({
               This will be permanently removed and cannot be undone.
             </p>
           </div>
-
           <div className="flex gap-3">
             <button
               className="flex-1 px-4 py-2.5 rounded-xl border-2 border-gray-200 text-gray-700 font-medium hover:bg-gray-50 transition-colors"
@@ -157,47 +240,70 @@ function DeleteButton({ onDelete }: { onDelete: () => void }) {
   )
 }
 
-function ArtStoryCard({ item, onClick, onDelete, showWordCount = true }: { item: LibraryItem; onClick: () => void; onDelete: () => void; showWordCount?: boolean }) {
-  // Use state for image error to avoid direct DOM mutation via parentElement!.innerHTML
+// ---- subcomponents ----
+
+function ArtStoryCard({
+  item,
+  onClick,
+  onDelete,
+  showFavorite,
+  onFavoriteToggled,
+  showWordCount = true,
+}: {
+  item: LibraryItem
+  onClick: () => void
+  onDelete: () => void
+  showFavorite: boolean
+  onFavoriteToggled?: () => void
+  showWordCount?: boolean
+}) {
   const [imgError, setImgError] = useState(false)
+  const imgSrc = (item as any).thumbnail_url || item.image_url
 
   return (
     <Card className="cursor-pointer" onClick={onClick}>
       <div className="flex gap-4">
         {/* Thumbnail */}
         <div className="flex-shrink-0 w-20 h-20 rounded-lg bg-gradient-to-br from-primary/20 via-secondary/10 to-accent/20 flex items-center justify-center overflow-hidden">
-          {(item.thumbnail_url || item.image_url) && !imgError ? (
+          {imgSrc && !imgError ? (
             <img
-              src={(() => { const url = item.thumbnail_url || item.image_url || ''; return url.startsWith('/') ? url : '/' + url })()}
+              src={imgSrc.startsWith('/') ? imgSrc : '/' + imgSrc}
               alt="Artwork"
               className="w-full h-full object-cover"
               onError={() => setImgError(true)}
             />
           ) : (
-            <motion.span
-              className="text-4xl"
+            <motion.div
               whileHover={{ rotate: [0, -10, 10, 0] }}
               transition={{ duration: 0.5 }}
             >
-              📖
-            </motion.span>
+              <Palette size={36} className="text-primary/60" strokeWidth={1.5} />
+            </motion.div>
           )}
         </div>
 
         {/* Content */}
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2">
-            <div>
+            <div className="min-w-0 flex-1">
               <span className="text-xs font-medium px-2 py-0.5 bg-primary/10 text-primary rounded-full mb-1 inline-block">
                 Art Story
               </span>
-              <h3 className="font-bold text-gray-800 truncate">
-                {item.title}
-              </h3>
+              <h3 className="font-bold text-gray-800 truncate">{item.title}</h3>
             </div>
-            {item.safety_score !== undefined && (
-              <SafetyBadge score={item.safety_score} />
-            )}
+            <div className="flex items-center gap-2 flex-shrink-0">
+              {item.safety_score !== undefined && (
+                <SafetyBadge score={item.safety_score} />
+              )}
+              {showFavorite && (
+                <FavoriteButton
+                  itemId={item.id}
+                  itemType="art-story"
+                  isFavorited={item.is_favorited}
+                  onToggled={onFavoriteToggled}
+                />
+              )}
+            </div>
           </div>
 
           <p className="text-gray-500 text-sm mt-1 line-clamp-2">
@@ -250,7 +356,19 @@ function ArtStoryCard({ item, onClick, onDelete, showWordCount = true }: { item:
   )
 }
 
-function InteractiveStoryCard({ item, onClick, onDelete }: { item: LibraryItem; onClick: () => void; onDelete: () => void }) {
+function InteractiveStoryCard({
+  item,
+  onClick,
+  onDelete,
+  showFavorite,
+  onFavoriteToggled,
+}: {
+  item: LibraryItem
+  onClick: () => void
+  onDelete: () => void
+  showFavorite: boolean
+  onFavoriteToggled?: () => void
+}) {
   const progress = item.progress ?? 0
 
   return (
@@ -258,37 +376,46 @@ function InteractiveStoryCard({ item, onClick, onDelete }: { item: LibraryItem; 
       <div className="flex gap-4">
         {/* Icon */}
         <div className="flex-shrink-0 w-20 h-20 rounded-lg bg-gradient-to-br from-secondary/20 via-accent/10 to-primary/20 flex items-center justify-center">
-          <motion.span
-            className="text-4xl"
+          <motion.div
             whileHover={{ scale: 1.1 }}
             transition={{ duration: 0.3 }}
           >
-            🌿
-          </motion.span>
+            <Compass size={36} className="text-secondary/60" strokeWidth={1.5} />
+          </motion.div>
         </div>
 
         {/* Content */}
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2">
-            <div>
+            <div className="min-w-0 flex-1">
               <span className="text-xs font-medium px-2 py-0.5 bg-secondary/10 text-secondary rounded-full mb-1 inline-block">
                 Interactive Story
               </span>
               <h3 className="font-bold text-gray-800 truncate">{item.title}</h3>
             </div>
-            {item.status && (
-              <span
-                className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                  item.status === 'completed'
-                    ? 'bg-green-100 text-green-700'
-                    : item.status === 'expired'
-                    ? 'bg-gray-100 text-gray-500'
-                    : 'bg-blue-100 text-blue-700'
-                }`}
-              >
-                {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
-              </span>
-            )}
+            <div className="flex items-center gap-2 flex-shrink-0">
+              {item.status && (
+                <span
+                  className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                    item.status === 'completed'
+                      ? 'bg-green-100 text-green-700'
+                      : item.status === 'expired'
+                      ? 'bg-gray-100 text-gray-500'
+                      : 'bg-blue-100 text-blue-700'
+                  }`}
+                >
+                  {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
+                </span>
+              )}
+              {showFavorite && (
+                <FavoriteButton
+                  itemId={item.id}
+                  itemType="interactive"
+                  isFavorited={item.is_favorited}
+                  onToggled={onFavoriteToggled}
+                />
+              )}
+            </div>
           </div>
 
           {/* Progress bar */}
@@ -331,30 +458,56 @@ function InteractiveStoryCard({ item, onClick, onDelete }: { item: LibraryItem; 
   )
 }
 
-function NewsCard({ item, onDelete }: { item: LibraryItem; onDelete: () => void }) {
+function NewsCard({
+  item,
+  onClick,
+  onDelete,
+  showFavorite,
+  onFavoriteToggled,
+}: {
+  item: LibraryItem
+  onClick: () => void
+  onDelete: () => void
+  showFavorite: boolean
+  onFavoriteToggled?: () => void
+}) {
   return (
-    <Card>
+    <Card className="cursor-pointer" onClick={onClick}>
       <div className="flex gap-4">
         {/* Icon */}
         <div className="flex-shrink-0 w-20 h-20 rounded-lg bg-gradient-to-br from-accent/20 via-primary/10 to-secondary/20 flex items-center justify-center">
-          <motion.span
-            className="text-4xl"
+          <motion.div
             whileHover={{ rotate: [0, -5, 5, 0] }}
             transition={{ duration: 0.5 }}
           >
-            📰
-          </motion.span>
+            <Globe size={36} className="text-accent/60" strokeWidth={1.5} />
+          </motion.div>
         </div>
 
         {/* Content */}
         <div className="flex-1 min-w-0">
-          <div>
-            <span className="text-xs font-medium px-2 py-0.5 bg-accent/10 text-accent rounded-full mb-1 inline-block">
-              {item.category
-                ? item.category.charAt(0).toUpperCase() + item.category.slice(1)
-                : 'News'}
-            </span>
-            <h3 className="font-bold text-gray-800 truncate">{item.title}</h3>
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0 flex-1">
+              <span className="text-xs font-medium px-2 py-0.5 bg-accent/10 text-accent rounded-full mb-1 inline-block">
+                {item.category
+                  ? item.category.charAt(0).toUpperCase() + item.category.slice(1)
+                  : 'News'}
+              </span>
+              <h3 className="font-bold text-gray-800 truncate">{item.title}</h3>
+            </div>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              {item.safety_score !== undefined && (
+                <SafetyBadge score={item.safety_score} />
+              )}
+              {showFavorite && (
+                <FavoriteButton
+                  itemId={item.id}
+                  itemType="news"
+                  isFavorited={item.is_favorited}
+                  onToggled={onFavoriteToggled}
+                />
+              )}
+            </div>
           </div>
 
           <p className="text-gray-500 text-sm mt-1 line-clamp-2">
@@ -362,6 +515,12 @@ function NewsCard({ item, onDelete }: { item: LibraryItem; onDelete: () => void 
           </p>
 
           <div className="flex items-center gap-4 mt-2 text-xs text-gray-400">
+            {item.word_count !== undefined && item.word_count > 0 && (
+              <span className="flex items-center gap-1">
+                <span>📝</span>
+                {item.word_count} words
+              </span>
+            )}
             <span className="flex items-center gap-1">
               <span>🕐</span>
               {formatDate(item.created_at)}
@@ -375,6 +534,13 @@ function NewsCard({ item, onDelete }: { item: LibraryItem; onDelete: () => void 
           {item.audio_url && (
             <MiniPlayer itemId={item.id} audioUrl={item.audio_url} />
           )}
+          <motion.span
+            className="text-gray-400"
+            animate={{ x: [0, 4, 0] }}
+            transition={{ duration: 1.5, repeat: Infinity }}
+          >
+            →
+          </motion.span>
         </div>
       </div>
     </Card>
@@ -399,7 +565,7 @@ function ListRow({
   onDelete: () => void
 }) {
   const [imgError, setImgError] = useState(false)
-  const imgSrc = item.thumbnail_url || item.image_url
+  const imgSrc = (item as any).thumbnail_url || item.image_url
   const badge = TYPE_BADGE[item.type]
 
   return (
@@ -452,207 +618,106 @@ function ListRow({
 function LibraryPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const { storyHistory, setCurrentStory, removeStory } = useStoryStore()
+  const { storyHistory, clearHistory, setCurrentStory, removeStory } = useStoryStore()
   const { isAuthenticated } = useAuthStore()
   const { currentChild, defaultChildId } = useChildStore()
   const { viewMode, toggleViewMode } = useLibraryPreferences()
   const ageLayout = getAgeLayoutConfig(currentChild?.age_group)
 
   const [activeTab, setActiveTab] = useState<ContentTab>('all')
-  const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set())
+  const [sortOrder, setSortOrder] = useState<LibrarySortOrder>('newest')
+  const [searchQuery, setSearchQuery] = useState('')
   const [deleteTarget, setDeleteTarget] = useState<LibraryItem | null>(null)
+  const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set())
   const [pageSize] = useState(20)
-  const [artOffset, setArtOffset] = useState(0)
-  // Accumulate art story pages so "Load More" appends rather than replaces
-  const [accumulatedServerArt, setAccumulatedServerArt] = useState<UserStorySummary[]>([])
+  const [offset, setOffset] = useState(0)
 
   const childId = currentChild?.child_id || defaultChildId
+  const isSearching = searchQuery.length >= 2
 
-  // ---- data fetching ----
+  // Reset offset when tab, sort, or search changes
+  useEffect(() => {
+    setOffset(0)
+  }, [activeTab, sortOrder, searchQuery])
 
-  // Art stories (authenticated) — fetches one page at a time
-  const { data: serverArtData, isLoading: artLoading } = useQuery({
-    queryKey: ['library-art-stories', artOffset, pageSize],
-    queryFn: () => authService.getMyStories({ limit: pageSize, offset: artOffset }),
-    enabled: isAuthenticated,
+  // ---- data fetching (#61 — unified API for authenticated users) ----
+
+  const apiType = tabToApiType(activeTab)
+
+  // Unified library (authenticated, not searching)
+  const {
+    data: libraryData,
+    isLoading: libraryLoading,
+  } = useQuery({
+    queryKey: ['library', activeTab, sortOrder, offset, pageSize],
+    queryFn: () =>
+      libraryService.getLibrary({
+        type: apiType,
+        sort: sortOrder,
+        limit: pageSize,
+        offset,
+      }),
+    enabled: isAuthenticated && !isSearching,
   })
 
-  // Append newly fetched page into the accumulator so prior pages are preserved
-  useEffect(() => {
-    if (serverArtData?.stories && serverArtData.stories.length > 0) {
-      setAccumulatedServerArt((prev) => {
-        const existingIds = new Set(prev.map((s) => s.story_id))
-        const newItems = serverArtData.stories.filter((s) => !existingIds.has(s.story_id))
-        return newItems.length > 0 ? [...prev, ...newItems] : prev
-      })
-    }
-  }, [serverArtData])
+  // Search (authenticated, searching)
+  const {
+    data: searchData,
+    isLoading: searchLoading,
+  } = useQuery({
+    queryKey: ['library-search', searchQuery, activeTab, sortOrder, offset],
+    queryFn: () =>
+      libraryService.searchLibrary({
+        q: searchQuery,
+        type: apiType,
+        sort: sortOrder,
+        limit: pageSize,
+        offset,
+      }),
+    enabled: isAuthenticated && isSearching,
+  })
 
-  // Art stories by child_id (unauthenticated)
+  // Fallback: local stories (unauthenticated)
   const { data: childArtStories } = useQuery({
     queryKey: ['library-child-art-stories', childId],
     queryFn: () => storyService.getStoryHistory(childId),
     enabled: !!childId && !isAuthenticated,
   })
 
-  // Interactive sessions (authenticated)
-  const { data: sessionData, isLoading: sessionsLoading } = useQuery({
-    queryKey: ['library-sessions'],
-    queryFn: () => authService.getMySessions({ limit: 50, offset: 0 }),
-    enabled: isAuthenticated,
-  })
-
-  // News history by child_id
-  const { data: newsHistory, isLoading: newsLoading } = useQuery({
+  // Fallback: news by child_id (unauthenticated)
+  const { data: newsHistory } = useQuery({
     queryKey: ['library-news-history', childId],
     queryFn: () => storyService.getNewsHistory(childId),
-    enabled: !!childId,
+    enabled: !!childId && !isAuthenticated,
   })
 
-  // ---- build unified art story items ----
+  // ---- build items ----
 
-  const artItems: LibraryItem[] = (() => {
-    if (isAuthenticated && accumulatedServerArt.length > 0) {
-      const serverIds = new Set(accumulatedServerArt.map((s) => s.story_id))
+  const activeData = isSearching ? searchData : libraryData
+  const isLoading = isSearching ? searchLoading : libraryLoading
 
-      // UserStorySummary does not include safety_score; SafetyBadge will not render
-      // for server-side items until the API is extended to return it.
-      const serverItems: LibraryItem[] = accumulatedServerArt.map((s) => ({
-        id: s.story_id,
-        type: 'art-story',
-        title: `Story #${s.story_id.slice(0, 8)}`,
-        preview: s.story_preview || '',
-        image_url: s.image_url,
-        audio_url: s.audio_url,
-        created_at: s.created_at,
-        word_count: s.word_count,
-        themes: s.themes,
-      }))
+  // Authenticated: use unified API response
+  const serverItems: LibraryItem[] = isAuthenticated ? (activeData?.items ?? []) : []
+  const serverTotal = isAuthenticated ? (activeData?.total ?? 0) : 0
 
-      const localOnly: LibraryItem[] = storyHistory
-        .filter((s) => !serverIds.has(s.story_id))
-        .map((s) => ({
-          id: s.story_id,
-          type: 'art-story',
-          title: `Story #${s.story_id.slice(0, 8)}`,
-          preview: s.story.text,
-          image_url: s.image_url ?? null,
-          audio_url: s.audio_url ?? null,
-          created_at: s.created_at,
-          safety_score: s.safety_score as number | undefined,
-          word_count: s.story.word_count,
-          themes: s.educational_value.themes,
-        }))
+  // Unauthenticated: build from local stores (existing fallback behavior)
+  const localItems: LibraryItem[] = !isAuthenticated
+    ? buildLocalItems(storyHistory, childArtStories, newsHistory, activeTab, searchQuery)
+    : []
 
-      return [...serverItems, ...localOnly]
-    }
-
-    if (childArtStories && childArtStories.length > 0) {
-      const serverIds = new Set(childArtStories.map((s) => s.story_id))
-
-      const serverItems: LibraryItem[] = childArtStories.map((s) => ({
-        id: s.story_id,
-        type: 'art-story',
-        title: `Story #${s.story_id.slice(0, 8)}`,
-        preview: s.story?.text ? s.story.text.slice(0, 200) : '',
-        image_url: s.image_url ?? null,
-        audio_url: s.audio_url ?? null,
-        created_at: s.created_at,
-        safety_score: s.safety_score as number | undefined,
-        word_count: s.story?.word_count || 0,
-        themes: s.educational_value?.themes || [],
-      }))
-
-      const localOnly: LibraryItem[] = storyHistory
-        .filter((s) => !serverIds.has(s.story_id))
-        .map((s) => ({
-          id: s.story_id,
-          type: 'art-story',
-          title: `Story #${s.story_id.slice(0, 8)}`,
-          preview: s.story.text,
-          image_url: s.image_url ?? null,
-          audio_url: s.audio_url ?? null,
-          created_at: s.created_at,
-          safety_score: s.safety_score as number | undefined,
-          word_count: s.story.word_count,
-          themes: s.educational_value.themes,
-        }))
-
-      return [...serverItems, ...localOnly]
-    }
-
-    return storyHistory.map((s) => ({
-      id: s.story_id,
-      type: 'art-story',
-      title: `Story #${s.story_id.slice(0, 8)}`,
-      preview: s.story.text,
-      image_url: s.image_url ?? null,
-      audio_url: s.audio_url ?? null,
-      created_at: s.created_at,
-      safety_score: s.safety_score,
-      word_count: s.story.word_count,
-      themes: s.educational_value.themes,
-    }))
-  })()
-
-  // ---- build interactive session items ----
-
-  const interactiveItems: LibraryItem[] = (sessionData?.sessions ?? []).map(
-    (session: UserSessionSummary) => ({
-      id: session.session_id,
-      type: 'interactive',
-      title: session.story_title,
-      preview: session.theme ? `Theme: ${session.theme}` : 'Interactive adventure',
-      image_url: null,
-      audio_url: null,
-      created_at: session.created_at,
-      progress: sessionProgress(session),
-      status: session.status,
-    })
-  )
-
-  // ---- build news items ----
-  // News history returns raw story dicts from the repo, not NewsToKidsResponse
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const newsItems: LibraryItem[] = (newsHistory ?? []).map((n: any) => ({
-    id: n.story_id ?? n.conversion_id,
-    type: 'news' as const,
-    title: n.analysis?.kid_title || n.kid_title || `News #${(n.story_id ?? n.conversion_id ?? '').slice(0, 8)}`,
-    preview: n.story?.text || n.kid_content || '',
-    image_url: null,
-    audio_url: n.audio_url ?? null,
-    created_at: n.created_at,
-    category: n.analysis?.category || n.category,
-  }))
-
-  // ---- merge + filter ----
-
-  const dateSorter = (a: LibraryItem, b: LibraryItem) =>
-    new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-
-  const allItems = [...artItems, ...interactiveItems, ...newsItems].sort(dateSorter)
-
-  // Use .slice() before sorting to avoid mutating the source arrays in-place
-  // Filter out items currently being deleted for optimistic UI
+  // Filter out items being deleted
   const filterDeleting = (items: LibraryItem[]) =>
     items.filter((i) => !deletingIds.has(i.id))
 
-  const visibleItems = filterDeleting(
-    activeTab === 'all'
-      ? allItems
-      : activeTab === 'art-stories'
-      ? artItems.slice().sort(dateSorter)
-      : activeTab === 'interactive'
-      ? interactiveItems.slice().sort(dateSorter)
-      : newsItems.slice().sort(dateSorter)
-  )
-
-  const hasMoreArt =
-    isAuthenticated && serverArtData && artOffset + pageSize < serverArtData.total
-
-  const isLoading = artLoading || sessionsLoading || newsLoading
+  const visibleItems = filterDeleting(isAuthenticated ? serverItems : localItems)
+  const totalItems = isAuthenticated ? serverTotal : localItems.length
+  const hasMore = isAuthenticated && offset + pageSize < serverTotal
 
   // ---- handlers ----
+
+  const handleSearch = useCallback((q: string) => {
+    setSearchQuery(q)
+  }, [])
 
   const handleItemClick = (item: LibraryItem) => {
     if (item.type === 'art-story') {
@@ -661,20 +726,18 @@ function LibraryPage() {
       navigate(`/story/${item.id}`)
     } else if (item.type === 'interactive') {
       navigate(`/interactive?session=${item.id}`)
+    } else if (item.type === 'news') {
+      navigate(`/news`)
     }
-    // News items are read-only in the library for now
   }
 
   const handleDeleteItem = useCallback(async (item: LibraryItem) => {
-    // Optimistically remove from all local data sources FIRST
     setDeletingIds((prev) => new Set(prev).add(item.id))
 
     if (item.type !== 'interactive') {
       removeStory(item.id)
-      setAccumulatedServerArt((prev) => prev.filter((s) => s.story_id !== item.id))
     }
 
-    // Then try server deletion (best effort — may fail for unauthenticated users)
     try {
       if (item.type === 'interactive') {
         await storyService.deleteSession(item.id)
@@ -682,18 +745,32 @@ function LibraryPage() {
         await storyService.deleteStory(item.id)
       }
     } catch {
-      // Server deletion failed — local removal already happened, which is fine
+      // Server deletion failed — local removal already happened
     }
 
-    // Refresh queries so server-side lists stay in sync
-    queryClient.invalidateQueries({ queryKey: ['library-sessions'] })
-    queryClient.invalidateQueries({ queryKey: ['library-art-stories'] })
+    queryClient.invalidateQueries({ queryKey: ['library'] })
+    queryClient.invalidateQueries({ queryKey: ['library-search'] })
     queryClient.invalidateQueries({ queryKey: ['library-child-art-stories'] })
     queryClient.invalidateQueries({ queryKey: ['library-news-history'] })
   }, [queryClient, removeStory])
 
-  const handleLoadMoreArt = () => {
-    setArtOffset((prev) => prev + pageSize)
+  const handleClearHistory = () => {
+    if (
+      window.confirm(
+        'Are you sure you want to clear all local story history? This cannot be undone.'
+      )
+    ) {
+      clearHistory()
+    }
+  }
+
+  const handleLoadMore = () => {
+    setOffset((prev) => prev + pageSize)
+  }
+
+  const handleFavoriteToggled = () => {
+    queryClient.invalidateQueries({ queryKey: ['library'] })
+    queryClient.invalidateQueries({ queryKey: ['library-search'] })
   }
 
   // ---- render ----
@@ -707,48 +784,60 @@ function LibraryPage() {
         animate={{ opacity: 1, y: 0 }}
       >
         <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-          <span className="text-3xl">📚</span>
+          <BookOpen size={28} className="text-primary" />
           My Library
         </h1>
-        <motion.button
-          onClick={toggleViewMode}
-          className="p-2 rounded-lg text-gray-500 hover:text-primary hover:bg-primary/10 transition-colors"
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          title={viewMode === 'grid' ? 'Switch to list view' : 'Switch to grid view'}
-        >
-          {viewMode === 'grid' ? (
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" />
-              <line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" />
-            </svg>
-          ) : (
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" />
-              <rect x="3" y="14" width="7" height="7" /><rect x="14" y="14" width="7" height="7" />
-            </svg>
+        <div className="flex items-center gap-2">
+          <motion.button
+            onClick={toggleViewMode}
+            className="p-2 rounded-lg text-gray-500 hover:text-primary hover:bg-primary/10 transition-colors"
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            title={viewMode === 'grid' ? 'Switch to list view' : 'Switch to grid view'}
+          >
+            {viewMode === 'grid' ? (
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" />
+                <line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" />
+              </svg>
+            ) : (
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" />
+                <rect x="3" y="14" width="7" height="7" /><rect x="14" y="14" width="7" height="7" />
+              </svg>
+            )}
+          </motion.button>
+          {storyHistory.length > 0 && !isAuthenticated && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleClearHistory}
+              className="text-gray-500"
+            >
+              Clear Local History
+            </Button>
           )}
-        </motion.button>
+        </div>
       </motion.div>
 
-      {/* Tab bar */}
+      {/* Search bar (#62) */}
       <motion.div
-        className="flex gap-2 overflow-x-auto pb-1"
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.05 }}
+      >
+        <SearchBar onSearch={handleSearch} isLoading={searchLoading} />
+      </motion.div>
+
+      {/* Tab bar + sort dropdown (#65) */}
+      <motion.div
+        className="flex items-center justify-between gap-2"
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1 }}
       >
-        {TABS.map((tab) => {
-          const count =
-            tab.id === 'all'
-              ? allItems.length
-              : tab.id === 'art-stories'
-              ? artItems.length
-              : tab.id === 'interactive'
-              ? interactiveItems.length
-              : newsItems.length
-
-          return (
+        <div className="flex gap-2 overflow-x-auto pb-1">
+          {TABS.map((tab) => (
             <motion.button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
@@ -760,32 +849,33 @@ function LibraryPage() {
               whileHover={{ scale: 1.03 }}
               whileTap={{ scale: 0.97 }}
             >
-              <span>{tab.icon}</span>
+              {tab.icon}
               <span>{tab.label}</span>
-              {count > 0 && (
-                <span
-                  className={`text-xs px-1.5 py-0.5 rounded-full ${
-                    activeTab === tab.id
-                      ? 'bg-white/30 text-white'
-                      : 'bg-gray-200 text-gray-600'
-                  }`}
-                >
-                  {count}
-                </span>
-              )}
             </motion.button>
-          )
-        })}
+          ))}
+        </div>
+
+        <select
+          value={sortOrder}
+          onChange={(e) => setSortOrder(e.target.value as LibrarySortOrder)}
+          className="flex-shrink-0 text-sm px-3 py-2 rounded-btn bg-white/80 border border-gray-200 text-gray-600 focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none cursor-pointer"
+        >
+          {SORT_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
       </motion.div>
 
       {/* Loading indicator */}
-      {isAuthenticated && isLoading && allItems.length === 0 && (
+      {isLoading && visibleItems.length === 0 && (
         <motion.div
           className="text-center py-4 text-gray-400 text-sm"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
         >
-          Loading your library from the server...
+          {isSearching ? 'Searching...' : 'Loading your library...'}
         </motion.div>
       )}
 
@@ -806,19 +896,40 @@ function LibraryPage() {
                 ) : (
                   <>
                     {item.type === 'art-story' && (
-                      <ArtStoryCard item={item} onClick={() => handleItemClick(item)} onDelete={() => setDeleteTarget(item)} showWordCount={ageLayout.showWordCount} />
+                      <ArtStoryCard
+                        item={item}
+                        onClick={() => handleItemClick(item)}
+                        onDelete={() => setDeleteTarget(item)}
+                        showFavorite={isAuthenticated}
+                        onFavoriteToggled={handleFavoriteToggled}
+                        showWordCount={ageLayout.showWordCount}
+                      />
                     )}
                     {item.type === 'interactive' && (
-                      <InteractiveStoryCard item={item} onClick={() => handleItemClick(item)} onDelete={() => setDeleteTarget(item)} />
+                      <InteractiveStoryCard
+                        item={item}
+                        onClick={() => handleItemClick(item)}
+                        onDelete={() => setDeleteTarget(item)}
+                        showFavorite={isAuthenticated}
+                        onFavoriteToggled={handleFavoriteToggled}
+                      />
                     )}
-                    {item.type === 'news' && <NewsCard item={item} onDelete={() => setDeleteTarget(item)} />}
+                    {item.type === 'news' && (
+                      <NewsCard
+                        item={item}
+                        onClick={() => handleItemClick(item)}
+                        onDelete={() => setDeleteTarget(item)}
+                        showFavorite={isAuthenticated}
+                        onFavoriteToggled={handleFavoriteToggled}
+                      />
+                    )}
                   </>
                 )}
               </motion.div>
             ))}
 
-            {/* Load more (art stories only, when on All or Art tab) */}
-            {hasMoreArt && (activeTab === 'all' || activeTab === 'art-stories') && (
+            {/* Load more */}
+            {hasMore && (
               <motion.div
                 className="text-center pt-2"
                 initial={{ opacity: 0 }}
@@ -827,15 +938,15 @@ function LibraryPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={handleLoadMoreArt}
-                  isLoading={artLoading && artOffset > 0}
+                  onClick={handleLoadMore}
+                  isLoading={isLoading && offset > 0}
                 >
                   Load More
                 </Button>
               </motion.div>
             )}
           </motion.div>
-        ) : (
+        ) : !isLoading ? (
           // Empty state
           <motion.div
             className="text-center py-16"
@@ -847,10 +958,12 @@ function LibraryPage() {
               animate={{ y: [0, -10, 0] }}
               transition={{ duration: 2, repeat: Infinity }}
             >
-              📭
+              {isSearching ? '🔍' : '📭'}
             </motion.div>
             <h2 className="text-xl font-bold text-gray-800 mb-2">
-              {activeTab === 'all'
+              {isSearching
+                ? 'No results found'
+                : activeTab === 'all'
                 ? 'Nothing here yet'
                 : activeTab === 'art-stories'
                 ? 'No art stories yet'
@@ -859,27 +972,31 @@ function LibraryPage() {
                 : 'No news conversions yet'}
             </h2>
             <p className="text-gray-500 mb-6">
-              {activeTab === 'news'
+              {isSearching
+                ? 'Try a different search term or clear the search.'
+                : activeTab === 'news'
                 ? 'Visit the News Explorer to convert articles for kids!'
                 : activeTab === 'interactive'
                 ? 'Try the Interactive Story mode to create branching adventures!'
                 : 'Upload your first artwork and start creating amazing stories!'}
             </p>
-            <Link to={activeTab === 'news' ? '/news' : activeTab === 'interactive' ? '/interactive' : '/upload'}>
-              <Button size="lg" leftIcon={<span>✨</span>}>
-                {activeTab === 'news'
-                  ? 'Go to News Explorer'
-                  : activeTab === 'interactive'
-                  ? 'Start an Adventure'
-                  : 'Start Creating'}
-              </Button>
-            </Link>
+            {!isSearching && (
+              <Link to={activeTab === 'news' ? '/news' : activeTab === 'interactive' ? '/interactive' : '/upload'}>
+                <Button size="lg" leftIcon={<span>✨</span>}>
+                  {activeTab === 'news'
+                    ? 'Go to News Explorer'
+                    : activeTab === 'interactive'
+                    ? 'Start an Adventure'
+                    : 'Start Creating'}
+                </Button>
+              </Link>
+            )}
           </motion.div>
-        )}
+        ) : null}
       </AnimatePresence>
 
       {/* Footer statistics */}
-      {allItems.length > 0 && (
+      {totalItems > 0 && !isSearching && (
         <motion.div
           className="text-center py-4 text-gray-500"
           initial={{ opacity: 0 }}
@@ -888,16 +1005,7 @@ function LibraryPage() {
         >
           <p>
             Total:{' '}
-            <span className="font-bold text-primary">{allItems.length}</span> creations
-            {artItems.length > 0 && (
-              <> &middot; <span className="font-bold">{artItems.length}</span> art stories</>
-            )}
-            {interactiveItems.length > 0 && (
-              <> &middot; <span className="font-bold">{interactiveItems.length}</span> adventures</>
-            )}
-            {newsItems.length > 0 && (
-              <> &middot; <span className="font-bold">{newsItems.length}</span> news</>
-            )}
+            <span className="font-bold text-primary">{totalItems}</span> creations
           </p>
         </motion.div>
       )}
@@ -919,6 +1027,73 @@ function LibraryPage() {
       />
     </div>
   )
+}
+
+// ---- Local fallback for unauthenticated users ----
+
+function buildLocalItems(
+  storyHistory: any[],
+  childArtStories: any[] | undefined,
+  newsHistory: NewsToKidsResponse[] | undefined,
+  activeTab: ContentTab,
+  searchQuery: string,
+): LibraryItem[] {
+  const items: LibraryItem[] = []
+  const queryLower = searchQuery.toLowerCase()
+
+  // Art stories
+  if (activeTab === 'all' || activeTab === 'art-stories') {
+    const stories = childArtStories && childArtStories.length > 0
+      ? childArtStories
+      : storyHistory
+
+    for (const s of stories) {
+      const text = s.story?.text || s.story_text || ''
+      const item: LibraryItem = {
+        id: s.story_id,
+        type: 'art-story',
+        title: `Story #${s.story_id.slice(0, 8)}`,
+        preview: text.slice(0, 150),
+        image_url: s.image_url ?? null,
+        audio_url: s.audio_url ?? null,
+        created_at: s.created_at,
+        is_favorited: false,
+        safety_score: s.safety_score,
+        word_count: s.story?.word_count || s.word_count || 0,
+        themes: s.educational_value?.themes || s.themes || [],
+      }
+
+      if (!searchQuery || text.toLowerCase().includes(queryLower)) {
+        items.push(item)
+      }
+    }
+  }
+
+  // News
+  if ((activeTab === 'all' || activeTab === 'news') && newsHistory) {
+    for (const n of newsHistory) {
+      const item: LibraryItem = {
+        id: n.conversion_id,
+        type: 'news',
+        title: n.kid_title,
+        preview: n.kid_content,
+        image_url: null,
+        audio_url: n.audio_url ?? null,
+        created_at: n.created_at as unknown as string,
+        is_favorited: false,
+        category: n.category,
+      }
+
+      if (!searchQuery || `${n.kid_title} ${n.kid_content}`.toLowerCase().includes(queryLower)) {
+        items.push(item)
+      }
+    }
+  }
+
+  // Sort by date descending
+  items.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+
+  return items
 }
 
 export default LibraryPage
