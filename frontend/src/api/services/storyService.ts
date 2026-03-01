@@ -291,10 +291,11 @@ export const storyService = {
    * Get news conversion history
    */
   async getNewsHistory(childId: string): Promise<NewsToKidsResponse[]> {
-    const response = await apiClient.get<NewsToKidsResponse[]>(
+    const response = await apiClient.get<{ items: NewsToKidsResponse[] }>(
       `/news-to-kids/history/${childId}`
     )
-    return response.data
+    // Backend returns paginated response { items, total, limit, offset }
+    return response.data.items ?? (response.data as unknown as NewsToKidsResponse[])
   },
 
   /**

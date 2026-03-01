@@ -14,7 +14,6 @@ import { useLibraryPreferences } from '@/hooks/useLibraryPreferences'
 import MiniPlayer from '@/components/common/MiniPlayer'
 import { getAgeLayoutConfig } from '@/config/ageConfig'
 import type { UserStorySummary, UserSessionSummary } from '@/types/auth'
-import type { NewsToKidsResponse } from '@/types/api'
 
 // Content type tabs
 type ContentTab = 'all' | 'art-stories' | 'interactive' | 'news'
@@ -613,16 +612,17 @@ function LibraryPage() {
   )
 
   // ---- build news items ----
-
-  const newsItems: LibraryItem[] = (newsHistory ?? []).map((n: NewsToKidsResponse) => ({
-    id: n.conversion_id,
-    type: 'news',
-    title: n.kid_title,
-    preview: n.kid_content,
+  // News history returns raw story dicts from the repo, not NewsToKidsResponse
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const newsItems: LibraryItem[] = (newsHistory ?? []).map((n: any) => ({
+    id: n.story_id ?? n.conversion_id,
+    type: 'news' as const,
+    title: n.analysis?.kid_title || n.kid_title || `News #${(n.story_id ?? n.conversion_id ?? '').slice(0, 8)}`,
+    preview: n.story?.text || n.kid_content || '',
     image_url: null,
-    audio_url: n.audio_url,
+    audio_url: n.audio_url ?? null,
     created_at: n.created_at,
-    category: n.category,
+    category: n.analysis?.category || n.category,
   }))
 
   // ---- merge + filter ----
