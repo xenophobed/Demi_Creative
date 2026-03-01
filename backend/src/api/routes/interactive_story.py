@@ -20,10 +20,12 @@ from ..models import (
     ChoiceRequest,
     ChoiceResponse,
     SessionStatusResponse,
+    SessionResumeResponse,
     SaveInteractiveStoryResponse,
     StorySegment,
     StoryChoice,
     EducationalValue,
+    AgeGroup,
     SessionStatus as SessionStatusEnum
 )
 from ..deps import get_current_user, get_session_for_owner
@@ -541,6 +543,71 @@ async def choose_story_branch(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Story branch generation failed, please try again later"
+        )
+
+
+@router.get(
+    "/{session_id}/resume",
+    response_model=SessionResumeResponse,
+    summary="Resume interactive story session",
+    description="Fetch full session data including all segments for resuming a story"
+)
+async def resume_session(
+    session_id: str = PathParam(..., description="Session ID"),
+    user: UserData = Depends(get_current_user),
+):
+    """
+    Resume an interactive story session — returns all segments so the
+    frontend can restore the story view from a My Library card click.
+    """
+    try:
+        session = await get_session_for_owner(session_id, user.user_id)
+
+        # Parse stored segments into StorySegment models
+        segments = []
+        for seg_data in session.segments:
+            choices = [
+                StoryChoice(**c) for c in seg_data.get("choices", [])
+            ]
+            segments.append(StorySegment(
+                segment_id=seg_data.get("segment_id", 0),
+                text=seg_data.get("text", ""),
+                audio_url=seg_data.get("audio_url"),
+                choices=choices,
+                is_ending=seg_data.get("is_ending", False),
+                primary_mode=seg_data.get("primary_mode", "both"),
+                optional_content_available=seg_data.get("optional_content_available", False),
+                optional_content_type=seg_data.get("optional_content_type"),
+            ))
+
+        educational_summary = None
+        if session.educational_summary:
+            educational_summary = EducationalValue(**session.educational_summary)
+
+        progress = (
+            session.current_segment / session.total_segments
+            if session.total_segments > 0 else 0.0
+        )
+
+        return SessionResumeResponse(
+            session_id=session.session_id,
+            status=SessionStatusEnum(session.status),
+            story_title=session.story_title,
+            age_group=AgeGroup(session.age_group),
+            segments=segments,
+            choice_history=session.choice_history,
+            progress=progress,
+            total_segments=session.total_segments,
+            educational_summary=educational_summary,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error resuming session: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to resume session"
         )
 
 
