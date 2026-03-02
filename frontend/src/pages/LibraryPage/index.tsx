@@ -41,17 +41,6 @@ function tabToApiType(tab: ContentTab): LibraryItemType | undefined {
 
 // ---- helpers ----
 
-function formatDate(dateStr: string): string {
-  const date = new Date(dateStr)
-  return date.toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-}
-
 function truncatePreview(text: string, maxLen = 120): string {
   if (!text) return ''
   return text.length > maxLen ? `${text.slice(0, maxLen)}...` : text
@@ -241,23 +230,29 @@ function DeleteButton({ onDelete }: { onDelete: () => void }) {
 
 // ---- card config ----
 
+const TYPE_BADGE: Record<LibraryItemType, { label: string; color: string }> = {
+  'art-story': { label: 'Art Story', color: 'bg-primary/10 text-primary' },
+  interactive: { label: 'Interactive', color: 'bg-secondary/10 text-secondary' },
+  news: { label: 'News', color: 'bg-accent/10 text-accent' },
+}
+
 const CARD_STYLES: Record<LibraryItemType, {
   icon: React.ReactNode
   gradient: string
   badgeColor: string
 }> = {
   'art-story': {
-    icon: <Palette size={28} className="text-primary/60" strokeWidth={1.5} />,
+    icon: <Palette size={36} className="text-primary/60" strokeWidth={1.5} />,
     gradient: 'from-primary/20 via-secondary/10 to-accent/20',
     badgeColor: 'bg-primary/10 text-primary',
   },
   interactive: {
-    icon: <Compass size={28} className="text-secondary/60" strokeWidth={1.5} />,
+    icon: <Compass size={36} className="text-secondary/60" strokeWidth={1.5} />,
     gradient: 'from-secondary/20 via-accent/10 to-primary/20',
     badgeColor: 'bg-secondary/10 text-secondary',
   },
   news: {
-    icon: <Globe size={28} className="text-accent/60" strokeWidth={1.5} />,
+    icon: <Globe size={36} className="text-accent/60" strokeWidth={1.5} />,
     gradient: 'from-accent/20 via-primary/10 to-secondary/20',
     badgeColor: 'bg-accent/10 text-accent',
   },
@@ -299,10 +294,10 @@ function LibraryCard({
       : badge.label
 
   return (
-    <Card className="cursor-pointer h-full" padding="sm" onClick={onClick}>
-      <div className="flex gap-3 h-full">
+    <Card className="cursor-pointer h-full" onClick={onClick} padding="sm">
+      <div className="flex gap-4 h-full">
         {/* Thumbnail / Icon */}
-        <div className={`flex-shrink-0 w-16 h-16 rounded-lg bg-gradient-to-br ${style.gradient} flex items-center justify-center overflow-hidden`}>
+        <div className={`flex-shrink-0 w-16 h-16 rounded-xl bg-gradient-to-br ${style.gradient} flex items-center justify-center overflow-hidden`}>
           {imgSrc && !imgError ? (
             <img
               src={imgSrc.startsWith('/') ? imgSrc : '/' + imgSrc}
@@ -320,19 +315,19 @@ function LibraryCard({
           {/* Row 1: Badge + Title + Actions */}
           <div className="flex items-start gap-2">
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-1.5 mb-0.5">
-                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full leading-none ${style.badgeColor}`}>
+              <div className="flex items-center gap-2 mb-1">
+                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${style.badgeColor}`}>
                   {badgeLabel}
                 </span>
                 {item.type === 'interactive' && item.status && (
-                  <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full leading-none ${STATUS_COLORS[item.status] || STATUS_COLORS.active}`}>
+                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${STATUS_COLORS[item.status] || STATUS_COLORS.active}`}>
                     {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
                   </span>
                 )}
               </div>
-              <h3 className="text-sm font-bold text-gray-800 truncate leading-tight">{item.title}</h3>
+              <h3 className="text-base font-bold text-gray-800 truncate">{item.title}</h3>
             </div>
-            <div className="flex items-center gap-1 flex-shrink-0">
+            <div className="flex items-center gap-1.5 flex-shrink-0">
               {showFavorite && (
                 <FavoriteButton
                   itemId={item.id}
@@ -347,12 +342,12 @@ function LibraryCard({
 
           {/* Row 2: Preview text OR Progress bar */}
           {item.type === 'interactive' ? (
-            <div className="mt-1.5">
-              <div className="flex items-center justify-between text-[10px] text-gray-500 mb-1">
+            <div className="mt-2">
+              <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
                 <span>Progress</span>
                 <span>{progress}%</span>
               </div>
-              <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+              <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
                 <motion.div
                   className="h-full bg-secondary rounded-full"
                   initial={{ width: 0 }}
@@ -362,18 +357,18 @@ function LibraryCard({
               </div>
             </div>
           ) : item.preview ? (
-            <p className="text-gray-500 text-xs mt-1 line-clamp-2 leading-relaxed">
+            <p className="text-gray-500 text-sm mt-1.5 line-clamp-2 leading-relaxed">
               {truncatePreview(item.preview)}
             </p>
           ) : null}
 
           {/* Row 3: Theme tags (art-story only) */}
           {item.themes && item.themes.length > 0 && (
-            <div className="flex flex-wrap gap-1 mt-1.5">
+            <div className="flex flex-wrap gap-1.5 mt-2">
               {item.themes.slice(0, 3).map((theme) => (
                 <span
                   key={theme}
-                  className="text-[10px] px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded-full leading-none"
+                  className="text-xs px-2 py-0.5 bg-gray-100 text-gray-500 rounded-full"
                 >
                   {theme}
                 </span>
@@ -382,21 +377,29 @@ function LibraryCard({
           )}
 
           {/* Spacer pushes footer to bottom */}
-          <div className="flex-1 min-h-1" />
+          <div className="flex-1 min-h-2" />
 
           {/* Row 4: Footer — meta left, audio + chevron right */}
-          <div className="flex items-center justify-between mt-1.5 pt-1.5 border-t border-gray-50">
-            <div className="flex items-center gap-3 text-[10px] text-gray-400">
+          <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-100">
+            <div className="flex items-center gap-1.5 text-xs text-gray-400">
               {showWordCount && item.word_count !== undefined && item.word_count > 0 && (
-                <span>{item.word_count}w</span>
+                <>
+                  <span>{item.word_count}w</span>
+                  <span aria-hidden="true">·</span>
+                </>
               )}
-              <span>{new Date(item.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+              <span>
+                {new Date(item.created_at).toLocaleDateString('en-US', {
+                  month: 'short',
+                  day: 'numeric',
+                })}
+              </span>
             </div>
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-2">
               {item.audio_url && (
                 <MiniPlayer itemId={item.id} audioUrl={item.audio_url} />
               )}
-              <ChevronRight size={14} className="text-gray-300" />
+              <ChevronRight size={16} className="text-gray-300" />
             </div>
           </div>
         </div>
@@ -406,12 +409,6 @@ function LibraryCard({
 }
 
 // ---- list row (compact view) ----
-
-const TYPE_BADGE: Record<LibraryItemType, { label: string; color: string }> = {
-  'art-story': { label: 'Art Story', color: 'bg-primary/10 text-primary' },
-  interactive: { label: 'Interactive', color: 'bg-secondary/10 text-secondary' },
-  news: { label: 'News', color: 'bg-accent/10 text-accent' },
-}
 
 function ListRow({
   item,
@@ -428,12 +425,12 @@ function ListRow({
 
   return (
     <motion.div
-      className="flex items-center gap-3 px-3 py-2 rounded-xl bg-white/80 hover:bg-white cursor-pointer transition-colors border border-gray-100"
+      className="flex items-center gap-4 px-4 py-3 rounded-xl bg-white/80 hover:bg-white cursor-pointer transition-colors border border-gray-100"
       onClick={onClick}
       whileHover={{ x: 2 }}
     >
       {/* Mini thumbnail */}
-      <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center overflow-hidden">
+      <div className="flex-shrink-0 w-12 h-12 rounded-lg bg-gray-100 flex items-center justify-center overflow-hidden">
         {imgSrc && !imgError ? (
           <img
             src={imgSrc.startsWith('/') ? imgSrc : '/' + imgSrc}
@@ -442,22 +439,22 @@ function ListRow({
             onError={() => setImgError(true)}
           />
         ) : (
-          <span className="text-lg">{item.type === 'art-story' ? '📖' : item.type === 'interactive' ? '🌿' : '📰'}</span>
+          <span className="text-xl">{item.type === 'art-story' ? '📖' : item.type === 'interactive' ? '🌿' : '📰'}</span>
         )}
       </div>
 
       {/* Title + badge */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${badge.color}`}>
+          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${badge.color}`}>
             {badge.label}
           </span>
-          <h4 className="text-sm font-semibold text-gray-800 truncate">{item.title}</h4>
+          <h4 className="text-base font-semibold text-gray-800 truncate">{item.title}</h4>
         </div>
       </div>
 
       {/* Meta */}
-      <div className="flex items-center gap-3 text-xs text-gray-400 flex-shrink-0">
+      <div className="flex items-center gap-3 text-sm text-gray-400 flex-shrink-0">
         {item.word_count !== undefined && <span>{item.word_count}w</span>}
         <span className="hidden sm:inline">
           {new Date(item.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
