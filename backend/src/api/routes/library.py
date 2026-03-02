@@ -47,6 +47,8 @@ def _resolve_story_type(story: dict) -> LibraryItemType:
     story_type = story.get("story_type", "image_to_story")
     if story_type == "news_to_kids":
         return LibraryItemType.NEWS
+    if story_type == "morning_show":
+        return LibraryItemType.MORNING_SHOW
     return LibraryItemType.ART_STORY
 
 
@@ -66,12 +68,15 @@ def _story_to_library_item(
 
     # Extract news category from analysis metadata (#84)
     analysis = story.get("analysis", {})
-    category = analysis.get("category") if item_type == LibraryItemType.NEWS else None
+    category = analysis.get("category") if item_type in (LibraryItemType.NEWS, LibraryItemType.MORNING_SHOW) else None
+    duration_seconds = analysis.get("duration_seconds") if item_type == LibraryItemType.MORNING_SHOW else None
+    is_new = analysis.get("is_new") if item_type == LibraryItemType.MORNING_SHOW else None
+    title = analysis.get("kid_title") if item_type == LibraryItemType.MORNING_SHOW else _extract_title(text)
 
     return LibraryItem(
         id=story["story_id"],
         type=item_type,
-        title=_extract_title(text),
+        title=title or _extract_title(text),
         preview=text[:150] if text else "",
         image_url=story.get("image_url"),
         thumbnail_url=thumbnail_url or story.get("image_url"),
@@ -82,6 +87,8 @@ def _story_to_library_item(
         word_count=word_count,
         themes=ed_value.get("themes", []),
         category=category,
+        duration_seconds=duration_seconds,
+        is_new=is_new,
     )
 
 
@@ -101,6 +108,14 @@ def _session_to_library_item(session, is_favorited: bool = False) -> LibraryItem
 
     total = session.total_segments or 1
     progress = int((session.current_segment / total) * 100)
+    progress = max(0, min(100, progress))
+
+    # Enrich interactive cards with metadata similar to art stories
+    full_text = " ".join(
+        segment.get("text", "") for segment in session.segments if segment.get("text")
+    ).strip()
+    word_count = count_words(full_text) if full_text else None
+    themes = [session.theme] if session.theme else []
 
     return LibraryItem(
         id=session.session_id,
@@ -111,6 +126,8 @@ def _session_to_library_item(session, is_favorited: bool = False) -> LibraryItem
         audio_url=None,
         created_at=session.created_at,
         is_favorited=is_favorited,
+        word_count=word_count,
+        themes=themes,
         progress=progress,
         status=session.status,
     )
@@ -146,6 +163,10 @@ def _sort_items(items: List[LibraryItem], sort: LibrarySortOrder) -> None:
         items.sort(key=lambda x: x.created_at)
     elif sort == LibrarySortOrder.WORD_COUNT:
         items.sort(key=lambda x: x.word_count or 0, reverse=True)
+    elif sort == LibrarySortOrder.FAVORITE_FIRST:
+        # Keep newest-first ordering inside each favorite group
+        items.sort(key=lambda x: x.created_at, reverse=True)
+        items.sort(key=lambda x: x.is_favorited, reverse=True)
     else:  # NEWEST (default)
         items.sort(key=lambda x: x.created_at, reverse=True)
 
@@ -172,19 +193,23 @@ async def get_library(
     all_items: List[LibraryItem] = []
 
     # Fetch stories (includes both art-story and news types)
-    if type is None or type in (LibraryItemType.ART_STORY, LibraryItemType.NEWS):
+    if type is None or type in (LibraryItemType.ART_STORY, LibraryItemType.NEWS, LibraryItemType.MORNING_SHOW):
         stories = await story_repo.list_by_user(user.user_id, limit=200, offset=0)
 
         # Separate favorites lookups by resolved type
         art_ids = [s["story_id"] for s in stories if _resolve_story_type(s) == LibraryItemType.ART_STORY]
         news_ids = [s["story_id"] for s in stories if _resolve_story_type(s) == LibraryItemType.NEWS]
+        morning_ids = [s["story_id"] for s in stories if _resolve_story_type(s) == LibraryItemType.MORNING_SHOW]
         fav_art_ids = await favorite_repo.get_favorited_ids(
             user.user_id, "art-story", art_ids
         ) if art_ids else set()
         fav_news_ids = await favorite_repo.get_favorited_ids(
             user.user_id, "news", news_ids
         ) if news_ids else set()
-        fav_story_ids = fav_art_ids | fav_news_ids
+        fav_morning_ids = await favorite_repo.get_favorited_ids(
+            user.user_id, "morning-show", morning_ids
+        ) if morning_ids else set()
+        fav_story_ids = fav_art_ids | fav_news_ids | fav_morning_ids
 
         for s in stories:
             thumb = await _resolve_thumbnail(s["story_id"])
@@ -253,18 +278,22 @@ async def search_library(
     query_lower = q.lower()
 
     # Search stories (includes both art-story and news types)
-    if type is None or type in (LibraryItemType.ART_STORY, LibraryItemType.NEWS):
+    if type is None or type in (LibraryItemType.ART_STORY, LibraryItemType.NEWS, LibraryItemType.MORNING_SHOW):
         stories = await story_repo.list_by_user(user.user_id, limit=200, offset=0)
 
         art_ids = [s["story_id"] for s in stories if _resolve_story_type(s) == LibraryItemType.ART_STORY]
         news_ids = [s["story_id"] for s in stories if _resolve_story_type(s) == LibraryItemType.NEWS]
+        morning_ids = [s["story_id"] for s in stories if _resolve_story_type(s) == LibraryItemType.MORNING_SHOW]
         fav_art = await favorite_repo.get_favorited_ids(
             user.user_id, "art-story", art_ids
         ) if art_ids else set()
         fav_news = await favorite_repo.get_favorited_ids(
             user.user_id, "news", news_ids
         ) if news_ids else set()
-        fav_ids = fav_art | fav_news
+        fav_morning = await favorite_repo.get_favorited_ids(
+            user.user_id, "morning-show", morning_ids
+        ) if morning_ids else set()
+        fav_ids = fav_art | fav_news | fav_morning
 
         for s in stories:
             thumb = await _resolve_thumbnail(s["story_id"])
@@ -281,7 +310,8 @@ async def search_library(
             text = s.get("story", {}).get("text", "")
             themes = json.dumps(s.get("educational_value", {}).get("themes", []))
             characters = json.dumps(s.get("characters", []))
-            searchable = f"{text} {themes} {characters}".lower()
+            analysis = json.dumps(s.get("analysis", {}), ensure_ascii=False)
+            searchable = f"{text} {themes} {characters} {analysis}".lower()
 
             if query_lower in searchable:
                 all_items.append(item)

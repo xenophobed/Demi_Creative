@@ -192,6 +192,27 @@ function ProfilePage() {
         </TiltCard>
       </motion.div>
 
+      {/* Morning Show settings shortcut */}
+      <motion.section
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.15 }}
+      >
+        <Card className="p-4 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-base font-bold text-gray-800">Morning Show Preferences</h2>
+            <p className="text-sm text-gray-500">Manage topic channels for Daily Drop episodes.</p>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => navigate('/morning-show/subscriptions')}
+          >
+            Manage Channels
+          </Button>
+        </Card>
+      </motion.section>
+
       {/* Recent Stories */}
       <motion.section
         initial={{ opacity: 0, y: 20 }}

@@ -6,8 +6,8 @@ Pydantic 模型定义所有 API 端点的请求和响应格式
 
 from datetime import datetime
 from enum import Enum
-from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, Field, field_validator
+from typing import List, Optional, Dict, Any, Literal
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 # ============================================================================
@@ -333,6 +333,142 @@ class NewsToKidsResponse(BaseModel):
 
 
 # ============================================================================
+# Morning Show API Models (#44)
+# ============================================================================
+
+ALLOWED_DIALOGUE_ROLES = {"curious_kid", "fun_expert", "guest"}
+ALLOWED_ANIMATION_TYPES = {"pan", "zoom", "ken_burns"}
+
+
+class DialogueLine(BaseModel):
+    """Morning Show 对话行"""
+    role: str = Field(..., description="角色: curious_kid | fun_expert | guest")
+    text: str = Field(..., min_length=1, description="对话内容")
+    timestamp_start: float = Field(..., ge=0.0, description="开始时间（秒）")
+    timestamp_end: float = Field(..., ge=0.0, description="结束时间（秒）")
+
+    @field_validator("role")
+    @classmethod
+    def validate_role(cls, value: str) -> str:
+        if value not in ALLOWED_DIALOGUE_ROLES:
+            raise ValueError("role must be one of curious_kid | fun_expert | guest")
+        return value
+
+    @model_validator(mode="after")
+    def validate_timestamps(self):
+        if self.timestamp_end <= self.timestamp_start:
+            raise ValueError("timestamp_end must be greater than timestamp_start")
+        return self
+
+
+class DialogueScript(BaseModel):
+    """Morning Show 对话脚本"""
+    lines: List[DialogueLine] = Field(default_factory=list, description="对话行列表")
+    total_duration: float = Field(..., ge=0.0, description="总时长（秒）")
+    guest_character: Optional[str] = Field(None, description="嘉宾角色名（可选）")
+
+    @model_validator(mode="after")
+    def validate_total_duration(self):
+        if self.lines:
+            latest_end = max(line.timestamp_end for line in self.lines)
+            if self.total_duration < latest_end:
+                raise ValueError("total_duration must cover the final line timestamp")
+        return self
+
+
+class EpisodeIllustration(BaseModel):
+    """Morning Show 插画元数据"""
+    url: str = Field(..., min_length=1, description="插画 URL")
+    description: str = Field(..., min_length=1, description="插画描述")
+    display_order: int = Field(..., ge=0, description="显示顺序")
+    animation_type: str = Field(..., description="动画类型: pan | zoom | ken_burns")
+
+    @field_validator("animation_type")
+    @classmethod
+    def validate_animation_type(cls, value: str) -> str:
+        if value not in ALLOWED_ANIMATION_TYPES:
+            raise ValueError("animation_type must be one of pan | zoom | ken_burns")
+        return value
+
+
+class MorningShowEpisode(BaseModel):
+    """Morning Show 完整节目数据"""
+    episode_id: str = Field(..., description="节目唯一 ID")
+    child_id: str = Field(..., description="儿童 ID")
+    age_group: AgeGroup = Field(..., description="年龄组")
+    category: NewsCategory = Field(..., description="话题分类")
+    kid_title: str = Field(..., description="儿童友好标题")
+    kid_content: str = Field(..., description="儿童友好正文")
+    why_care: str = Field(..., description="为什么重要")
+    key_concepts: List[KeyConceptResponse] = Field(default_factory=list, description="关键概念")
+    interactive_questions: List[InteractiveQuestionResponse] = Field(default_factory=list, description="互动问题")
+    dialogue_script: DialogueScript = Field(..., description="多角色对话脚本")
+    illustrations: List[EpisodeIllustration] = Field(default_factory=list, description="插画列表")
+    audio_urls: Dict[str, str] = Field(default_factory=dict, description="音频 URL 映射（line_index -> url）")
+    story_type: Literal["morning_show"] = Field(default="morning_show", description="内容类型")
+    duration_seconds: Optional[int] = Field(None, ge=0, description="节目总时长（秒）")
+    is_played: bool = Field(default=False, description="是否已播放")
+    is_new: bool = Field(default=True, description="是否新内容")
+    created_at: datetime = Field(default_factory=datetime.now, description="创建时间")
+
+
+class MorningShowRequest(BaseModel):
+    """Morning Show 生成请求"""
+    news_url: Optional[str] = Field(None, description="新闻 URL")
+    news_text: Optional[str] = Field(None, description="新闻正文")
+    age_group: AgeGroup = Field(..., description="年龄组")
+    child_id: Optional[str] = Field(None, description="儿童 ID（可选）")
+    category: NewsCategory = Field(default=NewsCategory.GENERAL, description="话题分类")
+
+
+class MorningShowGenerationMetadata(BaseModel):
+    """Morning Show 生成元数据"""
+    generation_id: str = Field(..., description="生成任务 ID")
+    safety_score: float = Field(..., ge=0.0, le=1.0, description="内容安全分数")
+    used_mock: bool = Field(default=False, description="是否使用 mock fallback")
+    created_at: datetime = Field(default_factory=datetime.now, description="生成时间")
+
+
+class MorningShowResponse(BaseModel):
+    """Morning Show 生成响应"""
+    episode: MorningShowEpisode = Field(..., description="节目数据")
+    metadata: MorningShowGenerationMetadata = Field(..., description="生成元数据")
+
+
+class PaginatedMorningShowResponse(BaseModel):
+    """Morning Show 节目列表响应"""
+    items: List[MorningShowEpisode] = Field(default_factory=list, description="节目列表")
+    total: int = Field(..., description="总数")
+    limit: int = Field(..., description="分页大小")
+    offset: int = Field(..., description="偏移量")
+
+
+class TopicSubscription(BaseModel):
+    """话题订阅记录"""
+    child_id: str = Field(..., description="儿童 ID")
+    topic: NewsCategory = Field(..., description="订阅话题")
+    subscribed_at: datetime = Field(default_factory=datetime.now, description="订阅时间")
+    is_active: bool = Field(default=True, description="是否有效订阅")
+
+
+class SubscriptionRequest(BaseModel):
+    """创建订阅请求"""
+    child_id: str = Field(..., min_length=1, max_length=100, description="儿童 ID")
+    topic: NewsCategory = Field(..., description="订阅话题")
+
+
+class SubscriptionResponse(TopicSubscription):
+    """订阅操作响应"""
+    message: str = Field(default="ok", description="操作结果消息")
+
+
+class SubscriptionListResponse(BaseModel):
+    """订阅列表响应"""
+    items: List[TopicSubscription] = Field(default_factory=list, description="订阅列表")
+    total: int = Field(..., description="订阅总数")
+
+
+# ============================================================================
 # 错误响应 Models
 # ============================================================================
 
@@ -547,6 +683,7 @@ class LibraryItemType(str, Enum):
     ART_STORY = "art-story"
     INTERACTIVE = "interactive"
     NEWS = "news"
+    MORNING_SHOW = "morning-show"
 
 
 class LibrarySortOrder(str, Enum):
@@ -554,6 +691,7 @@ class LibrarySortOrder(str, Enum):
     NEWEST = "newest"
     OLDEST = "oldest"
     WORD_COUNT = "word_count"
+    FAVORITE_FIRST = "favorite_first"
 
 
 class LibraryItem(BaseModel):
@@ -576,6 +714,9 @@ class LibraryItem(BaseModel):
     status: Optional[str] = Field(None, description="Session status")
     # News specific
     category: Optional[str] = Field(None, description="News category")
+    # Morning Show specific
+    duration_seconds: Optional[int] = Field(None, description="Episode duration in seconds")
+    is_new: Optional[bool] = Field(None, description="Whether the episode is unplayed/new")
 
 
 class LibraryResponse(BaseModel):

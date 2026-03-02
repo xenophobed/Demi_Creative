@@ -6,8 +6,8 @@ import apiClient from '../client'
 
 // ---- Types ----
 
-export type LibraryItemType = 'art-story' | 'interactive' | 'news'
-export type LibrarySortOrder = 'newest' | 'oldest' | 'word_count'
+export type LibraryItemType = 'art-story' | 'interactive' | 'news' | 'morning-show'
+export type LibrarySortOrder = 'newest' | 'oldest' | 'word_count' | 'favorite_first'
 
 export interface LibraryItem {
   id: string
@@ -27,6 +27,9 @@ export interface LibraryItem {
   status?: string
   // News
   category?: string
+  // Morning Show
+  duration_seconds?: number
+  is_new?: boolean
 }
 
 export interface LibraryResponse {

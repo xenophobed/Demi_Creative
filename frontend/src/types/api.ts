@@ -3,7 +3,7 @@
  */
 
 // Enum types
-export type AgeGroup = '3-5' | '6-9' | '10-12';
+export type AgeGroup = '3-5' | '6-8' | '6-9' | '9-12' | '10-12';
 
 export type VoiceType = 'nova' | 'shimmer' | 'alloy' | 'echo' | 'fable' | 'onyx';
 
@@ -204,6 +204,101 @@ export interface NewsToKidsResponse {
   audio_url: string | null;
   original_url: string | null;
   created_at: string;
+}
+
+// ============================================================================
+// Morning Show Types
+// ============================================================================
+
+export type DialogueRole = 'curious_kid' | 'fun_expert' | 'guest';
+export type IllustrationAnimationType = 'pan' | 'zoom' | 'ken_burns';
+
+export interface DialogueLine {
+  role: DialogueRole;
+  text: string;
+  timestamp_start: number;
+  timestamp_end: number;
+}
+
+export interface DialogueScript {
+  lines: DialogueLine[];
+  total_duration: number;
+  guest_character?: string | null;
+}
+
+export interface EpisodeIllustration {
+  url: string;
+  description: string;
+  display_order: number;
+  animation_type: IllustrationAnimationType;
+}
+
+export interface MorningShowEpisode {
+  episode_id: string;
+  child_id: string;
+  age_group: AgeGroup;
+  category: NewsCategory;
+  kid_title: string;
+  kid_content: string;
+  why_care: string;
+  key_concepts: KeyConcept[];
+  interactive_questions: InteractiveQuestion[];
+  dialogue_script: DialogueScript;
+  illustrations: EpisodeIllustration[];
+  audio_urls: Record<string, string>;
+  story_type: 'morning_show';
+  duration_seconds?: number | null;
+  is_played: boolean;
+  is_new: boolean;
+  created_at: string;
+}
+
+export interface MorningShowRequest {
+  news_url?: string;
+  news_text?: string;
+  age_group: AgeGroup;
+  child_id?: string;
+  category?: NewsCategory;
+}
+
+export interface MorningShowGenerationMetadata {
+  generation_id: string;
+  safety_score: number;
+  used_mock: boolean;
+  created_at: string;
+}
+
+export interface MorningShowResponse {
+  episode: MorningShowEpisode;
+  metadata: MorningShowGenerationMetadata;
+}
+
+export interface PaginatedMorningShowResponse {
+  items: MorningShowEpisode[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface TopicSubscription {
+  child_id: string;
+  topic: NewsCategory;
+  subscribed_at: string;
+  is_active: boolean;
+}
+
+export interface SubscriptionRequest {
+  child_id: string;
+  topic: NewsCategory;
+}
+
+export interface SubscriptionResponse extends TopicSubscription {
+  message: string;
+}
+
+export interface SubscriptionListResponse {
+  items: TopicSubscription[];
+  total: number;
 }
 
 // Frontend-specific types

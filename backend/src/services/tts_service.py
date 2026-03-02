@@ -5,10 +5,11 @@ Provides a plain callable API for story audio generation.
 """
 
 import hashlib
+import json
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 try:
     from openai import OpenAI
@@ -108,3 +109,140 @@ async def generate_story_audio_file(
             "error": f"TTS generation failed: {str(e)}",
             "audio_path": None,
         }
+
+
+def _audio_url_from_path(audio_path: Optional[str]) -> Optional[str]:
+    if not audio_path:
+        return None
+    filename = Path(audio_path).name
+    return f"/data/audio/{filename}"
+
+
+def _voice_assignment_for_age(age_group: str) -> Dict[str, Dict[str, float | str]]:
+    table = {
+        "3-5": {
+            "curious_kid": {"voice": "nova", "speed": 0.9},
+            "fun_expert": {"voice": "shimmer", "speed": 0.9},
+            "guest": {"voice": "alloy", "speed": 0.9},
+        },
+        "6-8": {
+            "curious_kid": {"voice": "shimmer", "speed": 1.0},
+            "fun_expert": {"voice": "fable", "speed": 1.0},
+            "guest": {"voice": "alloy", "speed": 1.0},
+        },
+        "6-9": {
+            "curious_kid": {"voice": "shimmer", "speed": 1.0},
+            "fun_expert": {"voice": "fable", "speed": 1.0},
+            "guest": {"voice": "alloy", "speed": 1.0},
+        },
+        "9-12": {
+            "curious_kid": {"voice": "echo", "speed": 1.1},
+            "fun_expert": {"voice": "fable", "speed": 1.1},
+            "guest": {"voice": "alloy", "speed": 1.1},
+        },
+        "10-12": {
+            "curious_kid": {"voice": "echo", "speed": 1.1},
+            "fun_expert": {"voice": "fable", "speed": 1.1},
+            "guest": {"voice": "alloy", "speed": 1.1},
+        },
+    }
+    return table.get(age_group, table["6-8"])
+
+
+def _extract_lines(dialogue_script: Any) -> List[Dict[str, Any]]:
+    if isinstance(dialogue_script, dict):
+        return dialogue_script.get("lines", []) or []
+    lines = getattr(dialogue_script, "lines", [])
+    out: List[Dict[str, Any]] = []
+    for line in lines:
+        if hasattr(line, "model_dump"):
+            out.append(line.model_dump())
+        elif isinstance(line, dict):
+            out.append(line)
+        else:
+            out.append(
+                {
+                    "role": getattr(line, "role", "guest"),
+                    "text": getattr(line, "text", ""),
+                    "timestamp_start": getattr(line, "timestamp_start", 0.0),
+                    "timestamp_end": getattr(line, "timestamp_end", 1.0),
+                }
+            )
+    return out
+
+
+async def generate_multi_speaker_audio(dialogue_script: Any, age_group: str) -> Dict[str, str]:
+    """
+    Generate per-line multi-speaker audio for Morning Show dialogue (#92).
+
+    Returns:
+        Dict[str, str]: mapping of line_index -> audio_url
+    """
+    lines = _extract_lines(dialogue_script)
+    if not lines:
+        return {}
+
+    voices = _voice_assignment_for_age(age_group)
+    audio_urls: Dict[str, str] = {}
+
+    # Try MCP batch generation first per role to reduce repeated API calls.
+    try:
+        from ..mcp_servers import generate_audio_batch
+
+        if generate_audio_batch is not None:
+            role_to_batch: Dict[str, List[Dict[str, Any]]] = {"curious_kid": [], "fun_expert": [], "guest": []}
+            for index, line in enumerate(lines):
+                role = str(line.get("role", "guest"))
+                role_to_batch.setdefault(role, []).append({"segment_id": index, "text": line.get("text", "")})
+
+            for role, segments in role_to_batch.items():
+                if not segments:
+                    continue
+                voice_cfg = voices.get(role, {"voice": "alloy", "speed": 1.0})
+                raw = await generate_audio_batch(
+                    {
+                        "story_segments": segments,
+                        "voice": voice_cfg["voice"],
+                        "speed": voice_cfg["speed"],
+                    }
+                )
+                content = raw.get("content", []) if isinstance(raw, dict) else []
+                if not content:
+                    continue
+                text = content[0].get("text", "{}") if isinstance(content[0], dict) else "{}"
+                payload = json.loads(text)
+                for item in payload.get("results", []) or []:
+                    segment_id = item.get("segment_id")
+                    url = _audio_url_from_path(item.get("audio_path"))
+                    if segment_id is not None and url:
+                        audio_urls[str(segment_id)] = url
+    except Exception:
+        # Fall through to per-line generation
+        pass
+
+    # Fill missing lines with direct TTS generation (or deterministic placeholders).
+    for index, line in enumerate(lines):
+        key = str(index)
+        if key in audio_urls:
+            continue
+
+        role = str(line.get("role", "guest"))
+        voice_cfg = voices.get(role, {"voice": "alloy", "speed": 1.0})
+        text = str(line.get("text", "")).strip()
+
+        if not text:
+            audio_urls[key] = f"/data/audio/morning_show_line_{index}.mp3"
+            continue
+
+        generated = await generate_story_audio_file(
+            text=text,
+            voice=str(voice_cfg["voice"]),
+            speed=float(voice_cfg["speed"]),
+        )
+        url = _audio_url_from_path(generated.get("audio_path"))
+        if url:
+            audio_urls[key] = url
+        else:
+            audio_urls[key] = f"/data/audio/morning_show_line_{index}.mp3"
+
+    return audio_urls

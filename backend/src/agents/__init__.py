@@ -15,6 +15,11 @@ from .interactive_story_agent import (
     NextSegmentOutput
 )
 from .news_to_kids_agent import convert_news_to_kids, stream_news_to_kids
+from .morning_show_agent import (
+    convert_news_to_morning_show,
+    generate_morning_show_dialogue,
+    stream_morning_show_generation,
+)
 
 __all__ = [
     # Image to Story Agent
@@ -32,4 +37,8 @@ __all__ = [
     # News to Kids Agent
     "convert_news_to_kids",
     "stream_news_to_kids",
+    # Morning Show Agent
+    "convert_news_to_morning_show",
+    "generate_morning_show_dialogue",
+    "stream_morning_show_generation",
 ]

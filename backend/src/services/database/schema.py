@@ -165,6 +165,25 @@ CREATE INDEX IF NOT EXISTS idx_child_preferences_child_id ON child_preferences(c
 CREATE INDEX IF NOT EXISTS idx_child_preferences_updated_at ON child_preferences(updated_at DESC);
 """
 
+TOPIC_SUBSCRIPTIONS_TABLE = """
+CREATE TABLE IF NOT EXISTS topic_subscriptions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL,
+    child_id TEXT NOT NULL,
+    topic TEXT NOT NULL,
+    subscribed_at TEXT NOT NULL,
+    is_active INTEGER DEFAULT 1,
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
+    UNIQUE(user_id, child_id, topic)
+);
+"""
+
+TOPIC_SUBSCRIPTIONS_INDEXES = """
+CREATE INDEX IF NOT EXISTS idx_topic_subscriptions_user_child ON topic_subscriptions(user_id, child_id);
+CREATE INDEX IF NOT EXISTS idx_topic_subscriptions_topic ON topic_subscriptions(topic);
+CREATE INDEX IF NOT EXISTS idx_topic_subscriptions_is_active ON topic_subscriptions(is_active);
+"""
+
 
 # ============================================================================
 # Schema Initialization
@@ -211,6 +230,15 @@ async def init_schema(db: "DatabaseManager") -> None:
     # Create child preferences table
     await db.execute(CHILD_PREFERENCES_TABLE)
     for stmt in CHILD_PREFERENCES_INDEXES.strip().split(";"):
+        if stmt.strip():
+            try:
+                await db.execute(stmt)
+            except Exception:
+                pass
+
+    # Create topic subscriptions table (#94)
+    await db.execute(TOPIC_SUBSCRIPTIONS_TABLE)
+    for stmt in TOPIC_SUBSCRIPTIONS_INDEXES.strip().split(";"):
         if stmt.strip():
             try:
                 await db.execute(stmt)

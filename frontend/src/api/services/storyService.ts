@@ -13,6 +13,14 @@ import type {
   StreamCallbacks,
   NewsToKidsRequest,
   NewsToKidsResponse,
+  MorningShowRequest,
+  MorningShowResponse,
+  MorningShowEpisode,
+  PaginatedMorningShowResponse,
+  SubscriptionRequest,
+  SubscriptionResponse,
+  SubscriptionListResponse,
+  NewsCategory,
 } from '@/types/api'
 import { consumeSSEStream } from '../utils/sseStream'
 
@@ -307,6 +315,99 @@ export const storyService = {
     )
     // Backend returns paginated response { items, total, limit, offset }
     return response.data.items ?? (response.data as unknown as NewsToKidsResponse[])
+  },
+
+  /**
+   * Generate Morning Show episode
+   */
+  async generateMorningShow(
+    params: MorningShowRequest
+  ): Promise<MorningShowResponse> {
+    const response = await apiClient.post<MorningShowResponse>(
+      '/morning-show/generate',
+      params
+    )
+    return response.data
+  },
+
+  /**
+   * Generate Morning Show episode (streaming)
+   */
+  async generateMorningShowStream(
+    params: MorningShowRequest,
+    callbacks: StreamCallbacks
+  ): Promise<void> {
+    const response = await fetch(`${API_BASE_URL}/morning-show/generate/stream`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAuthHeaders(),
+      },
+      body: JSON.stringify(params),
+    })
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+
+    await consumeSSEStream(response, callbacks)
+  },
+
+  /**
+   * Get Morning Show episode details
+   */
+  async getMorningShowEpisode(episodeId: string): Promise<MorningShowEpisode> {
+    const response = await apiClient.get<MorningShowEpisode>(
+      `/morning-show/episode/${episodeId}`
+    )
+    return response.data
+  },
+
+  /**
+   * List Morning Show episodes by child
+   */
+  async listMorningShowEpisodes(
+    childId: string,
+    params?: { limit?: number; offset?: number }
+  ): Promise<PaginatedMorningShowResponse> {
+    const response = await apiClient.get<PaginatedMorningShowResponse>(
+      `/morning-show/episodes/${childId}`,
+      { params }
+    )
+    return response.data
+  },
+
+  /**
+   * Subscribe to topic channel
+   */
+  async subscribeTopic(
+    request: SubscriptionRequest
+  ): Promise<SubscriptionResponse> {
+    const response = await apiClient.post<SubscriptionResponse>(
+      '/subscriptions',
+      request
+    )
+    return response.data
+  },
+
+  /**
+   * Unsubscribe from topic channel
+   */
+  async unsubscribeTopic(
+    childId: string,
+    topic: NewsCategory
+  ): Promise<void> {
+    await apiClient.delete(`/subscriptions/${childId}/${topic}`)
+  },
+
+  /**
+   * List active topic subscriptions
+   */
+  async getSubscriptions(childId: string): Promise<SubscriptionListResponse> {
+    const response = await apiClient.get<SubscriptionListResponse>(
+      `/subscriptions/${childId}`
+    )
+    return response.data
   },
 
   /**

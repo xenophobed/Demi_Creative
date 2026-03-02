@@ -10,6 +10,12 @@ from .session_repository import SessionRepository, session_repo
 from .user_repository import UserRepository, user_repo, UserData
 from .preference_repository import PreferenceRepository, preference_repo
 from .favorite_repository import FavoriteRepository, favorite_repo
+from .subscription_repository import (
+    SubscriptionRepository,
+    subscription_repo,
+    DuplicateSubscriptionError,
+    MaxSubscriptionsExceededError,
+)
 
 __all__ = [
     "DatabaseManager",
@@ -25,4 +31,8 @@ __all__ = [
     "preference_repo",
     "FavoriteRepository",
     "favorite_repo",
+    "SubscriptionRepository",
+    "subscription_repo",
+    "DuplicateSubscriptionError",
+    "MaxSubscriptionsExceededError",
 ]

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { BookOpen, Palette, Map, Newspaper, Compass, Globe, ChevronRight } from 'lucide-react'
+import { BookOpen, Palette, Map, Newspaper, Compass, Globe, ChevronRight, Podcast } from 'lucide-react'
 import Button from '@/components/common/Button'
 import Card from '@/components/common/Card'
 import useStoryStore from '@/store/useStoryStore'
@@ -17,16 +17,18 @@ import { getAgeLayoutConfig } from '@/config/ageConfig'
 import type { NewsToKidsResponse } from '@/types/api'
 
 // Content type tabs
-type ContentTab = 'all' | 'art-stories' | 'interactive' | 'news'
+type ContentTab = 'all' | 'art-stories' | 'interactive' | 'news' | 'morning-show'
 
 const TABS: { id: ContentTab; label: string; icon: React.ReactNode }[] = [
   { id: 'all', label: 'All', icon: <BookOpen size={16} /> },
   { id: 'art-stories', label: 'Art Stories', icon: <Palette size={16} /> },
   { id: 'interactive', label: 'Interactive', icon: <Map size={16} /> },
   { id: 'news', label: 'News', icon: <Newspaper size={16} /> },
+  { id: 'morning-show', label: 'Morning Show', icon: <Podcast size={16} /> },
 ]
 
 const SORT_OPTIONS: { value: LibrarySortOrder; label: string }[] = [
+  { value: 'favorite_first', label: 'Favourite First' },
   { value: 'newest', label: 'Newest First' },
   { value: 'oldest', label: 'Oldest First' },
   { value: 'word_count', label: 'Longest First' },
@@ -36,6 +38,7 @@ function tabToApiType(tab: ContentTab): LibraryItemType | undefined {
   if (tab === 'art-stories') return 'art-story'
   if (tab === 'interactive') return 'interactive'
   if (tab === 'news') return 'news'
+  if (tab === 'morning-show') return 'morning-show'
   return undefined // 'all'
 }
 
@@ -234,6 +237,7 @@ const TYPE_BADGE: Record<LibraryItemType, { label: string; color: string }> = {
   'art-story': { label: 'Art Story', color: 'bg-primary/10 text-primary' },
   interactive: { label: 'Interactive', color: 'bg-secondary/10 text-secondary' },
   news: { label: 'News', color: 'bg-accent/10 text-accent' },
+  'morning-show': { label: 'Morning Show', color: 'bg-orange-100 text-orange-700' },
 }
 
 const CARD_STYLES: Record<LibraryItemType, {
@@ -256,12 +260,21 @@ const CARD_STYLES: Record<LibraryItemType, {
     gradient: 'from-accent/20 via-primary/10 to-secondary/20',
     badgeColor: 'bg-accent/10 text-accent',
   },
+  'morning-show': {
+    icon: <Podcast size={36} className="text-orange-500/70" strokeWidth={1.5} />,
+    gradient: 'from-orange-200/40 via-rose-100/20 to-amber-200/40',
+    badgeColor: 'bg-orange-100 text-orange-700',
+  },
 }
 
 const STATUS_COLORS: Record<string, string> = {
   completed: 'bg-green-100 text-green-700',
   expired: 'bg-gray-100 text-gray-500',
   active: 'bg-blue-100 text-blue-700',
+}
+
+function statusLabel(status: string): string {
+  return status.charAt(0).toUpperCase() + status.slice(1)
 }
 
 // ---- unified card ----
@@ -286,10 +299,26 @@ function LibraryCard({
   const style = CARD_STYLES[item.type]
   const badge = TYPE_BADGE[item.type]
   const progress = item.progress ?? 0
+  const durationLabel = item.duration_seconds
+    ? `${Math.max(1, Math.round(item.duration_seconds / 60))} min`
+    : null
+  const themeTags = (item.themes ?? []).filter(Boolean).slice(0, 3)
+  const infoTags = item.type === 'interactive'
+    ? [`${progress}% complete`, ...themeTags].slice(0, 3)
+    : item.type === 'morning-show'
+      ? [durationLabel, item.is_new ? 'New episode' : null, ...themeTags].filter(Boolean).slice(0, 3)
+    : themeTags
+  const previewText = item.preview
+    ? truncatePreview(item.preview)
+    : item.type === 'interactive'
+      ? 'Continue this adventure to unlock the next branch.'
+      : item.type === 'morning-show'
+        ? 'Tap to play today\'s Morning Show episode.'
+      : ''
 
-  // Badge label: use category for news, status badge for interactive
+  // Badge label: use category for news / morning-show
   const badgeLabel =
-    item.type === 'news' && item.category
+    (item.type === 'news' || item.type === 'morning-show') && item.category
       ? item.category.charAt(0).toUpperCase() + item.category.slice(1)
       : badge.label
 
@@ -297,7 +326,7 @@ function LibraryCard({
     <Card className="cursor-pointer h-full" onClick={onClick} padding="sm">
       <div className="flex gap-4 h-full">
         {/* Thumbnail / Icon */}
-        <div className={`flex-shrink-0 w-16 h-16 rounded-xl bg-gradient-to-br ${style.gradient} flex items-center justify-center overflow-hidden`}>
+        <div className={`flex-shrink-0 w-20 h-20 rounded-xl bg-gradient-to-br ${style.gradient} flex items-center justify-center overflow-hidden`}>
           {imgSrc && !imgError ? (
             <img
               src={imgSrc.startsWith('/') ? imgSrc : '/' + imgSrc}
@@ -321,7 +350,12 @@ function LibraryCard({
                 </span>
                 {item.type === 'interactive' && item.status && (
                   <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${STATUS_COLORS[item.status] || STATUS_COLORS.active}`}>
-                    {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
+                    {statusLabel(item.status)}
+                  </span>
+                )}
+                {item.type === 'morning-show' && item.is_new && (
+                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
+                    New
                   </span>
                 )}
               </div>
@@ -340,8 +374,13 @@ function LibraryCard({
             </div>
           </div>
 
-          {/* Row 2: Preview text OR Progress bar */}
-          {item.type === 'interactive' ? (
+          {/* Row 2: Preview text (+ progress for interactive) */}
+          {previewText && (
+            <p className="text-gray-500 text-sm mt-1.5 line-clamp-2 leading-relaxed">
+              {previewText}
+            </p>
+          )}
+          {item.type === 'interactive' && (
             <div className="mt-2">
               <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
                 <span>Progress</span>
@@ -356,16 +395,12 @@ function LibraryCard({
                 />
               </div>
             </div>
-          ) : item.preview ? (
-            <p className="text-gray-500 text-sm mt-1.5 line-clamp-2 leading-relaxed">
-              {truncatePreview(item.preview)}
-            </p>
-          ) : null}
+          )}
 
-          {/* Row 3: Theme tags (art-story only) */}
-          {item.themes && item.themes.length > 0 && (
+          {/* Row 3: Info tags */}
+          {infoTags.length > 0 && (
             <div className="flex flex-wrap gap-1.5 mt-2">
-              {item.themes.slice(0, 3).map((theme) => (
+              {infoTags.map((theme) => (
                 <span
                   key={theme}
                   className="text-xs px-2 py-0.5 bg-gray-100 text-gray-500 rounded-full"
@@ -385,6 +420,12 @@ function LibraryCard({
               {showWordCount && item.word_count !== undefined && item.word_count > 0 && (
                 <>
                   <span>{item.word_count}w</span>
+                  <span aria-hidden="true">·</span>
+                </>
+              )}
+              {item.type === 'morning-show' && durationLabel && (
+                <>
+                  <span>{durationLabel}</span>
                   <span aria-hidden="true">·</span>
                 </>
               )}
@@ -414,56 +455,147 @@ function ListRow({
   item,
   onClick,
   onDelete,
+  showFavorite,
+  onFavoriteToggled,
+  showWordCount = true,
 }: {
   item: LibraryItem
   onClick: () => void
   onDelete: () => void
+  showFavorite: boolean
+  onFavoriteToggled?: () => void
+  showWordCount?: boolean
 }) {
   const [imgError, setImgError] = useState(false)
   const imgSrc = (item as any).thumbnail_url || item.image_url
   const badge = TYPE_BADGE[item.type]
+  const style = CARD_STYLES[item.type]
+  const progress = item.progress ?? 0
+  const durationLabel = item.duration_seconds
+    ? `${Math.max(1, Math.round(item.duration_seconds / 60))} min`
+    : null
+  const themeTags = (item.themes ?? []).filter(Boolean).slice(0, 2)
+  const previewText = item.preview
+    ? truncatePreview(item.preview, 90)
+    : item.type === 'interactive'
+      ? 'Continue this adventure to see what happens next.'
+      : item.type === 'morning-show'
+        ? 'Tap to play the latest Morning Show episode.'
+      : ''
+  const badgeLabel =
+    (item.type === 'news' || item.type === 'morning-show') && item.category
+      ? item.category.charAt(0).toUpperCase() + item.category.slice(1)
+      : badge.label
 
   return (
     <motion.div
-      className="flex items-center gap-4 px-4 py-3 rounded-xl bg-white/80 hover:bg-white cursor-pointer transition-colors border border-gray-100"
+      className="group relative cursor-pointer"
       onClick={onClick}
-      whileHover={{ x: 2 }}
+      whileHover={{ y: -2 }}
     >
-      {/* Mini thumbnail */}
-      <div className="flex-shrink-0 w-12 h-12 rounded-lg bg-gray-100 flex items-center justify-center overflow-hidden">
-        {imgSrc && !imgError ? (
-          <img
-            src={imgSrc.startsWith('/') ? imgSrc : '/' + imgSrc}
-            alt=""
-            className="w-full h-full object-cover"
-            onError={() => setImgError(true)}
-          />
-        ) : (
-          <span className="text-xl">{item.type === 'art-story' ? '📖' : item.type === 'interactive' ? '🌿' : '📰'}</span>
-        )}
-      </div>
+      <div className={`pointer-events-none absolute inset-0 rounded-2xl bg-gradient-to-r ${style.gradient} opacity-25 transition-opacity group-hover:opacity-35`} />
+      <div className="relative rounded-2xl border border-gray-200/80 bg-white/90 backdrop-blur-sm p-4 shadow-sm transition-all group-hover:shadow-card">
+        <div className="flex gap-4">
+          {/* Thumbnail */}
+          <div className={`flex-shrink-0 w-20 h-20 rounded-xl bg-gradient-to-br ${style.gradient} flex items-center justify-center overflow-hidden`}>
+            {imgSrc && !imgError ? (
+              <img
+                src={imgSrc.startsWith('/') ? imgSrc : '/' + imgSrc}
+                alt=""
+                className="w-full h-full object-cover"
+                onError={() => setImgError(true)}
+              />
+            ) : (
+              style.icon
+            )}
+          </div>
 
-      {/* Title + badge */}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${badge.color}`}>
-            {badge.label}
-          </span>
-          <h4 className="text-base font-semibold text-gray-800 truncate">{item.title}</h4>
+          {/* Content */}
+          <div className="flex-1 min-w-0 flex flex-col">
+            <div className="flex items-start gap-2">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${badge.color}`}>
+                    {badgeLabel}
+                  </span>
+                  {item.type === 'interactive' && item.status && (
+                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${STATUS_COLORS[item.status] || STATUS_COLORS.active}`}>
+                      {statusLabel(item.status)}
+                    </span>
+                  )}
+                  {item.type === 'morning-show' && item.is_new && (
+                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
+                      New
+                    </span>
+                  )}
+                </div>
+                <h4 className="text-base font-semibold text-gray-800 truncate">{item.title}</h4>
+              </div>
+              <div className="flex items-center gap-1.5 flex-shrink-0">
+                {showFavorite && (
+                  <FavoriteButton
+                    itemId={item.id}
+                    itemType={item.type}
+                    isFavorited={item.is_favorited}
+                    onToggled={onFavoriteToggled}
+                  />
+                )}
+                <DeleteButton onDelete={onDelete} />
+              </div>
+            </div>
+
+            {previewText && (
+              <p className="text-sm text-gray-500 mt-1.5 line-clamp-1">{previewText}</p>
+            )}
+            {item.type === 'interactive' && (
+              <div className="mt-2">
+                <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                  <motion.div
+                    className="h-full bg-secondary rounded-full"
+                    initial={{ width: 0 }}
+                    animate={{ width: `${progress}%` }}
+                    transition={{ duration: 0.6, ease: 'easeOut' }}
+                  />
+                </div>
+              </div>
+            )}
+            {themeTags.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {themeTags.map((theme) => (
+                  <span
+                    key={theme}
+                    className="text-xs px-2 py-0.5 bg-gray-100 text-gray-500 rounded-full"
+                  >
+                    {theme}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-100">
+              <div className="flex items-center gap-1.5 text-xs text-gray-400">
+                {showWordCount && item.word_count !== undefined && item.word_count > 0 && (
+                  <>
+                    <span>{item.word_count}w</span>
+                    <span aria-hidden="true">·</span>
+                  </>
+                )}
+                {item.type === 'morning-show' && durationLabel && (
+                  <>
+                    <span>{durationLabel}</span>
+                    <span aria-hidden="true">·</span>
+                  </>
+                )}
+                <span>{new Date(item.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                {item.audio_url && <MiniPlayer itemId={item.id} audioUrl={item.audio_url} />}
+                <ChevronRight size={16} className="text-gray-300" />
+              </div>
+            </div>
+          </div>
         </div>
       </div>
-
-      {/* Meta */}
-      <div className="flex items-center gap-3 text-sm text-gray-400 flex-shrink-0">
-        {item.word_count !== undefined && <span>{item.word_count}w</span>}
-        <span className="hidden sm:inline">
-          {new Date(item.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-        </span>
-      </div>
-
-      {/* Audio + Delete */}
-      {item.audio_url && <MiniPlayer itemId={item.id} audioUrl={item.audio_url} />}
-      <DeleteButton onDelete={onDelete} />
     </motion.div>
   )
 }
@@ -557,7 +689,7 @@ function LibraryPage() {
 
   // Unauthenticated: build from local stores (existing fallback behavior)
   const localItems: LibraryItem[] = !isAuthenticated
-    ? buildLocalItems(storyHistory, childArtStories, newsHistory, activeTab, searchQuery)
+    ? buildLocalItems(storyHistory, childArtStories, newsHistory, activeTab, searchQuery, sortOrder)
     : []
 
   // Filter out items being deleted
@@ -581,6 +713,8 @@ function LibraryPage() {
       navigate(`/story/${item.id}`)
     } else if (item.type === 'interactive') {
       navigate(`/interactive?session=${item.id}`)
+    } else if (item.type === 'morning-show') {
+      navigate(`/morning-show/${item.id}`)
     } else if (item.type === 'news') {
       navigate(`/news`)
     }
@@ -747,7 +881,14 @@ function LibraryPage() {
                 transition={{ delay: Math.min(index * 0.04, 0.3) }}
               >
                 {viewMode === 'list' ? (
-                  <ListRow item={item} onClick={() => handleItemClick(item)} onDelete={() => setDeleteTarget(item)} />
+                  <ListRow
+                    item={item}
+                    onClick={() => handleItemClick(item)}
+                    onDelete={() => setDeleteTarget(item)}
+                    showFavorite={isAuthenticated}
+                    onFavoriteToggled={handleFavoriteToggled}
+                    showWordCount={ageLayout.showWordCount}
+                  />
                 ) : (
                   <LibraryCard
                     item={item}
@@ -793,37 +934,53 @@ function LibraryPage() {
             >
               {isSearching ? '🔍' : '📭'}
             </motion.div>
-            <h2 className="text-xl font-bold text-gray-800 mb-2">
-              {isSearching
-                ? 'No results found'
-                : activeTab === 'all'
-                ? 'Nothing here yet'
-                : activeTab === 'art-stories'
-                ? 'No art stories yet'
-                : activeTab === 'interactive'
-                ? 'No interactive stories yet'
-                : 'No news conversions yet'}
-            </h2>
-            <p className="text-gray-500 mb-6">
-              {isSearching
-                ? 'Try a different search term or clear the search.'
-                : activeTab === 'news'
-                ? 'Visit the News Explorer to convert articles for kids!'
-                : activeTab === 'interactive'
-                ? 'Try the Interactive Story mode to create branching adventures!'
-                : 'Upload your first artwork and start creating amazing stories!'}
-            </p>
-            {!isSearching && (
-              <Link to={activeTab === 'news' ? '/news' : activeTab === 'interactive' ? '/interactive' : '/upload'}>
-                <Button size="lg" leftIcon={<span>✨</span>}>
-                  {activeTab === 'news'
-                    ? 'Go to News Explorer'
-                    : activeTab === 'interactive'
-                    ? 'Start an Adventure'
-                    : 'Start Creating'}
-                </Button>
-              </Link>
-            )}
+              <h2 className="text-xl font-bold text-gray-800 mb-2">
+                {isSearching
+                  ? 'No results found'
+                  : activeTab === 'all'
+                  ? 'Nothing here yet'
+                  : activeTab === 'art-stories'
+                  ? 'No art stories yet'
+                  : activeTab === 'interactive'
+                  ? 'No interactive stories yet'
+                  : activeTab === 'morning-show'
+                  ? 'No Morning Show episodes yet'
+                  : 'No news conversions yet'}
+              </h2>
+              <p className="text-gray-500 mb-6">
+                {isSearching
+                  ? 'Try a different search term or clear the search.'
+                  : activeTab === 'news'
+                  ? 'Visit the News Explorer to convert articles for kids!'
+                  : activeTab === 'interactive'
+                  ? 'Try the Interactive Story mode to create branching adventures!'
+                  : activeTab === 'morning-show'
+                  ? 'Pick topic channels to receive Daily Drop Morning Show episodes.'
+                  : 'Upload your first artwork and start creating amazing stories!'}
+              </p>
+              {!isSearching && (
+                <Link
+                  to={
+                    activeTab === 'news'
+                      ? '/news'
+                      : activeTab === 'interactive'
+                        ? '/interactive'
+                        : activeTab === 'morning-show'
+                          ? '/morning-show/subscriptions'
+                          : '/upload'
+                  }
+                >
+                  <Button size="lg" leftIcon={<span>✨</span>}>
+                    {activeTab === 'news'
+                      ? 'Go to News Explorer'
+                      : activeTab === 'interactive'
+                        ? 'Start an Adventure'
+                        : activeTab === 'morning-show'
+                          ? 'Choose Topics'
+                      : 'Start Creating'}
+                  </Button>
+                </Link>
+              )}
           </motion.div>
         ) : null}
       </AnimatePresence>
@@ -848,7 +1005,8 @@ function LibraryPage() {
         isOpen={deleteTarget !== null}
         itemLabel={
           deleteTarget?.type === 'art-story' ? 'this art story' :
-          deleteTarget?.type === 'interactive' ? 'this interactive story' : 'this news article'
+          deleteTarget?.type === 'interactive' ? 'this interactive story' :
+          deleteTarget?.type === 'morning-show' ? 'this Morning Show episode' : 'this news article'
         }
         onCancel={() => setDeleteTarget(null)}
         onConfirm={() => {
@@ -870,6 +1028,7 @@ function buildLocalItems(
   newsHistory: NewsToKidsResponse[] | undefined,
   activeTab: ContentTab,
   searchQuery: string,
+  sortOrder: LibrarySortOrder,
 ): LibraryItem[] {
   const items: LibraryItem[] = []
   const queryLower = searchQuery.toLowerCase()
@@ -923,8 +1082,17 @@ function buildLocalItems(
     }
   }
 
-  // Sort by date descending
-  items.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+  // Sort
+  if (sortOrder === 'oldest') {
+    items.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+  } else if (sortOrder === 'word_count') {
+    items.sort((a, b) => (b.word_count || 0) - (a.word_count || 0))
+  } else if (sortOrder === 'favorite_first') {
+    items.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    items.sort((a, b) => Number(b.is_favorited) - Number(a.is_favorited))
+  } else {
+    items.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+  }
 
   return items
 }

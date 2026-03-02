@@ -13,6 +13,8 @@ const InteractiveStoryPage = lazy(() => import('./pages/InteractiveStoryPage'))
 const LoginPage = lazy(() => import('./pages/LoginPage'))
 const ProfilePage = lazy(() => import('./pages/ProfilePage'))
 const NewsPage = lazy(() => import('./pages/NewsPage'))
+const MorningShowPage = lazy(() => import('./pages/MorningShowPage'))
+const MorningShowSubscriptionsPage = lazy(() => import('./pages/MorningShowSubscriptionsPage'))
 
 function App() {
   return (
@@ -32,6 +34,8 @@ function App() {
             <Route path="library" element={<LibraryPage />} />
             <Route path="interactive" element={<InteractiveStoryPage />} />
             <Route path="news" element={<NewsPage />} />
+            <Route path="morning-show/subscriptions" element={<MorningShowSubscriptionsPage />} />
+            <Route path="morning-show/:episodeId" element={<MorningShowPage />} />
             <Route path="profile" element={<ProfilePage />} />
           </Route>
         </Routes>
