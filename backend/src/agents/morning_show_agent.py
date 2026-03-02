@@ -245,6 +245,27 @@ async def _safety_score_for_script(script: DialogueScript, age_group: str) -> fl
         return 0.9
 
 
+async def _guest_safety_score(script: DialogueScript, age_group: str) -> float:
+    guest_lines = [line.text for line in script.lines if line.role == "guest" and line.text.strip()]
+    if not guest_lines:
+        return 1.0
+
+    joined = "\\n".join(guest_lines)
+    try:
+        raw = await check_content_safety(
+            {
+                "content_text": joined,
+                "content_type": "morning_show_guest_dialogue",
+                "target_age": _target_age(age_group),
+            }
+        )
+        parsed = _parse_tool_json(raw)
+        score = float(parsed.get("safety_score", 0.9))
+        return max(0.0, min(1.0, score))
+    except Exception:
+        return 0.9
+
+
 async def _generate_with_sdk(
     *,
     source_text: str,
@@ -290,6 +311,8 @@ async def generate_morning_show_dialogue(
             used_mock = True
 
     safety_score = await _safety_score_for_script(script, age_group)
+    guest_score = await _guest_safety_score(script, age_group)
+    safety_score = min(safety_score, guest_score)
 
     # Safety hard floor for deterministic fallback (maintains contract >= 0.85)
     if safety_score < 0.85:
