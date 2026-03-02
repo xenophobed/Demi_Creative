@@ -44,6 +44,9 @@ from .models import (
     SubscriptionRequest,
     SubscriptionResponse,
     SubscriptionListResponse,
+    MorningShowTrackEvent,
+    MorningShowTrackRequest,
+    MorningShowTrackResponse,
     # 错误处理
     ErrorResponse,
     ErrorDetail,
@@ -91,6 +94,9 @@ __all__ = [
     "SubscriptionRequest",
     "SubscriptionResponse",
     "SubscriptionListResponse",
+    "MorningShowTrackEvent",
+    "MorningShowTrackRequest",
+    "MorningShowTrackResponse",
     # 错误处理
     "ErrorResponse",
     "ErrorDetail",

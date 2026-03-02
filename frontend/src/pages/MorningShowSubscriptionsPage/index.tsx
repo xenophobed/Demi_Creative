@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -20,6 +20,7 @@ const TOPIC_CARDS: Array<{ topic: NewsCategory; titleZh: string; titleEn: string
 ]
 
 const MAX_SUBSCRIPTIONS = 5
+const ONBOARD_KEY = 'morning_show_onboarding_done'
 
 function MorningShowSubscriptionsPage() {
   const queryClient = useQueryClient()
@@ -28,6 +29,11 @@ function MorningShowSubscriptionsPage() {
 
   const [pendingTopic, setPendingTopic] = useState<NewsCategory | null>(null)
   const [error, setError] = useState<string | null>(null)
+
+  const [showOnboarding, setShowOnboarding] = useState(false)
+  const [onboardingStep, setOnboardingStep] = useState(0)
+  const [draftTopics, setDraftTopics] = useState<Set<NewsCategory>>(new Set())
+  const [onboardingBusy, setOnboardingBusy] = useState(false)
 
   const { data, isLoading } = useQuery({
     queryKey: ['morning-show-subscriptions', childId],
@@ -40,6 +46,15 @@ function MorningShowSubscriptionsPage() {
   }, [data])
 
   const activeCount = activeTopics.size
+
+  useEffect(() => {
+    if (isLoading || !childId) return
+    const onboardingDone = localStorage.getItem(ONBOARD_KEY) === 'true'
+    if (!onboardingDone && activeCount === 0) {
+      setShowOnboarding(true)
+      setOnboardingStep(0)
+    }
+  }, [isLoading, activeCount, childId])
 
   const toggleTopic = async (topic: NewsCategory) => {
     if (!childId || pendingTopic) return
@@ -66,6 +81,41 @@ function MorningShowSubscriptionsPage() {
       setError(message)
     } finally {
       setPendingTopic(null)
+    }
+  }
+
+  const toggleDraftTopic = (topic: NewsCategory) => {
+    setDraftTopics((prev) => {
+      const next = new Set(prev)
+      if (next.has(topic)) {
+        next.delete(topic)
+      } else if (next.size < 3) {
+        next.add(topic)
+      }
+      return next
+    })
+  }
+
+  const finishOnboarding = async (skip: boolean) => {
+    if (!childId) return
+    setOnboardingBusy(true)
+    setError(null)
+
+    try {
+      if (!skip) {
+        for (const topic of Array.from(draftTopics)) {
+          await storyService.subscribeTopic({ child_id: childId, topic })
+        }
+      }
+      localStorage.setItem(ONBOARD_KEY, 'true')
+      setShowOnboarding(false)
+      await queryClient.invalidateQueries({ queryKey: ['morning-show-subscriptions', childId] })
+      await queryClient.invalidateQueries({ queryKey: ['library'] })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to complete onboarding'
+      setError(message)
+    } finally {
+      setOnboardingBusy(false)
     }
   }
 
@@ -140,6 +190,70 @@ function MorningShowSubscriptionsPage() {
               </motion.div>
             )
           })}
+        </div>
+      )}
+
+      {showOnboarding && (
+        <div className="fixed inset-0 z-50 bg-black/40 p-4 flex items-center justify-center">
+          <Card className="w-full max-w-2xl">
+            {onboardingStep === 0 && (
+              <div className="space-y-4">
+                <h2 className="text-2xl font-bold text-gray-800">Welcome to Morning Show</h2>
+                <p className="text-gray-600">Pick your favorite topic channels and we will prepare a Daily Drop episode for tomorrow morning.</p>
+                <div className="flex gap-2 justify-end">
+                  <Button variant="outline" onClick={() => finishOnboarding(true)} isLoading={onboardingBusy}>Skip</Button>
+                  <Button onClick={() => setOnboardingStep(1)}>Start Setup</Button>
+                </div>
+              </div>
+            )}
+
+            {onboardingStep === 1 && (
+              <div className="space-y-4">
+                <h2 className="text-2xl font-bold text-gray-800">Choose 1-3 Topics</h2>
+                <p className="text-gray-600">Selected: {draftTopics.size}/3</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {TOPIC_CARDS.map((card) => {
+                    const selected = draftTopics.has(card.topic)
+                    return (
+                      <button
+                        key={card.topic}
+                        className={`text-left rounded-xl border px-3 py-2 transition-colors ${selected ? 'border-primary bg-primary/10' : 'border-gray-200 hover:border-primary/40'}`}
+                        onClick={() => toggleDraftTopic(card.topic)}
+                      >
+                        <div className="text-lg">{card.icon} {card.titleZh}</div>
+                        <div className="text-xs text-gray-500">{card.titleEn}</div>
+                      </button>
+                    )
+                  })}
+                </div>
+                <div className="flex gap-2 justify-end">
+                  <Button variant="outline" onClick={() => finishOnboarding(true)} isLoading={onboardingBusy}>Skip</Button>
+                  <Button disabled={draftTopics.size === 0} onClick={() => setOnboardingStep(2)}>Continue</Button>
+                </div>
+              </div>
+            )}
+
+            {onboardingStep === 2 && (
+              <div className="space-y-4">
+                <h2 className="text-2xl font-bold text-gray-800">You&apos;re all set</h2>
+                <p className="text-gray-600">Your first Morning Show episode will be ready tomorrow morning. You can update channels anytime.</p>
+                <div className="flex flex-wrap gap-2">
+                  {Array.from(draftTopics).map((topic) => {
+                    const card = TOPIC_CARDS.find((item) => item.topic === topic)
+                    return (
+                      <span key={topic} className="text-sm px-2 py-1 rounded-full bg-primary/10 text-primary">
+                        {card?.icon} {card?.titleEn}
+                      </span>
+                    )
+                  })}
+                </div>
+                <div className="flex gap-2 justify-end">
+                  <Button variant="outline" onClick={() => setOnboardingStep(1)}>Back</Button>
+                  <Button onClick={() => finishOnboarding(false)} isLoading={onboardingBusy}>Finish Setup</Button>
+                </div>
+              </div>
+            )}
+          </Card>
         </div>
       )}
     </div>

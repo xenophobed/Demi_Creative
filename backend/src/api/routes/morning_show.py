@@ -14,7 +14,7 @@ from ...agents.morning_show_agent import (
     convert_news_to_morning_show,
     stream_morning_show_generation,
 )
-from ...services.database import story_repo
+from ...services.database import preference_repo, story_repo
 from ...services.tts_service import generate_multi_speaker_audio
 from ...services.user_service import UserData
 from ...utils.text import count_words
@@ -29,6 +29,8 @@ from ..models import (
     MorningShowGenerationMetadata,
     MorningShowRequest,
     MorningShowResponse,
+    MorningShowTrackRequest,
+    MorningShowTrackResponse,
     PaginatedMorningShowResponse,
 )
 
@@ -404,4 +406,42 @@ async def list_morning_show_episodes(
         total=total,
         limit=limit,
         offset=offset,
+    )
+
+
+@router.post(
+    "/track",
+    response_model=MorningShowTrackResponse,
+    summary="Track Morning Show playback engagement",
+)
+async def track_morning_show_engagement(
+    request: MorningShowTrackRequest,
+    user: UserData = Depends(get_current_user),
+):
+    story = await story_repo.get_by_id(request.episode_id)
+    if not story or story.get("story_type") != "morning_show":
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Episode not found")
+
+    if story.get("user_id") != user.user_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
+    topic_score = await preference_repo.update_from_morning_show(
+        child_id=request.child_id,
+        topic=request.topic.value,
+        event_type=request.event_type.value,
+        progress=request.progress,
+    )
+
+    updates = {"is_new": False}
+    if request.event_type.value == "complete" or request.progress >= 0.8:
+        updates["is_played"] = True
+    elif request.event_type.value == "abandon" and request.progress < 0.5:
+        updates["is_played"] = False
+
+    await story_repo.update_analysis_fields(request.episode_id, updates)
+
+    return MorningShowTrackResponse(
+        status="tracked",
+        topic_score=topic_score,
+        profile_updated_at=datetime.now(),
     )

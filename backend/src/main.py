@@ -18,6 +18,7 @@ from .api.models import ErrorResponse, ErrorDetail, HealthCheckResponse
 from .paths import DATA_DIR, UPLOAD_DIR, AUDIO_DIR, VIDEO_DIR, VIDEO_JOBS_DIR
 from .services.database import db_manager, session_repo
 from .services.database.schema import init_schema, migrate_json_sessions
+from .services.morning_show_scheduler import daily_drop_scheduler
 
 
 # Load environment variables
@@ -50,10 +51,19 @@ async def lifespan(app: FastAPI):
     cleaned = await session_repo.cleanup_expired_sessions()
     print(f"🧹 Cleaned up {cleaned} expired sessions")
 
+    # Start Daily Drop scheduler (#97) outside test env.
+    scheduler_enabled = os.getenv("DAILY_DROP_ENABLED", "1") != "0"
+    if scheduler_enabled and os.getenv("ENVIRONMENT") != "test":
+        await daily_drop_scheduler.start()
+
     yield
 
     # On shutdown
     print("👋 Creative Agent API Shutting down...")
+
+    # Disconnect from database
+    if scheduler_enabled and os.getenv("ENVIRONMENT") != "test":
+        await daily_drop_scheduler.stop()
 
     # Disconnect from database
     await db_manager.disconnect()

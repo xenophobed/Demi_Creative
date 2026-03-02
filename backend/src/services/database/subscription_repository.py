@@ -110,6 +110,26 @@ class SubscriptionRepository:
         )
         return [self._row_to_dict(row) for row in rows]
 
+    async def list_all_active(self) -> List[Dict[str, Any]]:
+        rows = await self._db.fetchall(
+            """
+            SELECT user_id, child_id, topic, subscribed_at, is_active
+            FROM topic_subscriptions
+            WHERE is_active = 1
+            ORDER BY subscribed_at ASC
+            """
+        )
+        return [
+            {
+                "user_id": row["user_id"],
+                "child_id": row["child_id"],
+                "topic": row["topic"],
+                "subscribed_at": row["subscribed_at"],
+                "is_active": bool(row.get("is_active", 1)),
+            }
+            for row in rows
+        ]
+
     def _row_to_dict(self, row: Dict[str, Any]) -> Dict[str, Any]:
         return {
             "child_id": row["child_id"],
@@ -120,4 +140,3 @@ class SubscriptionRepository:
 
 
 subscription_repo = SubscriptionRepository()
-

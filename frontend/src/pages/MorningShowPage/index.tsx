@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query'
 import Card from '@/components/common/Card'
 import Button from '@/components/common/Button'
 import { storyService } from '@/api/services/storyService'
+import useChildStore from '@/store/useChildStore'
 
 const ROLE_META = {
   curious_kid: { label: 'Curious Kid', emoji: '🧒' },
@@ -26,6 +27,7 @@ function formatDuration(seconds?: number | null): string {
 function MorningShowPage() {
   const navigate = useNavigate()
   const { episodeId } = useParams<{ episodeId: string }>()
+  const { currentChild, defaultChildId } = useChildStore()
 
   const [currentLineIndex, setCurrentLineIndex] = useState(0)
   const [isPlaying, setIsPlaying] = useState(false)
@@ -34,6 +36,8 @@ function MorningShowPage() {
   const [hasStarted, setHasStarted] = useState(false)
 
   const audioRef = useRef<HTMLAudioElement | null>(null)
+  const startTrackedRef = useRef(false)
+  const completionTrackedRef = useRef(false)
 
   const { data: episode, isLoading, error } = useQuery({
     queryKey: ['morning-show-episode', episodeId],
@@ -51,6 +55,8 @@ function MorningShowPage() {
 
   const currentStoryTime = (currentLine?.timestamp_start ?? 0) + lineElapsed
   const totalDuration = episode?.dialogue_script.total_duration || 1
+  const progressRatio = Math.min(1, Math.max(0, currentStoryTime / totalDuration))
+  const trackingChildId = currentChild?.child_id || defaultChildId || episode?.child_id || ''
 
   const activeIllustrationIndex = illustrations.length > 0
     ? Math.min(
@@ -62,6 +68,25 @@ function MorningShowPage() {
   const activeIllustration = illustrations[activeIllustrationIndex]
 
   const isFinished = hasStarted && !isPlaying && currentLineIndex >= Math.max(0, lines.length - 1)
+
+  const trackEvent = async (
+    eventType: 'start' | 'progress' | 'complete' | 'abandon',
+    progress: number
+  ) => {
+    if (!episode || !trackingChildId) return
+    try {
+      await storyService.trackMorningShowEvent({
+        child_id: trackingChildId,
+        episode_id: episode.episode_id,
+        topic: episode.category,
+        event_type: eventType,
+        progress,
+        played_seconds: progress * totalDuration,
+      })
+    } catch {
+      // Playback should continue even if tracking fails.
+    }
+  }
 
   useEffect(() => {
     if (!episode || !audioRef.current || lines.length === 0) return
@@ -117,6 +142,23 @@ function MorningShowPage() {
       audio.removeEventListener('timeupdate', handleTimeUpdate)
     }
   }, [currentLineIndex, lines.length])
+
+  useEffect(() => {
+    if (!episode || !hasStarted || completionTrackedRef.current) return
+    if (isFinished && progressRatio >= 0.8) {
+      completionTrackedRef.current = true
+      void trackEvent('complete', progressRatio)
+    }
+  }, [episode, hasStarted, isFinished, progressRatio])
+
+  useEffect(() => {
+    return () => {
+      if (!episode || !hasStarted || completionTrackedRef.current) return
+      if (progressRatio < 0.5) {
+        void trackEvent('abandon', progressRatio)
+      }
+    }
+  }, [episode, hasStarted, progressRatio])
 
   if (isLoading) {
     return <div className="text-center py-16 text-gray-500">Loading Morning Show episode...</div>
@@ -209,6 +251,10 @@ function MorningShowPage() {
                   onClick={() => {
                     if (lines.length === 0) return
                     setHasStarted(true)
+                    if (!startTrackedRef.current) {
+                      startTrackedRef.current = true
+                      void trackEvent('start', progressRatio)
+                    }
                     setIsPlaying((prev) => !prev)
                   }}
                 >

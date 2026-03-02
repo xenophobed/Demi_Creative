@@ -108,3 +108,36 @@ class TestMorningShowEndpoints:
 
             assert response.status_code == 400
             assert "Either news_url or news_text must be provided" in response.json()["detail"]
+
+    async def test_track_engagement_updates_topic_score(self, test_client):
+        child_id = f"child-ms-{uuid.uuid4().hex[:8]}"
+
+        async with test_client as client:
+            generate = await client.post(
+                "/api/v1/morning-show/generate",
+                json={
+                    "child_id": child_id,
+                    "age_group": "6-8",
+                    "news_text": "Scientists built a cleaner ocean robot for coral reefs.",
+                    "category": "science",
+                },
+            )
+            assert generate.status_code == 200
+            episode_id = generate.json()["episode"]["episode_id"]
+
+            tracked = await client.post(
+                "/api/v1/morning-show/track",
+                json={
+                    "child_id": child_id,
+                    "episode_id": episode_id,
+                    "topic": "science",
+                    "event_type": "complete",
+                    "progress": 0.92,
+                    "played_seconds": 90,
+                },
+            )
+
+            assert tracked.status_code == 200
+            payload = tracked.json()
+            assert payload["status"] == "tracked"
+            assert payload["topic_score"] > 0

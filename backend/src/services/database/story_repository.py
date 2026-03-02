@@ -305,6 +305,37 @@ class StoryRepository:
         await self._db.commit()
         return cursor.rowcount > 0
 
+    async def update_analysis_fields(self, story_id: str, updates: Dict[str, Any]) -> bool:
+        """
+        Merge fields into a story's analysis JSON payload.
+
+        Args:
+            story_id: Story identifier
+            updates: Dict of keys to merge into existing analysis object
+
+        Returns:
+            bool: True if story exists and was updated
+        """
+        row = await self._db.fetchone(
+            "SELECT analysis FROM stories WHERE story_id = ?",
+            (story_id,),
+        )
+        if not row:
+            return False
+
+        try:
+            analysis = json.loads(row.get("analysis") or "{}")
+        except Exception:
+            analysis = {}
+
+        analysis.update(updates or {})
+        cursor = await self._db.execute(
+            "UPDATE stories SET analysis = ? WHERE story_id = ?",
+            (json.dumps(analysis, ensure_ascii=False), story_id),
+        )
+        await self._db.commit()
+        return cursor.rowcount > 0
+
     async def delete(self, story_id: str) -> bool:
         """
         Delete a story.

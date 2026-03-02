@@ -21,6 +21,8 @@ import type {
   SubscriptionResponse,
   SubscriptionListResponse,
   NewsCategory,
+  MorningShowTrackRequest,
+  MorningShowTrackResponse,
 } from '@/types/api'
 import { consumeSSEStream } from '../utils/sseStream'
 
@@ -406,6 +408,19 @@ export const storyService = {
   async getSubscriptions(childId: string): Promise<SubscriptionListResponse> {
     const response = await apiClient.get<SubscriptionListResponse>(
       `/subscriptions/${childId}`
+    )
+    return response.data
+  },
+
+  /**
+   * Track Morning Show playback event
+   */
+  async trackMorningShowEvent(
+    request: MorningShowTrackRequest
+  ): Promise<MorningShowTrackResponse> {
+    const response = await apiClient.post<MorningShowTrackResponse>(
+      '/morning-show/track',
+      request
     )
     return response.data
   },

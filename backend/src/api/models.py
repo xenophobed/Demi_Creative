@@ -468,6 +468,32 @@ class SubscriptionListResponse(BaseModel):
     total: int = Field(..., description="订阅总数")
 
 
+class MorningShowTrackEvent(str, Enum):
+    """Morning Show 播放事件类型"""
+    START = "start"
+    PROGRESS = "progress"
+    COMPLETE = "complete"
+    ABANDON = "abandon"
+
+
+class MorningShowTrackRequest(BaseModel):
+    """Morning Show 播放行为跟踪请求"""
+    child_id: str = Field(..., min_length=1, max_length=100, description="儿童 ID")
+    episode_id: str = Field(..., min_length=1, description="节目 ID")
+    topic: NewsCategory = Field(..., description="节目话题")
+    event_type: MorningShowTrackEvent = Field(..., description="事件类型")
+    progress: float = Field(default=0.0, ge=0.0, le=1.0, description="播放进度 0-1")
+    played_seconds: Optional[float] = Field(default=None, ge=0.0, description="已播放秒数")
+    event_at: datetime = Field(default_factory=datetime.now, description="事件时间")
+
+
+class MorningShowTrackResponse(BaseModel):
+    """Morning Show 跟踪响应"""
+    status: str = Field(..., description="状态")
+    topic_score: float = Field(..., description="当前话题参与度分数")
+    profile_updated_at: datetime = Field(default_factory=datetime.now, description="偏好更新时间")
+
+
 # ============================================================================
 # 错误响应 Models
 # ============================================================================

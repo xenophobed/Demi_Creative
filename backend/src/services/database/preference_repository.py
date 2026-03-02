@@ -36,6 +36,49 @@ class PreferenceRepository:
         self._bump(profile["concepts"], concepts, 1)
         await self._save_profile(child_id, profile)
 
+    async def update_from_morning_show(
+        self,
+        child_id: str,
+        topic: str,
+        event_type: str,
+        progress: float,
+    ) -> float:
+        """
+        Update preference profile from Morning Show playback events (#102).
+
+        Returns:
+            float: updated engagement score for the topic.
+        """
+        profile = await self._get_profile(child_id)
+
+        morning = profile.setdefault("morning_show", {})
+        topic_scores = morning.setdefault("topic_scores", {})
+        topic_stats = morning.setdefault("topic_stats", {})
+
+        current_score = float(topic_scores.get(topic, 0.0))
+        stats = topic_stats.get(topic, {"started": 0, "completed": 0, "abandoned": 0})
+
+        if event_type == "start":
+            stats["started"] = int(stats.get("started", 0)) + 1
+            current_score += 0.2
+        elif event_type == "complete" or progress >= 0.8:
+            stats["completed"] = int(stats.get("completed", 0)) + 1
+            current_score += 1.0
+            self._bump(profile["themes"], [topic], 2)
+            self._bump(profile["interests"], [topic], 2)
+        elif event_type == "abandon" or progress < 0.5:
+            stats["abandoned"] = int(stats.get("abandoned", 0)) + 1
+            current_score -= 0.6
+        else:
+            current_score += 0.05
+
+        topic_stats[topic] = stats
+        topic_scores[topic] = round(max(-5.0, min(20.0, current_score)), 3)
+        morning["last_event_at"] = datetime.now().isoformat()
+
+        await self._save_profile(child_id, profile)
+        return topic_scores[topic]
+
     async def get_profile(self, child_id: str) -> Dict[str, Any]:
         return await self._get_profile(child_id)
 
@@ -75,6 +118,11 @@ class PreferenceRepository:
             "concepts": {},
             "interests": {},
             "recent_choices": [],
+            "morning_show": {
+                "topic_scores": {},
+                "topic_stats": {},
+                "last_event_at": None,
+            },
         }
 
     def _normalize_profile(self, profile: Dict[str, Any]) -> Dict[str, Any]:
@@ -87,6 +135,14 @@ class PreferenceRepository:
                 normalized[key] = {}
         if not isinstance(normalized.get("recent_choices"), list):
             normalized["recent_choices"] = []
+        if not isinstance(normalized.get("morning_show"), dict):
+            normalized["morning_show"] = self._empty_profile()["morning_show"]
+        else:
+            morning = normalized["morning_show"]
+            if not isinstance(morning.get("topic_scores"), dict):
+                morning["topic_scores"] = {}
+            if not isinstance(morning.get("topic_stats"), dict):
+                morning["topic_stats"] = {}
 
         return normalized
 

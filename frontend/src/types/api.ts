@@ -301,6 +301,24 @@ export interface SubscriptionListResponse {
   total: number;
 }
 
+export type MorningShowTrackEvent = 'start' | 'progress' | 'complete' | 'abandon';
+
+export interface MorningShowTrackRequest {
+  child_id: string;
+  episode_id: string;
+  topic: NewsCategory;
+  event_type: MorningShowTrackEvent;
+  progress?: number;
+  played_seconds?: number;
+  event_at?: string;
+}
+
+export interface MorningShowTrackResponse {
+  status: string;
+  topic_score: number;
+  profile_updated_at: string;
+}
+
 // Frontend-specific types
 
 // Story history item
