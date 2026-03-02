@@ -2,13 +2,21 @@
 
 from __future__ import annotations
 
+import base64
 import json
+import os
 import uuid
 from datetime import datetime
 from typing import Any, AsyncGenerator, Dict, List
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
+
+try:
+    from openai import OpenAI
+except Exception:  # pragma: no cover - import fallback for test env
+    OpenAI = None
 
 from ...agents.morning_show_agent import (
     convert_news_to_morning_show,
@@ -67,6 +75,41 @@ def _make_placeholder_svg(title: str, subtitle: str, width: int = 1280, height: 
 </svg>"""
 
 
+def _is_live_illustration_enabled() -> bool:
+    if os.getenv("PYTEST_CURRENT_TEST") is not None:
+        return False
+    api_key = (os.getenv("OPENAI_API_KEY") or "").strip()
+    if not api_key or api_key.startswith("your_"):
+        return False
+    force_placeholder = os.getenv("MORNING_SHOW_FORCE_PLACEHOLDER_ILLUSTRATIONS", "").strip().lower()
+    if force_placeholder in {"1", "true", "yes"}:
+        return False
+    return True
+
+
+def _save_placeholder_illustration(
+    episode_id: str,
+    idx: int,
+    kid_title: str,
+    subtitle: str,
+) -> str:
+    filename = f"morning_show_{episode_id}_{idx}.svg"
+    path = UPLOAD_DIR / filename
+    path.write_text(_make_placeholder_svg(kid_title, subtitle), encoding="utf-8")
+    return f"/data/uploads/{filename}"
+
+
+def _scene_prompt(kid_title: str, topic: str, age_group: str, idx: int) -> str:
+    return (
+        f"Create a bright 2D children's editorial illustration for a morning show episode.\n"
+        f"Episode title: {kid_title}\n"
+        f"Scene: {topic} scene {idx + 1}\n"
+        f"Audience age group: {age_group}\n"
+        "Style: playful shapes, soft gradients, clean outlines, educational and optimistic.\n"
+        "Safety: no violence, no fear, no injuries, no scary faces, no weapons, no text."
+    )
+
+
 async def _generate_illustrations(
     episode_id: str,
     kid_title: str,
@@ -77,19 +120,74 @@ async def _generate_illustrations(
     animation_types = ["pan", "zoom", "ken_burns"]
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
+    live_enabled = _is_live_illustration_enabled()
+    openai_client = None
+    if live_enabled and OpenAI is not None:
+        openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    image_model = os.getenv("MORNING_SHOW_IMAGE_MODEL", "gpt-image-1")
+    api_key = (os.getenv("OPENAI_API_KEY") or "").strip()
+
     illustrations: List[EpisodeIllustration] = []
     for idx in range(count):
-        filename = f"morning_show_{episode_id}_{idx}.svg"
-        path = UPLOAD_DIR / filename
         subtitle = f"{topic.title()} scene {idx + 1}"
-        path.write_text(_make_placeholder_svg(kid_title, subtitle), encoding="utf-8")
+        animation_type = animation_types[idx % len(animation_types)]
+        description = f"{topic.title()} illustration #{idx + 1}"
+
+        generated_url: str
+        if live_enabled:
+            try:
+                item_url = None
+                item_b64 = None
+                if openai_client is not None:
+                    response = openai_client.images.generate(
+                        model=image_model,
+                        prompt=_scene_prompt(kid_title, topic, age_group, idx),
+                        size="1024x1024",
+                    )
+                    item = (getattr(response, "data", None) or [None])[0]
+                    item_url = getattr(item, "url", None) if item is not None else None
+                    item_b64 = getattr(item, "b64_json", None) if item is not None else None
+                else:
+                    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+                    payload = {
+                        "model": image_model,
+                        "prompt": _scene_prompt(kid_title, topic, age_group, idx),
+                        "size": "1024x1024",
+                    }
+                    async with httpx.AsyncClient(timeout=60.0) as client:
+                        response = await client.post(
+                            "https://api.openai.com/v1/images/generations",
+                            headers=headers,
+                            json=payload,
+                        )
+                        response.raise_for_status()
+                        body = response.json()
+                    item = (body.get("data") or [None])[0]
+                    if isinstance(item, dict):
+                        item_url = item.get("url")
+                        item_b64 = item.get("b64_json")
+
+                if item_b64:
+                    image_bytes = base64.b64decode(item_b64)
+                    filename = f"morning_show_{episode_id}_{idx}.png"
+                    path = UPLOAD_DIR / filename
+                    path.write_bytes(image_bytes)
+                    generated_url = f"/data/uploads/{filename}"
+                elif item_url:
+                    generated_url = str(item_url)
+                else:
+                    raise RuntimeError("OpenAI image response did not include image data")
+            except Exception:
+                generated_url = _save_placeholder_illustration(episode_id, idx, kid_title, subtitle)
+        else:
+            generated_url = _save_placeholder_illustration(episode_id, idx, kid_title, subtitle)
 
         illustrations.append(
             EpisodeIllustration(
-                url=f"/data/uploads/{filename}",
-                description=f"{topic.title()} illustration #{idx + 1}",
+                url=generated_url,
+                description=description,
                 display_order=idx,
-                animation_type=animation_types[idx % len(animation_types)],
+                animation_type=animation_type,
             )
         )
 

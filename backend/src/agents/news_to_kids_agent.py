@@ -5,8 +5,17 @@ remains reliable in local/dev environments even when LLM integrations are not
 available.
 """
 
+import json
+import os
 import re
 from typing import Any, AsyncGenerator, Dict, List, Optional
+
+import httpx
+
+try:
+    from anthropic import AsyncAnthropic
+except Exception:  # pragma: no cover - import fallback for test env
+    AsyncAnthropic = None
 
 
 AGE_RULES: Dict[str, Dict[str, Any]] = {
@@ -95,6 +104,202 @@ def _build_questions(category: str) -> List[Dict[str, str]]:
     ]
 
 
+def _should_use_live_llm() -> bool:
+    if os.getenv("PYTEST_CURRENT_TEST") is not None:
+        return False
+    anthropic_key = (os.getenv("ANTHROPIC_API_KEY") or "").strip()
+    openai_key = (os.getenv("OPENAI_API_KEY") or "").strip()
+    has_anthropic = bool(anthropic_key) and not anthropic_key.startswith("your_")
+    has_openai = bool(openai_key) and not openai_key.startswith("your_")
+    if not has_anthropic and not has_openai:
+        return False
+    return True
+
+
+def _extract_json_object(text: str) -> Dict[str, Any]:
+    cleaned = (text or "").strip()
+    if not cleaned:
+        return {}
+
+    try:
+        parsed = json.loads(cleaned)
+        if isinstance(parsed, dict):
+            return parsed
+    except Exception:
+        pass
+
+    match = re.search(r"\{.*\}", cleaned, flags=re.DOTALL)
+    if not match:
+        return {}
+    try:
+        parsed = json.loads(match.group(0))
+        return parsed if isinstance(parsed, dict) else {}
+    except Exception:
+        return {}
+
+
+def _normalize_key_concepts(raw: Any, source: str) -> List[Dict[str, str]]:
+    if not isinstance(raw, list):
+        return _build_key_concepts(source)
+
+    out: List[Dict[str, str]] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        term = str(item.get("term", "")).strip()
+        explanation = str(item.get("explanation", "")).strip()
+        if not term or not explanation:
+            continue
+        emoji = str(item.get("emoji", "💡")).strip() or "💡"
+        out.append({"term": term, "explanation": explanation, "emoji": emoji})
+    return out or _build_key_concepts(source)
+
+
+def _normalize_questions(raw: Any, category: str) -> List[Dict[str, str]]:
+    if not isinstance(raw, list):
+        return _build_questions(category)
+
+    out: List[Dict[str, str]] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        question = str(item.get("question", "")).strip()
+        if not question:
+            continue
+        hint = item.get("hint")
+        normalized_hint = str(hint).strip() if isinstance(hint, str) else None
+        emoji = str(item.get("emoji", "🤔")).strip() or "🤔"
+        out.append({"question": question, "hint": normalized_hint, "emoji": emoji})
+    return out or _build_questions(category)
+
+
+async def _convert_news_to_kids_live(source: str, age_group: str, category: str) -> Dict[str, Any]:
+    anthropic_key = (os.getenv("ANTHROPIC_API_KEY") or "").strip()
+    openai_key = (os.getenv("OPENAI_API_KEY") or "").strip()
+    if not anthropic_key and not openai_key:
+        raise RuntimeError("No LLM key configured")
+
+    anthropic_model = os.getenv("NEWS_TO_KIDS_MODEL", "claude-3-5-sonnet-latest")
+    openai_model = os.getenv("NEWS_TO_KIDS_OPENAI_MODEL", "gpt-4o-mini")
+    rules = AGE_RULES.get(age_group, AGE_RULES["6-9"])
+
+    prompt = (
+        "Rewrite the following news text for children.\n"
+        f"Age group: {age_group}\n"
+        f"Category: {category or 'general'}\n"
+        f"Tone: {rules['tone']}\n"
+        f"Maximum words for kid_content: {rules['max_words']}\n"
+        "Return strict JSON with keys exactly:\n"
+        "- kid_title (string)\n"
+        "- kid_content (string)\n"
+        "- why_care (string)\n"
+        "- key_concepts (array of {term, explanation, emoji})\n"
+        "- interactive_questions (array of {question, hint, emoji})\n"
+        "No markdown, no extra keys.\n\n"
+        f"News text:\n{source}"
+    )
+
+    chunks: List[str] = []
+    anthropic_error: Optional[Exception] = None
+    if anthropic_key:
+        try:
+            if AsyncAnthropic is not None:
+                client = AsyncAnthropic(api_key=anthropic_key)
+                response = await client.messages.create(
+                    model=anthropic_model,
+                    max_tokens=1200,
+                    temperature=0.2,
+                    system="You are a child-education editor. Keep facts accurate and language child-safe.",
+                    messages=[{"role": "user", "content": prompt}],
+                )
+                for block in getattr(response, "content", []) or []:
+                    text = getattr(block, "text", None)
+                    if isinstance(text, str) and text.strip():
+                        chunks.append(text.strip())
+            else:
+                headers = {
+                    "x-api-key": anthropic_key,
+                    "anthropic-version": "2023-06-01",
+                    "content-type": "application/json",
+                }
+                payload = {
+                    "model": anthropic_model,
+                    "max_tokens": 1200,
+                    "temperature": 0.2,
+                    "system": "You are a child-education editor. Keep facts accurate and language child-safe.",
+                    "messages": [{"role": "user", "content": prompt}],
+                }
+                async with httpx.AsyncClient(timeout=45.0) as client:
+                    response = await client.post(
+                        "https://api.anthropic.com/v1/messages",
+                        headers=headers,
+                        json=payload,
+                    )
+                    response.raise_for_status()
+                    body = response.json()
+                for block in body.get("content", []) or []:
+                    if isinstance(block, dict):
+                        text = str(block.get("text", "")).strip()
+                        if block.get("type") == "text" and text:
+                            chunks.append(text)
+        except Exception as exc:
+            anthropic_error = exc
+
+    if not chunks and openai_key:
+        headers = {
+            "Authorization": f"Bearer {openai_key}",
+            "content-type": "application/json",
+        }
+        payload = {
+            "model": openai_model,
+            "temperature": 0.2,
+            "response_format": {"type": "json_object"},
+            "messages": [
+                {
+                    "role": "system",
+                    "content": "You are a child-education editor. Keep facts accurate and language child-safe.",
+                },
+                {"role": "user", "content": prompt},
+            ],
+        }
+        async with httpx.AsyncClient(timeout=45.0) as client:
+            response = await client.post(
+                "https://api.openai.com/v1/chat/completions",
+                headers=headers,
+                json=payload,
+            )
+            response.raise_for_status()
+            body = response.json()
+        choices = body.get("choices", []) if isinstance(body, dict) else []
+        if choices:
+            message = choices[0].get("message", {}) if isinstance(choices[0], dict) else {}
+            content = message.get("content")
+            if isinstance(content, str) and content.strip():
+                chunks.append(content.strip())
+
+    if not chunks and anthropic_error is not None:
+        raise RuntimeError(str(anthropic_error))
+
+    payload = _extract_json_object("\n".join(chunks))
+    if not payload:
+        raise RuntimeError("Model output was not parseable JSON")
+
+    kid_title = str(payload.get("kid_title", "")).strip() or f"Kid News: {(category or 'general').title()}"
+    kid_content = str(payload.get("kid_content", "")).strip() or _build_kid_content(source, age_group, category)
+    why_care = str(payload.get("why_care", "")).strip() or _build_why_care(category)
+    key_concepts = _normalize_key_concepts(payload.get("key_concepts"), source)
+    questions = _normalize_questions(payload.get("interactive_questions"), category)
+
+    return {
+        "kid_title": kid_title,
+        "kid_content": _trim_words(kid_content, rules["max_words"]),
+        "why_care": why_care,
+        "key_concepts": key_concepts,
+        "interactive_questions": questions,
+        "audio_path": None,
+    }
+
+
 async def convert_news_to_kids(
     *,
     news_text: str,
@@ -110,6 +315,12 @@ async def convert_news_to_kids(
     source = _normalize(news_text)
     if not source and news_url:
         source = f"Article source: {news_url}."
+
+    if _should_use_live_llm():
+        try:
+            return await _convert_news_to_kids_live(source, age_group, category)
+        except Exception:
+            pass
 
     content = _build_kid_content(source, age_group, category)
     why_care = _build_why_care(category)
