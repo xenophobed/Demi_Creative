@@ -11,6 +11,7 @@ import json
 from typing import Optional, List
 
 from ...utils.text import count_words
+from ...paths import AUDIO_DIR
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
@@ -73,6 +74,13 @@ def _story_to_library_item(
     is_new = analysis.get("is_new") if item_type == LibraryItemType.MORNING_SHOW else None
     title = analysis.get("kid_title") if item_type == LibraryItemType.MORNING_SHOW else _extract_title(text)
 
+    audio_url = story.get("audio_url")
+    if isinstance(audio_url, str) and audio_url.startswith("/data/audio/"):
+        filename = audio_url[len("/data/audio/"):]
+        file_path = AUDIO_DIR / filename
+        if not file_path.exists() or not file_path.is_file():
+            audio_url = None
+
     return LibraryItem(
         id=story["story_id"],
         type=item_type,
@@ -80,7 +88,7 @@ def _story_to_library_item(
         preview=text[:150] if text else "",
         image_url=story.get("image_url"),
         thumbnail_url=thumbnail_url or story.get("image_url"),
-        audio_url=story.get("audio_url"),
+        audio_url=audio_url,
         created_at=story.get("created_at", ""),
         is_favorited=is_favorited,
         safety_score=story.get("safety_score"),

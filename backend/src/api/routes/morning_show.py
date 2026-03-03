@@ -26,7 +26,7 @@ from ...services.database import preference_repo, story_repo
 from ...services.tts_service import generate_multi_speaker_audio
 from ...services.user_service import UserData
 from ...utils.text import count_words
-from ...paths import UPLOAD_DIR
+from ...paths import AUDIO_DIR, UPLOAD_DIR
 from ..deps import get_current_user
 from ..models import (
     DialogueScript,
@@ -226,6 +226,37 @@ def _as_questions(raw_items: List[Dict[str, Any]]) -> List[InteractiveQuestionRe
     return out
 
 
+def _sanitize_audio_urls(raw_urls: Any) -> Dict[str, str]:
+    """Filter out stale/missing local audio URLs from stored analysis payloads."""
+    if not isinstance(raw_urls, dict):
+        return {}
+
+    sanitized: Dict[str, str] = {}
+    for key, value in raw_urls.items():
+        if not isinstance(value, str):
+            continue
+        url = value.strip()
+        if not url:
+            continue
+
+        # Keep remote URLs as-is.
+        if url.startswith("http://") or url.startswith("https://"):
+            sanitized[str(key)] = url
+            continue
+
+        # Validate local audio files to prevent `/data/audio/*.mp3` 404s.
+        if url.startswith("/data/audio/"):
+            filename = url[len("/data/audio/"):]
+            file_path = AUDIO_DIR / filename
+            if file_path.exists() and file_path.is_file():
+                sanitized[str(key)] = url
+            continue
+
+        sanitized[str(key)] = url
+
+    return sanitized
+
+
 def _story_analysis_to_episode(story: Dict[str, Any]) -> MorningShowEpisode:
     analysis = story.get("analysis", {})
     key_concepts = _as_key_concepts(analysis.get("key_concepts", []))
@@ -248,7 +279,7 @@ def _story_analysis_to_episode(story: Dict[str, Any]) -> MorningShowEpisode:
         interactive_questions=questions,
         dialogue_script=dialogue_script,
         illustrations=illustrations,
-        audio_urls=analysis.get("audio_urls", {}),
+        audio_urls=_sanitize_audio_urls(analysis.get("audio_urls", {})),
         duration_seconds=int(analysis.get("duration_seconds", 0) or 0),
         is_played=bool(analysis.get("is_played", False)),
         is_new=bool(analysis.get("is_new", True)),
