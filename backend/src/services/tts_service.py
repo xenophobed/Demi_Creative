@@ -246,7 +246,6 @@ async def generate_multi_speaker_audio(dialogue_script: Any, age_group: str) -> 
         text = str(line.get("text", "")).strip()
 
         if not text:
-            audio_urls[key] = f"/data/audio/morning_show_line_{index}.mp3"
             continue
 
         generated = await generate_story_audio_file(
@@ -257,7 +256,5 @@ async def generate_multi_speaker_audio(dialogue_script: Any, age_group: str) -> 
         url = _audio_url_from_path(generated.get("audio_path"))
         if url:
             audio_urls[key] = url
-        else:
-            audio_urls[key] = f"/data/audio/morning_show_line_{index}.mp3"
 
     return audio_urls

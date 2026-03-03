@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion'
 import type { StoryContent } from '@/types/api'
 import FloatingImage from '../FloatingImage'
+import { resolveMediaUrl } from '@/utils/mediaUrl'
 
 interface StoryDisplayProps {
   story: StoryContent
@@ -129,7 +130,7 @@ export function StoryCard({
         {/* Thumbnail */}
         <div className="flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center">
           {imageUrl ? (
-            <img src={imageUrl.startsWith('/') ? imageUrl : '/' + imageUrl} alt="" className="w-full h-full object-cover" />
+            <img src={resolveMediaUrl(imageUrl) || ''} alt="" className="w-full h-full object-cover" />
           ) : (
             <span className="text-3xl">📚</span>
           )}

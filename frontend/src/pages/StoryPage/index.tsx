@@ -11,36 +11,7 @@ import TabbedMetadata from '@/components/story/TabbedMetadata'
 import useStoryStore from '@/store/useStoryStore'
 import useChildStore from '@/store/useChildStore'
 import storyService from '@/api/services/storyService'
-
-// Convert audio URL to full path
-function getAudioUrl(audioUrl: string): string {
-  if (!audioUrl) return ''
-  if (audioUrl.startsWith('./')) {
-    return audioUrl.replace('./', '/')
-  }
-  if (audioUrl.startsWith('data/')) {
-    return '/' + audioUrl
-  }
-  if (audioUrl.startsWith('http')) {
-    return audioUrl
-  }
-  return audioUrl.startsWith('/') ? audioUrl : '/' + audioUrl
-}
-
-// Convert image URL to full path
-function getImageUrl(imageUrl: string | null | undefined): string | null {
-  if (!imageUrl) return null
-  if (imageUrl.startsWith('./')) {
-    return imageUrl.replace('./', '/')
-  }
-  if (imageUrl.startsWith('data/')) {
-    return '/' + imageUrl
-  }
-  if (imageUrl.startsWith('http')) {
-    return imageUrl
-  }
-  return imageUrl.startsWith('/') ? imageUrl : '/' + imageUrl
-}
+import { resolveMediaUrl } from '@/utils/mediaUrl'
 
 function StoryPage() {
   const { storyId } = useParams<{ storyId: string }>()
@@ -126,7 +97,7 @@ function StoryPage() {
     )
   }
 
-  const imageUrl = getImageUrl(story.image_url)
+  const imageUrl = resolveMediaUrl(story.image_url)
   // Use the story's age_group (content was generated for it), fall back to child store
   const ageGroup = story.age_group || currentChild?.age_group || null
 
@@ -182,7 +153,7 @@ function StoryPage() {
       {/* Book container with story - age-aware display */}
       <AgeAwareContent
         ageGroup={ageGroup}
-        audioUrl={story.audio_url ? getAudioUrl(story.audio_url) : onDemandAudioUrl}
+        audioUrl={story.audio_url ? resolveMediaUrl(story.audio_url) : resolveMediaUrl(onDemandAudioUrl)}
         onRequestAudio={handleRequestAudio}
         isAudioLoading={isAudioGenerating}
         autoPlayAudio={ageGroup === '3-5'}

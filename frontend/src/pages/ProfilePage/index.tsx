@@ -8,6 +8,7 @@ import TiltCard from '@/components/depth/TiltCard'
 import useAuthStore from '@/store/useAuthStore'
 import { authService } from '@/api/services/authService'
 import type { UpdateProfileRequest } from '@/types/auth'
+import { resolveMediaUrl } from '@/utils/mediaUrl'
 
 function ProfilePage() {
   const navigate = useNavigate()
@@ -83,7 +84,7 @@ function ProfilePage() {
             <div className="w-16 h-16 rounded-full bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center text-3xl overflow-hidden flex-shrink-0">
               {user?.avatar_url ? (
                 <img
-                  src={user.avatar_url}
+                  src={resolveMediaUrl(user.avatar_url) || user.avatar_url}
                   alt="avatar"
                   className="w-full h-full object-cover"
                 />
@@ -236,7 +237,7 @@ function ProfilePage() {
                   <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary/20 to-secondary/10 flex items-center justify-center overflow-hidden flex-shrink-0">
                     {story.image_url ? (
                       <img
-                        src={story.image_url.startsWith('/') ? story.image_url : '/' + story.image_url}
+                        src={resolveMediaUrl(story.image_url) || ''}
                         alt="Artwork"
                         className="w-full h-full object-cover"
                       />
