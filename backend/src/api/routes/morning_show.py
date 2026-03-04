@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import json
 import os
@@ -167,11 +168,20 @@ async def _generate_illustrations(
                 item_url = None
                 item_b64 = None
                 if openai_client is not None:
-                    response = openai_client.images.generate(
-                        model=image_model,
-                        prompt=_scene_prompt(kid_title, topic, age_group, idx),
-                        size="1024x1024",
-                    )
+                    # openai.OpenAI is the synchronous SDK — run it in a thread
+                    # to avoid blocking the asyncio event loop (image gen can
+                    # take 10–30 s).
+                    _prompt = _scene_prompt(kid_title, topic, age_group, idx)
+                    _model = image_model
+
+                    def _sync_generate():
+                        return openai_client.images.generate(
+                            model=_model,
+                            prompt=_prompt,
+                            size="1024x1024",
+                        )
+
+                    response = await asyncio.get_running_loop().run_in_executor(None, _sync_generate)
                     item = (getattr(response, "data", None) or [None])[0]
                     item_url = getattr(item, "url", None) if item is not None else None
                     item_b64 = getattr(item, "b64_json", None) if item is not None else None

@@ -87,8 +87,7 @@ async def generate_story_audio_file(
                 )
                 resp.stream_to_file(audio_path)
 
-            loop = asyncio.get_event_loop()
-            await loop.run_in_executor(None, _sync_tts)
+            await asyncio.get_running_loop().run_in_executor(None, _sync_tts)
         else:
             headers = {
                 "Authorization": f"Bearer {api_key}",

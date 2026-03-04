@@ -354,8 +354,16 @@ async def convert_news_to_kids(
     if _should_use_live_llm():
         try:
             return await _convert_news_to_kids_live(source, age_group, category)
-        except Exception:
-            pass
+        except RuntimeError as exc:
+            # Safety rejections must never be silently discarded — re-raise so
+            # the caller (Morning Show route) can propagate the structured error.
+            if "safety check" in str(exc).lower():
+                raise
+            # Other LLM failures (network, parse errors) fall through to the
+            # deterministic static baseline.
+            print(f"[news_to_kids] Live LLM failed, using static fallback: {exc}")
+        except Exception as exc:
+            print(f"[news_to_kids] Live LLM failed, using static fallback: {exc}")
 
     content = _build_kid_content(source, age_group, category)
     why_care = _build_why_care(category)
