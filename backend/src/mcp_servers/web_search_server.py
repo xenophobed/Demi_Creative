@@ -7,14 +7,46 @@ the query to child-appropriate news content and by relying on the platform's
 existing safety_check_server for all generated output.
 """
 
+import ipaddress
 import os
 import json
 from typing import Any, Dict
+from urllib.parse import urlparse
 
 from claude_agent_sdk import tool, create_sdk_mcp_server
 
 _MAX_RESULTS_LIMIT = 10
 _MAX_RESULTS_DEFAULT = 5
+
+
+def _is_safe_url(url: str) -> bool:
+    """Return True only if *url* is an HTTP(S) URL pointing to a public internet address.
+
+    Rejects:
+    - Non-http(s) schemes (file://, ftp://, javascript:, etc.)
+    - Localhost / loopback (127.x.x.x, ::1)
+    - Private network ranges (10.x, 172.16-31.x, 192.168.x)
+    - Link-local ranges including AWS metadata (169.254.x.x)
+    - Any reserved or unspecified address
+    """
+    if not isinstance(url, str) or not (url.startswith("http://") or url.startswith("https://")):
+        return False
+    try:
+        parsed = urlparse(url)
+        hostname = (parsed.hostname or "").lower().rstrip(".")
+        if not hostname:
+            return False
+        if hostname in ("localhost",):
+            return False
+        try:
+            addr = ipaddress.ip_address(hostname)
+            if addr.is_private or addr.is_loopback or addr.is_link_local or addr.is_reserved or addr.is_unspecified:
+                return False
+        except ValueError:
+            pass  # hostname is a domain name — allowed
+        return True
+    except Exception:
+        return False
 
 
 @tool(
@@ -94,6 +126,16 @@ async def get_headlines_by_topic(args: Dict[str, Any]) -> Dict[str, Any]:
 )
 async def fetch_article_text(args: Dict[str, Any]) -> Dict[str, Any]:
     url = args["url"]
+
+    # Reject unsafe URLs to prevent SSRF (file://, localhost, private IPs,
+    # cloud metadata endpoints like 169.254.169.254, etc.)
+    if not _is_safe_url(url):
+        return {
+            "content": [{
+                "type": "text",
+                "text": json.dumps({"error": "invalid URL: only public http:// and https:// URLs are permitted", "url": url, "text": ""}),
+            }]
+        }
 
     api_key = os.getenv("TAVILY_API_KEY")
     if not api_key:

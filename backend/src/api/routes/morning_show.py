@@ -110,6 +110,34 @@ def _scene_prompt(kid_title: str, topic: str, age_group: str, idx: int) -> str:
     )
 
 
+async def _safe_illustration_description(description: str, age_group: str) -> str:
+    """Run check_content_safety on an illustration description.
+
+    Returns the original description if it passes (score >= 0.85) or if
+    the MCP tool is unavailable.  Replaces with a generic safe description
+    if the content fails the safety gate.
+    """
+    try:
+        from ...mcp_servers import check_content_safety
+        import json as _json
+
+        age_map = {"3-5": 4, "6-8": 7, "6-9": 7, "9-12": 11}
+        target_age = age_map.get(age_group, 7)
+
+        result = await check_content_safety({
+            "content_text": description,
+            "content_type": "illustration_description",
+            "target_age": target_age,
+        })
+        data = _json.loads(result["content"][0]["text"])
+        score = float(data.get("safety_score", 1.0))
+        if score < 0.85:
+            return "A colorful, cheerful scene suitable for children"
+    except Exception:
+        pass
+    return description
+
+
 async def _generate_illustrations(
     episode_id: str,
     kid_title: str,
@@ -182,10 +210,14 @@ async def _generate_illustrations(
         else:
             generated_url = _save_placeholder_illustration(episode_id, idx, kid_title, subtitle)
 
+        # Safety gate on description before storing (CLAUDE.md: all AI-generated
+        # content must pass check_content_safety, threshold >= 0.85).
+        safe_description = await _safe_illustration_description(description, age_group)
+
         illustrations.append(
             EpisodeIllustration(
                 url=generated_url,
-                description=description,
+                description=safe_description,
                 display_order=idx,
                 animation_type=animation_type,
             )

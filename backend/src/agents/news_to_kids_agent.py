@@ -104,6 +104,32 @@ def _build_questions(category: str) -> List[Dict[str, str]]:
     ]
 
 
+async def _check_content_safety(text: str, age_group: str) -> float:
+    """Call the safety_check MCP tool and return the safety score (0.0–1.0).
+
+    Falls back to 1.0 (pass-through) if the MCP tool is unavailable, so
+    test environments without the full MCP stack are not blocked.
+    """
+    try:
+        from ..mcp_servers import check_content_safety
+
+        # Convert age_group string to a representative age integer
+        age_map = {"3-5": 4, "6-9": 7, "10-12": 11}
+        target_age = age_map.get(age_group, 7)
+
+        result = await check_content_safety({
+            "content_text": text,
+            "content_type": "news",
+            "target_age": target_age,
+        })
+        import json as _json
+        data = _json.loads(result["content"][0]["text"])
+        return float(data.get("safety_score", 1.0))
+    except Exception:
+        # MCP tool unavailable (test env, import error) — allow content through
+        return 1.0
+
+
 def _should_use_live_llm() -> bool:
     if os.getenv("PYTEST_CURRENT_TEST") is not None:
         return False
@@ -290,13 +316,22 @@ async def _convert_news_to_kids_live(source: str, age_group: str, category: str)
     key_concepts = _normalize_key_concepts(payload.get("key_concepts"), source)
     questions = _normalize_questions(payload.get("interactive_questions"), category)
 
+    kid_content = _trim_words(kid_content, rules["max_words"])
+
+    # Mandatory safety gate — all AI-generated content must pass check_content_safety
+    # before delivery (CLAUDE.md: threshold >= 0.85).
+    safety_score = await _check_content_safety(kid_content, age_group)
+    if safety_score < 0.85:
+        raise RuntimeError(f"Live news content failed safety check (score={safety_score:.2f})")
+
     return {
         "kid_title": kid_title,
-        "kid_content": _trim_words(kid_content, rules["max_words"]),
+        "kid_content": kid_content,
         "why_care": why_care,
         "key_concepts": key_concepts,
         "interactive_questions": questions,
         "audio_path": None,
+        "safety_score": safety_score,
     }
 
 

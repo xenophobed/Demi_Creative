@@ -193,3 +193,23 @@ class TestFetchArticleText:
 
         assert data.get("error") == "web-search unavailable"
         assert data.get("text") == ""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("bad_url", [
+        "file:///etc/passwd",
+        "http://169.254.169.254/latest/meta-data/",
+        "ftp://example.com/file",
+        "javascript:alert(1)",
+        "",
+        "not-a-url-at-all",
+    ])
+    async def test_rejects_non_http_urls(self, ws, monkeypatch, bad_url):
+        """Tool must reject any URL that is not http:// or https:// (SSRF prevention)."""
+        monkeypatch.setenv("TAVILY_API_KEY", "tvly-fake-key")
+
+        result = await ws.fetch_article_text.handler({"url": bad_url})
+        data = _parse_result(result)
+
+        assert "error" in data, f"Expected error for URL: {bad_url!r}"
+        assert "invalid URL" in data["error"], f"Expected SSRF rejection message for: {bad_url!r}"
+        assert data.get("text") == ""

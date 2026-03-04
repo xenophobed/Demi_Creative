@@ -4,6 +4,7 @@ TTS service layer.
 Provides a plain callable API for story audio generation.
 """
 
+import asyncio
 import hashlib
 import json
 import os
@@ -74,14 +75,20 @@ async def generate_story_audio_file(
         audio_path = os.path.join(audio_dir, filename)
 
         if OpenAI is not None:
-            client = OpenAI(api_key=api_key)
-            response = client.audio.speech.create(
-                model="tts-1",
-                voice=voice,
-                input=text,
-                speed=resolved_speed,
-            )
-            response.stream_to_file(audio_path)
+            # Run the synchronous OpenAI SDK calls in a thread so they don't
+            # block the asyncio event loop during potentially multi-second TTS.
+            def _sync_tts() -> None:
+                client = OpenAI(api_key=api_key)
+                resp = client.audio.speech.create(
+                    model="tts-1",
+                    voice=voice,
+                    input=text,
+                    speed=resolved_speed,
+                )
+                resp.stream_to_file(audio_path)
+
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(None, _sync_tts)
         else:
             headers = {
                 "Authorization": f"Bearer {api_key}",
