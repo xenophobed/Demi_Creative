@@ -373,39 +373,42 @@ async def _generate_with_sdk(
             anthropic_error = exc
 
     if not text_blocks and openai_key:
-        headers = {
-            "Authorization": f"Bearer {openai_key}",
-            "content-type": "application/json",
-        }
-        payload = {
-            "model": openai_model,
-            "temperature": 0.2,
-            "response_format": {"type": "json_object"},
-            "messages": [
-                {
-                    "role": "system",
-                    "content": (
-                        "You write playful, factual, and child-safe dialogue scripts for children. "
-                        "Return strict JSON only."
-                    ),
-                },
-                {"role": "user", "content": user_prompt},
-            ],
-        }
-        async with httpx.AsyncClient(timeout=45.0) as client:
-            response = await client.post(
-                "https://api.openai.com/v1/chat/completions",
-                headers=headers,
-                json=payload,
-            )
-            response.raise_for_status()
-            body = response.json()
-        choices = body.get("choices", []) if isinstance(body, dict) else []
-        if choices:
-            message = choices[0].get("message", {}) if isinstance(choices[0], dict) else {}
-            content = message.get("content")
-            if isinstance(content, str) and content.strip():
-                text_blocks.append(content.strip())
+        try:
+            headers = {
+                "Authorization": f"Bearer {openai_key}",
+                "content-type": "application/json",
+            }
+            payload = {
+                "model": openai_model,
+                "temperature": 0.2,
+                "response_format": {"type": "json_object"},
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": (
+                            "You write playful, factual, and child-safe dialogue scripts for children. "
+                            "Return strict JSON only."
+                        ),
+                    },
+                    {"role": "user", "content": user_prompt},
+                ],
+            }
+            async with httpx.AsyncClient(timeout=45.0) as client:
+                response = await client.post(
+                    "https://api.openai.com/v1/chat/completions",
+                    headers=headers,
+                    json=payload,
+                )
+                response.raise_for_status()
+                body = response.json()
+            choices = body.get("choices", []) if isinstance(body, dict) else []
+            if choices:
+                message = choices[0].get("message", {}) if isinstance(choices[0], dict) else {}
+                content = message.get("content")
+                if isinstance(content, str) and content.strip():
+                    text_blocks.append(content.strip())
+        except Exception:
+            pass
 
     if not text_blocks and anthropic_error is not None:
         raise RuntimeError(str(anthropic_error))
