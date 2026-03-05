@@ -122,8 +122,7 @@ async def _check_content_safety(text: str, age_group: str) -> float:
             "content_type": "news",
             "target_age": target_age,
         })
-        import json as _json
-        data = _json.loads(result["content"][0]["text"])
+        data = json.loads(result["content"][0]["text"])
         return float(data.get("safety_score", 1.0))
     except Exception:
         # MCP tool unavailable (test env, import error) — allow content through
@@ -318,9 +317,12 @@ async def _convert_news_to_kids_live(source: str, age_group: str, category: str)
 
     kid_content = _trim_words(kid_content, rules["max_words"])
 
-    # Mandatory safety gate — all AI-generated content must pass check_content_safety
-    # before delivery (CLAUDE.md: threshold >= 0.85).
-    safety_score = await _check_content_safety(kid_content, age_group)
+    # Mandatory safety gate — ALL AI-generated text fields must pass
+    # check_content_safety before delivery (CLAUDE.md: threshold >= 0.85).
+    # Run a single check over the combined bundle so kid_title / why_care
+    # cannot slip through while kid_content passes on its own.
+    safety_bundle = " ".join(filter(None, [kid_title, kid_content, why_care]))
+    safety_score = await _check_content_safety(safety_bundle, age_group)
     if safety_score < 0.85:
         raise RuntimeError(f"Live news content failed safety check (score={safety_score:.2f})")
 

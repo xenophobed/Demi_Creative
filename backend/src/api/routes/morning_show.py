@@ -59,8 +59,8 @@ def _illustration_count(age_group: str) -> int:
 
 
 def _make_placeholder_svg(title: str, subtitle: str, width: int = 1280, height: int = 720) -> str:
-    safe_title = title.replace("&", "and")
-    safe_subtitle = subtitle.replace("&", "and")
+    safe_title = title.replace("&", "and").replace("<", "").replace(">", "")
+    safe_subtitle = subtitle.replace("&", "and").replace("<", "").replace(">", "")
     return f"""<svg xmlns='http://www.w3.org/2000/svg' width='{width}' height='{height}'>
 <defs>
   <linearGradient id='g' x1='0%' y1='0%' x2='100%' y2='100%'>
@@ -100,10 +100,19 @@ def _save_placeholder_illustration(
     return f"/data/uploads/{filename}"
 
 
+def _sanitize_for_image_prompt(text: str, max_len: int = 120) -> str:
+    """Strip characters that could escape the image generation prompt context."""
+    return text.replace("\n", " ").replace("\r", " ").replace("<", "").replace(">", "")[:max_len].strip()
+
+
 def _scene_prompt(kid_title: str, topic: str, age_group: str, idx: int) -> str:
+    # kid_title originates from LLM-generated + Tavily-sourced data.  Sanitize
+    # before injecting into the image generation prompt to prevent prompt
+    # injection through crafted news headlines.
+    safe_title = _sanitize_for_image_prompt(kid_title)
     return (
         f"Create a bright 2D children's editorial illustration for a morning show episode.\n"
-        f"Episode title: {kid_title}\n"
+        f"Episode title: {safe_title}\n"
         f"Scene: {topic} scene {idx + 1}\n"
         f"Audience age group: {age_group}\n"
         "Style: playful shapes, soft gradients, clean outlines, educational and optimistic.\n"
