@@ -47,6 +47,28 @@ router = APIRouter(
     tags=["Interactive Story"]
 )
 
+_AGE_MAP = {"3-5": 4, "6-8": 7, "6-9": 7, "9-12": 11}
+
+
+async def _check_story_safety(text: str, age_group: str) -> float:
+    """Run check_content_safety on story text, return the safety score.
+
+    Falls back to 0.0 if the MCP tool is unavailable so that callers
+    never silently accept unchecked content.
+    """
+    try:
+        from ...mcp_servers import check_content_safety
+
+        result = await check_content_safety({
+            "content_text": text,
+            "content_type": "interactive_story",
+            "target_age": _AGE_MAP.get(age_group, 7),
+        })
+        data = json.loads(result["content"][0]["text"])
+        return float(data.get("safety_score", 0.0))
+    except Exception:
+        return 0.0
+
 
 @router.post(
     "/start",
@@ -701,6 +723,17 @@ async def save_interactive_story(
             seg.get("text", "") for seg in session.segments if seg.get("text")
         )
 
+        # Run safety check on the full story text
+        safety_score = await _check_story_safety(full_text, session.age_group)
+        if safety_score < 0.85:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=(
+                    f"Story content did not pass safety check "
+                    f"(score={safety_score:.2f}, threshold=0.85)"
+                ),
+            )
+
         # Build story data
         story_id = str(uuid.uuid4())
         educational = session.educational_summary or {}
@@ -727,7 +760,7 @@ async def save_interactive_story(
                 "choices_made": len(session.choice_history),
                 "story_title": session.story_title,
             },
-            "safety_score": 0.9,
+            "safety_score": safety_score,
             "created_at": session.created_at,
         }
 
