@@ -7,6 +7,7 @@ touches the DB.  All requests go through ASGITransport for httpx >= 0.27.
 
 import pytest
 import pytest_asyncio
+from unittest.mock import AsyncMock, patch
 from httpx import AsyncClient, ASGITransport
 
 from backend.src.main import app
@@ -357,3 +358,103 @@ class TestStoryProgression:
 
             assert len(final_status["choice_history"]) == 3
             assert final_status["current_segment"] >= 3
+
+
+# ============================================================================
+# Save Interactive Story — safety_score (issue #109)
+# ============================================================================
+
+def _mock_safety_response(score: float):
+    """Build a mock check_content_safety return value."""
+    import json
+    return {
+        "content": [{
+            "type": "text",
+            "text": json.dumps({
+                "safety_score": score,
+                "is_safe": score >= 0.7,
+                "passed": score >= 0.85,
+                "issues": [],
+            }),
+        }]
+    }
+
+
+@pytest.mark.asyncio
+class TestSaveInteractiveStory:
+    """Save interactive story tests — verifies real safety scoring (#109)."""
+
+    async def _create_completed_session(self, client: AsyncClient) -> str:
+        """Helper: start a session, play through, and mark completed."""
+        payload = {
+            "child_id": "test_child_001",
+            "age_group": "6-8",
+            "interests": ["animals"],
+        }
+        resp = await client.post(
+            "/api/v1/story/interactive/start", json=payload
+        )
+        assert resp.status_code == 201
+        session_id = resp.json()["session_id"]
+
+        # Mark session as completed so save endpoint accepts it
+        await session_repo.update_session(
+            session_id=session_id, status="completed"
+        )
+        return session_id
+
+    @patch(
+        "backend.src.api.routes.interactive_story._check_story_safety",
+        new_callable=AsyncMock,
+        return_value=0.95,
+    )
+    async def test_save_uses_actual_safety_score(self, mock_safety):
+        """Save should use the real safety score, not a hardcoded value."""
+        async with _client() as client:
+            session_id = await self._create_completed_session(client)
+
+            resp = await client.post(
+                f"/api/v1/story/interactive/{session_id}/save"
+            )
+
+            assert resp.status_code == 200
+            result = resp.json()
+            assert "story_id" in result
+            mock_safety.assert_called_once()
+
+    @patch(
+        "backend.src.api.routes.interactive_story._check_story_safety",
+        new_callable=AsyncMock,
+        return_value=0.60,
+    )
+    async def test_save_rejects_unsafe_content(self, mock_safety):
+        """Save should reject stories that fail safety check."""
+        async with _client() as client:
+            session_id = await self._create_completed_session(client)
+
+            resp = await client.post(
+                f"/api/v1/story/interactive/{session_id}/save"
+            )
+
+            assert resp.status_code == 422
+            assert "safety check" in resp.json()["detail"].lower()
+            mock_safety.assert_called_once()
+
+    async def test_save_non_completed_session_rejected(self):
+        """Cannot save an active (non-completed) session."""
+        async with _client() as client:
+            payload = {
+                "child_id": "test_child_001",
+                "age_group": "6-8",
+                "interests": ["animals"],
+            }
+            resp = await client.post(
+                "/api/v1/story/interactive/start", json=payload
+            )
+            assert resp.status_code == 201
+            session_id = resp.json()["session_id"]
+
+            resp = await client.post(
+                f"/api/v1/story/interactive/{session_id}/save"
+            )
+            assert resp.status_code == 400
