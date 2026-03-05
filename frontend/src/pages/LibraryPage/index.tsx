@@ -15,6 +15,7 @@ import { useLibraryPreferences } from '@/hooks/useLibraryPreferences'
 import MiniPlayer from '@/components/common/MiniPlayer'
 import { getAgeLayoutConfig } from '@/config/ageConfig'
 import type { NewsToKidsResponse } from '@/types/api'
+import { resolveMediaUrl } from '@/utils/mediaUrl'
 
 // Content type tabs
 type ContentTab = 'all' | 'art-stories' | 'interactive' | 'news' | 'morning-show'
@@ -329,7 +330,7 @@ function LibraryCard({
         <div className={`flex-shrink-0 w-20 h-20 rounded-xl bg-gradient-to-br ${style.gradient} flex items-center justify-center overflow-hidden`}>
           {imgSrc && !imgError ? (
             <img
-              src={imgSrc.startsWith('/') ? imgSrc : '/' + imgSrc}
+              src={resolveMediaUrl(imgSrc) || ''}
               alt=""
               className="w-full h-full object-cover"
               onError={() => setImgError(true)}
@@ -500,7 +501,7 @@ function ListRow({
           <div className={`flex-shrink-0 w-20 h-20 rounded-xl bg-gradient-to-br ${style.gradient} flex items-center justify-center overflow-hidden`}>
             {imgSrc && !imgError ? (
               <img
-                src={imgSrc.startsWith('/') ? imgSrc : '/' + imgSrc}
+                src={resolveMediaUrl(imgSrc) || ''}
                 alt=""
                 className="w-full h-full object-cover"
                 onError={() => setImgError(true)}

@@ -4,12 +4,15 @@ TTS service layer.
 Provides a plain callable API for story audio generation.
 """
 
+import asyncio
 import hashlib
 import json
 import os
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+import httpx
 
 try:
     from openai import OpenAI
@@ -64,15 +67,6 @@ async def generate_story_audio_file(
     resolved_speed = _resolve_speed(speed, child_age)
 
     try:
-        if OpenAI is None:
-            return {
-                "success": False,
-                "error": "OpenAI SDK is unavailable in current environment",
-                "audio_path": None,
-            }
-
-        client = OpenAI(api_key=api_key)
-
         timestamp = datetime.now().isoformat()
         text_hash = hashlib.md5(text.encode()).hexdigest()[:8]
         filename = f"story_{text_hash}_{timestamp.replace(':', '-')}.mp3"
@@ -80,13 +74,41 @@ async def generate_story_audio_file(
         audio_dir = get_audio_output_path()
         audio_path = os.path.join(audio_dir, filename)
 
-        response = client.audio.speech.create(
-            model="tts-1",
-            voice=voice,
-            input=text,
-            speed=resolved_speed,
-        )
-        response.stream_to_file(audio_path)
+        if OpenAI is not None:
+            # Run the synchronous OpenAI SDK calls in a thread so they don't
+            # block the asyncio event loop during potentially multi-second TTS.
+            def _sync_tts() -> None:
+                client = OpenAI(api_key=api_key)
+                resp = client.audio.speech.create(
+                    model="tts-1",
+                    voice=voice,
+                    input=text,
+                    speed=resolved_speed,
+                )
+                resp.stream_to_file(audio_path)
+
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(None, _sync_tts)
+        else:
+            headers = {
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            }
+            payload = {
+                "model": "tts-1",
+                "voice": voice,
+                "input": text,
+                "speed": resolved_speed,
+                "format": "mp3",
+            }
+            async with httpx.AsyncClient(timeout=90.0) as client:
+                response = await client.post(
+                    "https://api.openai.com/v1/audio/speech",
+                    headers=headers,
+                    json=payload,
+                )
+                response.raise_for_status()
+                Path(audio_path).write_bytes(response.content)
 
         file_size = os.path.getsize(audio_path)
         file_size_mb = round(file_size / (1024 * 1024), 2)
@@ -231,7 +253,6 @@ async def generate_multi_speaker_audio(dialogue_script: Any, age_group: str) -> 
         text = str(line.get("text", "")).strip()
 
         if not text:
-            audio_urls[key] = f"/data/audio/morning_show_line_{index}.mp3"
             continue
 
         generated = await generate_story_audio_file(
@@ -242,7 +263,5 @@ async def generate_multi_speaker_audio(dialogue_script: Any, age_group: str) -> 
         url = _audio_url_from_path(generated.get("audio_path"))
         if url:
             audio_urls[key] = url
-        else:
-            audio_urls[key] = f"/data/audio/morning_show_line_{index}.mp3"
 
     return audio_urls

@@ -6,6 +6,7 @@ import Card from '@/components/common/Card'
 import Button from '@/components/common/Button'
 import { storyService } from '@/api/services/storyService'
 import useChildStore from '@/store/useChildStore'
+import { resolveMediaUrl } from '@/utils/mediaUrl'
 
 const ROLE_META = {
   curious_kid: { label: 'Curious Kid', emoji: '🧒' },
@@ -14,8 +15,7 @@ const ROLE_META = {
 } as const
 
 function morningShowAudioSrc(url?: string | null): string | null {
-  if (!url) return null
-  return url.startsWith('/') ? url : `/${url}`
+  return resolveMediaUrl(url)
 }
 
 function formatDuration(seconds?: number | null): string {
@@ -204,7 +204,7 @@ function MorningShowPage() {
                 {activeIllustration ? (
                   <motion.img
                     key={activeIllustration.url}
-                    src={activeIllustration.url}
+                    src={resolveMediaUrl(activeIllustration.url) || ''}
                     alt={activeIllustration.description}
                     className="absolute inset-0 w-full h-full object-cover"
                     initial={{ opacity: 0, scale: 1.02 }}

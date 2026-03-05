@@ -8,19 +8,21 @@ from __future__ import annotations
 
 import json
 import os
-import random
+import re
 from pathlib import Path
 from typing import Any, AsyncGenerator, Dict, List, Optional, Tuple
+
+import httpx
+from pydantic import ValidationError
 
 from ..api.models import DialogueLine, DialogueScript
 from ..mcp_servers import check_content_safety, search_similar_drawings
 from .news_to_kids_agent import convert_news_to_kids
 
 try:
-    from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient
+    from anthropic import AsyncAnthropic
 except Exception:  # pragma: no cover - import fallback for test env
-    ClaudeAgentOptions = None
-    ClaudeSDKClient = None
+    AsyncAnthropic = None
 
 
 _PROMPT_PATH = Path(__file__).resolve().parents[1] / "prompts" / "morning-show.md"
@@ -50,11 +52,18 @@ def _target_age(age_group: str) -> int:
 
 
 def _should_use_mock() -> bool:
-    return (
-        ClaudeSDKClient is None
-        or ClaudeAgentOptions is None
-        or os.getenv("PYTEST_CURRENT_TEST") is not None
-    )
+    force_mock = os.getenv("MORNING_SHOW_FORCE_MOCK", "").strip().lower() in {"1", "true", "yes"}
+    if force_mock or os.getenv("PYTEST_CURRENT_TEST") is not None:
+        return True
+
+    anthropic_key = (os.getenv("ANTHROPIC_API_KEY") or "").strip()
+    openai_key = (os.getenv("OPENAI_API_KEY") or "").strip()
+    has_anthropic = bool(anthropic_key) and not anthropic_key.startswith("your_")
+    has_openai = bool(openai_key) and not openai_key.startswith("your_")
+    if not has_anthropic and not has_openai:
+        return True
+
+    return False
 
 
 def _load_prompt() -> str:
@@ -272,13 +281,206 @@ async def _generate_with_sdk(
     age_group: str,
     guest_name: str,
 ) -> DialogueScript:
-    """Best-effort SDK path; local fallback is used when unavailable."""
-    if ClaudeSDKClient is None or ClaudeAgentOptions is None:
-        raise RuntimeError("Claude Agent SDK unavailable")
+    """Generate dialogue via Anthropic with schema + safety-friendly post-processing."""
+    anthropic_key = (os.getenv("ANTHROPIC_API_KEY") or "").strip()
+    openai_key = (os.getenv("OPENAI_API_KEY") or "").strip()
+    if not anthropic_key and not openai_key:
+        raise RuntimeError("No LLM API key configured for Morning Show generation")
 
-    # The SDK integration is intentionally conservative in this repository.
-    # We keep a strict fallback path to avoid runtime instability in local/test envs.
-    raise RuntimeError("SDK live generation not configured for local test environment")
+    anthropic_model = os.getenv("MORNING_SHOW_MODEL", "claude-3-5-sonnet-latest")
+    openai_model = os.getenv("MORNING_SHOW_OPENAI_MODEL", "gpt-4o-mini")
+    config = _AGE_CONFIG[_age_bucket(age_group)]
+    line_count = int(config["line_count"])
+    line_duration = float(config["line_duration"])
+
+    prompt = _load_prompt()
+    user_prompt = (
+        f"{prompt}\n\n"
+        "Generate one complete script for the input below.\n"
+        f"- age_group: {age_group}\n"
+        f"- target_line_count: {line_count}\n"
+        f"- target_line_duration_seconds: {line_duration}\n"
+        f"- guest_character: {guest_name}\n"
+        f"- source_news_text: {source_text}\n\n"
+        "Output must be valid JSON and contain only the required keys."
+    )
+
+    text_blocks: List[str] = []
+    anthropic_error: Optional[Exception] = None
+    if anthropic_key:
+        try:
+            if AsyncAnthropic is not None:
+                client = AsyncAnthropic(api_key=anthropic_key)
+                response = await client.messages.create(
+                    model=anthropic_model,
+                    max_tokens=1400,
+                    temperature=0.2,
+                    system=(
+                        "You write playful, factual, and child-safe dialogue scripts for children. "
+                        "Return strict JSON only."
+                    ),
+                    messages=[{"role": "user", "content": user_prompt}],
+                )
+                for block in getattr(response, "content", []) or []:
+                    block_text = getattr(block, "text", None)
+                    if isinstance(block_text, str) and block_text.strip():
+                        text_blocks.append(block_text.strip())
+            else:
+                headers = {
+                    "x-api-key": anthropic_key,
+                    "anthropic-version": "2023-06-01",
+                    "content-type": "application/json",
+                }
+                payload = {
+                    "model": anthropic_model,
+                    "max_tokens": 1400,
+                    "temperature": 0.2,
+                    "system": (
+                        "You write playful, factual, and child-safe dialogue scripts for children. "
+                        "Return strict JSON only."
+                    ),
+                    "messages": [{"role": "user", "content": user_prompt}],
+                }
+                async with httpx.AsyncClient(timeout=45.0) as client:
+                    response = await client.post(
+                        "https://api.anthropic.com/v1/messages",
+                        headers=headers,
+                        json=payload,
+                    )
+                    response.raise_for_status()
+                    body = response.json()
+                for block in body.get("content", []) or []:
+                    if isinstance(block, dict):
+                        block_text = str(block.get("text", "")).strip()
+                        if block.get("type") == "text" and block_text:
+                            text_blocks.append(block_text)
+        except Exception as exc:
+            anthropic_error = exc
+
+    if not text_blocks and openai_key:
+        headers = {
+            "Authorization": f"Bearer {openai_key}",
+            "content-type": "application/json",
+        }
+        payload = {
+            "model": openai_model,
+            "temperature": 0.2,
+            "response_format": {"type": "json_object"},
+            "messages": [
+                {
+                    "role": "system",
+                    "content": (
+                        "You write playful, factual, and child-safe dialogue scripts for children. "
+                        "Return strict JSON only."
+                    ),
+                },
+                {"role": "user", "content": user_prompt},
+            ],
+        }
+        async with httpx.AsyncClient(timeout=45.0) as client:
+            response = await client.post(
+                "https://api.openai.com/v1/chat/completions",
+                headers=headers,
+                json=payload,
+            )
+            response.raise_for_status()
+            body = response.json()
+        choices = body.get("choices", []) if isinstance(body, dict) else []
+        if choices:
+            message = choices[0].get("message", {}) if isinstance(choices[0], dict) else {}
+            content = message.get("content")
+            if isinstance(content, str) and content.strip():
+                text_blocks.append(content.strip())
+
+    if not text_blocks and anthropic_error is not None:
+        raise RuntimeError(str(anthropic_error))
+
+    raw_text = "\n".join(text_blocks).strip()
+    if not raw_text:
+        raise RuntimeError("Empty model output")
+
+    try:
+        payload = json.loads(raw_text)
+    except json.JSONDecodeError:
+        match = re.search(r"\{.*\}", raw_text, flags=re.DOTALL)
+        if not match:
+            raise RuntimeError("Model output is not valid JSON")
+        payload = json.loads(match.group(0))
+
+    raw_lines = payload.get("lines", [])
+    if not isinstance(raw_lines, list) or not raw_lines:
+        raise RuntimeError("Model output missing lines")
+
+    normalized_lines: List[DialogueLine] = []
+    current_time = 0.0
+    for idx, item in enumerate(raw_lines):
+        if not isinstance(item, dict):
+            continue
+
+        role = str(item.get("role", "")).strip()
+        if role not in {"curious_kid", "fun_expert", "guest"}:
+            role = "curious_kid" if idx % 2 == 0 else "fun_expert"
+
+        text = str(item.get("text", "")).strip()
+        if not text:
+            continue
+
+        start_value = item.get("timestamp_start", current_time)
+        end_value = item.get("timestamp_end", current_time + line_duration)
+
+        try:
+            start = max(float(start_value), current_time)
+        except Exception:
+            start = current_time
+
+        try:
+            end = float(end_value)
+        except Exception:
+            end = start + line_duration
+        if end <= start:
+            end = start + line_duration
+
+        normalized_lines.append(
+            DialogueLine(
+                role=role,
+                text=text,
+                timestamp_start=round(start, 2),
+                timestamp_end=round(end, 2),
+            )
+        )
+        current_time = round(end, 2)
+
+    if not normalized_lines:
+        raise RuntimeError("Model output produced no valid dialogue lines")
+
+    if not any(line.role == "guest" for line in normalized_lines):
+        midpoint = len(normalized_lines) // 2
+        guest_start = normalized_lines[midpoint].timestamp_start
+        guest_end = normalized_lines[midpoint].timestamp_end
+        normalized_lines[midpoint] = DialogueLine(
+            role="guest",
+            text=f"{guest_name} joins us with a fun tip: keep being curious and kind!",
+            timestamp_start=guest_start,
+            timestamp_end=guest_end,
+        )
+
+    total_duration = max(line.timestamp_end for line in normalized_lines)
+    declared_duration = payload.get("total_duration")
+    try:
+        total_duration = max(total_duration, float(declared_duration))
+    except Exception:
+        pass
+
+    script = DialogueScript(
+        lines=normalized_lines,
+        total_duration=round(total_duration, 2),
+        guest_character=str(payload.get("guest_character") or guest_name).strip() or guest_name,
+    )
+
+    try:
+        return DialogueScript.model_validate(script.model_dump())
+    except ValidationError as exc:
+        raise RuntimeError(f"Invalid dialogue schema: {exc}") from exc
 
 
 async def generate_morning_show_dialogue(

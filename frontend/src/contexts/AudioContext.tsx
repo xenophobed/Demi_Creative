@@ -1,6 +1,7 @@
 import { createContext, useContext, useCallback, useRef, useState, useEffect } from 'react'
 import type { ReactNode } from 'react'
 import { Howl } from 'howler'
+import { resolveMediaUrl } from '@/utils/mediaUrl'
 
 interface AudioState {
   currentId: string | null
@@ -71,8 +72,13 @@ export function AudioProvider({ children }: { children: ReactNode }) {
       // Stop previous audio
       cleanup()
 
+      const resolvedSrc = resolveMediaUrl(src)
+      if (!resolvedSrc) {
+        return
+      }
+
       const howl = new Howl({
-        src: [src.startsWith('/') ? src : '/' + src],
+        src: [resolvedSrc],
         html5: true,
         onplay: () => {
           setIsPlaying(true)

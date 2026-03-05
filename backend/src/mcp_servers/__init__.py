@@ -28,6 +28,9 @@ video_server = {}
 generate_painting_video = _unavailable_tool
 check_video_status = _unavailable_tool
 combine_video_audio = _unavailable_tool
+web_search_server = {}
+get_headlines_by_topic = _unavailable_tool
+fetch_article_text = _unavailable_tool
 
 try:
     from .vision_analysis_server import vision_server, analyze_children_drawing
@@ -59,6 +62,15 @@ try:
 except Exception:
     pass
 
+try:
+    from .web_search_server import (
+        web_search_server,
+        get_headlines_by_topic,
+        fetch_article_text,
+    )
+except Exception:
+    pass
+
 
 __all__ = [
     "vision_server",
@@ -77,4 +89,7 @@ __all__ = [
     "generate_painting_video",
     "check_video_status",
     "combine_video_audio",
+    "web_search_server",
+    "get_headlines_by_topic",
+    "fetch_article_text",
 ]
