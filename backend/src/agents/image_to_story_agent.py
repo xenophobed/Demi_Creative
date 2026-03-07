@@ -74,23 +74,23 @@ class StoryOutput(BaseModel):
 # ============================================================================
 
 def _get_age_group_from_age(age: int) -> str:
-    """Convert age to age group string."""
+    """Convert age to canonical age group string (PRD §2.1)."""
     if age <= 5:
         return "3-5"
-    elif age <= 9:
-        return "6-9"
+    elif age <= 8:
+        return "6-8"
     else:
-        return "10-12"
+        return "9-12"
 
 
 def _get_audio_config(age_group: str) -> dict:
     """Get audio configuration for age group."""
     configs = {
         "3-5": {"audio_mode": "audio_first", "voice": "nova", "speed": 0.9},
-        "6-9": {"audio_mode": "simultaneous", "voice": "shimmer", "speed": 1.0},
-        "10-12": {"audio_mode": "text_first", "voice": "alloy", "speed": 1.1}
+        "6-8": {"audio_mode": "simultaneous", "voice": "shimmer", "speed": 1.0},
+        "9-12": {"audio_mode": "text_first", "voice": "alloy", "speed": 1.1}
     }
-    return configs.get(age_group, configs["6-9"])
+    return configs.get(age_group, configs["6-8"])
 
 
 async def image_to_story(

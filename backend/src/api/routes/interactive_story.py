@@ -47,7 +47,7 @@ router = APIRouter(
     tags=["Interactive Story"]
 )
 
-_AGE_MAP = {"3-5": 4, "6-8": 7, "6-9": 7, "9-12": 11}
+_AGE_MAP = {"3-5": 4, "6-8": 7, "9-12": 11}
 
 
 async def _check_story_safety(text: str, age_group: str) -> float:
@@ -117,7 +117,7 @@ async def start_interactive_story(
         )
 
         # 2. Create session (determine total segments based on age group)
-        age_config = AGE_CONFIG.get(request.age_group.value, AGE_CONFIG["6-9"])
+        age_config = AGE_CONFIG.get(request.age_group.value, AGE_CONFIG["6-8"])
         total_segments = age_config["total_segments"]
 
         session = await session_repo.create_session(
@@ -254,7 +254,7 @@ async def start_interactive_story_stream(
                     opening_data = event_data
 
                     # Create session
-                    age_config = AGE_CONFIG.get(request.age_group.value, AGE_CONFIG["6-9"])
+                    age_config = AGE_CONFIG.get(request.age_group.value, AGE_CONFIG["6-8"])
                     total_segments = age_config["total_segments"]
 
                     session = await session_repo.create_session(
@@ -697,7 +697,7 @@ async def get_session_status(
 @router.post(
     "/{session_id}/save",
     response_model=SaveInteractiveStoryResponse,
-    summary="Save interactive story to My Stories",
+    summary="Save interactive story to My Library",
     description="Save a completed interactive story session as a story record"
 )
 async def save_interactive_story(

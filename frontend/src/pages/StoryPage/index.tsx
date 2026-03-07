@@ -20,7 +20,7 @@ function StoryPage() {
   const { currentStory, setCurrentStory, reset } = useStoryStore()
   const { currentChild } = useChildStore()
 
-  // On-demand audio state (for 10-12 age group)
+  // On-demand audio state (for 9-12 age group)
   const [onDemandAudioUrl, setOnDemandAudioUrl] = useState<string | null>(null)
   const [isAudioGenerating, setIsAudioGenerating] = useState(false)
 
@@ -45,7 +45,7 @@ function StoryPage() {
     }
   }, [fetchedStory, matchingStory, setCurrentStory])
 
-  // On-demand audio handler for 10-12 age group
+  // On-demand audio handler for 9-12 age group
   const handleRequestAudio = useCallback(async () => {
     if (!story || isAudioGenerating) return
     setIsAudioGenerating(true)

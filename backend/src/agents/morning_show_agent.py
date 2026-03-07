@@ -31,9 +31,7 @@ _DEFAULT_GUESTS = ("Professor Owl", "Captain Comet")
 _AGE_CONFIG: Dict[str, Dict[str, Any]] = {
     "3-5": {"line_count": 6, "line_duration": 7.5, "question_style": "why", "answer_style": "one short sentence"},
     "6-8": {"line_count": 8, "line_duration": 9.0, "question_style": "how or what if", "answer_style": "simple analogy"},
-    "6-9": {"line_count": 8, "line_duration": 9.0, "question_style": "how or what if", "answer_style": "simple analogy"},
     "9-12": {"line_count": 10, "line_duration": 10.0, "question_style": "but what about", "answer_style": "deeper analysis"},
-    "10-12": {"line_count": 10, "line_duration": 10.0, "question_style": "but what about", "answer_style": "deeper analysis"},
 }
 
 
@@ -46,7 +44,7 @@ def _age_bucket(age_group: str) -> str:
 def _target_age(age_group: str) -> int:
     if age_group == "3-5":
         return 4
-    if age_group in {"6-8", "6-9"}:
+    if age_group == "6-8":
         return 7
     return 10
 
@@ -162,7 +160,7 @@ def _build_line_text(role: str, topic: str, age_group: str, idx: int, guest_name
                 f"What happened first in this {topic} story?",
                 f"Can this help kids like me?",
             ]
-        elif bucket in {"6-8", "6-9"}:
+        elif bucket in {"6-8"}:
             prompts = [
                 f"How did this {topic} story begin?",
                 f"What if we tried this idea at school?",
@@ -186,7 +184,7 @@ def _build_line_text(role: str, topic: str, age_group: str, idx: int, guest_name
             "People worked together carefully, step by step, to keep everyone safe.",
             "Yes. Small kind actions from kids can make a big difference.",
         ]
-    elif bucket in {"6-8", "6-9"}:
+    elif bucket in {"6-8"}:
         answers = [
             f"Imagine {topic} as a team puzzle where each piece solves part of the problem.",
             "Scientists tested ideas, compared results, and improved the plan.",
@@ -610,17 +608,7 @@ def pick_age_voice(role: str, age_group: str) -> Tuple[str, float]:
             "fun_expert": ("fable", 1.0),
             "guest": ("alloy", 1.0),
         },
-        "6-9": {
-            "curious_kid": ("shimmer", 1.0),
-            "fun_expert": ("fable", 1.0),
-            "guest": ("alloy", 1.0),
-        },
         "9-12": {
-            "curious_kid": ("echo", 1.1),
-            "fun_expert": ("fable", 1.1),
-            "guest": ("alloy", 1.1),
-        },
-        "10-12": {
             "curious_kid": ("echo", 1.1),
             "fun_expert": ("fable", 1.1),
             "guest": ("alloy", 1.1),

@@ -175,8 +175,8 @@ def parse_age_group(age_group: str) -> int:
     """
     age_map = {
         "3-5": 4,
-        "6-9": 7,
-        "10-12": 11
+        "6-8": 7,
+        "9-12": 11
     }
     return age_map.get(age_group, 7)
 

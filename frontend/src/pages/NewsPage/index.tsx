@@ -11,8 +11,8 @@ import type { AnimationPhase } from '@/types/streaming'
 
 const AGE_GROUPS: { value: AgeGroup; label: string; emoji: string }[] = [
   { value: '3-5', label: '3-5 yrs', emoji: '🧒' },
-  { value: '6-9', label: '6-9 yrs', emoji: '👦' },
-  { value: '10-12', label: '10-12 yrs', emoji: '🧑' },
+  { value: '6-8', label: '6-8 yrs', emoji: '👦' },
+  { value: '9-12', label: '9-12 yrs', emoji: '🧑' },
 ]
 
 const CATEGORIES: { value: NewsCategory; label: string; emoji: string }[] = [

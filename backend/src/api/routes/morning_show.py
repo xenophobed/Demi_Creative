@@ -52,7 +52,7 @@ router = APIRouter(
 def _illustration_count(age_group: str) -> int:
     if age_group == "3-5":
         return 2
-    if age_group in {"6-8", "6-9"}:
+    if age_group == "6-8":
         return 3
     return 4
 
@@ -121,7 +121,7 @@ async def _safe_illustration_description(description: str, age_group: str) -> st
         from ...mcp_servers import check_content_safety
         import json as _json
 
-        age_map = {"3-5": 4, "6-8": 7, "6-9": 7, "9-12": 11}
+        age_map = {"3-5": 4, "6-8": 7, "9-12": 11}
         target_age = age_map.get(age_group, 7)
 
         result = await check_content_safety({

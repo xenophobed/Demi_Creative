@@ -123,20 +123,7 @@ AGE_CONFIG = {
         "voice": "shimmer",
         "speed": 1.0
     },
-    "6-9": {
-        "word_count": "100-200",
-        "sentence_length": "10-15字",
-        "complexity": "简单",
-        "vocab_level": "小学低年级词汇",
-        "theme_depth": "有趣的冒险，简单的道德选择",
-        "choices_style": "有趣的选择，配有emoji",
-        "total_segments": 4,
-        # Audio settings
-        "audio_mode": "simultaneous",
-        "voice": "shimmer",
-        "speed": 1.0
-    },
-    "10-12": {
+    "9-12": {
         "word_count": "150-300",
         "sentence_length": "15-25字",
         "complexity": "中等",
@@ -395,7 +382,7 @@ async def generate_story_opening(
 
     Args:
         child_id: 儿童ID
-        age_group: 年龄组 ("3-5", "6-9", "10-12")
+        age_group: 年龄组 ("3-5", "6-8", "9-12")
         interests: 兴趣标签列表
         theme: 故事主题（可选）
         enable_audio: 是否生成语音
@@ -404,7 +391,7 @@ async def generate_story_opening(
     Returns:
         包含故事标题和开场段落的字典
     """
-    config = AGE_CONFIG.get(age_group, AGE_CONFIG["6-9"])
+    config = AGE_CONFIG.get(age_group, AGE_CONFIG["6-8"])
     if _should_use_mock():
         return _mock_opening(interests)
     interests_str = "、".join(interests) if interests else "冒险"
@@ -518,7 +505,7 @@ async def generate_story_opening_stream(
 
     Args:
         child_id: 儿童ID
-        age_group: 年龄组 ("3-5", "6-9", "10-12")
+        age_group: 年龄组 ("3-5", "6-8", "9-12")
         interests: 兴趣标签列表
         theme: 故事主题（可选）
         enable_audio: 是否生成语音
@@ -527,7 +514,7 @@ async def generate_story_opening_stream(
     Yields:
         流式事件字典，包含 type 和 data 字段
     """
-    config = AGE_CONFIG.get(age_group, AGE_CONFIG["6-9"])
+    config = AGE_CONFIG.get(age_group, AGE_CONFIG["6-8"])
     if _should_use_mock():
         yield {"type": "status", "data": {"status": "started", "message": "正在生成故事开场..."}}
         yield {"type": "result", "data": _mock_opening(interests)}
@@ -748,12 +735,12 @@ async def generate_next_segment_stream(
     """
     segments = session_data.get("segments", [])
     choice_history = session_data.get("choice_history", [])
-    age_group = session_data.get("age_group", "6-9")
+    age_group = session_data.get("age_group", "6-8")
     interests = session_data.get("interests", ["冒险"])
     theme = session_data.get("theme", "冒险故事")
     story_title = session_data.get("story_title", "神秘的冒险")
 
-    config = AGE_CONFIG.get(age_group, AGE_CONFIG["6-9"])
+    config = AGE_CONFIG.get(age_group, AGE_CONFIG["6-8"])
     segment_count = len(segments)
     total_segments = config["total_segments"]
     is_final_segment = segment_count >= total_segments - 1
@@ -988,12 +975,12 @@ async def generate_next_segment(
     """
     segments = session_data.get("segments", [])
     choice_history = session_data.get("choice_history", [])
-    age_group = session_data.get("age_group", "6-9")
+    age_group = session_data.get("age_group", "6-8")
     interests = session_data.get("interests", ["冒险"])
     theme = session_data.get("theme", "冒险故事")
     story_title = session_data.get("story_title", "神秘的冒险")
 
-    config = AGE_CONFIG.get(age_group, AGE_CONFIG["6-9"])
+    config = AGE_CONFIG.get(age_group, AGE_CONFIG["6-8"])
     segment_count = len(segments)
     total_segments = config["total_segments"]
 

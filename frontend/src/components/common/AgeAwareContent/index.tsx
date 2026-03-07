@@ -17,9 +17,9 @@ function getDisplayMode(ageGroup: AgeGroup | null): 'audio' | 'both' | 'text' {
   switch (ageGroup) {
     case '3-5':
       return 'audio'
-    case '10-12':
+    case '9-12':
       return 'text'
-    case '6-9':
+    case '6-8':
     default:
       return 'both'
   }
@@ -99,7 +99,7 @@ function AgeAwareContent({
     )
   }
 
-  // 10-12: Text-first mode
+  // 9-12: Text-first mode
   if (mode === 'text') {
     return (
       <div className={className}>
@@ -141,7 +141,7 @@ function AgeAwareContent({
     )
   }
 
-  // 6-9: Both mode (default)
+  // 6-8: Both mode (default)
   return (
     <div className={className}>
       {textContent}

@@ -59,7 +59,7 @@ class TestMorningShowEndpoints:
                 "/api/v1/morning-show/generate",
                 json={
                     "child_id": child_id,
-                    "age_group": "10-12",
+                    "age_group": "9-12",
                     "news_text": "A new space telescope captured colorful nebula images.",
                 },
             )

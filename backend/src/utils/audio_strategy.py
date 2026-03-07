@@ -13,8 +13,8 @@ from typing import Optional
 class AudioMode(str, Enum):
     """Audio generation mode based on age group"""
     AUDIO_FIRST = "audio_first"      # 3-5 years: Audio primary, text optional
-    SIMULTANEOUS = "simultaneous"    # 6-9 years: Both audio and text together
-    TEXT_FIRST = "text_first"        # 10-12 years: Text primary, audio on-demand
+    SIMULTANEOUS = "simultaneous"    # 6-8 years: Both audio and text together
+    TEXT_FIRST = "text_first"        # 9-12 years: Text primary, audio on-demand
 
 
 @dataclass
@@ -49,16 +49,7 @@ _AUDIO_STRATEGIES = {
         optional_content_available=False,
         optional_content_type=None
     ),
-    "6-9": AudioStrategy(
-        mode=AudioMode.SIMULTANEOUS,
-        auto_generate_audio=True,
-        default_voice="shimmer",  # Lively voice for this age group
-        default_speed=1.0,
-        primary_mode="both",
-        optional_content_available=False,
-        optional_content_type=None
-    ),
-    "10-12": AudioStrategy(
+    "9-12": AudioStrategy(
         mode=AudioMode.TEXT_FIRST,
         auto_generate_audio=False,  # Audio is on-demand
         default_voice="alloy",  # More mature voice
@@ -75,12 +66,12 @@ def get_audio_strategy(age_group: str) -> AudioStrategy:
     Get the audio strategy for a given age group.
 
     Args:
-        age_group: Age group string ("3-5", "6-9", "10-12")
+        age_group: Age group string ("3-5", "6-8", "9-12")
 
     Returns:
         AudioStrategy for the age group
     """
-    return _AUDIO_STRATEGIES.get(age_group, _AUDIO_STRATEGIES["6-9"])
+    return _AUDIO_STRATEGIES.get(age_group, _AUDIO_STRATEGIES["6-8"])
 
 
 def should_auto_generate_audio(age_group: str, enable_audio: bool = True) -> bool:
