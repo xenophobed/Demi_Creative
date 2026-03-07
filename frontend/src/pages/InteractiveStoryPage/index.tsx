@@ -22,8 +22,8 @@ type PageState = 'setup' | 'playing' | 'completed'
 
 const AGE_GROUPS: { value: AgeGroup; label: string; emoji: string }[] = [
   { value: '3-5', label: '3-5 yrs', emoji: '🧒' },
-  { value: '6-9', label: '6-9 yrs', emoji: '👦' },
-  { value: '10-12', label: '10-12 yrs', emoji: '🧑' },
+  { value: '6-8', label: '6-8 yrs', emoji: '👦' },
+  { value: '9-12', label: '9-12 yrs', emoji: '🧑' },
 ]
 
 function InteractiveStoryPage() {
@@ -55,7 +55,7 @@ function InteractiveStoryPage() {
     reset,
   } = useInteractiveStory()
 
-  // On-demand audio state (for 10-12 age group)
+  // On-demand audio state (for 9-12 age group)
   const [onDemandAudioUrl, setOnDemandAudioUrl] = useState<string | null>(null)
   const [isAudioGenerating, setIsAudioGenerating] = useState(false)
 
@@ -137,7 +137,7 @@ function InteractiveStoryPage() {
     setIsAudioGenerating(false)
   }, [currentSegment?.segment_id])
 
-  // On-demand audio handler for 10-12 age group
+  // On-demand audio handler for 9-12 age group
   const handleRequestAudio = useCallback(async () => {
     if (!sessionId || !currentSegment || isAudioGenerating) return
     setIsAudioGenerating(true)
@@ -213,7 +213,7 @@ function InteractiveStoryPage() {
     setTheme('')
   }
 
-  // Save interactive story to My Stories
+  // Save interactive story to My Library
   const handleSaveStory = useCallback(async () => {
     if (!sessionId || saveStatus === 'saving' || saveStatus === 'saved') return
     setSaveStatus('saving')
@@ -514,7 +514,7 @@ function InteractiveStoryPage() {
                 ? 'Saved!'
                 : saveStatus === 'error'
                   ? 'Retry Save'
-                  : 'Save to My Stories'}
+                  : 'Save to My Library'}
             </Button>
             <Button
               variant="primary"

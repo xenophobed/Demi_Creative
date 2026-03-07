@@ -20,8 +20,8 @@ except Exception:  # pragma: no cover - import fallback for test env
 
 AGE_RULES: Dict[str, Dict[str, Any]] = {
     "3-5": {"max_sentences": 2, "max_words": 70, "tone": "warm and very simple"},
-    "6-9": {"max_sentences": 3, "max_words": 110, "tone": "simple and curious"},
-    "10-12": {"max_sentences": 4, "max_words": 150, "tone": "clear with a bit more detail"},
+    "6-8": {"max_sentences": 3, "max_words": 110, "tone": "simple and curious"},
+    "9-12": {"max_sentences": 4, "max_words": 150, "tone": "clear with a bit more detail"},
 }
 
 
@@ -45,7 +45,7 @@ def _trim_words(text: str, max_words: int) -> str:
 
 
 def _build_kid_content(news_text: str, age_group: str, category: str) -> str:
-    rules = AGE_RULES.get(age_group, AGE_RULES["6-9"])
+    rules = AGE_RULES.get(age_group, AGE_RULES["6-8"])
     sentences = _split_sentences(news_text)
 
     if not sentences:
@@ -114,7 +114,7 @@ async def _check_content_safety(text: str, age_group: str) -> float:
         from ..mcp_servers import check_content_safety
 
         # Convert age_group string to a representative age integer
-        age_map = {"3-5": 4, "6-9": 7, "10-12": 11}
+        age_map = {"3-5": 4, "6-8": 7, "9-12": 11}
         target_age = age_map.get(age_group, 7)
 
         result = await check_content_safety({
@@ -207,7 +207,7 @@ async def _convert_news_to_kids_live(source: str, age_group: str, category: str)
 
     anthropic_model = os.getenv("NEWS_TO_KIDS_MODEL", "claude-3-5-sonnet-latest")
     openai_model = os.getenv("NEWS_TO_KIDS_OPENAI_MODEL", "gpt-4o-mini")
-    rules = AGE_RULES.get(age_group, AGE_RULES["6-9"])
+    rules = AGE_RULES.get(age_group, AGE_RULES["6-8"])
 
     prompt = (
         "Rewrite the following news text for children.\n"

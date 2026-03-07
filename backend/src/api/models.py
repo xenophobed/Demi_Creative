@@ -15,11 +15,10 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 # ============================================================================
 
 class AgeGroup(str, Enum):
-    """年龄组"""
+    """年龄组 (PRD §2.1 canonical: 3-5, 6-8, 9-12)"""
     AGE_3_5 = "3-5"
     AGE_6_8 = "6-8"
-    AGE_6_9 = "6-9"
-    AGE_10_12 = "10-12"
+    AGE_9_12 = "9-12"
 
 
 class VoiceType(str, Enum):

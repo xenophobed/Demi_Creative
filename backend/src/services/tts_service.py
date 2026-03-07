@@ -152,17 +152,7 @@ def _voice_assignment_for_age(age_group: str) -> Dict[str, Dict[str, float | str
             "fun_expert": {"voice": "fable", "speed": 1.0},
             "guest": {"voice": "alloy", "speed": 1.0},
         },
-        "6-9": {
-            "curious_kid": {"voice": "shimmer", "speed": 1.0},
-            "fun_expert": {"voice": "fable", "speed": 1.0},
-            "guest": {"voice": "alloy", "speed": 1.0},
-        },
         "9-12": {
-            "curious_kid": {"voice": "echo", "speed": 1.1},
-            "fun_expert": {"voice": "fable", "speed": 1.1},
-            "guest": {"voice": "alloy", "speed": 1.1},
-        },
-        "10-12": {
             "curious_kid": {"voice": "echo", "speed": 1.1},
             "fun_expert": {"voice": "fable", "speed": 1.1},
             "guest": {"voice": "alloy", "speed": 1.1},

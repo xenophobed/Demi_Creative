@@ -212,7 +212,7 @@ export const storyService = {
   },
 
   /**
-   * Save interactive story to My Stories
+   * Save interactive story to My Library
    */
   async saveInteractiveStory(
     sessionId: string
@@ -453,7 +453,7 @@ export const storyService = {
   },
 
   /**
-   * Generate audio on-demand for an interactive story segment (10-12 age group)
+   * Generate audio on-demand for an interactive story segment (9-12 age group)
    */
   async generateAudioOnDemand(
     sessionId: string,
@@ -471,7 +471,7 @@ export const storyService = {
   },
 
   /**
-   * Generate audio on-demand for an image-to-story (10-12 age group)
+   * Generate audio on-demand for an image-to-story (9-12 age group)
    */
   async generateAudioForStory(
     storyId: string,

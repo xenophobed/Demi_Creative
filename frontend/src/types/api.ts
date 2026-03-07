@@ -3,7 +3,7 @@
  */
 
 // Enum types
-export type AgeGroup = '3-5' | '6-8' | '6-9' | '9-12' | '10-12';
+export type AgeGroup = '3-5' | '6-8' | '9-12';
 
 export type VoiceType = 'nova' | 'shimmer' | 'alloy' | 'echo' | 'fable' | 'onyx';
 

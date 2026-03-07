@@ -156,10 +156,7 @@ AI 生成下一段："小恐龙走进山洞，发现了发光的化石..."
 - 🔲 **跨会话故事宇宙**: 引用前次会话中的角色和事件（"还记得上次闪电小狗的冒险吗？"）
 
 #### 已知技术债
-- 年龄组定义不一致：PRD 定义 3-5/6-8/9-12，后端枚举包含 6-8 和 6-9 两个重叠组，前端仅显示 3-5/6-9/10-12
-- `_should_use_mock()` 在 agent 中重复定义两次
 - 开篇和续段的提示词在普通/流式函数间重复，应提取为共享函数
-- 保存互动故事时 `safety_score` 硬编码为 0.9，未使用实际安全检查分数
 - 互动故事领域缺少契约测试 (`backend/tests/contracts/`)
 
 > **GitHub Epic**: #41 | **Phase**: 2 (core flow complete, enhancements in Phase 2) | **Milestone**: Phase 2 — Interactive + Memory + News
