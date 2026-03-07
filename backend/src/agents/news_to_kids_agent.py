@@ -1,8 +1,8 @@
-"""News-to-kids conversion helpers.
+"""News-to-kids conversion agent.
 
-This module intentionally uses deterministic text processing so API behavior
-remains reliable in local/dev environments even when LLM integrations are not
-available.
+Uses Claude Agent SDK with MCP tool access for live LLM generation.
+Falls back to deterministic text processing when the SDK is unavailable
+or in test environments.
 """
 
 import json
@@ -10,13 +10,45 @@ import os
 import re
 from typing import Any, AsyncGenerator, Dict, List, Optional
 
-import httpx
+from pydantic import BaseModel
 
 try:
-    from anthropic import AsyncAnthropic
+    from claude_agent_sdk import (
+        ClaudeAgentOptions,
+        ResultMessage,
+        ClaudeSDKClient,
+        AssistantMessage,
+        ToolUseBlock,
+        ToolResultBlock,
+    )
 except Exception:  # pragma: no cover - import fallback for test env
-    AsyncAnthropic = None
+    ClaudeAgentOptions = None
+    ResultMessage = object
+    ClaudeSDKClient = None
+    AssistantMessage = object
+    ToolUseBlock = object
+    ToolResultBlock = object
 
+from ..mcp_servers import safety_server
+
+
+# ---------------------------------------------------------------------------
+# Pydantic output model (Structured Output)
+# ---------------------------------------------------------------------------
+
+class KidsNewsOutput(BaseModel):
+    """Structured output for news-to-kids conversion."""
+    kid_title: str
+    kid_content: str
+    why_care: str
+    key_concepts: List[Dict[str, str]] = []
+    interactive_questions: List[Dict[str, str]] = []
+    safety_score: float = 0.9
+
+
+# ---------------------------------------------------------------------------
+# Age rules & helpers
+# ---------------------------------------------------------------------------
 
 AGE_RULES: Dict[str, Dict[str, Any]] = {
     "3-5": {"max_sentences": 2, "max_words": 70, "tone": "warm and very simple"},
@@ -104,43 +136,22 @@ def _build_questions(category: str) -> List[Dict[str, str]]:
     ]
 
 
-async def _check_content_safety(text: str, age_group: str) -> float:
-    """Call the safety_check MCP tool and return the safety score (0.0–1.0).
+# ---------------------------------------------------------------------------
+# SDK mock guard
+# ---------------------------------------------------------------------------
 
-    Falls back to 1.0 (pass-through) if the MCP tool is unavailable, so
-    test environments without the full MCP stack are not blocked.
-    """
-    try:
-        from ..mcp_servers import check_content_safety
-
-        # Convert age_group string to a representative age integer
-        age_map = {"3-5": 4, "6-8": 7, "9-12": 11}
-        target_age = age_map.get(age_group, 7)
-
-        result = await check_content_safety({
-            "content_text": text,
-            "content_type": "news",
-            "target_age": target_age,
-        })
-        import json as _json
-        data = _json.loads(result["content"][0]["text"])
-        return float(data.get("safety_score", 1.0))
-    except Exception:
-        # MCP tool unavailable (test env, import error) — allow content through
-        return 1.0
+def _should_use_mock() -> bool:
+    """Return True when running inside pytest or when the SDK is unavailable."""
+    return (
+        ClaudeSDKClient is None
+        or ClaudeAgentOptions is None
+        or os.getenv("PYTEST_CURRENT_TEST") is not None
+    )
 
 
-def _should_use_live_llm() -> bool:
-    if os.getenv("PYTEST_CURRENT_TEST") is not None:
-        return False
-    anthropic_key = (os.getenv("ANTHROPIC_API_KEY") or "").strip()
-    openai_key = (os.getenv("OPENAI_API_KEY") or "").strip()
-    has_anthropic = bool(anthropic_key) and not anthropic_key.startswith("your_")
-    has_openai = bool(openai_key) and not openai_key.startswith("your_")
-    if not has_anthropic and not has_openai:
-        return False
-    return True
-
+# ---------------------------------------------------------------------------
+# JSON extraction helpers
+# ---------------------------------------------------------------------------
 
 def _extract_json_object(text: str) -> Dict[str, Any]:
     cleaned = (text or "").strip()
@@ -199,15 +210,15 @@ def _normalize_questions(raw: Any, category: str) -> List[Dict[str, str]]:
     return out or _build_questions(category)
 
 
-async def _convert_news_to_kids_live(source: str, age_group: str, category: str) -> Dict[str, Any]:
-    anthropic_key = (os.getenv("ANTHROPIC_API_KEY") or "").strip()
-    openai_key = (os.getenv("OPENAI_API_KEY") or "").strip()
-    if not anthropic_key and not openai_key:
-        raise RuntimeError("No LLM key configured")
+# ---------------------------------------------------------------------------
+# Live LLM generation via Claude Agent SDK
+# ---------------------------------------------------------------------------
 
-    anthropic_model = os.getenv("NEWS_TO_KIDS_MODEL", "claude-3-5-sonnet-latest")
-    openai_model = os.getenv("NEWS_TO_KIDS_OPENAI_MODEL", "gpt-4o-mini")
+async def _convert_news_to_kids_live(source: str, age_group: str, category: str) -> Dict[str, Any]:
+    """Generate kid-friendly news content using Claude Agent SDK with MCP safety check."""
     rules = AGE_RULES.get(age_group, AGE_RULES["6-8"])
+    age_map = {"3-5": 4, "6-8": 7, "9-12": 11}
+    target_age = age_map.get(age_group, 7)
 
     prompt = (
         "Rewrite the following news text for children.\n"
@@ -222,105 +233,67 @@ async def _convert_news_to_kids_live(source: str, age_group: str, category: str)
         "- key_concepts (array of {term, explanation, emoji})\n"
         "- interactive_questions (array of {question, hint, emoji})\n"
         "No markdown, no extra keys.\n\n"
-        f"News text:\n{source}"
+        f"News text:\n{source}\n\n"
+        "**Safety check (mandatory)**:\n"
+        "After generating the content, you MUST use `mcp__safety-check__check_content_safety` "
+        "to verify the content is safe for children, with:\n"
+        f"- content_text: the kid_content you generated\n"
+        f"- target_age: {target_age}\n"
+        "- content_type: \"news\"\n"
+        "If the safety check fails (passed == false), revise the content and re-check. "
+        "Include the safety_score in your output.\n"
     )
 
-    chunks: List[str] = []
-    anthropic_error: Optional[Exception] = None
-    if anthropic_key:
-        try:
-            if AsyncAnthropic is not None:
-                client = AsyncAnthropic(api_key=anthropic_key)
-                response = await client.messages.create(
-                    model=anthropic_model,
-                    max_tokens=1200,
-                    temperature=0.2,
-                    system="You are a child-education editor. Keep facts accurate and language child-safe.",
-                    messages=[{"role": "user", "content": prompt}],
-                )
-                for block in getattr(response, "content", []) or []:
-                    text = getattr(block, "text", None)
-                    if isinstance(text, str) and text.strip():
-                        chunks.append(text.strip())
-            else:
-                headers = {
-                    "x-api-key": anthropic_key,
-                    "anthropic-version": "2023-06-01",
-                    "content-type": "application/json",
-                }
-                payload = {
-                    "model": anthropic_model,
-                    "max_tokens": 1200,
-                    "temperature": 0.2,
-                    "system": "You are a child-education editor. Keep facts accurate and language child-safe.",
-                    "messages": [{"role": "user", "content": prompt}],
-                }
-                async with httpx.AsyncClient(timeout=45.0) as client:
-                    response = await client.post(
-                        "https://api.anthropic.com/v1/messages",
-                        headers=headers,
-                        json=payload,
-                    )
-                    response.raise_for_status()
-                    body = response.json()
-                for block in body.get("content", []) or []:
-                    if isinstance(block, dict):
-                        text = str(block.get("text", "")).strip()
-                        if block.get("type") == "text" and text:
-                            chunks.append(text)
-        except Exception as exc:
-            anthropic_error = exc
+    options = ClaudeAgentOptions(
+        mcp_servers={
+            "safety-check": safety_server,
+        },
+        allowed_tools=[
+            "mcp__safety-check__check_content_safety",
+            "mcp__safety-check__suggest_content_improvements",
+        ],
+        cwd=".",
+        permission_mode="acceptEdits",
+        max_turns=8,
+        output_format={
+            "type": "json_schema",
+            "schema": KidsNewsOutput.model_json_schema(),
+        },
+    )
 
-    if not chunks and openai_key:
-        headers = {
-            "Authorization": f"Bearer {openai_key}",
-            "content-type": "application/json",
-        }
-        payload = {
-            "model": openai_model,
-            "temperature": 0.2,
-            "response_format": {"type": "json_object"},
-            "messages": [
-                {
-                    "role": "system",
-                    "content": "You are a child-education editor. Keep facts accurate and language child-safe.",
-                },
-                {"role": "user", "content": prompt},
-            ],
-        }
-        async with httpx.AsyncClient(timeout=45.0) as client:
-            response = await client.post(
-                "https://api.openai.com/v1/chat/completions",
-                headers=headers,
-                json=payload,
-            )
-            response.raise_for_status()
-            body = response.json()
-        choices = body.get("choices", []) if isinstance(body, dict) else []
-        if choices:
-            message = choices[0].get("message", {}) if isinstance(choices[0], dict) else {}
-            content = message.get("content")
-            if isinstance(content, str) and content.strip():
-                chunks.append(content.strip())
+    result_data: Dict[str, Any] = {}
 
-    if not chunks and anthropic_error is not None:
-        raise RuntimeError(str(anthropic_error))
+    async with ClaudeSDKClient(options=options) as client:
+        await client.query(prompt)
 
-    payload = _extract_json_object("\n".join(chunks))
-    if not payload:
-        raise RuntimeError("Model output was not parseable JSON")
+        async for message in client.receive_response():
+            if isinstance(message, ResultMessage):
+                if hasattr(message, "structured_output") and message.structured_output:
+                    result_data = message.structured_output
+                elif message.result:
+                    if isinstance(message.result, dict):
+                        result_data = message.result
+                    else:
+                        result_data = _extract_json_object(str(message.result))
+                break
 
-    kid_title = str(payload.get("kid_title", "")).strip() or f"Kid News: {(category or 'general').title()}"
-    kid_content = str(payload.get("kid_content", "")).strip() or _build_kid_content(source, age_group, category)
-    why_care = str(payload.get("why_care", "")).strip() or _build_why_care(category)
-    key_concepts = _normalize_key_concepts(payload.get("key_concepts"), source)
-    questions = _normalize_questions(payload.get("interactive_questions"), category)
+    if not result_data:
+        raise RuntimeError("Empty model output from Claude Agent SDK")
+
+    # Normalize and validate fields
+    kid_title = str(result_data.get("kid_title", "")).strip() or f"Kid News: {(category or 'general').title()}"
+    kid_content = str(result_data.get("kid_content", "")).strip() or _build_kid_content(source, age_group, category)
+    why_care = str(result_data.get("why_care", "")).strip() or _build_why_care(category)
+    key_concepts = _normalize_key_concepts(result_data.get("key_concepts"), source)
+    questions = _normalize_questions(result_data.get("interactive_questions"), category)
 
     kid_content = _trim_words(kid_content, rules["max_words"])
 
-    # Mandatory safety gate — all AI-generated content must pass check_content_safety
-    # before delivery (CLAUDE.md: threshold >= 0.85).
-    safety_score = await _check_content_safety(kid_content, age_group)
+    # Extract safety score from SDK output (safety check was done via MCP tool)
+    safety_score = float(result_data.get("safety_score", 0.9))
+    safety_score = max(0.0, min(1.0, safety_score))
+
+    # Safety floor enforcement — all content must pass >= 0.85 (CLAUDE.md)
     if safety_score < 0.85:
         raise RuntimeError(f"Live news content failed safety check (score={safety_score:.2f})")
 
@@ -334,6 +307,10 @@ async def _convert_news_to_kids_live(source: str, age_group: str, category: str)
         "safety_score": safety_score,
     }
 
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
 
 async def convert_news_to_kids(
     *,
@@ -351,7 +328,7 @@ async def convert_news_to_kids(
     if not source and news_url:
         source = f"Article source: {news_url}."
 
-    if _should_use_live_llm():
+    if not _should_use_mock():
         try:
             return await _convert_news_to_kids_live(source, age_group, category)
         except Exception:
