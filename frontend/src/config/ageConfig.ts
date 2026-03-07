@@ -6,6 +6,7 @@ export interface AgeLayoutConfig {
   cardSize: 'sm' | 'md' | 'lg'
   fontSize: string
   showWordCount: boolean
+  showSearchBar: boolean
 }
 
 const AGE_CONFIGS: Record<string, AgeLayoutConfig> = {
@@ -15,6 +16,7 @@ const AGE_CONFIGS: Record<string, AgeLayoutConfig> = {
     cardSize: 'lg',
     fontSize: 'text-lg',
     showWordCount: false,
+    showSearchBar: false,
   },
   '6-8': {
     gridCols: 3,
@@ -22,6 +24,7 @@ const AGE_CONFIGS: Record<string, AgeLayoutConfig> = {
     cardSize: 'md',
     fontSize: 'text-base',
     showWordCount: true,
+    showSearchBar: true,
   },
   '9-12': {
     gridCols: 4,
@@ -29,6 +32,7 @@ const AGE_CONFIGS: Record<string, AgeLayoutConfig> = {
     cardSize: 'sm',
     fontSize: 'text-sm',
     showWordCount: true,
+    showSearchBar: true,
   },
 }
 

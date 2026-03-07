@@ -810,14 +810,16 @@ function LibraryPage() {
         </div>
       </motion.div>
 
-      {/* Search bar (#62) */}
-      <motion.div
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.05 }}
-      >
-        <SearchBar onSearch={handleSearch} isLoading={searchLoading} />
-      </motion.div>
+      {/* Search bar (#62) — hidden for 3-5 age group per #114 */}
+      {ageLayout.showSearchBar && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.05 }}
+        >
+          <SearchBar onSearch={handleSearch} isLoading={searchLoading} />
+        </motion.div>
+      )}
 
       {/* Tab bar + sort dropdown (#65) */}
       <motion.div
