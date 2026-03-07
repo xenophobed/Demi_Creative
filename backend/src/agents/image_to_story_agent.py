@@ -29,15 +29,6 @@ except Exception:  # pragma: no cover - import fallback for test env
     ToolResultBlock = object
 
 
-def _should_use_mock() -> bool:
-    """Return True when running inside pytest or when the SDK is unavailable."""
-    return (
-        ClaudeSDKClient is None
-        or ClaudeAgentOptions is None
-        or os.getenv("PYTEST_CURRENT_TEST") is not None
-    )
-
-
 from ..mcp_servers import (
     vision_server,
     vector_server,
@@ -166,6 +157,14 @@ async def image_to_story(
    - image_path: {image_path}
 
 请根据画作内容创作故事，并提取主题、概念和寓意。
+
+**安全检查（必须执行）**：
+故事创作完成后，你**必须**使用 `mcp__safety-check__check_content_safety` 工具检查故事内容的安全性，参数如下：
+- content_text: 生成的故事文本
+- target_age: {child_age}
+- content_type: "story"
+如果安全检查未通过（passed == false），**必须**使用 `mcp__safety-check__suggest_content_improvements` 工具改进内容，然后重新检查，最多重试3次。
+安全检查通过后才能继续后续步骤。
 """
 
     # Add TTS instruction if audio should be generated
@@ -352,6 +351,14 @@ async def stream_image_to_story(
    - image_path: {image_path}
 
 请根据画作内容创作故事，并提取主题、概念和寓意。
+
+**安全检查（必须执行）**：
+故事创作完成后，你**必须**使用 `mcp__safety-check__check_content_safety` 工具检查故事内容的安全性，参数如下：
+- content_text: 生成的故事文本
+- target_age: {child_age}
+- content_type: "story"
+如果安全检查未通过（passed == false），**必须**使用 `mcp__safety-check__suggest_content_improvements` 工具改进内容，然后重新检查，最多重试3次。
+安全检查通过后才能继续后续步骤。
 """
 
     # Add TTS instruction if audio should be generated
