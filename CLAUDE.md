@@ -153,6 +153,18 @@ Agents must use services/repositories — never query SQLite directly.
 | `/feature-spec [idea]` | Design a new feature before engineering |
 | `/prd [action]` | Update the Product Requirements Document |
 
+### Pipeline Skills
+| Command | Use When |
+|---------|---------|
+| `/discover [idea/area]` | Run investigate -> plan -> feature-spec before coding |
+| `/spec-to-backlog [feature]` | Convert feature idea into PRD updates + tracked issues |
+| `/audit-and-fix [area]` | Audit product gaps and create prioritized follow-up issues |
+| `/triage [filter]` | Prioritize current issues and build an execution queue |
+| `/quality [file/module]` | Improve quality via test -> review -> refactor flow |
+| `/fix [issue number]` | Resolve one issue end-to-end: investigate -> TDD fix -> review -> PR |
+| `/ship [optional message]` | Run commit -> PR -> optional review in one command |
+| `/land [PR number]` | Run final review gate -> merge -> cleanup safely |
+
 ### Engineering Skills
 | Command | Use When |
 |---------|---------|

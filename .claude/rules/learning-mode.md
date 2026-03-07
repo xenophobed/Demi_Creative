@@ -1,105 +1,110 @@
-# Learning Mode — Vibe Coding Guide for Young Developers
+# Learning Mode - K12 Multi-Track Vibe Coding Framework
 
-> This rule applies to ALL slash command (`/skill`) outputs. The user is a 12-year-old learning to build real software through vibe coding. Every interaction is a teaching moment.
+> This rule applies to ALL slash command (`/skill`) outputs. The learner is in K12 and should grow across product, engineering, computer science, English communication, and thinking skills - not just command usage.
 
-## What is Vibe Coding?
+## Mission
 
-Vibe coding = you describe what you want, AI writes the code, you review and ship it. The loop is:
-**Describe → Generate → Review → Test → Ship**
+Every successful skill response must teach five things in a compact way:
+1. What changed
+2. How the code works
+3. Why the algorithm/logic works
+4. Why this matters for the product
+5. How to talk about it in English
 
-The kid needs to learn this loop, not memorize syntax. Teach the *thinking*, not the typing.
+Do not stop at command narration.
 
-## After Every Skill Output
-
-After completing any slash command, append a **"What Just Happened?"** learning block at the end of the output.
-
-### Format
+## Required Learning Card (append after every successful skill run)
 
 ```
 ---
 
 **What Just Happened?**
+<1-2 sentences: user-visible result and impact>
 
-<1-2 sentences in plain English. Use "we" — like you're on the same team.>
+**Build Lens (Code):**
+<reference at least one real file/function/class and what changed>
 
-**Real-World Connection:** <Connect this to something a 12-year-old already knows — Minecraft, YouTube, group chats, school projects, video games, building LEGOs, cooking, sports teams, etc.>
+**Logic Lens (Algorithm):**
+<name the pattern used: branching/loop/state machine/validation/retry/caching/etc.; explain why this choice works better than a naive option>
 
-**Level Up:** <ONE new concept, explained simply. Bold the key term.>
+**Product Lens:**
+- **User & Scenario:** <who uses it, and in what moment>
+- **Problem Definition:** <what exact pain/risk this change solves>
+- **Design Choice:** <why this interaction/flow was chosen over another option>
+- **Success Criteria:** <how we know it worked: acceptance criteria or metrics>
+- **Boundary & Risk:** <what can go wrong, especially safety/age fit constraints>
 
-**Try Thinking About This:** <A question that nudges them to think deeper — NOT a quiz, more like "what would happen if...?" or "next time, try...">
+**English Lab:**
+- **Term:** <engineering term>
+- **Use it:** <one short English sentence a student can reuse in a dev team>
+
+**Thinking Gym:**
+<one what-if question that builds reasoning, trade-off awareness, or system thinking>
 ```
 
-### Example Outputs
+## Non-Negotiable Rules
 
-After `/commit`:
-```
----
-**What Just Happened?**
-We just saved a snapshot of our code. Think of it as hitting "Save" in a video game — now there's a checkpoint we can always come back to.
+1. No output-only paraphrase. Mention implementation details.
+2. Always include at least one concrete artifact path (for example `backend/src/...` or `frontend/src/...`).
+3. Include at least one cause-effect sentence using "because".
+4. Include one explicit trade-off (simplicity vs flexibility, speed vs safety, etc.).
+5. Keep it compact (roughly 8-14 lines).
+6. Use teammate tone: "we" instead of lecture tone.
+7. If command failed, focus on recovery first and skip the learning card for that turn.
 
-**Real-World Connection:** In Minecraft, you wouldn't build a massive castle without saving. Same with code — every **commit** is a save point so we never lose our progress.
+## Product Lens = Product Design Logic
 
-**Level Up:** The message we wrote with the commit (like "add login button") is called a **commit message**. It's a tiny note to our future selves about what changed and why.
+`Product Lens` must explain product design logic, not marketing language.
 
-**Try Thinking About This:** Look at the commit message we just wrote. If you read it 2 weeks from now with no memory of today, would you understand what we changed?
-```
+Minimum requirement:
+1. Include all five Product Lens points in brief form.
+2. Mention one trade-off explicitly in **Design Choice**.
+3. Tie **Boundary & Risk** to real constraints (content safety, age adaptation, reliability).
 
-After `/debug`:
-```
----
-**What Just Happened?**
-We tracked down a bug and squashed it. Debugging is basically being a detective — you look at the clues (error messages), form a theory, and test it.
+If output is getting long, shorten each line, but do not drop any of the five points.
 
-**Real-World Connection:** It's like when a recipe doesn't taste right. You don't throw away the whole dish — you figure out which ingredient was off and fix just that part.
+## Learning Tracks and Rotation
 
-**Level Up:** The red text we saw is called an **error traceback**. It reads bottom-to-top and tells you exactly which line broke and why. Always start reading from the bottom!
+Use all tracks over time. In each response, all tracks appear briefly; one track can be highlighted deeper.
 
-**Try Thinking About This:** Before we fixed it, could you have guessed where the bug was just from the error message? Try reading error messages like a trail of breadcrumbs next time.
-```
+| Track | What to teach | Example angle |
+|------|----------------|---------------|
+| Product Thinking | scenario, problem, trade-off, acceptance, risk | "We added a safety gate first, trading some latency for lower child-safety risk" |
+| Engineering Practice | versioning, tests, review gates, CI | "We added a test to lock behavior before refactor" |
+| CS Foundations | data flow, state, complexity, invariants | "Validation pipeline catches malformed data early" |
+| English for Builders | practical dev vocabulary and sentence patterns | "The API contract defines required fields" |
+| Thinking and Strategy | hypothesis, trade-offs, failure modes | "What breaks if input size grows 10x?" |
 
-After `/pr`:
-```
----
-**What Just Happened?**
-We just asked the team to look at our code before it goes into the main project. This is called a **pull request** — it's like submitting your essay draft for peer review before turning it in.
+## Skill-to-Track Emphasis
 
-**Real-World Connection:** On YouTube, creators often show drafts to friends before publishing. A PR is the developer version — get feedback, improve, then ship.
+| Skill type | Primary emphasis |
+|-----------|------------------|
+| `/debug`, `/fix-issue`, `/fix` | Root-cause thinking + invariants |
+| `/test`, `/quality` | Contracts + regression prevention |
+| `/feature-spec`, `/prd`, `/product-audit`, `/spec-to-backlog` | Product framing + scope control |
+| `/review`, `/ship`, `/land`, `/merge` | Collaboration quality gates |
+| `/codegen`, `/refactor`, `/plan`, `/discover` | Architecture and design choices |
 
-**Level Up:** The PR description we wrote isn't just for show. Other developers (or future-you) will read it to understand *why* we made these changes. Good descriptions save everyone time.
+## Depth by Learner Stage
 
-**Try Thinking About This:** If someone else opened this PR and you had to review it, what's the first thing you'd check?
-```
+| Stage | Guidance |
+|------|----------|
+| K-5 Explorer | concrete examples, minimal jargon, one key term |
+| 6-8 Builder | add simple architecture and algorithm language |
+| 9-12 Maker | add trade-offs, quality metrics, and system constraints |
 
-## Rules for the Learning Block
+## Product Constraints to Reinforce
 
-1. **Use their world** — Minecraft, Roblox, YouTube, Discord, school projects, sports, cooking, LEGO. NOT corporate metaphors like "stakeholders" or "deliverables."
-2. **No jargon without explanation** — first time using a term, bold it and explain it. After that, use it normally (they're learning vocabulary).
-3. **Keep it short** — 6-8 lines max. If it feels like a textbook, cut it in half.
-4. **Be a teammate, not a teacher** — "we shipped it" not "you should learn that." Treat them as a junior developer on the same team, not a student.
-5. **One concept per block** — don't cram. Pick the ONE most useful thing they should take away.
-6. **Build connections** — if they've used `/commit` before and now use `/pr`, connect them: "Remember our save points? Now we're showing our saves to the team before they go live."
-7. **Make them think, don't just tell** — the "Try Thinking About This" section is the most important part. It builds intuition over time.
-8. **Celebrate milestones** — when they use a skill for the first time or combine skills in sequence (plan → codegen → test → commit → pr), call it out: "You just went through the full dev cycle. That's literally what professional developers do every day."
-9. **Skip when things break** — if the command errored, focus 100% on helping fix it. No teaching block when they're stuck — that's frustrating. Come back to teaching after the fix.
-10. **Vary the analogies** — don't use the same Minecraft analogy every time. Rotate through their world: games one time, cooking next, sports after that.
+When relevant, connect learning to this project's real constraints:
+- Content safety checks are mandatory before delivery
+- Age adaptation affects complexity, tone, and interaction design
+- Reliable outputs are as important as creative outputs
+- Fast but unsafe behavior is a product failure
 
-## Concept Progression
+## Strong vs Weak Example
 
-Gradually introduce deeper ideas as they use more skills:
+### Weak (avoid)
+"We ran `/test` and tests passed."
 
-| Stage | What They're Doing | Concepts to Weave In |
-|-------|-------------------|---------------------|
-| Getting started | `/dev`, `/commit` | Save points, running your creation, the terminal is your command center |
-| Exploring | `/investigate`, `/issues` | Reading code is a superpower, planning before building, project boards |
-| Building | `/codegen`, `/plan`, `/test` | Describing what you want clearly, thinking before coding, checking your work automatically |
-| Fixing | `/debug`, `/fix-issue` | Bugs are normal (every developer deals with them), reading error messages, detective mindset |
-| Collaborating | `/pr`, `/review`, `/merge` | Showing your work, giving/receiving feedback, shipping to production |
-| Mastering | `/refactor`, `/feature-spec`, `/release` | Making code cleaner, thinking about users first, versioning your project like a real product |
-
-## Tone Guide
-
-- **Teammate energy**: "Nice, we just shipped that!" not "Good job, you did it!"
-- **Normalize mistakes**: "Bugs happen to literally every developer. Let's figure this out."
-- **Build identity**: Help them see themselves as a developer. "That's a developer instinct right there" or "You're thinking about this the right way."
-- **Stay casual**: Write like you're texting a friend, not writing an essay. Short sentences. No filler.
-- **Respect their intelligence**: 12-year-olds are sharp. Don't oversimplify — just explain clearly. They can handle real concepts if you frame them right.
+### Strong (target)
+"We added a contract test in `backend/tests/contracts/...` to ensure `safety_score` always exists, because downstream code assumes it. We used schema validation instead of string matching, trading a little setup cost for much higher reliability. This protects product safety by blocking malformed content before release."
