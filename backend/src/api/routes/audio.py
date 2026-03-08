@@ -29,6 +29,13 @@ class AudioGenerateRequest(BaseModel):
     segment_id: int = Field(..., description="Segment ID")
     voice: str = Field(default="alloy", description="Voice type")
     speed: float = Field(default=1.0, ge=0.5, le=2.0, description="Speech speed")
+    # Expressive TTS params (#149) — all optional, backward compatible
+    emotion: Optional[str] = Field(default=None, description="TTS emotion (happy, sad, neutral, surprised, disgusted)")
+    pitch: Optional[int] = Field(default=None, ge=-12, le=12, description="Pitch adjustment (-12 to 12)")
+    volume: Optional[float] = Field(default=None, ge=0, le=10, description="Volume (0-10)")
+    language_boost: Optional[str] = Field(default=None, description="Language boost (e.g. English, Chinese)")
+    provider: Optional[str] = Field(default=None, description="TTS provider (openai or replicate)")
+    age_group: Optional[str] = Field(default=None, description="Age group for emotion filtering (3-5, 6-8, 9-12)")
 
 
 class AudioGenerateResponse(BaseModel):
@@ -90,6 +97,12 @@ async def generate_audio_on_demand(
             voice=request.voice,
             speed=request.speed,
             child_age=None,
+            emotion=request.emotion,
+            pitch=request.pitch,
+            volume=request.volume,
+            language_boost=request.language_boost,
+            provider=request.provider,
+            age_group=request.age_group,
         )
 
         if not result.get("success"):
@@ -138,6 +151,13 @@ class StoryAudioGenerateRequest(BaseModel):
     story_id: str = Field(..., description="Story ID")
     voice: str = Field(default="alloy", description="Voice type")
     speed: float = Field(default=1.1, ge=0.5, le=2.0, description="Speech speed")
+    # Expressive TTS params (#149)
+    emotion: Optional[str] = Field(default=None, description="TTS emotion")
+    pitch: Optional[int] = Field(default=None, ge=-12, le=12, description="Pitch adjustment")
+    volume: Optional[float] = Field(default=None, ge=0, le=10, description="Volume")
+    language_boost: Optional[str] = Field(default=None, description="Language boost")
+    provider: Optional[str] = Field(default=None, description="TTS provider")
+    age_group: Optional[str] = Field(default=None, description="Age group for emotion filtering")
 
 
 class StoryAudioGenerateResponse(BaseModel):
@@ -189,6 +209,12 @@ async def generate_audio_for_story(
             voice=request.voice,
             speed=request.speed,
             child_age=None,
+            emotion=request.emotion,
+            pitch=request.pitch,
+            volume=request.volume,
+            language_boost=request.language_boost,
+            provider=request.provider,
+            age_group=request.age_group,
         )
 
         if not result.get("success"):

@@ -1,24 +1,210 @@
 """
 TTS service layer.
 
-Provides a plain callable API for story audio generation.
+Provides a plain callable API for story audio generation with pluggable
+provider support (#149).  OpenAI is the default; Replicate minimax/speech-02-turbo
+is available as an expressive alternative with emotion/pitch/volume controls.
 """
 
 import asyncio
 import hashlib
 import json
+import logging
 import os
+import time
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Protocol, Set
 
 import httpx
+
+logger = logging.getLogger(__name__)
 
 try:
     from openai import OpenAI
 except Exception:  # pragma: no cover - import fallback for test env
     OpenAI = None
 
+try:
+    import replicate as _replicate_module
+except Exception:  # pragma: no cover - import fallback for test env
+    _replicate_module = None
+
+
+# ---------------------------------------------------------------------------
+# Age-based emotion filtering (#149)
+# ---------------------------------------------------------------------------
+
+AGE_EMOTION_MAP: Dict[str, Set[str]] = {
+    "3-5": {"happy", "neutral"},
+    "6-8": {"happy", "sad", "surprised", "neutral"},
+    "9-12": {"happy", "sad", "surprised", "disgusted", "neutral"},
+}
+
+
+def filter_emotion_for_age(emotion: Optional[str], age_group: Optional[str]) -> Optional[str]:
+    """Return *emotion* if allowed for *age_group*, else fall back to 'neutral'.
+
+    Returns ``None`` unchanged so callers that omit emotion are unaffected.
+    """
+    if emotion is None:
+        return None
+    allowed = AGE_EMOTION_MAP.get(age_group or "6-8", AGE_EMOTION_MAP["6-8"])
+    return emotion if emotion in allowed else "neutral"
+
+
+# ---------------------------------------------------------------------------
+# TTSProvider protocol (#149)
+# ---------------------------------------------------------------------------
+
+class TTSProvider(Protocol):
+    """Pluggable TTS backend."""
+
+    async def generate(
+        self,
+        text: str,
+        voice: str,
+        speed: float,
+        audio_path: str,
+        emotion: Optional[str] = None,
+        pitch: Optional[int] = None,
+        volume: Optional[float] = None,
+        language_boost: Optional[str] = None,
+    ) -> Dict[str, Any]: ...
+
+
+# ---------------------------------------------------------------------------
+# OpenAI provider (existing baseline, refactored)
+# ---------------------------------------------------------------------------
+
+class OpenAITTSProvider:
+    """OpenAI tts-1 provider."""
+
+    async def generate(
+        self,
+        text: str,
+        voice: str,
+        speed: float,
+        audio_path: str,
+        emotion: Optional[str] = None,
+        pitch: Optional[int] = None,
+        volume: Optional[float] = None,
+        language_boost: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            return {"success": False, "error": "OPENAI_API_KEY not configured"}
+
+        if OpenAI is not None:
+            def _sync_tts() -> None:
+                client = OpenAI(api_key=api_key)
+                resp = client.audio.speech.create(
+                    model="tts-1",
+                    voice=voice,
+                    input=text,
+                    speed=speed,
+                )
+                resp.stream_to_file(audio_path)
+
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(None, _sync_tts)
+        else:
+            headers = {
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            }
+            payload = {
+                "model": "tts-1",
+                "voice": voice,
+                "input": text,
+                "speed": speed,
+                "format": "mp3",
+            }
+            async with httpx.AsyncClient(timeout=90.0) as client:
+                response = await client.post(
+                    "https://api.openai.com/v1/audio/speech",
+                    headers=headers,
+                    json=payload,
+                )
+                response.raise_for_status()
+                Path(audio_path).write_bytes(response.content)
+
+        return {"success": True, "provider": "openai"}
+
+
+# ---------------------------------------------------------------------------
+# Replicate minimax/speech-02-turbo provider (#149)
+# ---------------------------------------------------------------------------
+
+class ReplicateTTSProvider:
+    """Replicate minimax/speech-02-turbo provider with expressive controls."""
+
+    MODEL = "minimax/speech-02-turbo"
+
+    async def generate(
+        self,
+        text: str,
+        voice: str,
+        speed: float,
+        audio_path: str,
+        emotion: Optional[str] = None,
+        pitch: Optional[int] = None,
+        volume: Optional[float] = None,
+        language_boost: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        api_token = os.getenv("REPLICATE_API_TOKEN")
+        if not api_token:
+            return {"success": False, "error": "REPLICATE_API_TOKEN not configured"}
+
+        if _replicate_module is None:
+            return {"success": False, "error": "replicate SDK not installed"}
+
+        input_params: Dict[str, Any] = {
+            "text": text,
+            "voice_id": voice,
+            "speed": speed,
+            "audio_format": "mp3",
+        }
+        if emotion is not None:
+            input_params["emotion"] = emotion
+        if pitch is not None:
+            input_params["pitch"] = pitch
+        if volume is not None:
+            input_params["volume"] = volume
+        if language_boost is not None:
+            input_params["language_boost"] = language_boost
+
+        def _sync_replicate() -> bytes:
+            output = _replicate_module.run(self.MODEL, input=input_params)
+            # output is a FileOutput; read bytes from it
+            return output.read()
+
+        try:
+            loop = asyncio.get_event_loop()
+            audio_bytes = await loop.run_in_executor(None, _sync_replicate)
+            Path(audio_path).write_bytes(audio_bytes)
+            return {"success": True, "provider": "replicate"}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+
+# ---------------------------------------------------------------------------
+# Provider factory
+# ---------------------------------------------------------------------------
+
+_openai_provider = OpenAITTSProvider()
+_replicate_provider = ReplicateTTSProvider()
+
+
+def _select_provider(provider: Optional[str]) -> TTSProvider:
+    if provider == "replicate":
+        return _replicate_provider
+    return _openai_provider
+
+
+# ---------------------------------------------------------------------------
+# Public API (backward-compatible)
+# ---------------------------------------------------------------------------
 
 def get_audio_output_path() -> str:
     """Get the audio output directory."""
@@ -47,22 +233,29 @@ async def generate_story_audio_file(
     voice: str = "nova",
     speed: Optional[float] = None,
     child_age: Optional[int] = None,
+    *,
+    emotion: Optional[str] = None,
+    pitch: Optional[int] = None,
+    volume: Optional[float] = None,
+    language_boost: Optional[str] = None,
+    provider: Optional[str] = None,
+    age_group: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Generate story audio file and return a normalized result payload."""
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        return {
-            "success": False,
-            "error": "OPENAI_API_KEY environment variable is not configured",
-            "audio_path": None,
-        }
+    """Generate story audio file and return a normalized result payload.
 
+    New optional params (#149): emotion, pitch, volume, language_boost,
+    provider ('openai' | 'replicate'), age_group (for emotion filtering).
+    All are keyword-only so existing positional callers are unaffected.
+    """
     if not text:
         return {
             "success": False,
             "error": "story text is empty",
             "audio_path": None,
         }
+
+    # Apply age-based emotion filtering
+    filtered_emotion = filter_emotion_for_age(emotion, age_group)
 
     resolved_speed = _resolve_speed(speed, child_age)
 
@@ -74,45 +267,74 @@ async def generate_story_audio_file(
         audio_dir = get_audio_output_path()
         audio_path = os.path.join(audio_dir, filename)
 
-        if OpenAI is not None:
-            # Run the synchronous OpenAI SDK calls in a thread so they don't
-            # block the asyncio event loop during potentially multi-second TTS.
-            def _sync_tts() -> None:
-                client = OpenAI(api_key=api_key)
-                resp = client.audio.speech.create(
-                    model="tts-1",
-                    voice=voice,
-                    input=text,
-                    speed=resolved_speed,
-                )
-                resp.stream_to_file(audio_path)
+        chosen_provider = _select_provider(provider)
+        fallback_used = False
+        original_provider = provider or "openai"
+        actual_provider = original_provider
 
-            loop = asyncio.get_event_loop()
-            await loop.run_in_executor(None, _sync_tts)
-        else:
-            headers = {
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-            }
-            payload = {
-                "model": "tts-1",
-                "voice": voice,
-                "input": text,
-                "speed": resolved_speed,
-                "format": "mp3",
-            }
-            async with httpx.AsyncClient(timeout=90.0) as client:
-                response = await client.post(
-                    "https://api.openai.com/v1/audio/speech",
-                    headers=headers,
-                    json=payload,
+        t0 = time.monotonic()
+
+        result = await chosen_provider.generate(
+            text=text,
+            voice=voice,
+            speed=resolved_speed,
+            audio_path=audio_path,
+            emotion=filtered_emotion,
+            pitch=pitch,
+            volume=volume,
+            language_boost=language_boost,
+        )
+
+        # Fallback: if Replicate failed, retry once then fall back to OpenAI
+        if not result.get("success") and provider == "replicate":
+            logger.warning("Replicate TTS failed (%s), retrying once...", result.get("error"))
+            result = await _replicate_provider.generate(
+                text=text,
+                voice=voice,
+                speed=resolved_speed,
+                audio_path=audio_path,
+                emotion=filtered_emotion,
+                pitch=pitch,
+                volume=volume,
+                language_boost=language_boost,
+            )
+            if not result.get("success"):
+                logger.warning("Replicate retry failed, falling back to OpenAI")
+                result = await _openai_provider.generate(
+                    text=text,
+                    voice=voice,
+                    speed=resolved_speed,
+                    audio_path=audio_path,
                 )
-                response.raise_for_status()
-                Path(audio_path).write_bytes(response.content)
+                if result.get("success"):
+                    fallback_used = True
+                    actual_provider = "openai"
+
+        elapsed_ms = round((time.monotonic() - t0) * 1000)
+
+        if not result.get("success"):
+            # Check if it's an API key issue — return the old-style error
+            error_msg = result.get("error", "TTS generation failed")
+            if "OPENAI_API_KEY" in error_msg:
+                return {
+                    "success": False,
+                    "error": "OPENAI_API_KEY environment variable is not configured",
+                    "audio_path": None,
+                }
+            return {
+                "success": False,
+                "error": f"TTS generation failed: {error_msg}",
+                "audio_path": None,
+            }
 
         file_size = os.path.getsize(audio_path)
         file_size_mb = round(file_size / (1024 * 1024), 2)
         estimated_duration = round(len(text) / 150 * 60 / resolved_speed, 1)
+
+        logger.info(
+            "TTS generated: provider=%s fallback=%s latency_ms=%d size_mb=%.2f",
+            actual_provider, fallback_used, elapsed_ms, file_size_mb,
+        )
 
         return {
             "success": True,
@@ -124,6 +346,9 @@ async def generate_story_audio_file(
             "estimated_duration_seconds": estimated_duration,
             "duration": estimated_duration,
             "text_length": len(text),
+            "provider": actual_provider,
+            "fallback_used": fallback_used,
+            "latency_ms": elapsed_ms,
         }
     except Exception as e:
         return {
@@ -132,6 +357,10 @@ async def generate_story_audio_file(
             "audio_path": None,
         }
 
+
+# ---------------------------------------------------------------------------
+# Multi-speaker helpers (unchanged, used by Morning Show)
+# ---------------------------------------------------------------------------
 
 def _audio_url_from_path(audio_path: Optional[str]) -> Optional[str]:
     if not audio_path:
