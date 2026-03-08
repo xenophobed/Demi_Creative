@@ -161,8 +161,8 @@ async def _resolve_thumbnail(story_id: str) -> Optional[str]:
     try:
         link_repo = StoryArtifactLinkRepository(db_manager)
         artifact = await link_repo.get_canonical_artifact(story_id, "cover")
-        if artifact and artifact.storage_url:
-            return artifact.storage_url
+        if artifact and artifact.artifact_url:
+            return artifact.artifact_url
     except Exception:
         pass
     return None
