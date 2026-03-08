@@ -6,6 +6,7 @@ Supports streaming responses (SSE) for a better user experience
 """
 
 import json
+import logging
 import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -29,8 +30,13 @@ from ..models import (
     SessionStatus as SessionStatusEnum
 )
 from ..deps import get_current_user, get_session_for_owner
-from ...services.database import session_repo, story_repo, preference_repo
+from ...services.database import session_repo, story_repo, preference_repo, db_manager
 from ...services.user_service import UserData
+from ...services.provenance_tracker import ProvenanceTracker
+from ...services.models.artifact_models import (
+    ArtifactType, WorkflowType, StoryArtifactRole,
+    ArtifactMetadata,
+)
 from ...agents.interactive_story_agent import (
     generate_story_opening,
     generate_story_opening_stream,
@@ -40,6 +46,8 @@ from ...agents.interactive_story_agent import (
 )
 from ...utils.audio_strategy import get_audio_strategy
 from ...utils.text import count_words
+
+logger = logging.getLogger(__name__)
 
 
 router = APIRouter(
@@ -102,6 +110,9 @@ async def start_interactive_story(
     }
     ```
     """
+    tracker = ProvenanceTracker(db_manager)
+    run_id = None
+
     try:
         # Get audio strategy for the age group
         audio_strategy = get_audio_strategy(request.age_group.value)
@@ -148,6 +159,52 @@ async def start_interactive_story(
             segment_id=segment_data["segment_id"]
         )
 
+        # --- Provenance tracking (Issue #138) ---
+        try:
+            run_id = await tracker.start_run(
+                session.session_id, WorkflowType.INTERACTIVE_STORY,
+                session_id=session.session_id,
+            )
+            step_id = await tracker.start_step(
+                run_id, "story_opening", 1,
+                input_data={
+                    "child_id": request.child_id,
+                    "age_group": request.age_group.value,
+                    "theme": request.theme,
+                },
+                model_name="claude-agent-sdk",
+                prompt_hash=ProvenanceTracker.compute_prompt_hash(
+                    f"interactive_story:{request.child_id}:{request.age_group.value}"
+                ),
+            )
+            story_text = segment_data.get("text", "")
+            text_artifact_id = await tracker.record_artifact(
+                step_id, ArtifactType.TEXT, run_id=run_id,
+                artifact_payload=story_text,
+                description="Interactive story opening segment",
+                safety_score=opening_data.get("safety_score"),
+                agent_name="interactive_story",
+                metadata=ArtifactMetadata(
+                    char_count=len(story_text),
+                    word_count=count_words(story_text),
+                ),
+            )
+            if audio_url and opening_data.get("audio_path"):
+                await tracker.record_artifact(
+                    step_id, ArtifactType.AUDIO, run_id=run_id,
+                    artifact_path=opening_data["audio_path"],
+                    artifact_url=audio_url,
+                    description="TTS narration for opening segment",
+                    mime_type="audio/mpeg",
+                    agent_name="tts_generation",
+                    input_artifact_ids=[text_artifact_id],
+                )
+            await tracker.complete_step(step_id, output_data={
+                "segment_id": segment_data["segment_id"],
+            })
+        except Exception:
+            logger.warning("Provenance tracking failed for story opening", exc_info=True)
+
         # 4. Build response with age-based display settings
         opening_segment = StorySegment(
             segment_id=segment_data["segment_id"],
@@ -179,6 +236,11 @@ async def start_interactive_story(
         )
 
     except Exception as e:
+        if run_id:
+            try:
+                await tracker.fail_run(run_id, str(e))
+            except Exception:
+                logger.warning("Failed to mark provenance run as failed", exc_info=True)
         print(f"Error starting interactive story: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -232,6 +294,8 @@ async def start_interactive_story_stream(
     async def event_generator() -> AsyncGenerator[str, None]:
         session = None
         opening_data = None
+        tracker = ProvenanceTracker(db_manager)
+        run_id = None
 
         # Get audio strategy for the age group
         audio_strategy = get_audio_strategy(request.age_group.value)
@@ -285,6 +349,52 @@ async def start_interactive_story_stream(
                         segment_id=segment_data.get("segment_id", 0)
                     )
 
+                    # --- Provenance tracking (Issue #138) ---
+                    try:
+                        run_id = await tracker.start_run(
+                            session.session_id, WorkflowType.INTERACTIVE_STORY,
+                            session_id=session.session_id,
+                        )
+                        step_id = await tracker.start_step(
+                            run_id, "story_opening", 1,
+                            input_data={
+                                "child_id": request.child_id,
+                                "age_group": request.age_group.value,
+                                "theme": request.theme,
+                            },
+                            model_name="claude-agent-sdk",
+                            prompt_hash=ProvenanceTracker.compute_prompt_hash(
+                                f"interactive_story:{request.child_id}:{request.age_group.value}"
+                            ),
+                        )
+                        story_text = segment_data.get("text", "")
+                        text_artifact_id = await tracker.record_artifact(
+                            step_id, ArtifactType.TEXT, run_id=run_id,
+                            artifact_payload=story_text,
+                            description="Interactive story opening segment",
+                            safety_score=opening_data.get("safety_score"),
+                            agent_name="interactive_story",
+                            metadata=ArtifactMetadata(
+                                char_count=len(story_text),
+                                word_count=count_words(story_text),
+                            ),
+                        )
+                        if audio_url and opening_data.get("audio_path"):
+                            await tracker.record_artifact(
+                                step_id, ArtifactType.AUDIO, run_id=run_id,
+                                artifact_path=opening_data["audio_path"],
+                                artifact_url=audio_url,
+                                description="TTS narration for opening segment",
+                                mime_type="audio/mpeg",
+                                agent_name="tts_generation",
+                                input_artifact_ids=[text_artifact_id],
+                            )
+                        await tracker.complete_step(step_id, output_data={
+                            "segment_id": segment_data.get("segment_id", 0),
+                        })
+                    except Exception:
+                        logger.warning("Provenance tracking failed for stream opening", exc_info=True)
+
                     # Send session info
                     yield f"event: session\ndata: {json.dumps({'session_id': session.session_id, 'story_title': opening_data.get('title', '')}, ensure_ascii=False)}\n\n"
 
@@ -311,6 +421,11 @@ async def start_interactive_story_stream(
                     yield f"event: {event_type}\ndata: {json.dumps(event_data, ensure_ascii=False)}\n\n"
 
         except Exception as e:
+            if run_id:
+                try:
+                    await tracker.fail_run(run_id, str(e))
+                except Exception:
+                    logger.warning("Failed to mark provenance run as failed", exc_info=True)
             error_data = {"error": str(e), "message": "Story creation failed"}
             yield f"event: error\ndata: {json.dumps(error_data, ensure_ascii=False)}\n\n"
 
@@ -349,6 +464,9 @@ async def choose_story_branch_stream(
     async def event_generator() -> AsyncGenerator[str, None]:
         # Get audio strategy for the age group
         audio_strategy = get_audio_strategy(session.age_group)
+        tracker = ProvenanceTracker(db_manager)
+        run_id = None
+        segment_number = len(session.segments) + 1
 
         try:
             # Stream next segment generation
@@ -390,6 +508,57 @@ async def choose_story_branch_stream(
                         audio_url=audio_url,
                         segment_id=segment_data.get("segment_id", 0)
                     )
+
+                    # --- Provenance tracking (Issue #138) ---
+                    try:
+                        run_id = await tracker.start_run(
+                            session_id, WorkflowType.INTERACTIVE_STORY,
+                            session_id=session_id,
+                        )
+                        step_id = await tracker.start_step(
+                            run_id, f"segment_{segment_number}", 1,
+                            input_data={
+                                "choice_id": request.choice_id,
+                                "segment_number": segment_number,
+                                "age_group": session.age_group,
+                            },
+                            model_name="claude-agent-sdk",
+                        )
+                        story_text = segment_data.get("text", "")
+                        text_artifact_id = await tracker.record_artifact(
+                            step_id, ArtifactType.TEXT, run_id=run_id,
+                            artifact_payload=story_text,
+                            description=f"Interactive story segment {segment_number}",
+                            safety_score=next_data.get("safety_score"),
+                            agent_name="interactive_story",
+                            metadata=ArtifactMetadata(
+                                char_count=len(story_text),
+                                word_count=count_words(story_text),
+                            ),
+                        )
+                        if audio_url and next_data.get("audio_path"):
+                            await tracker.record_artifact(
+                                step_id, ArtifactType.AUDIO, run_id=run_id,
+                                artifact_path=next_data["audio_path"],
+                                artifact_url=audio_url,
+                                description=f"TTS narration for segment {segment_number}",
+                                mime_type="audio/mpeg",
+                                agent_name="tts_generation",
+                                input_artifact_ids=[text_artifact_id],
+                            )
+                        await tracker.complete_step(step_id, output_data={
+                            "segment_id": segment_data.get("segment_id", 0),
+                            "is_ending": is_ending,
+                        })
+                        await tracker.complete_run(run_id, result_summary={
+                            "segment_number": segment_number,
+                            "is_ending": is_ending,
+                        })
+                    except Exception:
+                        logger.warning(
+                            "Provenance tracking failed for stream segment %d",
+                            segment_number, exc_info=True,
+                        )
 
                     # Update preferences on completion (Advanced Memory)
                     if is_ending:
@@ -435,6 +604,11 @@ async def choose_story_branch_stream(
                     yield f"event: {event_type}\ndata: {json.dumps(event_data, ensure_ascii=False)}\n\n"
 
         except Exception as e:
+            if run_id:
+                try:
+                    await tracker.fail_run(run_id, str(e))
+                except Exception:
+                    logger.warning("Failed to mark provenance run as failed", exc_info=True)
             error_data = {"error": str(e), "message": "Story branch generation failed"}
             yield f"event: error\ndata: {json.dumps(error_data, ensure_ascii=False)}\n\n"
 
@@ -463,6 +637,9 @@ async def choose_story_branch(
     """
     Choose a story branch (requires authentication + session ownership)
     """
+    tracker = ProvenanceTracker(db_manager)
+    run_id = None
+
     try:
         # 1. Get session and verify ownership
         session = await get_session_for_owner(session_id, user.user_id)
@@ -513,6 +690,55 @@ async def choose_story_branch(
             segment_id=segment_data["segment_id"]
         )
 
+        # --- Provenance tracking (Issue #138) ---
+        segment_number = len(session.segments) + 1
+        try:
+            run_id = await tracker.start_run(
+                session_id, WorkflowType.INTERACTIVE_STORY,
+                session_id=session_id,
+            )
+            step_id = await tracker.start_step(
+                run_id, f"segment_{segment_number}", 1,
+                input_data={
+                    "choice_id": request.choice_id,
+                    "segment_number": segment_number,
+                    "age_group": session.age_group,
+                },
+                model_name="claude-agent-sdk",
+            )
+            story_text = segment_data.get("text", "")
+            text_artifact_id = await tracker.record_artifact(
+                step_id, ArtifactType.TEXT, run_id=run_id,
+                artifact_payload=story_text,
+                description=f"Interactive story segment {segment_number}",
+                safety_score=next_data.get("safety_score"),
+                agent_name="interactive_story",
+                metadata=ArtifactMetadata(
+                    char_count=len(story_text),
+                    word_count=count_words(story_text),
+                ),
+            )
+            if audio_url and next_data.get("audio_path"):
+                await tracker.record_artifact(
+                    step_id, ArtifactType.AUDIO, run_id=run_id,
+                    artifact_path=next_data["audio_path"],
+                    artifact_url=audio_url,
+                    description=f"TTS narration for segment {segment_number}",
+                    mime_type="audio/mpeg",
+                    agent_name="tts_generation",
+                    input_artifact_ids=[text_artifact_id],
+                )
+            await tracker.complete_step(step_id, output_data={
+                "segment_id": segment_data["segment_id"],
+                "is_ending": is_ending,
+            })
+            await tracker.complete_run(run_id, result_summary={
+                "segment_number": segment_number,
+                "is_ending": is_ending,
+            })
+        except Exception:
+            logger.warning("Provenance tracking failed for segment %d", segment_number, exc_info=True)
+
         # Update preferences on completion (Advanced Memory)
         if is_ending:
             try:
@@ -562,6 +788,11 @@ async def choose_story_branch(
         raise
 
     except Exception as e:
+        if run_id:
+            try:
+                await tracker.fail_run(run_id, str(e))
+            except Exception:
+                logger.warning("Failed to mark provenance run as failed", exc_info=True)
         print(f"Error choosing story branch: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -765,6 +996,64 @@ async def save_interactive_story(
         }
 
         await story_repo.create(story_data)
+
+        # --- Provenance: record full story text + link to story (Issue #138) ---
+        try:
+            tracker = ProvenanceTracker(db_manager)
+            run_id = await tracker.start_run(
+                story_id, WorkflowType.INTERACTIVE_STORY,
+                session_id=session_id,
+            )
+            step_id = await tracker.start_step(
+                run_id, "save_story", 1,
+                input_data={
+                    "session_id": session_id,
+                    "segments_count": len(session.segments),
+                    "safety_score": safety_score,
+                },
+            )
+            text_artifact_id = await tracker.record_artifact(
+                step_id, ArtifactType.TEXT, run_id=run_id,
+                artifact_payload=full_text,
+                description="Complete interactive story text",
+                safety_score=safety_score,
+                agent_name="interactive_story",
+                metadata=ArtifactMetadata(
+                    char_count=len(full_text),
+                    word_count=count_words(full_text),
+                ),
+            )
+            # Promote and link
+            art_repo = tracker._artifact_repo
+            await art_repo.update_lifecycle_state(text_artifact_id, "candidate")
+            await art_repo.update_lifecycle_state(text_artifact_id, "published")
+
+            # Link audio artifacts from segments if available
+            for seg in session.segments:
+                audio_url = seg.get("audio_url")
+                if audio_url:
+                    audio_artifact_id = await tracker.record_artifact(
+                        step_id, ArtifactType.AUDIO, run_id=run_id,
+                        artifact_url=audio_url,
+                        description="Segment TTS narration",
+                        agent_name="tts_generation",
+                        input_artifact_ids=[text_artifact_id],
+                    )
+                    await art_repo.update_lifecycle_state(audio_artifact_id, "candidate")
+                    await tracker.publish_artifact(
+                        audio_artifact_id, story_id, StoryArtifactRole.FINAL_AUDIO,
+                    )
+
+            await tracker.complete_step(step_id, output_data={
+                "story_id": story_id,
+                "text_artifact_id": text_artifact_id,
+            })
+            await tracker.complete_run(run_id, result_summary={
+                "story_id": story_id,
+                "safety_score": safety_score,
+            })
+        except Exception:
+            logger.warning("Provenance tracking failed for save_interactive_story", exc_info=True)
 
         return SaveInteractiveStoryResponse(
             story_id=story_id,
