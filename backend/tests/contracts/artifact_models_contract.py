@@ -87,16 +87,16 @@ class TestStoryArtifactRoleEnum:
 
     def test_story_artifact_role_values(self):
         """
-        Contract: Four canonical roles plus custom.
+        Contract: Five canonical roles for story artifacts.
         """
-        valid_roles = {
-            "COVER": "cover",
-            "FINAL_AUDIO": "final_audio",
-            "FINAL_VIDEO": "final_video",
-            "SCENE_IMAGE": "scene_image"
-        }
+        from backend.src.services.models.artifact_models import StoryArtifactRole
 
-        assert len(valid_roles) == 4
+        assert StoryArtifactRole.COVER.value == "cover"
+        assert StoryArtifactRole.FINAL_AUDIO.value == "final_audio"
+        assert StoryArtifactRole.FINAL_VIDEO.value == "final_video"
+        assert StoryArtifactRole.SCENE_IMAGE.value == "scene_image"
+        assert StoryArtifactRole.STORY_TEXT.value == "story_text"
+        assert len(StoryArtifactRole) == 5
 
 
 class TestArtifactMetadataModel:
