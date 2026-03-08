@@ -7,6 +7,7 @@ export interface AgeLayoutConfig {
   fontSize: string
   showWordCount: boolean
   showSearchBar: boolean
+  showGrowthTimeline: boolean
 }
 
 const AGE_CONFIGS: Record<string, AgeLayoutConfig> = {
@@ -17,6 +18,7 @@ const AGE_CONFIGS: Record<string, AgeLayoutConfig> = {
     fontSize: 'text-lg',
     showWordCount: false,
     showSearchBar: false,
+    showGrowthTimeline: false,
   },
   '6-8': {
     gridCols: 3,
@@ -25,6 +27,7 @@ const AGE_CONFIGS: Record<string, AgeLayoutConfig> = {
     fontSize: 'text-base',
     showWordCount: true,
     showSearchBar: true,
+    showGrowthTimeline: false,
   },
   '9-12': {
     gridCols: 4,
@@ -33,6 +36,7 @@ const AGE_CONFIGS: Record<string, AgeLayoutConfig> = {
     fontSize: 'text-sm',
     showWordCount: true,
     showSearchBar: true,
+    showGrowthTimeline: true,
   },
 }
 

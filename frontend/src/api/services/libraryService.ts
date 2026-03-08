@@ -45,6 +45,17 @@ export interface FavoriteResponse {
   item_type: string
 }
 
+export type StatsGroupBy = 'week' | 'month'
+
+export interface LibraryStatsPeriod {
+  period: string
+  count: number
+}
+
+export interface LibraryStatsResponse {
+  periods: LibraryStatsPeriod[]
+}
+
 // ---- API ----
 
 const LIBRARY_BASE = '/library'
@@ -84,6 +95,16 @@ export const libraryService = {
     const response = await apiClient.post<FavoriteResponse>(`${LIBRARY_BASE}/favorites`, {
       item_id: itemId,
       item_type: itemType,
+    })
+    return response.data
+  },
+
+  /**
+   * GET /api/v1/library/stats — Creation counts grouped by week or month (#133)
+   */
+  async getStats(groupBy: StatsGroupBy = 'week'): Promise<LibraryStatsResponse> {
+    const response = await apiClient.get<LibraryStatsResponse>(`${LIBRARY_BASE}/stats`, {
+      params: { group_by: groupBy },
     })
     return response.data
   },
