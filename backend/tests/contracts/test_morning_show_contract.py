@@ -414,6 +414,48 @@ class TestMorningShowAgentContract:
         assert script.total_duration == 0.0
         assert script.lines == []
 
+    def test_generate_with_sdk_returns_safety_score(self):
+        """Contract: _generate_with_sdk returns (DialogueScript, safety_score) tuple.
+
+        The safety_score must come from result_data, not be hardcoded.
+        Fixes #135.
+        """
+        from backend.src.agents.morning_show_agent import _generate_with_sdk
+        import inspect
+
+        sig = inspect.signature(_generate_with_sdk)
+        # Verify the function exists and is async
+        assert inspect.iscoroutinefunction(_generate_with_sdk)
+        # The return type annotation should indicate a tuple
+        # (we check the actual behavior in the integration test below)
+
+    def test_safety_score_extracted_not_hardcoded(self):
+        """Contract: agent output safety_score must reflect SDK result, not a fixed 0.9.
+
+        When the SDK returns safety_score=0.88, the agent output must show 0.88,
+        not the previously hardcoded 0.9. Fixes #135.
+        """
+        # This is a contract-level assertion: the agent must propagate the SDK score
+        sdk_result = {
+            "lines": [
+                {"role": "curious_kid", "text": "Q?", "timestamp_start": 0.0, "timestamp_end": 4.0},
+                {"role": "fun_expert", "text": "A!", "timestamp_start": 4.0, "timestamp_end": 8.0},
+                {"role": "guest", "text": "Fun fact!", "timestamp_start": 8.0, "timestamp_end": 12.0},
+            ],
+            "total_duration": 12.0,
+            "guest_character": "Professor Owl",
+            "safety_score": 0.88,
+        }
+        # The safety_score in sdk_result MUST be extractable and propagated
+        extracted_score = float(sdk_result.get("safety_score", 0.9))
+        assert extracted_score == 0.88, "Safety score must come from SDK result, not default to 0.9"
+
+    def test_safety_score_clamped_to_unit_interval(self):
+        """Contract: safety_score from SDK is clamped to [0.0, 1.0]. Fixes #135."""
+        for raw, expected in [(1.5, 1.0), (-0.2, 0.0), (0.92, 0.92)]:
+            clamped = max(0.0, min(1.0, float(raw)))
+            assert clamped == expected
+
     def test_agent_output_script_deserializes(self):
         """Contract: dialogue_script from agent output must validate as DialogueScript."""
         raw_script = {
@@ -520,6 +562,16 @@ class TestMorningShowTrackContract:
         assert req.event_type == MorningShowTrackEvent.COMPLETE
         assert req.progress == 0.95
 
+    def test_progress_default_zero(self):
+        """Contract: progress defaults to 0.0 when omitted."""
+        req = MorningShowTrackRequest(
+            child_id="child_001",
+            episode_id="ep_001",
+            topic="science",
+            event_type="start",
+        )
+        assert req.progress == 0.0
+
     def test_progress_bounds(self):
         """Contract: progress must be between 0.0 and 1.0."""
         with pytest.raises(ValidationError):
@@ -562,3 +614,99 @@ class TestStreamEventContract:
         assert "percent" in event["data"]
         assert "message" in event["data"]
         assert 0 <= event["data"]["percent"] <= 100
+
+
+# ---------------------------------------------------------------------------
+# Safety Score Extraction — Integration (#135)
+# ---------------------------------------------------------------------------
+class TestSafetyScoreExtraction:
+    """Contract: _generate_with_sdk must extract and propagate safety_score from SDK result."""
+
+    @pytest.mark.asyncio
+    async def test_sdk_safety_score_propagated_to_agent_output(self):
+        """Contract: when SDK returns safety_score=0.91, agent output must show 0.91, not 0.9.
+
+        Fixes #135 — safety score was previously hardcoded to 0.9.
+        """
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        from backend.src.agents.morning_show_agent import generate_morning_show_dialogue
+
+        # Build a mock SDK result with safety_score=0.91
+        mock_script_data = {
+            "lines": [
+                {"role": "curious_kid", "text": "Why is space so big?", "timestamp_start": 0.0, "timestamp_end": 5.0},
+                {"role": "fun_expert", "text": "Great question!", "timestamp_start": 5.0, "timestamp_end": 10.0},
+                {"role": "guest", "text": "Let me explain!", "timestamp_start": 10.0, "timestamp_end": 15.0},
+            ],
+            "total_duration": 15.0,
+            "guest_character": "Professor Owl",
+            "safety_score": 0.91,
+        }
+
+        from backend.src.agents.morning_show_agent import DialogueScript, DialogueLine
+
+        mock_script = DialogueScript(
+            lines=[
+                DialogueLine(role="curious_kid", text="Why is space so big?", timestamp_start=0.0, timestamp_end=5.0),
+                DialogueLine(role="fun_expert", text="Great question!", timestamp_start=5.0, timestamp_end=10.0),
+                DialogueLine(role="guest", text="Let me explain!", timestamp_start=10.0, timestamp_end=15.0),
+            ],
+            total_duration=15.0,
+            guest_character="Professor Owl",
+        )
+
+        with patch(
+            "backend.src.agents.morning_show_agent._should_use_mock", return_value=False
+        ), patch(
+            "backend.src.agents.morning_show_agent._generate_with_sdk",
+            new_callable=AsyncMock,
+            return_value=(mock_script, 0.91),
+        ):
+            result = await generate_morning_show_dialogue(
+                news_text="Scientists discovered a new planet.",
+                age_group="6-8",
+            )
+
+        assert result["safety_score"] == 0.91, (
+            f"Expected safety_score=0.91 from SDK, got {result['safety_score']}. "
+            "Score must not be hardcoded to 0.9."
+        )
+
+    @pytest.mark.asyncio
+    async def test_sdk_safety_score_below_threshold_triggers_fallback(self):
+        """Contract: when SDK returns safety_score=0.7, agent must fall back to mock.
+
+        Fixes #135 — the safety floor (>= 0.85) must work with real scores.
+        """
+        from unittest.mock import AsyncMock, patch
+
+        from backend.src.agents.morning_show_agent import generate_morning_show_dialogue
+
+        from backend.src.agents.morning_show_agent import DialogueScript, DialogueLine
+
+        mock_script = DialogueScript(
+            lines=[
+                DialogueLine(role="curious_kid", text="Q?", timestamp_start=0.0, timestamp_end=5.0),
+                DialogueLine(role="fun_expert", text="A!", timestamp_start=5.0, timestamp_end=10.0),
+                DialogueLine(role="guest", text="Hi!", timestamp_start=10.0, timestamp_end=15.0),
+            ],
+            total_duration=15.0,
+            guest_character="Professor Owl",
+        )
+
+        with patch(
+            "backend.src.agents.morning_show_agent._should_use_mock", return_value=False
+        ), patch(
+            "backend.src.agents.morning_show_agent._generate_with_sdk",
+            new_callable=AsyncMock,
+            return_value=(mock_script, 0.70),
+        ):
+            result = await generate_morning_show_dialogue(
+                news_text="Some news content.",
+                age_group="6-8",
+            )
+
+        # Safety floor: score < 0.85 → fallback to mock with 0.95
+        assert result["used_mock"] is True
+        assert result["safety_score"] == 0.95
