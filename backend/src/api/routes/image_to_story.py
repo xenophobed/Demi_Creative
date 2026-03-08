@@ -395,15 +395,14 @@ async def create_story_from_image(
                 # Promote and link all created artifacts
                 for artifact_id, role in [
                     (image_artifact_id, StoryArtifactRole.COVER),
-                    (text_artifact_id, None),
+                    (text_artifact_id, StoryArtifactRole.STORY_TEXT),
                     (audio_artifact_id, StoryArtifactRole.FINAL_AUDIO),
                 ]:
                     if not artifact_id:
                         continue
                     await art_repo.update_lifecycle_state(artifact_id, "candidate")
                     await art_repo.update_lifecycle_state(artifact_id, "published")
-                    if role:
-                        await tracker.link_to_story(story_id, artifact_id, role)
+                    await tracker.link_to_story(story_id, artifact_id, role)
 
                 await tracker.complete_run(run_id, result_summary={
                     "artifacts_created": sum(1 for a in [image_artifact_id, text_artifact_id, audio_artifact_id] if a),

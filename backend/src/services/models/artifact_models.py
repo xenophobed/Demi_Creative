@@ -52,6 +52,7 @@ class StoryArtifactRole(str, Enum):
     FINAL_AUDIO = "final_audio"
     FINAL_VIDEO = "final_video"
     SCENE_IMAGE = "scene_image"
+    STORY_TEXT = "story_text"
 
 
 class RunStatus(str, Enum):
