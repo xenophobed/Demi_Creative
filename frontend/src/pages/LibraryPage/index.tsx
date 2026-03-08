@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { BookOpen, Palette, Map, Newspaper, Compass, Globe, ChevronRight, Podcast } from 'lucide-react'
+import { BookOpen, Palette, Map, Newspaper, Compass, Globe, ChevronRight, Podcast, TrendingUp } from 'lucide-react'
 import Button from '@/components/common/Button'
 import Card from '@/components/common/Card'
 import useStoryStore from '@/store/useStoryStore'
@@ -16,6 +16,7 @@ import MiniPlayer from '@/components/common/MiniPlayer'
 import { getAgeLayoutConfig } from '@/config/ageConfig'
 import type { NewsToKidsResponse } from '@/types/api'
 import { resolveMediaUrl } from '@/utils/mediaUrl'
+import GrowthTimeline from '@/components/library/GrowthTimeline'
 
 // Content type tabs
 type ContentTab = 'all' | 'art-stories' | 'interactive' | 'news' | 'morning-show'
@@ -617,6 +618,7 @@ function LibraryPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [deleteTarget, setDeleteTarget] = useState<LibraryItem | null>(null)
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set())
+  const [showGrowthView, setShowGrowthView] = useState(false)
   const [pageSize] = useState(20)
   const [offset, setOffset] = useState(0)
 
@@ -778,6 +780,22 @@ function LibraryPage() {
           My Library
         </h1>
         <div className="flex items-center gap-2">
+          {/* Growth Timeline toggle — only for 9-12 age group (#134) */}
+          {ageLayout.showGrowthTimeline && isAuthenticated && (
+            <motion.button
+              onClick={() => setShowGrowthView((v) => !v)}
+              className={`p-2 rounded-lg transition-colors ${
+                showGrowthView
+                  ? 'text-primary bg-primary/10'
+                  : 'text-gray-500 hover:text-primary hover:bg-primary/10'
+              }`}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              title={showGrowthView ? 'Back to library' : 'View growth timeline'}
+            >
+              <TrendingUp size={20} />
+            </motion.button>
+          )}
           <motion.button
             onClick={toggleViewMode}
             className="p-2 rounded-lg text-gray-500 hover:text-primary hover:bg-primary/10 transition-colors"
@@ -860,6 +878,11 @@ function LibraryPage() {
         </select>
       </motion.div>
 
+      {/* Growth Timeline view (#134) — replaces content area when active */}
+      {showGrowthView && ageLayout.showGrowthTimeline && isAuthenticated ? (
+        <GrowthTimeline />
+      ) : (
+      <>
       {/* Loading indicator */}
       {isLoading && visibleItems.length === 0 && (
         <motion.div
@@ -1001,6 +1024,8 @@ function LibraryPage() {
             <span className="font-bold text-primary">{totalItems}</span> creations
           </p>
         </motion.div>
+      )}
+      </>
       )}
 
       {/* Delete confirmation modal */}
