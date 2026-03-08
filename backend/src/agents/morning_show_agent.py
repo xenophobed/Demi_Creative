@@ -217,8 +217,12 @@ async def _generate_with_sdk(
     age_group: str,
     guest_name: str,
     child_id: Optional[str],
-) -> DialogueScript:
-    """Generate dialogue via Claude Agent SDK with MCP safety check and vector search."""
+) -> Tuple[DialogueScript, float]:
+    """Generate dialogue via Claude Agent SDK with MCP safety check and vector search.
+
+    Returns (DialogueScript, safety_score) tuple. The safety_score is extracted
+    from the SDK structured output rather than hardcoded (#135).
+    """
     config = _AGE_CONFIG[_age_bucket(age_group)]
     line_count = int(config["line_count"])
     line_duration = float(config["line_duration"])
@@ -387,8 +391,12 @@ async def _generate_with_sdk(
         guest_character=actual_guest,
     )
 
+    # Extract safety score from SDK structured output (#135)
+    safety_score = float(result_data.get("safety_score", 0.9))
+    safety_score = max(0.0, min(1.0, safety_score))
+
     try:
-        return DialogueScript.model_validate(script.model_dump())
+        return DialogueScript.model_validate(script.model_dump()), safety_score
     except ValidationError as exc:
         raise RuntimeError(f"Invalid dialogue schema: {exc}") from exc
 
@@ -428,16 +436,13 @@ async def generate_morning_show_dialogue(
         safety_score = 0.95  # Deterministic content is pre-vetted
     else:
         try:
-            script = await _generate_with_sdk(
+            script, safety_score = await _generate_with_sdk(
                 source_text=source_text,
                 age_group=age_group,
                 guest_name=guest_name,
                 child_id=child_id,
             )
             used_mock = False
-            # SDK performs safety check via MCP tool; extract score from script context
-            # Default to 0.9 if SDK didn't return an explicit score
-            safety_score = 0.9
         except Exception:
             script = _build_mock_dialogue_script(topic, age_group, guest_name)
             used_mock = True
