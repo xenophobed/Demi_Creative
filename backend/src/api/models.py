@@ -765,6 +765,23 @@ class FavoriteResponse(BaseModel):
     item_type: str = Field(..., description="Item type")
 
 
+class LibraryStatsGroupBy(str, Enum):
+    """Grouping period for library stats (#133)"""
+    WEEK = "week"
+    MONTH = "month"
+
+
+class LibraryStatsPeriod(BaseModel):
+    """A single time period with creation count (#133)."""
+    period: str = Field(..., description="Period label (YYYY-Www or YYYY-MM)")
+    count: int = Field(..., description="Number of creations in this period")
+
+
+class LibraryStatsResponse(BaseModel):
+    """Library creation stats response (#133)."""
+    periods: List[LibraryStatsPeriod] = Field(..., description="Creation counts by period")
+
+
 class PaginatedNewsResponse(BaseModel):
     """Paginated news history response (#69)."""
     items: List[Dict[str, Any]] = Field(..., description="News story items")

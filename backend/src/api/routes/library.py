@@ -20,6 +20,9 @@ from ..models import (
     LibrarySortOrder,
     LibraryItem,
     LibraryResponse,
+    LibraryStatsGroupBy,
+    LibraryStatsPeriod,
+    LibraryStatsResponse,
     FavoriteRequest,
     FavoriteResponse,
     ErrorResponse,
@@ -257,6 +260,62 @@ async def get_library(
         limit=limit,
         offset=offset,
     )
+
+
+# ============================================================================
+# GET /api/v1/library/stats — Creation stats endpoint (#133)
+# ============================================================================
+
+@router.get(
+    "/stats",
+    response_model=LibraryStatsResponse,
+    responses={401: {"model": ErrorResponse}},
+    summary="Get library creation stats",
+    description="Returns creation counts grouped by week or month",
+)
+async def get_library_stats(
+    group_by: LibraryStatsGroupBy = Query(
+        LibraryStatsGroupBy.WEEK, description="Group by week or month"
+    ),
+    user: UserData = Depends(get_current_user),
+):
+    """Return aggregate creation counts per time period (#133).
+
+    Queries both stories and sessions tables, groups by the requested
+    period, and returns only aggregate counts — no personal data.
+    """
+    if group_by == LibraryStatsGroupBy.MONTH:
+        # SQLite strftime: %Y-%m → "2026-03"
+        fmt = "%Y-%m"
+    else:
+        # ISO week: %Y-W%W → "2026-W10"
+        fmt = "%Y-W%W"
+
+    query = f"""
+        SELECT period, SUM(cnt) AS count FROM (
+            SELECT strftime('{fmt}', created_at) AS period, COUNT(*) AS cnt
+            FROM stories
+            WHERE user_id = ?
+            GROUP BY period
+            UNION ALL
+            SELECT strftime('{fmt}', created_at) AS period, COUNT(*) AS cnt
+            FROM sessions
+            WHERE user_id = ?
+            GROUP BY period
+        )
+        GROUP BY period
+        ORDER BY period
+    """
+
+    rows = await db_manager.fetchall(query, (user.user_id, user.user_id))
+
+    periods = [
+        LibraryStatsPeriod(period=row["period"], count=row["count"])
+        for row in rows
+        if row["period"] is not None
+    ]
+
+    return LibraryStatsResponse(periods=periods)
 
 
 # ============================================================================
