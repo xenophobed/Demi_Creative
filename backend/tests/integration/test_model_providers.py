@@ -198,8 +198,11 @@ class TestTTSProvider:
 
         assert "voices" in data
         assert len(data["voices"]) > 0
-        voice_ids = [v["id"] for v in data["voices"]]
+        voice_ids = [v["voice_id"] for v in data["voices"]]
         assert "nova" in voice_ids
+        # #149: all entries must have a provider field
+        providers = {v["provider"] for v in data["voices"]}
+        assert "openai" in providers
 
 
 # ===========================================================================

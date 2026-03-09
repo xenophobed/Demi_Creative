@@ -21,6 +21,21 @@ class AgeGroup(str, Enum):
     AGE_9_12 = "9-12"
 
 
+class TTSProviderEnum(str, Enum):
+    """TTS provider selection (#149)"""
+    OPENAI = "openai"
+    REPLICATE = "replicate"
+
+
+class EmotionType(str, Enum):
+    """Allowed TTS emotions (#149). Age-filtered at service layer."""
+    HAPPY = "happy"
+    SAD = "sad"
+    NEUTRAL = "neutral"
+    SURPRISED = "surprised"
+    DISGUSTED = "disgusted"
+
+
 class VoiceType(str, Enum):
     """语音类型"""
     NOVA = "nova"           # 温柔女性
