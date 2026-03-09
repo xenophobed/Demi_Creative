@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
 from ..deps import get_current_user, get_session_for_owner, get_story_for_owner
+from ..models import AgeGroup, EmotionType, TTSProviderEnum
 from ...services.database import session_repo, story_repo
 from ...services.user_service import UserData
 from ...services.tts_service import generate_story_audio_file
@@ -30,12 +31,12 @@ class AudioGenerateRequest(BaseModel):
     voice: str = Field(default="alloy", description="Voice type")
     speed: float = Field(default=1.0, ge=0.5, le=2.0, description="Speech speed")
     # Expressive TTS params (#149) — all optional, backward compatible
-    emotion: Optional[str] = Field(default=None, description="TTS emotion (happy, sad, neutral, surprised, disgusted)")
+    emotion: Optional[EmotionType] = Field(default=None, description="TTS emotion")
     pitch: Optional[int] = Field(default=None, ge=-12, le=12, description="Pitch adjustment (-12 to 12)")
     volume: Optional[float] = Field(default=None, ge=0, le=10, description="Volume (0-10)")
     language_boost: Optional[str] = Field(default=None, description="Language boost (e.g. English, Chinese)")
-    provider: Optional[str] = Field(default=None, description="TTS provider (openai or replicate)")
-    age_group: Optional[str] = Field(default=None, description="Age group for emotion filtering (3-5, 6-8, 9-12)")
+    provider: Optional[TTSProviderEnum] = Field(default=None, description="TTS provider")
+    age_group: Optional[AgeGroup] = Field(default=None, description="Age group for emotion filtering")
 
 
 class AudioGenerateResponse(BaseModel):
@@ -152,12 +153,12 @@ class StoryAudioGenerateRequest(BaseModel):
     voice: str = Field(default="alloy", description="Voice type")
     speed: float = Field(default=1.1, ge=0.5, le=2.0, description="Speech speed")
     # Expressive TTS params (#149)
-    emotion: Optional[str] = Field(default=None, description="TTS emotion")
+    emotion: Optional[EmotionType] = Field(default=None, description="TTS emotion")
     pitch: Optional[int] = Field(default=None, ge=-12, le=12, description="Pitch adjustment")
     volume: Optional[float] = Field(default=None, ge=0, le=10, description="Volume")
     language_boost: Optional[str] = Field(default=None, description="Language boost")
-    provider: Optional[str] = Field(default=None, description="TTS provider")
-    age_group: Optional[str] = Field(default=None, description="Age group for emotion filtering")
+    provider: Optional[TTSProviderEnum] = Field(default=None, description="TTS provider")
+    age_group: Optional[AgeGroup] = Field(default=None, description="Age group for emotion filtering")
 
 
 class StoryAudioGenerateResponse(BaseModel):

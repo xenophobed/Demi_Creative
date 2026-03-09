@@ -106,7 +106,7 @@ class OpenAITTSProvider:
                 )
                 resp.stream_to_file(audio_path)
 
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             await loop.run_in_executor(None, _sync_tts)
         else:
             headers = {
@@ -180,7 +180,7 @@ class ReplicateTTSProvider:
             return output.read()
 
         try:
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             audio_bytes = await loop.run_in_executor(None, _sync_replicate)
             Path(audio_path).write_bytes(audio_bytes)
             return {"success": True, "provider": "replicate"}
@@ -194,6 +194,7 @@ class ReplicateTTSProvider:
 
 _openai_provider = OpenAITTSProvider()
 _replicate_provider = ReplicateTTSProvider()
+_OPENAI_VOICE_IDS = {"alloy", "echo", "fable", "onyx", "nova", "shimmer"}
 
 
 def _select_provider(provider: Optional[str]) -> TTSProvider:
@@ -269,8 +270,7 @@ async def generate_story_audio_file(
 
         chosen_provider = _select_provider(provider)
         fallback_used = False
-        original_provider = provider or "openai"
-        actual_provider = original_provider
+        actual_provider = provider or "openai"
 
         t0 = time.monotonic()
 
@@ -285,24 +285,34 @@ async def generate_story_audio_file(
             language_boost=language_boost,
         )
 
-        # Fallback: if Replicate failed, retry once then fall back to OpenAI
+        # Fallback: if Replicate failed, retry once (transient) then fall back to OpenAI
         if not result.get("success") and provider == "replicate":
-            logger.warning("Replicate TTS failed (%s), retrying once...", result.get("error"))
-            result = await _replicate_provider.generate(
-                text=text,
-                voice=voice,
-                speed=resolved_speed,
-                audio_path=audio_path,
-                emotion=filtered_emotion,
-                pitch=pitch,
-                volume=volume,
-                language_boost=language_boost,
+            error_msg = result.get("error", "")
+            # Skip retry for deterministic failures (missing token, SDK not installed)
+            is_deterministic = any(
+                s in error_msg for s in ("REPLICATE_API_TOKEN", "SDK not installed")
             )
-            if not result.get("success"):
-                logger.warning("Replicate retry failed, falling back to OpenAI")
-                result = await _openai_provider.generate(
+
+            if not is_deterministic:
+                logger.warning("Replicate TTS failed (%s), retrying once...", error_msg)
+                result = await _replicate_provider.generate(
                     text=text,
                     voice=voice,
+                    speed=resolved_speed,
+                    audio_path=audio_path,
+                    emotion=filtered_emotion,
+                    pitch=pitch,
+                    volume=volume,
+                    language_boost=language_boost,
+                )
+
+            if not result.get("success"):
+                logger.warning("Replicate failed (%s), falling back to OpenAI", error_msg)
+                # Map Replicate voice IDs to a safe OpenAI default
+                fallback_voice = voice if voice in _OPENAI_VOICE_IDS else "nova"
+                result = await _openai_provider.generate(
+                    text=text,
+                    voice=fallback_voice,
                     speed=resolved_speed,
                     audio_path=audio_path,
                 )
