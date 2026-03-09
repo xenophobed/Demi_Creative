@@ -4,10 +4,13 @@ from __future__ import annotations
 
 import base64
 import json
+import logging
 import os
 import uuid
 from datetime import datetime
 from typing import Any, AsyncGenerator, Dict, List
+
+logger = logging.getLogger(__name__)
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -130,11 +133,18 @@ async def _safe_illustration_description(description: str, age_group: str) -> st
             "target_age": target_age,
         })
         data = _json.loads(result["content"][0]["text"])
-        score = float(data.get("safety_score", 1.0))
+        if "error" in data:
+            logger.warning("Safety MCP returned error for illustration, using safe fallback")
+            return "A colorful, cheerful scene suitable for children"
+        score = float(data.get("safety_score", 0.0))
         if score < 0.85:
             return "A colorful, cheerful scene suitable for children"
     except Exception:
-        pass
+        logger.warning(
+            "Safety check unavailable for illustration, using safe fallback (fail-closed)",
+            exc_info=True,
+        )
+        return "A colorful, cheerful scene suitable for children"
     return description
 
 
@@ -384,7 +394,7 @@ async def _build_episode(
 
     key_concepts = _as_key_concepts(generated.get("key_concepts", []))
     questions = _as_questions(generated.get("interactive_questions", []))
-    safety_score = max(float(generated.get("safety_score", 0.9)), 0.85)
+    safety_score = float(generated.get("safety_score", 0.0))
 
     episode = MorningShowEpisode(
         episode_id=episode_id,

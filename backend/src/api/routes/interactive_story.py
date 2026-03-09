@@ -62,7 +62,7 @@ async def _check_story_safety(text: str, age_group: str) -> float:
     """Run check_content_safety on story text, return the safety score.
 
     Falls back to 0.0 if the MCP tool is unavailable so that callers
-    never silently accept unchecked content.
+    never silently accept unchecked content (fail-closed).
     """
     try:
         from ...mcp_servers import check_content_safety
@@ -73,8 +73,15 @@ async def _check_story_safety(text: str, age_group: str) -> float:
             "target_age": _AGE_MAP.get(age_group, 7),
         })
         data = json.loads(result["content"][0]["text"])
+        if "error" in data:
+            logger.warning("Safety MCP tool returned error: %s", data["error"])
+            return 0.0
         return float(data.get("safety_score", 0.0))
     except Exception:
+        logger.warning(
+            "Safety check unavailable for interactive story, blocking content (fail-closed)",
+            exc_info=True,
+        )
         return 0.0
 
 

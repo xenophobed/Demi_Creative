@@ -102,7 +102,7 @@ async def convert_news(
                 "kid_title": result.get("kid_title", ""),
             },
             "story_type": "news_to_kids",
-            "safety_score": 0.9,
+            "safety_score": result.get("safety_score", 0.0),
             "audio_url": audio_url,
         }
         await story_repo.create(story_data)
@@ -225,7 +225,7 @@ async def convert_news_stream(
                             "kid_title": event_data.get("kid_title", ""),
                         },
                         "story_type": "news_to_kids",
-                        "safety_score": 0.9,
+                        "safety_score": event_data.get("safety_score", 0.0),
                         "audio_url": audio_url,
                     }
                     await story_repo.create(story_data)

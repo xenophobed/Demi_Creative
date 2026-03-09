@@ -351,7 +351,7 @@ async def create_story_from_image(
                     run_id=run_id,
                     artifact_payload=story_text,
                     description="Generated story text",
-                    safety_score=result.get("safety_score", 0.9),
+                    safety_score=result.get("safety_score", 0.0),
                     agent_name="story_generation",
                     input_artifact_ids=[image_artifact_id] if image_artifact_id else None,
                     metadata=ArtifactMetadata(
@@ -427,7 +427,7 @@ async def create_story_from_image(
             educational_value=educational_value,
             characters=characters,
             analysis=result.get("analysis", {}),
-            safety_score=result.get("safety_score", 0.9),
+            safety_score=result.get("safety_score", 0.0),
             created_at=created_at
         )
 
@@ -455,7 +455,7 @@ async def create_story_from_image(
                 for c in characters
             ],
             "analysis": result.get("analysis", {}),
-            "safety_score": result.get("safety_score", 0.9),
+            "safety_score": result.get("safety_score", 0.0),
             "created_at": created_at.isoformat(),
             "child_id": safe_child_id,
             "age_group": age_group.value,
@@ -624,7 +624,7 @@ async def create_story_from_image_stream(
                             for c in result_data.get("characters", [])
                         ],
                         "analysis": result_data.get("analysis", {}),
-                        "safety_score": result_data.get("safety_score", 0.9),
+                        "safety_score": result_data.get("safety_score", 0.0),
                         "created_at": datetime.now().isoformat()
                     }
 
