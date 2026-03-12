@@ -17,6 +17,8 @@ analyze_children_drawing = _unavailable_tool
 vector_server = {}
 search_similar_drawings = _unavailable_tool
 store_drawing_embedding = _unavailable_tool
+store_story_embedding = _unavailable_tool
+search_similar_stories = _unavailable_tool
 safety_server = {}
 check_content_safety = _unavailable_tool
 suggest_content_improvements = _unavailable_tool
@@ -38,7 +40,7 @@ except Exception:
     pass
 
 try:
-    from .vector_search_server import vector_server, search_similar_drawings, store_drawing_embedding
+    from .vector_search_server import vector_server, search_similar_drawings, store_drawing_embedding, store_story_embedding, search_similar_stories
 except Exception:
     pass
 
@@ -78,6 +80,8 @@ __all__ = [
     "vector_server",
     "search_similar_drawings",
     "store_drawing_embedding",
+    "store_story_embedding",
+    "search_similar_stories",
     "safety_server",
     "check_content_safety",
     "suggest_content_improvements",
