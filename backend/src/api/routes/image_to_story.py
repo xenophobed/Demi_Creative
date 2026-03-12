@@ -27,7 +27,7 @@ from ..models import (
 from ..deps import get_current_user, get_story_for_owner
 from ...agents.image_to_story_agent import image_to_story, stream_image_to_story
 from ...utils.audio_strategy import get_audio_strategy
-from ...services.database import story_repo, preference_repo, db_manager
+from ...services.database import story_repo, preference_repo, character_repo, db_manager
 from ...services.user_service import UserData
 from ...services.provenance_tracker import ProvenanceTracker
 from ...services.models.artifact_models import (
@@ -469,6 +469,17 @@ async def create_story_from_image(
             await preference_repo.update_from_story_result(safe_child_id, result)
         except Exception:
             pass  # Non-critical: don't fail the request
+
+        # Sync detected characters to characters table (#160)
+        for c in characters:
+            try:
+                await character_repo.upsert_character(
+                    child_id=safe_child_id,
+                    name=c.character_name,
+                    description=c.description,
+                )
+            except Exception:
+                pass  # Non-critical
 
         return response
 
