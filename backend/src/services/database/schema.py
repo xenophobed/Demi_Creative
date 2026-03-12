@@ -184,6 +184,31 @@ CREATE INDEX IF NOT EXISTS idx_topic_subscriptions_topic ON topic_subscriptions(
 CREATE INDEX IF NOT EXISTS idx_topic_subscriptions_is_active ON topic_subscriptions(is_active);
 """
 
+# ============================================================================
+# Characters Table (#160)
+# ============================================================================
+
+CHARACTERS_TABLE = """
+CREATE TABLE IF NOT EXISTS characters (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    child_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    description TEXT,
+    visual_features TEXT,
+    traits TEXT,
+    appearance_count INTEGER DEFAULT 1,
+    first_seen_at TEXT NOT NULL,
+    last_seen_at TEXT NOT NULL,
+    UNIQUE(child_id, name)
+);
+"""
+
+CHARACTERS_INDEXES = """
+CREATE INDEX IF NOT EXISTS idx_characters_child_id ON characters(child_id);
+CREATE INDEX IF NOT EXISTS idx_characters_child_name ON characters(child_id, name);
+CREATE INDEX IF NOT EXISTS idx_characters_appearance ON characters(appearance_count DESC);
+"""
+
 
 # ============================================================================
 # Schema Initialization
@@ -239,6 +264,15 @@ async def init_schema(db: "DatabaseManager") -> None:
     # Create topic subscriptions table (#94)
     await db.execute(TOPIC_SUBSCRIPTIONS_TABLE)
     for stmt in TOPIC_SUBSCRIPTIONS_INDEXES.strip().split(";"):
+        if stmt.strip():
+            try:
+                await db.execute(stmt)
+            except Exception:
+                pass
+
+    # Create characters table (#160)
+    await db.execute(CHARACTERS_TABLE)
+    for stmt in CHARACTERS_INDEXES.strip().split(";"):
         if stmt.strip():
             try:
                 await db.execute(stmt)

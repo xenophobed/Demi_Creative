@@ -30,7 +30,7 @@ from ..models import (
     SessionStatus as SessionStatusEnum
 )
 from ..deps import get_current_user, get_session_for_owner
-from ...services.database import session_repo, story_repo, preference_repo, db_manager
+from ...services.database import session_repo, story_repo, preference_repo, character_repo, db_manager
 from ...services.user_service import UserData
 from ...services.provenance_tracker import ProvenanceTracker
 from ...services.models.artifact_models import (
@@ -996,6 +996,19 @@ async def save_interactive_story(
         }
 
         await story_repo.create(story_data)
+
+        # Sync detected characters to characters table (#160)
+        for char_data in story_data.get("characters", []):
+            try:
+                name = char_data.get("character_name") or char_data.get("name", "")
+                if name:
+                    await character_repo.upsert_character(
+                        child_id=session.child_id,
+                        name=name,
+                        description=char_data.get("description", ""),
+                    )
+            except Exception:
+                pass  # Non-critical
 
         # --- Provenance: record full story text + link to story (Issue #138) ---
         try:
