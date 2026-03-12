@@ -34,6 +34,7 @@ from ..mcp_servers import (
     vector_server
 )
 from ..services.database import preference_repo
+from ..services.story_memory import get_story_memory_prompt
 
 
 def _should_use_mock() -> bool:
@@ -188,6 +189,7 @@ def _build_opening_prompt(
     theme_str: str,
     config: Dict[str, Any],
     preference_context: str = "",
+    story_memory_section: str = "",
 ) -> str:
     """
     Build the full prompt for interactive story opening generation.
@@ -216,6 +218,10 @@ def _build_opening_prompt(
     # Inject preference context (#72)
     if preference_context:
         prompt += f"\n{preference_context}\n请根据上述儿童偏好，自然地融入他们喜欢的主题和元素。\n"
+
+    # Inject cross-story memory (#165)
+    if story_memory_section:
+        prompt += f"\n{story_memory_section}\n"
 
     # Character continuity (#73)
     prompt += f"""
@@ -400,6 +406,13 @@ async def generate_story_opening(
     # Fetch preference context (#72)
     preference_context = await _fetch_preference_context(child_id)
 
+    # Build story memory section for cross-story references (#165)
+    story_memory_section = ""
+    try:
+        story_memory_section = await get_story_memory_prompt(child_id)
+    except Exception:
+        pass  # Non-critical
+
     # Build prompt with preference + character continuity (#72, #73)
     prompt = _build_opening_prompt(
         child_id=child_id,
@@ -408,6 +421,7 @@ async def generate_story_opening(
         theme_str=theme_str,
         config=config,
         preference_context=preference_context,
+        story_memory_section=story_memory_section,
     )
 
     # Determine if we should generate audio based on age_group audio_mode
@@ -535,6 +549,13 @@ async def generate_story_opening_stream(
     # Fetch preference context (#72)
     preference_context = await _fetch_preference_context(child_id)
 
+    # Build story memory section for cross-story references (#165)
+    story_memory_section = ""
+    try:
+        story_memory_section = await get_story_memory_prompt(child_id)
+    except Exception:
+        pass  # Non-critical
+
     # Build prompt with preference + character continuity (#72, #73)
     prompt = _build_opening_prompt(
         child_id=child_id,
@@ -543,6 +564,7 @@ async def generate_story_opening_stream(
         theme_str=theme_str,
         config=config,
         preference_context=preference_context,
+        story_memory_section=story_memory_section,
     )
 
     # Determine if we should generate audio based on age_group audio_mode
