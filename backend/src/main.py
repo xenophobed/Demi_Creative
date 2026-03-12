@@ -247,6 +247,7 @@ from .api.routes import (
     artifacts,
     admin_artifacts,
     library,
+    memory,
 )
 
 app.include_router(image_to_story.router)
@@ -260,6 +261,7 @@ app.include_router(subscriptions.router)
 app.include_router(artifacts.router)
 app.include_router(admin_artifacts.router)
 app.include_router(library.router)
+app.include_router(memory.router)
 
 
 # ============================================================================

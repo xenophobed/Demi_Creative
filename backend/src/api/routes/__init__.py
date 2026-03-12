@@ -16,6 +16,7 @@ from . import (
     artifacts,
     admin_artifacts,
     library,
+    memory,
 )
 
 __all__ = [
@@ -30,4 +31,5 @@ __all__ = [
     "artifacts",
     "admin_artifacts",
     "library",
+    "memory",
 ]
