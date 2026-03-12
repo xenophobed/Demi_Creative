@@ -41,15 +41,24 @@ def get_chroma_client():
 
 # 集合名称
 COLLECTION_NAME = "children_drawings"
+STORY_COLLECTION_NAME = "story_embeddings"
 
 
 def get_or_create_collection():
     """获取或创建集合"""
     client = get_chroma_client()
-    # ChromaDB 会自动创建集合（如果不存在）
     return client.get_or_create_collection(
         name=COLLECTION_NAME,
         metadata={"description": "儿童画作的向量存储"}
+    )
+
+
+def get_or_create_story_collection():
+    """Get or create story embeddings collection (#161)."""
+    client = get_chroma_client()
+    return client.get_or_create_collection(
+        name=STORY_COLLECTION_NAME,
+        metadata={"description": "Story text embeddings for deduplication"}
     )
 
 
@@ -261,11 +270,134 @@ async def store_drawing_embedding(args: Dict[str, Any]) -> Dict[str, Any]:
         }
 
 
+@tool(
+    "store_story_embedding",
+    """Store a story's text embedding for deduplication (#161).
+
+    Called after story generation to enable semantic similarity checks
+    before future generations. Prevents near-duplicate stories for the
+    same child.""",
+    {"child_id": str, "story_id": str, "story_text": str, "themes": str, "age_group": str}
+)
+async def store_story_embedding(args: Dict[str, Any]) -> Dict[str, Any]:
+    """Store story text embedding in the story_embeddings collection."""
+    child_id = args.get("child_id", "")
+    story_id = args.get("story_id", "")
+    story_text = args.get("story_text", "")
+
+    if not child_id or not story_text:
+        return {
+            "content": [{
+                "type": "text",
+                "text": json.dumps({"success": False, "error": "child_id and story_text are required"}, ensure_ascii=False)
+            }]
+        }
+
+    try:
+        collection = await anyio.to_thread.run_sync(get_or_create_story_collection)
+
+        doc_id = story_id or hashlib.md5(f"{child_id}_{datetime.now().isoformat()}".encode()).hexdigest()
+
+        metadata = {
+            "child_id": child_id,
+            "story_id": story_id,
+            "themes": args.get("themes", ""),
+            "age_group": args.get("age_group", ""),
+            "created_at": datetime.now().isoformat(),
+        }
+
+        await anyio.to_thread.run_sync(lambda: collection.upsert(
+            ids=[doc_id],
+            documents=[story_text[:2000]],
+            metadatas=[metadata]
+        ))
+
+        return {
+            "content": [{
+                "type": "text",
+                "text": json.dumps({"success": True, "document_id": doc_id}, ensure_ascii=False)
+            }]
+        }
+    except Exception as e:
+        return {
+            "content": [{
+                "type": "text",
+                "text": json.dumps({"success": False, "error": f"Failed to store story embedding: {e}"}, ensure_ascii=False)
+            }]
+        }
+
+
+@tool(
+    "search_similar_stories",
+    """Search for semantically similar stories for a child (#161).
+
+    Used before story generation to detect near-duplicates (similarity > 0.9)
+    and inject variation nudges into the prompt.""",
+    {"child_id": str, "story_description": str, "top_k": int}
+)
+async def search_similar_stories(args: Dict[str, Any]) -> Dict[str, Any]:
+    """Search for similar stories in the story_embeddings collection."""
+    child_id = args.get("child_id", "")
+    story_description = args.get("story_description", "")
+    top_k = args.get("top_k", 5)
+
+    if not child_id or not story_description:
+        return {
+            "content": [{
+                "type": "text",
+                "text": json.dumps({"similar_stories": [], "total_found": 0}, ensure_ascii=False)
+            }]
+        }
+
+    try:
+        collection = await anyio.to_thread.run_sync(get_or_create_story_collection)
+
+        results = await anyio.to_thread.run_sync(lambda: collection.query(
+            query_texts=[story_description],
+            n_results=top_k,
+            where={"child_id": child_id}
+        ))
+
+        similar_stories = []
+        if results and results['ids'] and len(results['ids']) > 0:
+            ids = results['ids'][0]
+            distances = results.get('distances', [[]])[0]
+            metadatas = results.get('metadatas', [[]])[0]
+            documents = results.get('documents', [[]])[0]
+
+            for i, doc_id in enumerate(ids):
+                similarity_score = 1.0 / (1.0 + distances[i]) if i < len(distances) else 0.0
+                similar_stories.append({
+                    "story_id": doc_id,
+                    "similarity_score": round(similarity_score, 4),
+                    "story_text_preview": (documents[i][:200] + "...") if i < len(documents) and len(documents[i]) > 200 else (documents[i] if i < len(documents) else ""),
+                    "metadata": metadatas[i] if i < len(metadatas) else {},
+                })
+
+        return {
+            "content": [{
+                "type": "text",
+                "text": json.dumps({
+                    "similar_stories": similar_stories,
+                    "total_found": len(similar_stories),
+                    "query": {"child_id": child_id, "top_k": top_k}
+                }, ensure_ascii=False, indent=2)
+            }]
+        }
+    except Exception as e:
+        return {
+            "content": [{
+                "type": "text",
+                "text": json.dumps({"similar_stories": [], "total_found": 0, "error": str(e)}, ensure_ascii=False)
+            }]
+        }
+
+
 # 创建 MCP Server
 vector_server = create_sdk_mcp_server(
     name="vector-search",
     version="1.0.0",
-    tools=[search_similar_drawings, store_drawing_embedding]
+    tools=[search_similar_drawings, store_drawing_embedding, store_story_embedding, search_similar_stories]
 )
 
 
