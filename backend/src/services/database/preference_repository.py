@@ -1,7 +1,7 @@
 """Persistent child preference repository."""
 
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Dict, List
 
 from .connection import db_manager
@@ -82,6 +82,38 @@ class PreferenceRepository:
     async def get_profile(self, child_id: str) -> Dict[str, Any]:
         return await self._get_profile(child_id)
 
+    async def get_profile_with_metadata(self, child_id: str) -> Dict[str, Any]:
+        """Return profile with data_collected_since and last_updated_at timestamps."""
+        row = await self._db.fetchone(
+            "SELECT profile_json, updated_at FROM child_preferences WHERE child_id = ?",
+            (child_id,),
+        )
+        if not row:
+            profile = self._empty_profile()
+            return {"profile": profile, "data_collected_since": None, "last_updated_at": None}
+
+        try:
+            loaded = json.loads(row.get("profile_json") or "{}")
+        except json.JSONDecodeError:
+            loaded = {}
+
+        profile = self._normalize_profile(loaded)
+        profile = self._apply_retention(profile)
+        return {
+            "profile": profile,
+            "data_collected_since": loaded.get("data_collected_since"),
+            "last_updated_at": row.get("updated_at"),
+        }
+
+    async def delete_profile(self, child_id: str) -> bool:
+        """Delete preference profile for a child. Returns True if a row was deleted."""
+        cursor = await self._db.execute(
+            "DELETE FROM child_preferences WHERE child_id = ?",
+            (child_id,),
+        )
+        await self._db.commit()
+        return cursor.rowcount > 0
+
     async def _get_profile(self, child_id: str) -> Dict[str, Any]:
         row = await self._db.fetchone(
             "SELECT profile_json FROM child_preferences WHERE child_id = ?",
@@ -100,6 +132,13 @@ class PreferenceRepository:
     async def _save_profile(self, child_id: str, profile: Dict[str, Any]) -> None:
         now = datetime.now().isoformat()
         payload = self._normalize_profile(profile)
+
+        # Cap recent_choices at 50 (#164)
+        payload["recent_choices"] = payload["recent_choices"][-50:]
+
+        # Stamp data_collected_since if not set
+        if not payload.get("data_collected_since"):
+            payload["data_collected_since"] = now
 
         await self._db.execute(
             """
@@ -145,6 +184,30 @@ class PreferenceRepository:
                 morning["topic_stats"] = {}
 
         return normalized
+
+    def _apply_retention(self, profile: Dict[str, Any]) -> Dict[str, Any]:
+        """Apply data retention rules (#164).
+
+        - Cap recent_choices at 50
+        - Decay topic scores not updated in 6 months by 50%
+        """
+        profile["recent_choices"] = profile.get("recent_choices", [])[-50:]
+
+        morning = profile.get("morning_show", {})
+        last_event = morning.get("last_event_at")
+        if last_event:
+            try:
+                last_dt = datetime.fromisoformat(last_event)
+                cutoff = datetime.now() - timedelta(days=180)
+                if last_dt < cutoff:
+                    topic_scores = morning.get("topic_scores", {})
+                    for topic in topic_scores:
+                        topic_scores[topic] = round(float(topic_scores[topic]) * 0.5, 3)
+                    morning["topic_scores"] = topic_scores
+            except (ValueError, TypeError):
+                pass
+
+        return profile
 
     def _extract_concepts(self, concepts: Any) -> List[str]:
         if not isinstance(concepts, list):
