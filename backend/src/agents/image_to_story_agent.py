@@ -35,6 +35,7 @@ from ..mcp_servers import (
     safety_server,
     tts_server
 )
+from ..services.story_memory import get_story_memory_prompt
 
 
 def _should_use_mock() -> bool:
@@ -134,6 +135,13 @@ async def image_to_story(
     actual_voice = voice or audio_config["voice"]
     audio_speed = audio_config["speed"]
 
+    # Build story memory section for cross-story references (#165)
+    story_memory_section = ""
+    try:
+        story_memory_section = await get_story_memory_prompt(child_id)
+    except Exception:
+        pass  # Non-critical
+
     # 构建提示词
     prompt = f"""请为这幅儿童画作创作一个适合{child_age}岁儿童的故事。
 
@@ -142,7 +150,7 @@ async def image_to_story(
 - 儿童ID: {child_id}
 - 儿童年龄: {child_age}岁
 - 兴趣爱好: {interests_str}
-
+{story_memory_section}
 **要求**：
 1. 首先使用 `mcp__vision-analysis__analyze_children_drawing` 工具分析画作
 2. 使用 `mcp__vector-search__search_similar_drawings` 工具搜索该儿童之前的相似画作，以保持角色和故事的连续性
@@ -329,6 +337,13 @@ async def stream_image_to_story(
         }
     }
 
+    # Build story memory section for streaming path (#165)
+    stream_memory_section = ""
+    try:
+        stream_memory_section = await get_story_memory_prompt(child_id)
+    except Exception:
+        pass
+
     prompt = f"""请为这幅儿童画作创作一个适合{child_age}岁儿童的故事。
 
 **任务信息**：
@@ -336,7 +351,7 @@ async def stream_image_to_story(
 - 儿童ID: {child_id}
 - 儿童年龄: {child_age}岁
 - 兴趣爱好: {interests_str}
-
+{stream_memory_section}
 **要求**：
 1. 首先使用 `mcp__vision-analysis__analyze_children_drawing` 工具分析画作
 2. 使用 `mcp__vector-search__search_similar_drawings` 工具搜索该儿童之前的相似画作，以保持角色和故事的连续性
