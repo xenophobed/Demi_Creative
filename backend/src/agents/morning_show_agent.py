@@ -86,11 +86,13 @@ def _target_age(age_group: str) -> int:
 
 
 def _should_use_mock() -> bool:
-    """Return True when running inside pytest or when the SDK is unavailable."""
+    """Return True when running inside pytest, SDK unavailable, or force-mock flag set."""
+    force_mock = os.getenv("MORNING_SHOW_FORCE_MOCK", "").strip().lower()
     return (
         ClaudeSDKClient is None
         or ClaudeAgentOptions is None
         or os.getenv("PYTEST_CURRENT_TEST") is not None
+        or force_mock in {"1", "true", "yes"}
     )
 
 
