@@ -1,4 +1,4 @@
-"""Memory API routes — preferences and characters (#162).
+"""Memory API routes — preferences and characters (#162, #164).
 
 Exposes read/delete endpoints for the memory system so the frontend can
 display favorite themes, suggest topics, and show a character gallery.
@@ -6,12 +6,15 @@ display favorite themes, suggest topics, and show a character gallery.
 Parent Epic: #42
 """
 
+import logging
 import re
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from ..deps import get_current_user
 from ...services.database import preference_repo, character_repo
 from ...services.user_service import UserData
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/api/v1/memory",
@@ -37,10 +40,15 @@ async def get_preferences(
     child_id: str,
     user: UserData = Depends(get_current_user),
 ):
-    """Return the normalized preference profile for a child."""
+    """Return the normalized preference profile with data timestamps (#164)."""
     child_id = _validate_child_id(child_id)
-    profile = await preference_repo.get_profile(child_id)
-    return {"child_id": child_id, "profile": profile}
+    result = await preference_repo.get_profile_with_metadata(child_id)
+    return {
+        "child_id": child_id,
+        "profile": result["profile"],
+        "data_collected_since": result["data_collected_since"],
+        "last_updated_at": result["last_updated_at"],
+    }
 
 
 @router.delete(
@@ -52,15 +60,37 @@ async def delete_preferences(
     child_id: str,
     user: UserData = Depends(get_current_user),
 ):
-    """Remove preference profile for a child (COPPA compliance)."""
+    """Remove preference profile + ChromaDB vectors for a child (COPPA compliance, #164)."""
     child_id = _validate_child_id(child_id)
-    db = preference_repo._db
-    await db.execute(
-        "DELETE FROM child_preferences WHERE child_id = ?",
-        (child_id,),
-    )
-    await db.commit()
-    return {"child_id": child_id, "deleted": True}
+
+    # Delete SQLite profile
+    deleted_sqlite = await preference_repo.delete_profile(child_id)
+
+    # Delete ChromaDB vectors for this child
+    deleted_vectors = 0
+    try:
+        import anyio
+        from ...mcp_servers.vector_search_server import get_or_create_collection
+        collection = await anyio.to_thread.run_sync(get_or_create_collection)
+        # Get all document IDs for this child
+        results = await anyio.to_thread.run_sync(
+            lambda: collection.get(where={"child_id": child_id})
+        )
+        if results and results.get("ids"):
+            doc_ids = results["ids"]
+            deleted_vectors = len(doc_ids)
+            await anyio.to_thread.run_sync(lambda: collection.delete(ids=doc_ids))
+    except Exception:
+        logger.warning("Failed to delete ChromaDB vectors for child %s", child_id, exc_info=True)
+
+    return {
+        "child_id": child_id,
+        "deleted": True,
+        "deleted_records": {
+            "preferences": 1 if deleted_sqlite else 0,
+            "vectors": deleted_vectors,
+        },
+    }
 
 
 @router.get(
