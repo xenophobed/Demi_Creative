@@ -3,18 +3,26 @@ Artifact System API Routes
 
 REST endpoints for artifact graph system:
 - GET/POST artifacts with pagination & filtering
-- Publish workflow (candidate → published)
+- Publish workflow (candidate -> published)
 - GET artifact lineage (provenance graph)
 - GET runs and execution steps
 - GET/POST story-artifact links with role filtering
 - GET curated story artifacts (published/canonical only)
+
+Security:
+- All mutation endpoints require authentication via Depends(get_current_user)
+- All read endpoints require authentication
+- Public responses use PublicArtifactResponse to redact internal fields
+- /health endpoint remains public
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone
 
+from ..deps import get_current_user
+from ...services.user_service import UserData
 from ...services.database.connection import DatabaseManager, db_manager
 from ...services.database.artifact_repository import (
     ArtifactRepository, ArtifactRelationRepository,
@@ -32,6 +40,54 @@ from ...services.provenance_tracker import ProvenanceTracker
 router = APIRouter(prefix="/api/v1/artifacts", tags=["artifacts"])
 
 
+# ============================================================================
+# Public-Safe Response Models
+# ============================================================================
+
+
+class PublicArtifactResponse(BaseModel):
+    """
+    Public-safe artifact response that excludes internal fields.
+
+    Omits: content_hash, artifact_path, created_by_step_id
+    """
+
+    artifact_id: str
+    artifact_type: str
+    lifecycle_state: str
+    artifact_url: Optional[str] = None
+    artifact_payload: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None
+    description: Optional[str] = None
+    mime_type: Optional[str] = None
+    file_size: Optional[int] = None
+    safety_score: Optional[float] = None
+    created_by_agent: Optional[str] = None
+    created_at: datetime
+    stored_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+    @classmethod
+    def from_artifact(cls, artifact) -> "PublicArtifactResponse":
+        """Create a public response from an internal Artifact model."""
+        data = (
+            artifact.model_dump(mode="json")
+            if hasattr(artifact, "model_dump")
+            else dict(artifact)
+        )
+        # Remove internal fields
+        data.pop("content_hash", None)
+        data.pop("artifact_path", None)
+        data.pop("created_by_step_id", None)
+        # Convert enums to strings
+        if hasattr(data.get("artifact_type", ""), "value"):
+            data["artifact_type"] = data["artifact_type"].value
+        if hasattr(data.get("lifecycle_state", ""), "value"):
+            data["lifecycle_state"] = data["lifecycle_state"].value
+        return cls(**data)
+
+
 def get_db() -> DatabaseManager:
     """Dependency that provides the singleton DatabaseManager."""
     return db_manager
@@ -40,6 +96,7 @@ def get_db() -> DatabaseManager:
 # ============================================================================
 # Health Check (must be before /{artifact_id} to avoid path conflicts)
 # ============================================================================
+
 
 @router.get("/health")
 async def health():
@@ -52,7 +109,7 @@ async def health():
     return {
         "status": "healthy",
         "service": "artifacts",
-        "timestamp": datetime.now(timezone.utc).isoformat()
+        "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
 
@@ -60,13 +117,18 @@ async def health():
 # Artifact Endpoints
 # ============================================================================
 
-@router.get("/{artifact_id}", response_model=Artifact)
-async def get_artifact(artifact_id: str, db: DatabaseManager = Depends(get_db)):
+
+@router.get("/{artifact_id}", response_model=PublicArtifactResponse)
+async def get_artifact(
+    artifact_id: str,
+    user: UserData = Depends(get_current_user),
+    db: DatabaseManager = Depends(get_db),
+):
     """
-    Get artifact by ID.
+    Get artifact by ID (public-safe fields only).
 
     Returns:
-        Artifact object with all metadata
+        Artifact object with internal fields redacted
     """
     repo = ArtifactRepository(db)
     artifact = await repo.get_by_id(artifact_id)
@@ -74,13 +136,17 @@ async def get_artifact(artifact_id: str, db: DatabaseManager = Depends(get_db)):
     if not artifact:
         raise HTTPException(status_code=404, detail="Artifact not found")
 
-    return artifact
+    return PublicArtifactResponse.from_artifact(artifact)
 
 
-@router.post("", response_model=Artifact)
-async def create_artifact(artifact_data: ArtifactCreate, db: DatabaseManager = Depends(get_db)):
+@router.post("", response_model=PublicArtifactResponse)
+async def create_artifact(
+    artifact_data: ArtifactCreate,
+    user: UserData = Depends(get_current_user),
+    db: DatabaseManager = Depends(get_db),
+):
     """
-    Create a new artifact.
+    Create a new artifact. Requires authentication.
 
     Args:
         artifact_data: Artifact creation data
@@ -95,15 +161,18 @@ async def create_artifact(artifact_data: ArtifactCreate, db: DatabaseManager = D
     if not artifact:
         raise HTTPException(status_code=500, detail="Failed to create artifact")
 
-    return artifact
+    return PublicArtifactResponse.from_artifact(artifact)
 
 
-@router.get("", response_model=List[Artifact])
+@router.get("", response_model=List[PublicArtifactResponse])
 async def list_artifacts(
     state: Optional[str] = Query(None, description="Filter by lifecycle state"),
-    artifact_type: Optional[str] = Query(None, description="Filter by type"),
+    artifact_type: Optional[str] = Query(
+        None, description="Filter by type"
+    ),
     limit: int = Query(100, ge=1, le=1000),
     offset: int = Query(0, ge=0),
+    user: UserData = Depends(get_current_user),
     db: DatabaseManager = Depends(get_db),
 ):
     """
@@ -128,19 +197,22 @@ async def list_artifacts(
             filter_state, artifact_type, limit, offset
         )
     else:
-        artifacts = await repo.list_by_lifecycle_state(filter_state, limit, offset)
+        artifacts = await repo.list_by_lifecycle_state(
+            filter_state, limit, offset
+        )
 
-    return artifacts
+    return [PublicArtifactResponse.from_artifact(a) for a in artifacts]
 
 
 @router.patch("/{artifact_id}/state")
 async def update_artifact_state(
     artifact_id: str,
     new_state: str = Query(..., description="New lifecycle state"),
+    user: UserData = Depends(get_current_user),
     db: DatabaseManager = Depends(get_db),
 ):
     """
-    Update artifact lifecycle state.
+    Update artifact lifecycle state. Requires authentication.
 
     Args:
         artifact_id: Artifact UUID
@@ -164,6 +236,7 @@ async def update_artifact_state(
 
 class PublishRequest(BaseModel):
     """Request body for publishing an artifact."""
+
     story_id: Optional[str] = None
     role: Optional[StoryArtifactRole] = None
 
@@ -172,10 +245,11 @@ class PublishRequest(BaseModel):
 async def publish_artifact(
     artifact_id: str,
     body: Optional[PublishRequest] = None,
+    user: UserData = Depends(get_current_user),
     db: DatabaseManager = Depends(get_db),
 ):
     """
-    Publish a candidate artifact.
+    Publish a candidate artifact. Requires authentication.
 
     Validates the artifact is in 'candidate' state, transitions to 'published',
     and optionally links it as the canonical artifact for a story role.
@@ -198,14 +272,20 @@ async def publish_artifact(
         raise HTTPException(status_code=400, detail=str(e))
 
     if not success:
-        raise HTTPException(status_code=500, detail="Failed to publish artifact")
+        raise HTTPException(
+            status_code=500, detail="Failed to publish artifact"
+        )
 
     artifact = await ArtifactRepository(db).get_by_id(artifact_id)
-    return artifact
+    return PublicArtifactResponse.from_artifact(artifact)
 
 
 @router.get("/{artifact_id}/lineage", response_model=ArtifactLineage)
-async def get_artifact_lineage(artifact_id: str, db: DatabaseManager = Depends(get_db)):
+async def get_artifact_lineage(
+    artifact_id: str,
+    user: UserData = Depends(get_current_user),
+    db: DatabaseManager = Depends(get_db),
+):
     """
     Get complete artifact lineage (ancestors, descendants, relations).
 
@@ -226,8 +306,13 @@ async def get_artifact_lineage(artifact_id: str, db: DatabaseManager = Depends(g
 # Run Endpoints
 # ============================================================================
 
+
 @router.get("/runs/{run_id}", response_model=RunWithArtifacts)
-async def get_run(run_id: str, db: DatabaseManager = Depends(get_db)):
+async def get_run(
+    run_id: str,
+    user: UserData = Depends(get_current_user),
+    db: DatabaseManager = Depends(get_db),
+):
     """
     Get run with all generated artifacts and steps.
 
@@ -261,14 +346,18 @@ async def get_run(run_id: str, db: DatabaseManager = Depends(get_db)):
         run=run,
         steps=steps,
         artifacts=artifacts,
-        links=links
+        links=links,
     )
 
 
 @router.post("/runs", response_model=Run)
-async def create_run(run_data: RunCreate, db: DatabaseManager = Depends(get_db)):
+async def create_run(
+    run_data: RunCreate,
+    user: UserData = Depends(get_current_user),
+    db: DatabaseManager = Depends(get_db),
+):
     """
-    Create a new run (execution workflow).
+    Create a new run (execution workflow). Requires authentication.
 
     Args:
         run_data: Run creation data (story_id, workflow_type required)
@@ -290,11 +379,22 @@ async def create_run(run_data: RunCreate, db: DatabaseManager = Depends(get_db))
 # Story Artifact Link Endpoints
 # ============================================================================
 
-@router.get("/stories/{story_id}/artifacts", response_model=List[StoryArtifactLink])
+
+@router.get(
+    "/stories/{story_id}/artifacts",
+    response_model=List[StoryArtifactLink],
+)
 async def list_story_artifacts(
     story_id: str,
-    role: Optional[str] = Query(None, description="Filter by role (cover|final_audio|final_video|scene_image)"),
-    state: Optional[str] = Query(None, description="Filter by artifact lifecycle state"),
+    role: Optional[str] = Query(
+        None,
+        description="Filter by role (cover|final_audio|final_video|scene_image)",
+    ),
+    state: Optional[str] = Query(
+        None,
+        description="Filter by artifact lifecycle state",
+    ),
+    user: UserData = Depends(get_current_user),
     db: DatabaseManager = Depends(get_db),
 ):
     """
@@ -311,7 +411,7 @@ async def list_story_artifacts(
     links = await link_repo.list_by_story(story_id)
 
     if role:
-        links = [l for l in links if l.role.value == role]
+        links = [link for link in links if link.role.value == role]
 
     if state:
         artifact_repo = ArtifactRepository(db)
@@ -328,35 +428,49 @@ async def list_story_artifacts(
 @router.get("/stories/{story_id}/curated")
 async def get_story_curated_artifacts(
     story_id: str,
+    user: UserData = Depends(get_current_user),
     db: DatabaseManager = Depends(get_db),
 ) -> Dict[str, Any]:
     """
     Get only curated (published/canonical) artifacts for a story.
 
-    Returns a map of role → primary artifact for the story,
+    Returns a map of role -> primary artifact for the story,
     including only published artifacts by default.
 
     Returns:
         Dict with role keys and Artifact values
     """
     link_repo = StoryArtifactLinkRepository(db)
-    artifact_repo = ArtifactRepository(db)
 
     curated: Dict[str, Any] = {"story_id": story_id, "artifacts": {}}
 
     for role in StoryArtifactRole:
-        artifact = await link_repo.get_canonical_artifact(story_id, role.value)
+        artifact = await link_repo.get_canonical_artifact(
+            story_id, role.value
+        )
         if artifact and artifact.lifecycle_state in (
             LifecycleState.PUBLISHED,
             LifecycleState.CANDIDATE,
         ):
-            curated["artifacts"][role.value] = artifact.model_dump(mode="json")
+            curated["artifacts"][role.value] = (
+                PublicArtifactResponse.from_artifact(artifact).model_dump(
+                    mode="json"
+                )
+            )
 
     return curated
 
 
-@router.get("/stories/{story_id}/artifacts/{role}", response_model=Artifact)
-async def get_story_canonical_artifact(story_id: str, role: str, db: DatabaseManager = Depends(get_db)):
+@router.get(
+    "/stories/{story_id}/artifacts/{role}",
+    response_model=PublicArtifactResponse,
+)
+async def get_story_canonical_artifact(
+    story_id: str,
+    role: str,
+    user: UserData = Depends(get_current_user),
+    db: DatabaseManager = Depends(get_db),
+):
     """
     Get primary (canonical) artifact for a story role.
 
@@ -373,20 +487,24 @@ async def get_story_canonical_artifact(story_id: str, role: str, db: DatabaseMan
     if not artifact:
         raise HTTPException(
             status_code=404,
-            detail=f"No {role} artifact found for story {story_id}"
+            detail=f"No {role} artifact found for story {story_id}",
         )
 
-    return artifact
+    return PublicArtifactResponse.from_artifact(artifact)
 
 
-@router.post("/stories/{story_id}/artifacts", response_model=StoryArtifactLink)
+@router.post(
+    "/stories/{story_id}/artifacts",
+    response_model=StoryArtifactLink,
+)
 async def link_story_artifact(
     story_id: str,
     link_data: StoryArtifactLinkCreate,
+    user: UserData = Depends(get_current_user),
     db: DatabaseManager = Depends(get_db),
 ):
     """
-    Link an artifact to a story with a canonical role.
+    Link an artifact to a story with a canonical role. Requires authentication.
 
     Args:
         story_id: Story UUID (also in link_data.story_id)
