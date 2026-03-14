@@ -9,6 +9,7 @@ import { FloatingElement } from '@/components/depth/ParallaxContainer'
 import { DepthLayer } from '@/components/depth/DepthLayer'
 import { useStreamVisualizationContext } from '@/providers/StreamVisualizationProvider'
 import useStoryStore from '@/store/useStoryStore'
+import useAuthStore from '@/store/useAuthStore'
 import useChildStore from '@/store/useChildStore'
 import { storyService } from '@/api/services/storyService'
 import { StoryCard } from '@/components/story/StoryDisplay'
@@ -63,6 +64,7 @@ function FloatingStar({
 function HomePage() {
   const navigate = useNavigate()
   const { storyHistory } = useStoryStore()
+  const { isAuthenticated } = useAuthStore()
   const { currentChild, defaultChildId } = useChildStore()
   const { mousePosition, prefersReducedMotion } = useStreamVisualizationContext()
 
@@ -72,11 +74,14 @@ function HomePage() {
   const { data: serverStories } = useQuery({
     queryKey: ['child-stories', childId],
     queryFn: () => storyService.getStoryHistory(childId),
-    enabled: !!childId,
+    enabled: !!childId && isAuthenticated,
   })
 
-  // Use server stories, fall back to in-memory store
-  const recentStories = (serverStories ?? storyHistory).slice(0, 3)
+  // Use server stories, fall back to in-memory store; filter to image-to-story only (#197)
+  const allStories = serverStories ?? storyHistory
+  const recentStories = allStories
+    .filter((s: any) => !s.story_type || s.story_type === 'image_to_story')
+    .slice(0, 3)
 
   // Mouse springs for parallax
   const mouseXSpring = useSpring(mousePosition.x, { stiffness: 80, damping: 25 })

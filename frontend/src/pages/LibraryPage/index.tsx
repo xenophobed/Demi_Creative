@@ -613,7 +613,7 @@ function LibraryPage() {
   const queryClient = useQueryClient()
   const { storyHistory, clearHistory, setCurrentStory, removeStory } = useStoryStore()
   const { isAuthenticated } = useAuthStore()
-  const { currentChild, defaultChildId } = useChildStore()
+  const { currentChild } = useChildStore()
   const { viewMode, toggleViewMode } = useLibraryPreferences()
   const ageLayout = getAgeLayoutConfig(currentChild?.age_group)
 
@@ -626,7 +626,6 @@ function LibraryPage() {
   const [pageSize] = useState(20)
   const [offset, setOffset] = useState(0)
 
-  const childId = currentChild?.child_id || defaultChildId
   const isSearching = searchQuery.length >= 2
 
   // Reset offset when tab, sort, or search changes
@@ -671,19 +670,9 @@ function LibraryPage() {
     enabled: isAuthenticated && isSearching,
   })
 
-  // Fallback: local stories (unauthenticated)
-  const { data: childArtStories } = useQuery({
-    queryKey: ['library-child-art-stories', childId],
-    queryFn: () => storyService.getStoryHistory(childId),
-    enabled: !!childId && !isAuthenticated,
-  })
-
-  // Fallback: news by child_id (unauthenticated)
-  const { data: newsHistory } = useQuery({
-    queryKey: ['library-news-history', childId],
-    queryFn: () => storyService.getNewsHistory(childId),
-    enabled: !!childId && !isAuthenticated,
-  })
+  // Fallback data for unauthenticated users — no server calls (#180)
+  const childArtStories = undefined
+  const newsHistory = undefined
 
   // ---- build items ----
 

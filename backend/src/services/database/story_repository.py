@@ -69,6 +69,20 @@ class StoryRepository:
 
         return story_id
 
+    async def find_by_session_id(self, session_id: str) -> Optional[Dict[str, Any]]:
+        """Find a story saved from a specific interactive session."""
+        row = await self._db.fetchone(
+            """SELECT * FROM stories
+               WHERE story_type = 'interactive'
+                 AND json_extract(analysis, '$.session_id') = ?
+               ORDER BY created_at DESC
+               LIMIT 1""",
+            (session_id,),
+        )
+        if row:
+            return self._row_to_dict(row)
+        return None
+
     async def get_by_id(self, story_id: str) -> Optional[Dict[str, Any]]:
         """
         Get a story by ID

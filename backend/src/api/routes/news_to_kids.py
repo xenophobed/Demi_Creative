@@ -6,6 +6,7 @@ Supports both non-streaming and SSE streaming responses.
 """
 
 import json
+import logging
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -27,12 +28,43 @@ from ..deps import get_current_user
 from ...services.database import story_repo, preference_repo
 from ...services.user_service import UserData
 from ...agents.news_to_kids_agent import convert_news_to_kids, stream_news_to_kids
+from ...mcp_servers import fetch_article_text
+
+logger = logging.getLogger(__name__)
 
 
 router = APIRouter(
     prefix="/api/v1/news-to-kids",
     tags=["News-to-Kids"]
 )
+
+
+async def _fetch_text_from_url(url: str) -> str:
+    """Fetch article text from a URL via the web-search MCP tool.
+
+    Raises ``HTTPException`` (422) when the article cannot be retrieved so that
+    callers never fall through to placeholder text.
+    """
+    try:
+        result = await fetch_article_text({"url": url})
+        data = json.loads(result["content"][0]["text"])
+        text = (data.get("text") or "").strip()
+        if not text or data.get("error"):
+            error_detail = data.get("error", "empty article body")
+            logger.warning("Failed to fetch article from %s: %s", url, error_detail)
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Could not fetch article text from URL: {error_detail}",
+            )
+        return text
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("Unexpected error fetching article from %s: %s", url, exc)
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Could not fetch article text from URL: {exc}",
+        )
 
 
 @router.post(
@@ -54,10 +86,10 @@ async def convert_news(
             detail="Either news_url or news_text must be provided",
         )
 
-    # If URL provided but no text, fetch the article
+    # If URL provided but no text, fetch the real article content
     news_text = request.news_text or ""
     if request.news_url and not news_text:
-        news_text = f"[Article from: {request.news_url}]\nPlease fetch and summarize the content from this URL."
+        news_text = await _fetch_text_from_url(request.news_url)
 
     try:
         result = await convert_news_to_kids(
@@ -176,9 +208,11 @@ async def convert_news_stream(
             detail="Either news_url or news_text must be provided",
         )
 
+    # Fetch article text before entering the generator so failures return
+    # a proper HTTP error instead of an SSE error event with placeholder text.
     news_text = request.news_text or ""
     if request.news_url and not news_text:
-        news_text = f"[Article from: {request.news_url}]\nPlease fetch and summarize the content from this URL."
+        news_text = await _fetch_text_from_url(request.news_url)
 
     async def event_generator() -> AsyncGenerator[str, None]:
         try:

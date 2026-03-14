@@ -709,7 +709,9 @@ async def get_child_story_history(
     """
     Get story history for a specific child (requires authentication, filtered by user)
     """
-    stories = await story_repo.list_by_user_and_child(user.user_id, child_id, limit)
+    stories = await story_repo.list_by_user_and_child(
+        user.user_id, child_id, limit, story_type="image_to_story"
+    )
     return JSONResponse(content=stories)
 
 
