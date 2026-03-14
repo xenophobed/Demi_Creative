@@ -724,6 +724,7 @@ class LibraryItemType(str, Enum):
     INTERACTIVE = "interactive"
     NEWS = "news"
     MORNING_SHOW = "morning-show"
+    KIDS_NEWS = "kids-news"
 
 
 class LibrarySortOrder(str, Enum):

@@ -19,14 +19,13 @@ import { resolveMediaUrl } from '@/utils/mediaUrl'
 import GrowthTimeline from '@/components/library/GrowthTimeline'
 
 // Content type tabs
-type ContentTab = 'all' | 'art-stories' | 'interactive' | 'news' | 'morning-show'
+type ContentTab = 'all' | 'art-stories' | 'interactive' | 'kids-news'
 
 const TABS: { id: ContentTab; label: string; icon: React.ReactNode }[] = [
   { id: 'all', label: 'All', icon: <BookOpen size={16} /> },
   { id: 'art-stories', label: 'Art Stories', icon: <Palette size={16} /> },
   { id: 'interactive', label: 'Interactive', icon: <Map size={16} /> },
-  { id: 'news', label: 'News', icon: <Newspaper size={16} /> },
-  { id: 'morning-show', label: 'Morning Show', icon: <Podcast size={16} /> },
+  { id: 'kids-news', label: 'Kids News', icon: <Newspaper size={16} /> },
 ]
 
 const SORT_OPTIONS: { value: LibrarySortOrder; label: string }[] = [
@@ -39,8 +38,7 @@ const SORT_OPTIONS: { value: LibrarySortOrder; label: string }[] = [
 function tabToApiType(tab: ContentTab): LibraryItemType | undefined {
   if (tab === 'art-stories') return 'art-story'
   if (tab === 'interactive') return 'interactive'
-  if (tab === 'news') return 'news'
-  if (tab === 'morning-show') return 'morning-show'
+  if (tab === 'kids-news') return 'kids-news'
   return undefined // 'all'
 }
 
@@ -240,6 +238,7 @@ const TYPE_BADGE: Record<LibraryItemType, { label: string; color: string }> = {
   interactive: { label: 'Interactive', color: 'bg-secondary/10 text-secondary' },
   news: { label: 'News', color: 'bg-accent/10 text-accent' },
   'morning-show': { label: 'Morning Show', color: 'bg-orange-100 text-orange-700' },
+  'kids-news': { label: 'Kids News', color: 'bg-accent/10 text-accent' },
 }
 
 const CARD_STYLES: Record<LibraryItemType, {
@@ -266,6 +265,11 @@ const CARD_STYLES: Record<LibraryItemType, {
     icon: <Podcast size={36} className="text-orange-500/70" strokeWidth={1.5} />,
     gradient: 'from-orange-200/40 via-rose-100/20 to-amber-200/40',
     badgeColor: 'bg-orange-100 text-orange-700',
+  },
+  'kids-news': {
+    icon: <Newspaper size={36} className="text-accent/60" strokeWidth={1.5} />,
+    gradient: 'from-accent/20 via-primary/10 to-secondary/20',
+    badgeColor: 'bg-accent/10 text-accent',
   },
 }
 
@@ -969,40 +973,34 @@ function LibraryPage() {
                   ? 'No art stories yet'
                   : activeTab === 'interactive'
                   ? 'No interactive stories yet'
-                  : activeTab === 'morning-show'
-                  ? 'No Morning Show episodes yet'
-                  : 'No news conversions yet'}
+                  : activeTab === 'kids-news'
+                  ? 'No kids news yet'
+                  : 'Nothing here yet'}
               </h2>
               <p className="text-gray-500 mb-6">
                 {isSearching
                   ? 'Try a different search term or clear the search.'
-                  : activeTab === 'news'
-                  ? 'Visit the News Explorer to convert articles for kids!'
+                  : activeTab === 'kids-news'
+                  ? 'Visit the News Hub to read or listen to kid-friendly news!'
                   : activeTab === 'interactive'
                   ? 'Try the Interactive Story mode to create branching adventures!'
-                  : activeTab === 'morning-show'
-                  ? 'Pick topic channels to receive Daily Drop Morning Show episodes.'
                   : 'Upload your first artwork and start creating amazing stories!'}
               </p>
               {!isSearching && (
                 <Link
                   to={
-                    activeTab === 'news'
+                    activeTab === 'kids-news'
                       ? '/news'
                       : activeTab === 'interactive'
                         ? '/interactive'
-                        : activeTab === 'morning-show'
-                          ? '/morning-show/subscriptions'
-                          : '/upload'
+                        : '/upload'
                   }
                 >
                   <Button size="lg" leftIcon={<span>✨</span>}>
-                    {activeTab === 'news'
-                      ? 'Go to News Explorer'
+                    {activeTab === 'kids-news'
+                      ? 'Explore Kids News'
                       : activeTab === 'interactive'
                         ? 'Start an Adventure'
-                        : activeTab === 'morning-show'
-                          ? 'Choose Topics'
                       : 'Start Creating'}
                   </Button>
                 </Link>
@@ -1090,7 +1088,7 @@ function buildLocalItems(
   }
 
   // News
-  if ((activeTab === 'all' || activeTab === 'news') && newsHistory) {
+  if ((activeTab === 'all' || activeTab === 'kids-news') && newsHistory) {
     for (const n of newsHistory) {
       const item: LibraryItem = {
         id: n.conversion_id,
