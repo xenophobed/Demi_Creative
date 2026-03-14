@@ -128,11 +128,11 @@ async def get_admin_user(
 
 async def get_story_for_owner(story_id: str, user_id: str) -> dict:
     """
-    Fetch story by ID, verify ownership. Auto-claims legacy stories (user_id=NULL).
+    Fetch story by ID, verify ownership.
 
     Raises:
         HTTPException 404: Story not found
-        HTTPException 403: User does not own this story
+        HTTPException 403: User does not own this story or story has no owner
     """
     story = await story_repo.get_by_id(story_id)
     if not story:
@@ -143,9 +143,10 @@ async def get_story_for_owner(story_id: str, user_id: str) -> dict:
 
     owner = story.get("user_id")
     if owner is None:
-        # Legacy story with no owner — auto-claim for requesting user
-        await story_repo.update_user_id(story_id, user_id)
-        story["user_id"] = user_id
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This resource is not accessible",
+        )
     elif owner != user_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -157,11 +158,11 @@ async def get_story_for_owner(story_id: str, user_id: str) -> dict:
 
 async def get_session_for_owner(session_id: str, user_id: str) -> SessionData:
     """
-    Fetch session by ID, verify ownership. Auto-claims legacy sessions (user_id=NULL).
+    Fetch session by ID, verify ownership.
 
     Raises:
         HTTPException 404: Session not found
-        HTTPException 403: User does not own this session
+        HTTPException 403: User does not own this session or session has no owner
     """
     session = await session_repo.get_session(session_id)
     if not session:
@@ -171,9 +172,10 @@ async def get_session_for_owner(session_id: str, user_id: str) -> SessionData:
         )
 
     if session.user_id is None:
-        # Legacy session with no owner — auto-claim
-        await session_repo.update_user_id(session_id, user_id)
-        session.user_id = user_id
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This resource is not accessible",
+        )
     elif session.user_id != user_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
