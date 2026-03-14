@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react'
+import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import Button from '@/components/common/Button'
 import Card from '@/components/common/Card'
@@ -28,6 +29,9 @@ const CATEGORIES: { value: NewsCategory; label: string; emoji: string }[] = [
 
 function NewsPage() {
   const { defaultChildId } = useChildStore()
+
+  // Mode toggle
+  const [mode, setMode] = useState<'quick-read' | 'morning-show'>('quick-read')
 
   // Form state
   const [newsUrl, setNewsUrl] = useState('')
@@ -139,15 +143,65 @@ function NewsPage() {
           📰
         </motion.span>
         <h1 className="text-2xl md:text-3xl font-bold text-gray-800 mt-2">
-          News Explorer
+          Kids News
         </h1>
         <p className="text-gray-600 mt-1">
-          Turn real news into stories kids can understand!
+          Read or listen to kid-friendly news!
         </p>
       </motion.div>
 
+      {/* Mode Toggle */}
+      <div className="flex justify-center gap-2">
+        <motion.button
+          className={`px-5 py-2.5 rounded-full text-sm font-medium transition-colors ${
+            mode === 'quick-read'
+              ? 'bg-primary text-white shadow-button'
+              : 'text-gray-600 bg-white/70 hover:bg-gray-100'
+          }`}
+          onClick={() => setMode('quick-read')}
+          whileHover={{ scale: 1.03 }}
+          whileTap={{ scale: 0.97 }}
+        >
+          Quick Read
+        </motion.button>
+        <motion.button
+          className={`px-5 py-2.5 rounded-full text-sm font-medium transition-colors ${
+            mode === 'morning-show'
+              ? 'bg-primary text-white shadow-button'
+              : 'text-gray-600 bg-white/70 hover:bg-gray-100'
+          }`}
+          onClick={() => setMode('morning-show')}
+          whileHover={{ scale: 1.03 }}
+          whileTap={{ scale: 0.97 }}
+        >
+          Morning Show
+        </motion.button>
+      </div>
+
+      {/* Morning Show mode */}
+      {mode === 'morning-show' && (
+        <motion.div className="space-y-6 text-center" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+          <Card>
+            <div className="py-8">
+              <span className="text-6xl block mb-4">🎙️</span>
+              <h2 className="text-xl font-bold text-gray-800 mb-2">Morning Show</h2>
+              <p className="text-gray-600 mb-6">
+                Listen to fun news conversations between Curious Kid and Fun Expert!
+              </p>
+              <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                <Link to="/morning-show/subscriptions">
+                  <Button size="lg" leftIcon={<span>📺</span>}>
+                    Choose Topics
+                  </Button>
+                </Link>
+              </div>
+            </div>
+          </Card>
+        </motion.div>
+      )}
+
       {/* Error display */}
-      {error && (
+      {mode === 'quick-read' && error && (
         <motion.div
           className="bg-red-50 border border-red-200 rounded-card p-4 text-red-700"
           initial={{ opacity: 0, scale: 0.95 }}
@@ -161,7 +215,7 @@ function NewsPage() {
       )}
 
       {/* Input Form - show when no result */}
-      {!result && (
+      {mode === 'quick-read' && !result && (
         <motion.div
           className="space-y-6"
           initial={{ opacity: 0 }}
@@ -270,7 +324,7 @@ function NewsPage() {
       )}
 
       {/* Result Display */}
-      {result && (
+      {mode === 'quick-read' && result && (
         <motion.div
           className="space-y-6"
           initial={{ opacity: 0, y: 20 }}

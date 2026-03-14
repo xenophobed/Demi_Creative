@@ -204,7 +204,7 @@ async def get_library(
     all_items: List[LibraryItem] = []
 
     # Fetch stories (includes both art-story and news types)
-    if type is None or type in (LibraryItemType.ART_STORY, LibraryItemType.NEWS, LibraryItemType.MORNING_SHOW):
+    if type is None or type in (LibraryItemType.ART_STORY, LibraryItemType.NEWS, LibraryItemType.MORNING_SHOW, LibraryItemType.KIDS_NEWS):
         stories = await story_repo.list_by_user(user.user_id, limit=200, offset=0)
 
         # Separate favorites lookups by resolved type
@@ -227,9 +227,10 @@ async def get_library(
             item = _story_to_library_item(
                 s, is_favorited=s["story_id"] in fav_story_ids, thumbnail_url=thumb
             )
-            # Apply type filter
+            # Apply type filter — KIDS_NEWS is a union alias for NEWS + MORNING_SHOW
             if type is not None and item.type != type:
-                continue
+                if type != LibraryItemType.KIDS_NEWS or item.type not in (LibraryItemType.NEWS, LibraryItemType.MORNING_SHOW):
+                    continue
             # Apply safety filter (#81)
             if not _is_safe(item):
                 continue
@@ -345,7 +346,7 @@ async def search_library(
     query_lower = q.lower()
 
     # Search stories (includes both art-story and news types)
-    if type is None or type in (LibraryItemType.ART_STORY, LibraryItemType.NEWS, LibraryItemType.MORNING_SHOW):
+    if type is None or type in (LibraryItemType.ART_STORY, LibraryItemType.NEWS, LibraryItemType.MORNING_SHOW, LibraryItemType.KIDS_NEWS):
         stories = await story_repo.list_by_user(user.user_id, limit=200, offset=0)
 
         art_ids = [s["story_id"] for s in stories if _resolve_story_type(s) == LibraryItemType.ART_STORY]
@@ -367,9 +368,10 @@ async def search_library(
             item = _story_to_library_item(
                 s, is_favorited=s["story_id"] in fav_ids, thumbnail_url=thumb
             )
-            # Apply type filter
+            # Apply type filter — KIDS_NEWS is a union alias for NEWS + MORNING_SHOW
             if type is not None and item.type != type:
-                continue
+                if type != LibraryItemType.KIDS_NEWS or item.type not in (LibraryItemType.NEWS, LibraryItemType.MORNING_SHOW):
+                    continue
             # Apply safety filter (#81)
             if not _is_safe(item):
                 continue

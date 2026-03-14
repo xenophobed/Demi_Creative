@@ -6,7 +6,7 @@ import apiClient from '../client'
 
 // ---- Types ----
 
-export type LibraryItemType = 'art-story' | 'interactive' | 'news' | 'morning-show'
+export type LibraryItemType = 'art-story' | 'interactive' | 'news' | 'morning-show' | 'kids-news'
 export type LibrarySortOrder = 'newest' | 'oldest' | 'word_count' | 'favorite_first'
 
 export interface LibraryItem {

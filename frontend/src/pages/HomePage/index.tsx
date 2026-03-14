@@ -250,17 +250,7 @@ function HomePage() {
                     rightIcon={<span>📰</span>}
                     className="shadow-lg hover:shadow-xl transition-shadow w-full sm:w-auto"
                   >
-                    News to Kids
-                  </Button>
-                </Link>
-                <Link to="/morning-show/subscriptions">
-                  <Button
-                    size="lg"
-                    variant="accent"
-                    rightIcon={<span>🌅</span>}
-                    className="shadow-lg hover:shadow-xl transition-shadow w-full sm:w-auto"
-                  >
-                    Morning Show
+                    Kids News
                   </Button>
                 </Link>
               </motion.div>
