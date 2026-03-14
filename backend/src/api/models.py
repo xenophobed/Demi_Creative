@@ -659,6 +659,15 @@ class UserLoginRequest(BaseModel):
     )
 
 
+class PublicUserResponse(BaseModel):
+    """Public user profile — safe for unauthenticated access"""
+    user_id: str = Field(..., description="用户唯一ID")
+    username: str = Field(..., description="用户名")
+    display_name: Optional[str] = Field(None, description="显示名称")
+    avatar_url: Optional[str] = Field(None, description="头像URL")
+    created_at: datetime = Field(..., description="注册时间")
+
+
 class UserResponse(BaseModel):
     """用户信息响应"""
     user_id: str = Field(..., description="用户唯一ID")
