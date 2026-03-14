@@ -94,19 +94,20 @@ class DailyDropScheduler:
         )
         return row is not None
 
-    async def _resolve_child_age_group(self, child_id: str) -> AgeGroup:
+    async def _resolve_child_age_group(self, child_id: str, user_id: str) -> AgeGroup:
         """Look up the child's age group from their most recent story.
 
+        Scoped by user_id to prevent cross-account data leakage (#188).
         Falls back to AGE_6_8 when no history exists.
         """
         row = await db_manager.fetchone(
             """
             SELECT age_group FROM stories
-            WHERE child_id = ?
+            WHERE child_id = ? AND user_id = ?
             ORDER BY created_at DESC
             LIMIT 1
             """,
-            (child_id,),
+            (child_id, user_id),
         )
         if row and row["age_group"] in AgeGroup._value2member_map_:
             return AgeGroup(row["age_group"])
@@ -171,7 +172,7 @@ class DailyDropScheduler:
                 )
 
                 category = NewsCategory(topic) if topic in NewsCategory._value2member_map_ else NewsCategory.GENERAL
-                age_group = await self._resolve_child_age_group(child_id)
+                age_group = await self._resolve_child_age_group(child_id, user_id)
 
                 request = MorningShowRequest(
                     child_id=child_id,
