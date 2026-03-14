@@ -124,23 +124,37 @@ class UserService:
         is_valid, _ = self._verify_password_with_rehash(password, stored_hash)
         return is_valid
 
+    @staticmethod
+    def _hash_token(token: str) -> str:
+        """Hash a bearer token for storage using SHA-256."""
+        return hashlib.sha256(token.encode()).hexdigest()
+
+    async def _revoke_all_tokens(self, user_id: str) -> None:
+        """Delete all tokens for a user (e.g. after password change)."""
+        await self._db.execute("DELETE FROM tokens WHERE user_id = ?", (user_id,))
+        await self._db.commit()
+
     async def _generate_token(self, user_id: str) -> TokenData:
         """
-        Generate an access token and persist it to the database
+        Generate an access token and persist its hash to the database.
+
+        The raw token is returned to the caller but only a SHA-256 hash
+        is stored, so a database leak does not expose valid credentials.
 
         Args:
             user_id: User ID
 
         Returns:
-            TokenData: Token data
+            TokenData: Token data (contains the raw token for the client)
         """
         token = secrets.token_urlsafe(32)
+        token_hash = self._hash_token(token)
         now = datetime.now()
         expires_at = now + timedelta(days=self._token_expiry_days)
 
         await self._db.execute(
             "INSERT INTO tokens (token, user_id, expires_at, created_at) VALUES (?, ?, ?, ?)",
-            (token, user_id, expires_at.isoformat(), now.isoformat())
+            (token_hash, user_id, expires_at.isoformat(), now.isoformat())
         )
         await self._db.commit()
 
@@ -266,9 +280,10 @@ class UserService:
         Returns:
             bool: Whether successful
         """
-        row = await self._db.fetchone("SELECT id FROM tokens WHERE token = ?", (token,))
+        token_hash = self._hash_token(token)
+        row = await self._db.fetchone("SELECT id FROM tokens WHERE token = ?", (token_hash,))
         if row:
-            await self._db.execute("DELETE FROM tokens WHERE token = ?", (token,))
+            await self._db.execute("DELETE FROM tokens WHERE token = ?", (token_hash,))
             await self._db.commit()
             return True
         return False
@@ -283,8 +298,9 @@ class UserService:
         Returns:
             UserData or None
         """
+        token_hash = self._hash_token(token)
         row = await self._db.fetchone(
-            "SELECT user_id, expires_at FROM tokens WHERE token = ?", (token,)
+            "SELECT user_id, expires_at FROM tokens WHERE token = ?", (token_hash,)
         )
         if not row:
             return None
@@ -292,7 +308,7 @@ class UserService:
         # Check if expired
         expires_at = datetime.fromisoformat(row["expires_at"])
         if datetime.now() > expires_at:
-            await self._db.execute("DELETE FROM tokens WHERE token = ?", (token,))
+            await self._db.execute("DELETE FROM tokens WHERE token = ?", (token_hash,))
             await self._db.commit()
             return None
 
@@ -342,6 +358,9 @@ class UserService:
         # Update password
         new_hash, _ = self._hash_password(new_password)
         await self._repo.update_user(user_id, password_hash=new_hash)
+
+        # Revoke all existing tokens so stolen tokens cannot survive a password change
+        await self._revoke_all_tokens(user_id)
 
         return AuthResult(success=True, user=user)
 
