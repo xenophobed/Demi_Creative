@@ -6,6 +6,7 @@ import GenerationStatusBar from '@/components/layout/GenerationStatusBar'
 import useGenerationNavigator from '@/hooks/useGenerationNavigator'
 import useAuthStore from '@/store/useAuthStore'
 import { authService } from '@/api/services/authService'
+import { performFullLogout } from '@/utils/logout'
 
 function PageContainer() {
   const location = useLocation()
@@ -20,7 +21,7 @@ function PageContainer() {
     } catch {
       // Ignore logout errors
     }
-    logout()
+    performFullLogout()
     navigate('/')
   }
 

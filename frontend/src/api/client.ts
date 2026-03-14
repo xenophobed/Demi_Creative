@@ -1,5 +1,6 @@
 import axios, { AxiosError, AxiosInstance } from 'axios'
 import type { ErrorResponse } from '@/types/api'
+import { performFullLogout } from '@/utils/logout'
 
 // API base configuration
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1'
@@ -49,21 +50,8 @@ apiClient.interceptors.response.use(
       // Handle different status codes
       switch (error.response.status) {
         case 401:
-          // Token expired or invalid - clear auth state
-          try {
-            const authStorage = localStorage.getItem('auth-storage')
-            if (authStorage) {
-              const parsed = JSON.parse(authStorage)
-              if (parsed.state?.token) {
-                parsed.state.token = null
-                parsed.state.user = null
-                parsed.state.isAuthenticated = false
-                localStorage.setItem('auth-storage', JSON.stringify(parsed))
-              }
-            }
-          } catch {
-            // Ignore
-          }
+          // Token expired or invalid - reset all stores and persisted state
+          performFullLogout()
           break
         case 400:
           // Bad request
