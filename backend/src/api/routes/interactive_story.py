@@ -981,6 +981,7 @@ async def save_interactive_story(
             "user_id": user.user_id,
             "child_id": session.child_id,
             "age_group": session.age_group,
+            "story_type": "interactive",
             "story": {
                 "text": full_text,
                 "word_count": count_words(full_text),
