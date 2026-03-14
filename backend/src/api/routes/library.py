@@ -53,6 +53,8 @@ def _resolve_story_type(story: dict) -> LibraryItemType:
         return LibraryItemType.NEWS
     if story_type == "morning_show":
         return LibraryItemType.MORNING_SHOW
+    if story_type == "interactive":
+        return LibraryItemType.INTERACTIVE
     return LibraryItemType.ART_STORY
 
 
