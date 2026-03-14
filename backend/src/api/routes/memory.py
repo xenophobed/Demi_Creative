@@ -42,7 +42,7 @@ async def get_preferences(
 ):
     """Return the normalized preference profile with data timestamps (#164)."""
     child_id = _validate_child_id(child_id)
-    result = await preference_repo.get_profile_with_metadata(child_id)
+    result = await preference_repo.get_profile_with_metadata(child_id, user_id=user.user_id)
     return {
         "child_id": child_id,
         "profile": result["profile"],
@@ -64,7 +64,7 @@ async def delete_preferences(
     child_id = _validate_child_id(child_id)
 
     # Delete SQLite profile
-    deleted_sqlite = await preference_repo.delete_profile(child_id)
+    deleted_sqlite = await preference_repo.delete_profile(child_id, user_id=user.user_id)
 
     # Delete ChromaDB vectors for this child
     deleted_vectors = 0

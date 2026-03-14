@@ -11,22 +11,42 @@ class PreferenceRepository:
     def __init__(self):
         self._db = db_manager
 
-    async def update_from_story_result(self, child_id: str, story_result: Dict[str, Any]) -> None:
-        profile = await self._get_profile(child_id)
+    @staticmethod
+    def _composite_key(user_id: str, child_id: str) -> str:
+        """Build a composite key to scope preferences per user.
+
+        Uses ``{user_id}:{child_id}`` so two accounts with the same child_id
+        never collide (#178).
+        """
+        return f"{user_id}:{child_id}"
+
+    async def update_from_story_result(
+        self, child_id: str, story_result: Dict[str, Any], *, user_id: str = "",
+    ) -> None:
+        key = self._composite_key(user_id, child_id) if user_id else child_id
+        profile = await self._get_profile(key)
         self._bump(profile["themes"], story_result.get("themes", []), 1)
         self._bump(profile["concepts"], self._extract_concepts(story_result.get("concepts", [])), 1)
-        await self._save_profile(child_id, profile)
+        await self._save_profile(key, profile)
 
-    async def update_from_choices(self, child_id: str, choice_history: List[str], session_data: Dict[str, Any]) -> None:
-        profile = await self._get_profile(child_id)
+    async def update_from_choices(
+        self, child_id: str, choice_history: List[str], session_data: Dict[str, Any],
+        *, user_id: str = "",
+    ) -> None:
+        key = self._composite_key(user_id, child_id) if user_id else child_id
+        profile = await self._get_profile(key)
         self._bump(profile["interests"], session_data.get("interests", []), 2)
         if isinstance(session_data.get("theme"), str) and session_data["theme"].strip():
             self._bump(profile["themes"], [session_data["theme"].strip()], 2)
         profile["recent_choices"] = [str(choice) for choice in (choice_history or [])[-20:]]
-        await self._save_profile(child_id, profile)
+        await self._save_profile(key, profile)
 
-    async def update_from_news(self, child_id: str, category: str, key_concepts: List[Dict[str, Any]]) -> None:
-        profile = await self._get_profile(child_id)
+    async def update_from_news(
+        self, child_id: str, category: str, key_concepts: List[Dict[str, Any]],
+        *, user_id: str = "",
+    ) -> None:
+        key = self._composite_key(user_id, child_id) if user_id else child_id
+        profile = await self._get_profile(key)
         if isinstance(category, str) and category.strip():
             self._bump(profile["themes"], [category.strip()], 1)
         concepts = []
@@ -34,7 +54,7 @@ class PreferenceRepository:
             if isinstance(item, dict) and isinstance(item.get("term"), str):
                 concepts.append(item["term"])
         self._bump(profile["concepts"], concepts, 1)
-        await self._save_profile(child_id, profile)
+        await self._save_profile(key, profile)
 
     async def update_from_morning_show(
         self,
@@ -42,6 +62,8 @@ class PreferenceRepository:
         topic: str,
         event_type: str,
         progress: float,
+        *,
+        user_id: str = "",
     ) -> float:
         """
         Update preference profile from Morning Show playback events (#102).
@@ -49,7 +71,8 @@ class PreferenceRepository:
         Returns:
             float: updated engagement score for the topic.
         """
-        profile = await self._get_profile(child_id)
+        key = self._composite_key(user_id, child_id) if user_id else child_id
+        profile = await self._get_profile(key)
 
         morning = profile.setdefault("morning_show", {})
         topic_scores = morning.setdefault("topic_scores", {})
@@ -76,17 +99,19 @@ class PreferenceRepository:
         topic_scores[topic] = round(max(-5.0, min(20.0, current_score)), 3)
         morning["last_event_at"] = datetime.now().isoformat()
 
-        await self._save_profile(child_id, profile)
+        await self._save_profile(key, profile)
         return topic_scores[topic]
 
-    async def get_profile(self, child_id: str) -> Dict[str, Any]:
-        return await self._get_profile(child_id)
+    async def get_profile(self, child_id: str, *, user_id: str = "") -> Dict[str, Any]:
+        key = self._composite_key(user_id, child_id) if user_id else child_id
+        return await self._get_profile(key)
 
-    async def get_profile_with_metadata(self, child_id: str) -> Dict[str, Any]:
+    async def get_profile_with_metadata(self, child_id: str, *, user_id: str = "") -> Dict[str, Any]:
         """Return profile with data_collected_since and last_updated_at timestamps."""
+        key = self._composite_key(user_id, child_id) if user_id else child_id
         row = await self._db.fetchone(
             "SELECT profile_json, updated_at FROM child_preferences WHERE child_id = ?",
-            (child_id,),
+            (key,),
         )
         if not row:
             profile = self._empty_profile()
@@ -105,11 +130,12 @@ class PreferenceRepository:
             "last_updated_at": row.get("updated_at"),
         }
 
-    async def delete_profile(self, child_id: str) -> bool:
+    async def delete_profile(self, child_id: str, *, user_id: str = "") -> bool:
         """Delete preference profile for a child. Returns True if a row was deleted."""
+        key = self._composite_key(user_id, child_id) if user_id else child_id
         cursor = await self._db.execute(
             "DELETE FROM child_preferences WHERE child_id = ?",
-            (child_id,),
+            (key,),
         )
         await self._db.commit()
         return cursor.rowcount > 0
