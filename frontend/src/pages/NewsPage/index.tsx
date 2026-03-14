@@ -6,9 +6,11 @@ import Card from '@/components/common/Card'
 import AgeAwareContent from '@/components/common/AgeAwareContent'
 import { StreamingVisualizer } from '@/components/streaming/StreamingVisualizer'
 import { storyService } from '@/api/services/storyService'
+import useAuthStore from '@/store/useAuthStore'
 import useChildStore from '@/store/useChildStore'
 import type { AgeGroup, NewsCategory, NewsToKidsResponse } from '@/types/api'
 import type { AnimationPhase } from '@/types/streaming'
+import LoginPrompt from '@/components/common/LoginPrompt'
 
 const AGE_GROUPS: { value: AgeGroup; label: string; emoji: string }[] = [
   { value: '3-5', label: '3-5 yrs', emoji: '🧒' },
@@ -28,7 +30,16 @@ const CATEGORIES: { value: NewsCategory; label: string; emoji: string }[] = [
 ]
 
 function NewsPage() {
+  const { isAuthenticated } = useAuthStore()
   const { defaultChildId } = useChildStore()
+
+  if (!isAuthenticated) {
+    return (
+      <div className="max-w-lg mx-auto mt-12">
+        <LoginPrompt feature="explore kids news" />
+      </div>
+    )
+  }
 
   // Mode toggle
   const [mode, setMode] = useState<'quick-read' | 'morning-show'>('quick-read')
