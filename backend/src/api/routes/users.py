@@ -12,6 +12,7 @@ from ..models import (
     UserRegisterRequest,
     UserLoginRequest,
     UserResponse,
+    PublicUserResponse,
     UserWithStatsResponse,
     TokenResponse,
     AuthResponse,
@@ -27,6 +28,17 @@ router = APIRouter(
     prefix="/api/v1/users",
     tags=["User Authentication"]
 )
+
+
+def _user_to_public_response(user: UserData) -> PublicUserResponse:
+    """Convert UserData to PublicUserResponse (no private fields)"""
+    return PublicUserResponse(
+        user_id=user.user_id,
+        username=user.username,
+        display_name=user.display_name,
+        avatar_url=user.avatar_url,
+        created_at=datetime.fromisoformat(user.created_at),
+    )
 
 
 def _user_to_response(user: UserData) -> UserResponse:
@@ -315,7 +327,7 @@ async def get_me_sessions(
 
 @router.get(
     "/{user_id}",
-    response_model=UserResponse,
+    response_model=PublicUserResponse,
     responses={
         404: {"model": ErrorResponse, "description": "User not found"}
     },
@@ -335,4 +347,4 @@ async def get_user(user_id: str):
             detail="User not found"
         )
 
-    return _user_to_response(user)
+    return _user_to_public_response(user)
