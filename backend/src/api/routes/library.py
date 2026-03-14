@@ -205,7 +205,7 @@ async def get_library(
 
     # Fetch stories (includes both art-story and news types)
     if type is None or type in (LibraryItemType.ART_STORY, LibraryItemType.NEWS, LibraryItemType.MORNING_SHOW, LibraryItemType.KIDS_NEWS):
-        stories = await story_repo.list_by_user(user.user_id, limit=200, offset=0)
+        stories = await story_repo.list_by_user(user.user_id, limit=10000, offset=0)
 
         # Separate favorites lookups by resolved type
         art_ids = [s["story_id"] for s in stories if _resolve_story_type(s) == LibraryItemType.ART_STORY]
@@ -238,7 +238,7 @@ async def get_library(
 
     # Fetch interactive sessions
     if type is None or type == LibraryItemType.INTERACTIVE:
-        sessions = await session_repo.list_by_user(user.user_id, limit=200, offset=0)
+        sessions = await session_repo.list_by_user(user.user_id, limit=10000, offset=0)
         session_ids = [s.session_id for s in sessions]
         fav_session_ids = await favorite_repo.get_favorited_ids(
             user.user_id, "interactive", session_ids
@@ -347,7 +347,7 @@ async def search_library(
 
     # Search stories (includes both art-story and news types)
     if type is None or type in (LibraryItemType.ART_STORY, LibraryItemType.NEWS, LibraryItemType.MORNING_SHOW, LibraryItemType.KIDS_NEWS):
-        stories = await story_repo.list_by_user(user.user_id, limit=200, offset=0)
+        stories = await story_repo.list_by_user(user.user_id, limit=10000, offset=0)
 
         art_ids = [s["story_id"] for s in stories if _resolve_story_type(s) == LibraryItemType.ART_STORY]
         news_ids = [s["story_id"] for s in stories if _resolve_story_type(s) == LibraryItemType.NEWS]
@@ -387,7 +387,7 @@ async def search_library(
 
     # Search sessions
     if type is None or type == LibraryItemType.INTERACTIVE:
-        sessions = await session_repo.list_by_user(user.user_id, limit=200, offset=0)
+        sessions = await session_repo.list_by_user(user.user_id, limit=10000, offset=0)
         session_ids = [s.session_id for s in sessions]
         fav_ids = await favorite_repo.get_favorited_ids(
             user.user_id, "interactive", session_ids

@@ -304,6 +304,7 @@ class SaveInteractiveStoryResponse(BaseModel):
     story_id: str = Field(..., description="保存后的故事ID")
     session_id: str = Field(..., description="互动会话ID")
     message: str = Field(..., description="操作结果消息")
+    already_saved: bool = Field(False, description="Whether the story was already saved previously")
 
 
 class KeyConceptResponse(BaseModel):

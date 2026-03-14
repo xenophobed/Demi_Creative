@@ -956,6 +956,19 @@ async def save_interactive_story(
                 detail="Can only save completed stories"
             )
 
+        # Idempotency check: return existing story if already saved (#199)
+        existing = await story_repo.find_by_session_id(session_id)
+        if existing:
+            return JSONResponse(
+                status_code=status.HTTP_200_OK,
+                content=SaveInteractiveStoryResponse(
+                    story_id=existing["story_id"],
+                    session_id=session_id,
+                    message="Interactive story was already saved",
+                    already_saved=True,
+                ).model_dump(),
+            )
+
         # Concatenate all segment texts
         full_text = "\n\n".join(
             seg.get("text", "") for seg in session.segments if seg.get("text")

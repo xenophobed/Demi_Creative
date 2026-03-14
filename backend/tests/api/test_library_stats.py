@@ -24,6 +24,19 @@ class TestLibraryStatsEndpoint:
             await db_manager.connect()
             await init_schema(db_manager)
 
+        # Seed test user so FK constraints are satisfied (#184)
+        now = datetime.now()
+        await db_manager.execute(
+            """INSERT OR IGNORE INTO users
+                (user_id, username, email, password_hash, display_name,
+                 is_active, is_verified, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, 1, 1, ?, ?)""",
+            ("test_user", "test_user", "test@example.com",
+             "test_hash", "Test User",
+             now.isoformat(), now.isoformat()),
+        )
+        await db_manager.commit()
+
         self.story_ids = []
         self.session_ids = []
 
