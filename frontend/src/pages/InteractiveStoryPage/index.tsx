@@ -14,9 +14,11 @@ import { storyService } from '@/api/services/storyService'
 import useInteractiveStory from '@/hooks/useInteractiveStory'
 import useInteractiveStoryStore from '@/store/useInteractiveStoryStore'
 import useStreamVisualization from '@/hooks/useStreamVisualization'
+import useAuthStore from '@/store/useAuthStore'
 import useChildStore, { DEFAULT_INTERESTS } from '@/store/useChildStore'
 import type { AgeGroup } from '@/types/api'
 import type { AnimationPhase } from '@/types/streaming'
+import LoginPrompt from '@/components/common/LoginPrompt'
 
 type PageState = 'setup' | 'playing' | 'completed'
 
@@ -29,7 +31,16 @@ const AGE_GROUPS: { value: AgeGroup; label: string; emoji: string }[] = [
 function InteractiveStoryPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
+  const { isAuthenticated } = useAuthStore()
   const { defaultChildId } = useChildStore()
+
+  if (!isAuthenticated) {
+    return (
+      <div className="max-w-lg mx-auto mt-12">
+        <LoginPrompt feature="play interactive stories" />
+      </div>
+    )
+  }
 
   // Local form state
   const [selectedAge, setSelectedAge] = useState<AgeGroup | null>(null)

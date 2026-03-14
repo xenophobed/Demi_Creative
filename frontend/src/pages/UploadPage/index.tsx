@@ -9,10 +9,12 @@ import TiltCard from '@/components/depth/TiltCard'
 import { FloatingElement } from '@/components/depth/ParallaxContainer'
 import { useStreamVisualizationContext } from '@/providers/StreamVisualizationProvider'
 import useStoryStore from '@/store/useStoryStore'
+import useAuthStore from '@/store/useAuthStore'
 import useChildStore, { DEFAULT_INTERESTS } from '@/store/useChildStore'
 import useStoryGeneration from '@/hooks/useStoryGeneration'
 import type { AgeGroup, VoiceType } from '@/types/api'
 import type { AnimationPhase } from '@/types/streaming'
+import LoginPrompt from '@/components/common/LoginPrompt'
 
 const AGE_GROUPS: { value: AgeGroup; label: string; emoji: string; description: string }[] = [
   { value: '3-5', label: '3-5 yrs', emoji: '🧒', description: 'Simple & Fun' },
@@ -40,10 +42,20 @@ function UploadPage() {
     setEnableAudio,
   } = useStoryStore()
 
+  const { isAuthenticated } = useAuthStore()
+
   const { currentChild, setAgeGroup, setInterests, addInterest, removeInterest } =
     useChildStore()
 
   const { prefersReducedMotion } = useStreamVisualizationContext()
+
+  if (!isAuthenticated) {
+    return (
+      <div className="max-w-lg mx-auto mt-12">
+        <LoginPrompt feature="create stories" />
+      </div>
+    )
+  }
 
   const [selectedAgeGroup, setSelectedAgeGroup] = useState<AgeGroup | null>(
     currentChild?.age_group || null
