@@ -14,7 +14,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional, AsyncGenerator
 
-from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException, status
+from fastapi import APIRouter, Depends, Request, UploadFile, File, Form, HTTPException, status
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from ..models import (
@@ -528,6 +528,7 @@ async def create_story_from_image(
     status_code=status.HTTP_200_OK
 )
 async def create_story_from_image_stream(
+    request: Request,
     image: UploadFile = File(..., description="Child's artwork image (PNG/JPG, max 10MB)"),
     child_id: str = Form(..., description="Child unique identifier"),
     age_group: AgeGroup = Form(..., description="Age group: 3-5, 6-8, 9-12"),
@@ -583,6 +584,7 @@ async def create_story_from_image_stream(
     async def event_generator() -> AsyncGenerator[str, None]:
         story_id = str(uuid.uuid4())
         result_data = None
+        client_disconnected = False
 
         try:
             # Stream story generation
@@ -594,12 +596,24 @@ async def create_story_from_image_stream(
                 enable_audio=enable_audio,
                 voice=voice
             ):
+                # Check if client has disconnected
+                if await request.is_disconnected():
+                    logger.info("Client disconnected during story generation (story_id=%s), aborting", story_id)
+                    client_disconnected = True
+                    break
+
                 event_type = event.get("type", "message")
                 event_data = event.get("data", {})
 
                 # When receiving a result, build the complete response
                 if event_type == "result":
                     result_data = event_data
+
+                    # Final disconnect check before persisting
+                    if await request.is_disconnected():
+                        logger.info("Client disconnected before save (story_id=%s), skipping persist", story_id)
+                        client_disconnected = True
+                        break
 
                     # Extract story text
                     story_text = result_data.get("story", "")
@@ -664,6 +678,9 @@ async def create_story_from_image_stream(
         except Exception as e:
             error_data = {"error": str(type(e).__name__), "message": f"Story generation failed: {str(e)}"}
             yield f"event: error\ndata: {json.dumps(error_data, ensure_ascii=False)}\n\n"
+
+        if client_disconnected:
+            logger.info("Streaming aborted for story_id=%s due to client disconnect; story was not saved", story_id)
 
     return StreamingResponse(
         event_generator(),

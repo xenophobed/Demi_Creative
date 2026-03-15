@@ -13,7 +13,7 @@ from typing import Any, AsyncGenerator, Dict, List
 logger = logging.getLogger(__name__)
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 
 try:
@@ -518,6 +518,7 @@ async def generate_morning_show(
     summary="Generate a Morning Show episode with SSE progress",
 )
 async def generate_morning_show_stream(
+    http_request: Request,
     request: MorningShowRequest,
     user: UserData = Depends(get_current_user),
 ):
@@ -542,10 +543,20 @@ async def generate_morning_show_stream(
             category=request.category.value,
             news_url=request.news_url,
         ):
+            # Check if client has disconnected
+            if await http_request.is_disconnected():
+                logger.info("Client disconnected during morning show generation, aborting")
+                return
+
             event_type = event.get("type", "status")
             yield f"event: {event_type}\ndata: {json.dumps(event.get('data', {}), ensure_ascii=False)}\n\n"
             if event_type == "result":
                 break
+
+        # Final disconnect check before building and persisting the episode
+        if await http_request.is_disconnected():
+            logger.info("Client disconnected before morning show save, skipping persist")
+            return
 
         response = await _build_episode(request, user)
 
