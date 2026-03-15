@@ -65,6 +65,7 @@ export interface UserStorySummary {
   story_id: string
   child_id: string
   age_group: string
+  story_type: string | null
   story_preview: string
   word_count: number
   themes: string[]
