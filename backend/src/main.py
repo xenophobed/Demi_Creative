@@ -196,11 +196,21 @@ async def health_check():
     required_env_vars = ["ANTHROPIC_API_KEY", "OPENAI_API_KEY"]
     env_vars_set = all(os.getenv(var) for var in required_env_vars)
 
+    # Determine Daily Drop scheduler status
+    scheduler_enabled = os.getenv("DAILY_DROP_ENABLED", "1") != "0"
+    if not scheduler_enabled:
+        scheduler_status = "disabled"
+    elif daily_drop_scheduler._task and not daily_drop_scheduler._task.done():
+        scheduler_status = "running"
+    else:
+        scheduler_status = "stopped"
+
     services_status = {
         "api": "running",
         "database": "running" if db_connected else "degraded",
         "session_manager": "running" if db_connected else "degraded",
-        "environment": "configured" if env_vars_set else "missing_keys"
+        "environment": "configured" if env_vars_set else "missing_keys",
+        "daily_drop_scheduler": scheduler_status
     }
 
     overall_status = "healthy" if all(
