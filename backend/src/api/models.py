@@ -344,6 +344,8 @@ class NewsToKidsResponse(BaseModel):
     age_group: AgeGroup = Field(..., description="年龄组")
     audio_url: Optional[str] = Field(None, description="音频URL")
     original_url: Optional[str] = Field(None, description="原始新闻URL")
+    is_degraded: bool = Field(default=False, description="是否为降级/回退生成内容")
+    degraded_reason: Optional[str] = Field(None, description="降级原因")
     created_at: datetime = Field(default_factory=datetime.now, description="创建时间")
 
 
@@ -359,6 +361,7 @@ class DialogueLine(BaseModel):
     """Morning Show 对话行"""
     role: str = Field(..., description="角色: curious_kid | fun_expert | guest")
     text: str = Field(..., min_length=1, description="对话内容")
+    display_name: Optional[str] = Field(None, description="角色显示名（Mimi / Duo）")
     timestamp_start: float = Field(..., ge=0.0, description="开始时间（秒）")
     timestamp_end: float = Field(..., ge=0.0, description="结束时间（秒）")
 
@@ -424,6 +427,8 @@ class MorningShowEpisode(BaseModel):
     duration_seconds: Optional[int] = Field(None, ge=0, description="节目总时长（秒）")
     is_played: bool = Field(default=False, description="是否已播放")
     is_new: bool = Field(default=True, description="是否新内容")
+    is_degraded: bool = Field(default=False, description="是否为降级/回退生成内容")
+    degraded_reason: Optional[str] = Field(None, description="降级原因")
     created_at: datetime = Field(default_factory=datetime.now, description="创建时间")
 
 
@@ -441,6 +446,8 @@ class MorningShowGenerationMetadata(BaseModel):
     generation_id: str = Field(..., description="生成任务 ID")
     safety_score: float = Field(..., ge=0.0, le=1.0, description="内容安全分数")
     used_mock: bool = Field(default=False, description="是否使用 mock fallback")
+    is_degraded: bool = Field(default=False, description="是否为降级/回退生成内容")
+    degraded_reason: Optional[str] = Field(None, description="降级原因")
     created_at: datetime = Field(default_factory=datetime.now, description="生成时间")
 
 

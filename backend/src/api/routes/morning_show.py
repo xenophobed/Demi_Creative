@@ -26,7 +26,14 @@ from ...agents.morning_show_agent import (
     stream_morning_show_generation,
 )
 from ...mcp_servers import fetch_article_text
-from ...services.database import preference_repo, story_repo
+from ...services.database import db_manager, preference_repo, story_repo
+from ...services.provenance_tracker import ProvenanceTracker
+from ...services.models.artifact_models import (
+    ArtifactType,
+    WorkflowType,
+    StoryArtifactRole,
+    ArtifactMetadata,
+)
 from ...services.tts_service import generate_multi_speaker_audio
 from ...services.user_service import UserData
 from ...utils.text import count_words
@@ -327,6 +334,8 @@ def _story_analysis_to_episode(story: Dict[str, Any]) -> MorningShowEpisode:
         duration_seconds=int(analysis.get("duration_seconds", 0) or 0),
         is_played=bool(analysis.get("is_played", False)),
         is_new=bool(analysis.get("is_new", True)),
+        is_degraded=bool(analysis.get("is_degraded", False)),
+        degraded_reason=analysis.get("degraded_reason"),
         created_at=story.get("created_at", datetime.now().isoformat()),
     )
 
@@ -394,13 +403,15 @@ async def _build_episode(
                 "lines": [
                     {
                         "role": "curious_kid",
-                        "text": "What happened in this story?",
+                        "text": "Mimi: What happened in this story?",
+                        "display_name": "Mimi",
                         "timestamp_start": 0.0,
                         "timestamp_end": 4.0,
                     },
                     {
                         "role": "fun_expert",
-                        "text": "Here is a safe and simple explanation for kids.",
+                        "text": "Duo: Here is a safe and simple explanation for kids.",
+                        "display_name": "Duo",
                         "timestamp_start": 4.0,
                         "timestamp_end": 8.0,
                     },
@@ -410,6 +421,7 @@ async def _build_episode(
             },
             "safety_score": 0.9,
             "used_mock": True,
+            "degraded_reason": "agent_fallback",
             "guest_character": "Professor Owl",
         }
 
@@ -427,6 +439,9 @@ async def _build_episode(
     key_concepts = _as_key_concepts(generated.get("key_concepts", []))
     questions = _as_questions(generated.get("interactive_questions", []))
     safety_score = float(generated.get("safety_score", 0.0))
+    used_mock = bool(generated.get("used_mock", False))
+    degraded_reason = generated.get("degraded_reason")
+    is_degraded = used_mock
 
     episode = MorningShowEpisode(
         episode_id=episode_id,
@@ -444,13 +459,17 @@ async def _build_episode(
         duration_seconds=int(dialogue_script.total_duration),
         is_played=False,
         is_new=True,
+        is_degraded=is_degraded,
+        degraded_reason=degraded_reason,
         created_at=datetime.now(),
     )
 
     metadata = MorningShowGenerationMetadata(
         generation_id=str(uuid.uuid4()),
         safety_score=safety_score,
-        used_mock=bool(generated.get("used_mock", False)),
+        used_mock=used_mock,
+        is_degraded=is_degraded,
+        degraded_reason=degraded_reason,
         created_at=datetime.now(),
     )
 
@@ -488,6 +507,8 @@ async def _build_episode(
                 "duration_seconds": episode.duration_seconds,
                 "is_new": True,
                 "is_played": False,
+                "is_degraded": is_degraded,
+                "degraded_reason": degraded_reason,
                 "guest_character": generated.get("guest_character", "Professor Owl"),
                 "generation_metadata": metadata.model_dump(mode="json"),
             },
@@ -498,6 +519,78 @@ async def _build_episode(
             "created_at": episode.created_at.isoformat(),
         }
     )
+
+    # --- Provenance tracking (#141) — never blocks content delivery ---
+    try:
+        tracker = ProvenanceTracker(db_manager)
+        run_id = await tracker.start_run(episode_id, WorkflowType.MORNING_SHOW)
+
+        # Step 1: news conversion
+        step1_id = await tracker.start_step(run_id, "news_conversion", 1,
+            input_data={"category": request.category.value, "age_group": request.age_group.value})
+        text_art_id = await tracker.record_artifact(
+            step1_id, ArtifactType.TEXT, run_id=run_id,
+            artifact_payload=episode.kid_content[:500],
+            description="Morning show converted news text",
+            safety_score=safety_score,
+            agent_name="morning_show",
+            metadata=ArtifactMetadata(word_count=count_words(episode.kid_content)),
+        )
+        await tracker.complete_step(step1_id, output_data={"text_artifact_id": text_art_id})
+
+        # Step 2: TTS generation
+        step2_id = await tracker.start_step(run_id, "tts_generation", 2,
+            input_data={"dialogue_lines": len(dialogue_script.lines)})
+        audio_art_ids = []
+        for idx_str, url in audio_urls.items():
+            aid = await tracker.record_artifact(
+                step2_id, ArtifactType.AUDIO, run_id=run_id,
+                artifact_url=url,
+                description=f"Morning show TTS audio segment {idx_str}",
+                mime_type="audio/mpeg",
+                agent_name="tts_generation",
+                input_artifact_ids=[text_art_id],
+            )
+            audio_art_ids.append(aid)
+        await tracker.complete_step(step2_id, output_data={"audio_count": len(audio_art_ids)})
+
+        # Step 3: illustration generation
+        step3_id = await tracker.start_step(run_id, "illustration_generation", 3,
+            input_data={"illustration_count": len(illustrations)})
+        illust_art_ids = []
+        for ill in illustrations:
+            iid = await tracker.record_artifact(
+                step3_id, ArtifactType.IMAGE, run_id=run_id,
+                artifact_url=ill.url,
+                description=ill.description,
+                agent_name="illustration_generation",
+            )
+            illust_art_ids.append(iid)
+        await tracker.complete_step(step3_id, output_data={"illustration_count": len(illust_art_ids)})
+
+        # Promote and link artifacts
+        artifact_repo = tracker._artifact_repo
+        await artifact_repo.update_lifecycle_state(text_art_id, "candidate")
+        await artifact_repo.update_lifecycle_state(text_art_id, "published")
+        await tracker.link_to_story(episode_id, text_art_id, StoryArtifactRole.STORY_TEXT)
+
+        for aid in audio_art_ids:
+            await artifact_repo.update_lifecycle_state(aid, "candidate")
+            await artifact_repo.update_lifecycle_state(aid, "published")
+            await tracker.link_to_story(episode_id, aid, StoryArtifactRole.FINAL_AUDIO, is_primary=False)
+
+        for idx, iid in enumerate(illust_art_ids):
+            await artifact_repo.update_lifecycle_state(iid, "candidate")
+            await artifact_repo.update_lifecycle_state(iid, "published")
+            role = StoryArtifactRole.COVER if idx == 0 else StoryArtifactRole.SCENE_IMAGE
+            await tracker.link_to_story(episode_id, iid, role, is_primary=(idx == 0), position=idx)
+
+        await tracker.complete_run(run_id, result_summary={
+            "artifacts_created": 1 + len(audio_art_ids) + len(illust_art_ids),
+            "episode_id": episode_id,
+        })
+    except Exception:
+        logger.warning("Provenance tracking failed for morning show episode %s", episode_id, exc_info=True)
 
     return MorningShowResponse(episode=episode, metadata=metadata)
 

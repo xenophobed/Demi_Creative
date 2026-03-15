@@ -25,7 +25,14 @@ from ..models import (
     PaginatedNewsResponse,
 )
 from ..deps import get_current_user
-from ...services.database import story_repo, preference_repo
+from ...services.database import db_manager, story_repo, preference_repo
+from ...services.provenance_tracker import ProvenanceTracker
+from ...services.models.artifact_models import (
+    ArtifactType,
+    WorkflowType,
+    StoryArtifactRole,
+    ArtifactMetadata,
+)
 from ...services.user_service import UserData
 from ...agents.news_to_kids_agent import convert_news_to_kids, stream_news_to_kids
 from ...mcp_servers import fetch_article_text
@@ -103,6 +110,9 @@ async def convert_news(
         )
 
         conversion_id = str(uuid.uuid4())
+        used_mock = bool(result.get("used_mock", False))
+        degraded_reason = result.get("degraded_reason")
+        is_degraded = used_mock
 
         # Build audio URL from path
         audio_url = None
@@ -132,6 +142,9 @@ async def convert_news(
                 "category": request.category.value,
                 "original_url": request.news_url,
                 "kid_title": result.get("kid_title", ""),
+                "used_mock": used_mock,
+                "is_degraded": is_degraded,
+                "degraded_reason": degraded_reason,
             },
             "story_type": "news_to_kids",
             "safety_score": result.get("safety_score", 0.0),
@@ -168,6 +181,53 @@ async def convert_news(
             for q in result.get("interactive_questions", [])
         ]
 
+        # --- Provenance tracking (#141) — never blocks content delivery ---
+        try:
+            tracker = ProvenanceTracker(db_manager)
+            run_id = await tracker.start_run(conversion_id, WorkflowType.NEWS_TO_KIDS)
+
+            step1_id = await tracker.start_step(run_id, "news_conversion", 1,
+                input_data={"category": request.category.value, "age_group": request.age_group.value})
+            text_art_id = await tracker.record_artifact(
+                step1_id, ArtifactType.TEXT, run_id=run_id,
+                artifact_payload=result.get("kid_content", "")[:500],
+                description="Converted news text for kids",
+                safety_score=result.get("safety_score"),
+                agent_name="news_to_kids",
+                metadata=ArtifactMetadata(word_count=count_words(result.get("kid_content", ""))),
+            )
+            await tracker.complete_step(step1_id, output_data={"text_artifact_id": text_art_id})
+
+            if audio_url:
+                step2_id = await tracker.start_step(run_id, "tts_generation", 2,
+                    input_data={"voice": request.voice.value if request.voice else "default"})
+                audio_art_id = await tracker.record_artifact(
+                    step2_id, ArtifactType.AUDIO, run_id=run_id,
+                    artifact_url=audio_url,
+                    description="News narration audio",
+                    mime_type="audio/mpeg",
+                    agent_name="tts_generation",
+                    input_artifact_ids=[text_art_id],
+                )
+                await tracker.complete_step(step2_id, output_data={"audio_artifact_id": audio_art_id})
+
+                art_repo = tracker._artifact_repo
+                await art_repo.update_lifecycle_state(audio_art_id, "candidate")
+                await art_repo.update_lifecycle_state(audio_art_id, "published")
+                await tracker.link_to_story(conversion_id, audio_art_id, StoryArtifactRole.FINAL_AUDIO)
+
+            art_repo = tracker._artifact_repo
+            await art_repo.update_lifecycle_state(text_art_id, "candidate")
+            await art_repo.update_lifecycle_state(text_art_id, "published")
+            await tracker.link_to_story(conversion_id, text_art_id, StoryArtifactRole.STORY_TEXT)
+
+            await tracker.complete_run(run_id, result_summary={
+                "artifacts_created": 2 if audio_url else 1,
+                "conversion_id": conversion_id,
+            })
+        except Exception:
+            logger.warning("Provenance tracking failed for news conversion %s", conversion_id, exc_info=True)
+
         return NewsToKidsResponse(
             conversion_id=conversion_id,
             kid_title=result.get("kid_title", "News for Kids"),
@@ -179,6 +239,8 @@ async def convert_news(
             age_group=request.age_group,
             audio_url=audio_url,
             original_url=request.news_url,
+            is_degraded=is_degraded,
+            degraded_reason=degraded_reason,
             created_at=datetime.now(),
         )
 
@@ -312,6 +374,74 @@ async def convert_news_stream(
             "Connection": "keep-alive",
             "X-Accel-Buffering": "no",
         },
+    )
+
+
+@router.get(
+    "/conversion/{conversion_id}",
+    response_model=NewsToKidsResponse,
+    summary="Get a saved news conversion by ID",
+)
+async def get_news_conversion(
+    conversion_id: str,
+    user: UserData = Depends(get_current_user),
+):
+    """Retrieve a saved news-to-kids conversion by its ID. Requires authentication."""
+    story = await story_repo.get_by_id(conversion_id)
+    if not story or story.get("story_type") != "news_to_kids":
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversion not found")
+
+    if story.get("user_id") != user.user_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversion not found")
+
+    analysis = story.get("analysis", {})
+    if isinstance(analysis, str):
+        try:
+            analysis = json.loads(analysis)
+        except (json.JSONDecodeError, ValueError):
+            analysis = {}
+
+    educational_value = story.get("educational_value", {})
+    if isinstance(educational_value, str):
+        try:
+            educational_value = json.loads(educational_value)
+        except (json.JSONDecodeError, ValueError):
+            educational_value = {}
+
+    key_concepts = [
+        KeyConceptResponse(
+            term=c.get("term", ""),
+            explanation=c.get("explanation", ""),
+            emoji=c.get("emoji", "💡"),
+        )
+        for c in analysis.get("key_concepts", [])
+        if isinstance(c, dict)
+    ]
+
+    interactive_questions = [
+        InteractiveQuestionResponse(
+            question=q.get("question", ""),
+            hint=q.get("hint"),
+            emoji=q.get("emoji", "🤔"),
+        )
+        for q in analysis.get("interactive_questions", [])
+        if isinstance(q, dict)
+    ]
+
+    return NewsToKidsResponse(
+        conversion_id=story["story_id"],
+        kid_title=analysis.get("kid_title", "News for Kids"),
+        kid_content=story.get("story", {}).get("text", ""),
+        why_care=educational_value.get("moral", ""),
+        key_concepts=key_concepts,
+        interactive_questions=interactive_questions,
+        category=analysis.get("category", "general"),
+        age_group=story.get("age_group", "6-8"),
+        audio_url=story.get("audio_url"),
+        original_url=analysis.get("original_url"),
+        is_degraded=bool(analysis.get("is_degraded", False)),
+        degraded_reason=analysis.get("degraded_reason"),
+        created_at=story.get("created_at", datetime.now().isoformat()),
     )
 
 

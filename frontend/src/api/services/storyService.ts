@@ -485,6 +485,11 @@ export const storyService = {
     })
     return response.data
   },
+  /** Get a saved news conversion by ID (#181) */
+  async getNewsConversion(conversionId: string): Promise<NewsToKidsResponse> {
+    const response = await apiClient.get(`/news-to-kids/conversion/${conversionId}`)
+    return response.data
+  },
 }
 
 export default storyService

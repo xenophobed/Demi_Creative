@@ -40,6 +40,13 @@ except Exception:  # pragma: no cover - import fallback for test env
 _PROMPT_PATH = Path(__file__).resolve().parents[1] / "prompts" / "morning-show.md"
 _DEFAULT_GUESTS = ("Professor Owl", "Captain Comet")
 
+# Character display names (#140)
+ROLE_DISPLAY_NAMES: Dict[str, Optional[str]] = {
+    "curious_kid": "Mimi",
+    "fun_expert": "Duo",
+    "guest": None,
+}
+
 _AGE_CONFIG: Dict[str, Dict[str, Any]] = {
     "3-5": {"line_count": 6, "line_duration": 7.5, "question_style": "why", "answer_style": "one short sentence"},
     "6-8": {"line_count": 8, "line_duration": 9.0, "question_style": "how or what if", "answer_style": "simple analogy"},
@@ -131,21 +138,21 @@ def _build_line_text(role: str, topic: str, age_group: str, idx: int, guest_name
     if role == "curious_kid":
         if bucket == "3-5":
             prompts = [
-                f"Why is the {topic} news so special?",
-                f"What happened first in this {topic} story?",
-                f"Can this help kids like me?",
+                f"Mimi: Why is the {topic} news so special?",
+                f"Mimi: What happened first in this {topic} story?",
+                f"Mimi: Can this help kids like me?",
             ]
         elif bucket in {"6-8"}:
             prompts = [
-                f"How did this {topic} story begin?",
-                f"What if we tried this idea at school?",
-                f"Why does this matter in real life?",
+                f"Mimi: How did this {topic} story begin?",
+                f"Mimi: What if we tried this idea at school?",
+                f"Mimi: Why does this matter in real life?",
             ]
         else:
             prompts = [
-                f"But what about the hardest part of this {topic} challenge?",
-                "How do experts know this will work long-term?",
-                "What could go wrong, and how can people prepare?",
+                f"Mimi: But what about the hardest part of this {topic} challenge?",
+                "Mimi: How do experts know this will work long-term?",
+                "Mimi: What could go wrong, and how can people prepare?",
             ]
         return prompts[idx % len(prompts)]
 
@@ -155,21 +162,21 @@ def _build_line_text(role: str, topic: str, age_group: str, idx: int, guest_name
     # fun_expert
     if bucket == "3-5":
         answers = [
-            f"Great question! Think of {topic} like building a tiny helper for our world.",
-            "People worked together carefully, step by step, to keep everyone safe.",
-            "Yes. Small kind actions from kids can make a big difference.",
+            f"Duo: Great question! Think of {topic} like building a tiny helper for our world.",
+            "Duo: People worked together carefully, step by step, to keep everyone safe.",
+            "Duo: Yes. Small kind actions from kids can make a big difference.",
         ]
     elif bucket in {"6-8"}:
         answers = [
-            f"Imagine {topic} as a team puzzle where each piece solves part of the problem.",
-            "Scientists tested ideas, compared results, and improved the plan.",
-            "It matters because it can shape what we learn, build, and protect next.",
+            f"Duo: Imagine {topic} as a team puzzle where each piece solves part of the problem.",
+            "Duo: Scientists tested ideas, compared results, and improved the plan.",
+            "Duo: It matters because it can shape what we learn, build, and protect next.",
         ]
     else:
         answers = [
-            f"The big idea is that {topic} combines evidence, tradeoffs, and long-term planning.",
-            "Researchers validate with repeated observations and peer review.",
-            "Policy, engineering, and community behavior all affect final outcomes.",
+            f"Duo: The big idea is that {topic} combines evidence, tradeoffs, and long-term planning.",
+            "Duo: Researchers validate with repeated observations and peer review.",
+            "Duo: Policy, engineering, and community behavior all affect final outcomes.",
         ]
     return answers[idx % len(answers)]
 
@@ -196,6 +203,7 @@ def _build_mock_dialogue_script(topic: str, age_group: str, guest_name: str) -> 
             DialogueLine(
                 role=role,
                 text=text,
+                display_name=ROLE_DISPLAY_NAMES.get(role),
                 timestamp_start=start,
                 timestamp_end=end,
             )
@@ -356,6 +364,7 @@ async def _generate_with_sdk(
             DialogueLine(
                 role=role,
                 text=text,
+                display_name=ROLE_DISPLAY_NAMES.get(role),
                 timestamp_start=round(start, 2),
                 timestamp_end=round(end, 2),
             )
@@ -374,6 +383,7 @@ async def _generate_with_sdk(
         normalized_lines[midpoint] = DialogueLine(
             role="guest",
             text=f"{actual_guest} joins us with a fun tip: keep being curious and kind!",
+            display_name=None,
             timestamp_start=guest_start,
             timestamp_end=guest_end,
         )
@@ -432,10 +442,12 @@ async def generate_morning_show_dialogue(
     topic = _headline_from_text(source_text)
     guest_name = _default_guest(child_id)
     used_mock = _should_use_mock()
+    degraded_reason: Optional[str] = None
 
     if used_mock:
         script = _build_mock_dialogue_script(topic, age_group, guest_name)
         safety_score = 0.95  # Deterministic content is pre-vetted
+        degraded_reason = "mock_environment"
     else:
         try:
             script, safety_score = await _generate_with_sdk(
@@ -445,22 +457,26 @@ async def generate_morning_show_dialogue(
                 child_id=child_id,
             )
             used_mock = False
-        except Exception:
+        except Exception as exc:
             script = _build_mock_dialogue_script(topic, age_group, guest_name)
             used_mock = True
             safety_score = 0.95
+            degraded_reason = f"live_generation_failed: {exc}"
 
     # Safety hard floor — if below 0.85, fall back to deterministic content
     if safety_score < 0.85:
         script = _build_mock_dialogue_script(topic, age_group, guest_name)
         safety_score = 0.95
         used_mock = True
+        degraded_reason = "safety_score_below_threshold"
 
     return {
         "dialogue_script": script.model_dump(),
         "safety_score": round(safety_score, 3),
         "used_mock": used_mock,
+        "degraded_reason": degraded_reason,
         "guest_character": script.guest_character or guest_name,
+        "role_display_names": dict(ROLE_DISPLAY_NAMES),
     }
 
 
@@ -500,6 +516,7 @@ async def convert_news_to_morning_show(
         "dialogue_script": dialogue_data["dialogue_script"],
         "safety_score": dialogue_data["safety_score"],
         "used_mock": dialogue_data["used_mock"],
+        "degraded_reason": dialogue_data.get("degraded_reason"),
         "guest_character": dialogue_data["guest_character"],
     }
 
@@ -560,4 +577,5 @@ __all__ = [
     "generate_morning_show_dialogue",
     "stream_morning_show_generation",
     "pick_age_voice",
+    "ROLE_DISPLAY_NAMES",
 ]
