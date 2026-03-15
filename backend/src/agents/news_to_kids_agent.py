@@ -29,7 +29,7 @@ except Exception:  # pragma: no cover - import fallback for test env
     ToolUseBlock = object
     ToolResultBlock = object
 
-from ..mcp_servers import safety_server
+from ..mcp_servers import safety_server, tts_server
 
 
 # ---------------------------------------------------------------------------
@@ -140,6 +140,16 @@ def _build_questions(category: str) -> List[Dict[str, str]]:
 # SDK mock guard
 # ---------------------------------------------------------------------------
 
+def _get_audio_config(age_group: str) -> dict:
+    """Get audio configuration for age group."""
+    configs = {
+        "3-5": {"audio_mode": "audio_first", "voice": "nova", "speed": 0.9},
+        "6-8": {"audio_mode": "simultaneous", "voice": "shimmer", "speed": 1.0},
+        "9-12": {"audio_mode": "text_first", "voice": "alloy", "speed": 1.1},
+    }
+    return configs.get(age_group, configs["6-8"])
+
+
 def _should_use_mock() -> bool:
     """Return True when running inside pytest or when the SDK is unavailable."""
     return (
@@ -214,11 +224,24 @@ def _normalize_questions(raw: Any, category: str) -> List[Dict[str, str]]:
 # Live LLM generation via Claude Agent SDK
 # ---------------------------------------------------------------------------
 
-async def _convert_news_to_kids_live(source: str, age_group: str, category: str) -> Dict[str, Any]:
+async def _convert_news_to_kids_live(
+    source: str,
+    age_group: str,
+    category: str,
+    enable_audio: bool = True,
+    voice: Optional[str] = None,
+    child_id: str = "",
+) -> Dict[str, Any]:
     """Generate kid-friendly news content using Claude Agent SDK with MCP safety check."""
     rules = AGE_RULES.get(age_group, AGE_RULES["6-8"])
     age_map = {"3-5": 4, "6-8": 7, "9-12": 11}
     target_age = age_map.get(age_group, 7)
+
+    # Audio configuration
+    audio_config = _get_audio_config(age_group)
+    should_generate_audio = enable_audio and audio_config["audio_mode"] in ["audio_first", "simultaneous"]
+    actual_voice = voice or audio_config["voice"]
+    audio_speed = audio_config["speed"]
 
     prompt = (
         "Rewrite the following news text for children.\n"
@@ -244,14 +267,32 @@ async def _convert_news_to_kids_live(source: str, age_group: str, category: str)
         "Include the safety_score in your output.\n"
     )
 
+    # Add TTS instruction if audio should be generated
+    if should_generate_audio:
+        prompt += (
+            f"\n**语音生成**：\n"
+            f"内容转换完成后，请使用 `mcp__tts-generation__generate_story_audio` 工具为 kid_content 生成语音。\n"
+            f"- 语音类型: {actual_voice}\n"
+            f"- 语速: {audio_speed}\n"
+            f"- 儿童ID: {child_id}\n"
+        )
+
+    # Build MCP servers and allowed tools lists
+    mcp_servers: Dict[str, Any] = {
+        "safety-check": safety_server,
+    }
+    allowed_tools = [
+        "mcp__safety-check__check_content_safety",
+        "mcp__safety-check__suggest_content_improvements",
+    ]
+
+    if should_generate_audio:
+        mcp_servers["tts-generation"] = tts_server
+        allowed_tools.append("mcp__tts-generation__generate_story_audio")
+
     options = ClaudeAgentOptions(
-        mcp_servers={
-            "safety-check": safety_server,
-        },
-        allowed_tools=[
-            "mcp__safety-check__check_content_safety",
-            "mcp__safety-check__suggest_content_improvements",
-        ],
+        mcp_servers=mcp_servers,
+        allowed_tools=allowed_tools,
         cwd=".",
         permission_mode="acceptEdits",
         max_turns=8,
@@ -262,11 +303,27 @@ async def _convert_news_to_kids_live(source: str, age_group: str, category: str)
     )
 
     result_data: Dict[str, Any] = {}
+    audio_path = None
 
     async with ClaudeSDKClient(options=options) as client:
         await client.query(prompt)
 
         async for message in client.receive_response():
+            # Check for TTS tool results in assistant messages
+            if isinstance(message, AssistantMessage):
+                content = getattr(message, "content", None)
+                if isinstance(content, list):
+                    for block in content:
+                        if isinstance(block, ToolResultBlock):
+                            result_content = getattr(block, "content", None)
+                            if result_content and isinstance(result_content, str):
+                                try:
+                                    result_json = json.loads(result_content)
+                                    if "audio_path" in result_json:
+                                        audio_path = result_json["audio_path"]
+                                except (json.JSONDecodeError, TypeError):
+                                    pass
+
             if isinstance(message, ResultMessage):
                 if hasattr(message, "structured_output") and message.structured_output:
                     result_data = message.structured_output
@@ -303,7 +360,7 @@ async def _convert_news_to_kids_live(source: str, age_group: str, category: str)
         "why_care": why_care,
         "key_concepts": key_concepts,
         "interactive_questions": questions,
-        "audio_path": None,
+        "audio_path": audio_path,
         "safety_score": safety_score,
     }
 
@@ -322,15 +379,15 @@ async def convert_news_to_kids(
     enable_audio: bool = True,
     voice: Optional[str] = None,
 ) -> Dict[str, Any]:
-    del child_id, enable_audio, voice
-
     source = _normalize(news_text)
     if not source and news_url:
         source = f"Article source: {news_url}."
 
     if not _should_use_mock():
         try:
-            return await _convert_news_to_kids_live(source, age_group, category)
+            return await _convert_news_to_kids_live(
+                source, age_group, category, enable_audio, voice, child_id
+            )
         except Exception:
             pass
 
