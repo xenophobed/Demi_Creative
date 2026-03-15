@@ -409,7 +409,7 @@ class UserRepository:
             query += " AND status = ?"
             params.append(status)
 
-        query += " ORDER BY created_at DESC LIMIT ? OFFSET ?"
+        query += " ORDER BY updated_at DESC LIMIT ? OFFSET ?"
         params.extend([limit, offset])
 
         sessions = await self._db.fetchall(query, tuple(params))
