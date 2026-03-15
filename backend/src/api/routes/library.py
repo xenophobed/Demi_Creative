@@ -77,7 +77,7 @@ def _story_to_library_item(
     category = analysis.get("category") if item_type in (LibraryItemType.NEWS, LibraryItemType.MORNING_SHOW) else None
     duration_seconds = analysis.get("duration_seconds") if item_type == LibraryItemType.MORNING_SHOW else None
     is_new = analysis.get("is_new") if item_type == LibraryItemType.MORNING_SHOW else None
-    title = analysis.get("kid_title") if item_type == LibraryItemType.MORNING_SHOW else _extract_title(text)
+    title = analysis.get("kid_title") if item_type in (LibraryItemType.NEWS, LibraryItemType.MORNING_SHOW) else _extract_title(text)
 
     audio_url = story.get("audio_url")
     if isinstance(audio_url, str) and audio_url.startswith("/data/audio/"):
