@@ -53,11 +53,8 @@ router = APIRouter(
 
 
 def _illustration_count(age_group: str) -> int:
-    if age_group == "3-5":
-        return 2
-    if age_group == "6-8":
-        return 3
-    return 4
+    """One illustration per episode to control API costs when live generation is on."""
+    return 1
 
 
 def _make_placeholder_svg(title: str, subtitle: str, width: int = 1280, height: int = 720) -> str:
@@ -79,13 +76,17 @@ def _make_placeholder_svg(title: str, subtitle: str, width: int = 1280, height: 
 
 
 def _is_live_illustration_enabled() -> bool:
+    """Live image generation is OFF by default to avoid per-request API costs.
+
+    Set ``MORNING_SHOW_LIVE_ILLUSTRATIONS=1`` to opt in.
+    """
     if os.getenv("PYTEST_CURRENT_TEST") is not None:
+        return False
+    opt_in = os.getenv("MORNING_SHOW_LIVE_ILLUSTRATIONS", "").strip().lower()
+    if opt_in not in {"1", "true", "yes"}:
         return False
     api_key = (os.getenv("OPENAI_API_KEY") or "").strip()
     if not api_key or api_key.startswith("your_"):
-        return False
-    force_placeholder = os.getenv("MORNING_SHOW_FORCE_PLACEHOLDER_ILLUSTRATIONS", "").strip().lower()
-    if force_placeholder in {"1", "true", "yes"}:
         return False
     return True
 
@@ -162,7 +163,7 @@ async def _generate_illustrations(
     openai_client = None
     if live_enabled and OpenAI is not None:
         openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-    image_model = os.getenv("MORNING_SHOW_IMAGE_MODEL", "gpt-image-1")
+    image_model = os.getenv("MORNING_SHOW_IMAGE_MODEL", "gpt-image-1-mini")
     api_key = (os.getenv("OPENAI_API_KEY") or "").strip()
 
     illustrations: List[EpisodeIllustration] = []
