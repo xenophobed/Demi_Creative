@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import AsyncGenerator
 
-from fastapi import APIRouter, Depends, HTTPException, status, Path as PathParam
+from fastapi import APIRouter, Depends, HTTPException, Request, status, Path as PathParam
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from ..models import (
@@ -262,6 +262,7 @@ async def start_interactive_story(
     status_code=status.HTTP_200_OK
 )
 async def start_interactive_story_stream(
+    http_request: Request,
     request: InteractiveStoryStartRequest,
     user: UserData = Depends(get_current_user),
 ):
@@ -303,6 +304,7 @@ async def start_interactive_story_stream(
         opening_data = None
         tracker = ProvenanceTracker(db_manager)
         run_id = None
+        client_disconnected = False
 
         # Get audio strategy for the age group
         audio_strategy = get_audio_strategy(request.age_group.value)
@@ -317,12 +319,24 @@ async def start_interactive_story_stream(
                 enable_audio=request.enable_audio,
                 voice=request.voice.value
             ):
+                # Check if client has disconnected
+                if await http_request.is_disconnected():
+                    logger.info("Client disconnected during interactive story generation, aborting")
+                    client_disconnected = True
+                    break
+
                 event_type = event.get("type", "message")
                 event_data = event.get("data", {})
 
                 # When receiving a result, create the session
                 if event_type == "result":
                     opening_data = event_data
+
+                    # Final disconnect check before persisting
+                    if await http_request.is_disconnected():
+                        logger.info("Client disconnected before interactive story save, skipping persist")
+                        client_disconnected = True
+                        break
 
                     # Create session
                     age_config = AGE_CONFIG.get(request.age_group.value, AGE_CONFIG["6-8"])
@@ -436,6 +450,9 @@ async def start_interactive_story_stream(
             error_data = {"error": str(e), "message": "Story creation failed"}
             yield f"event: error\ndata: {json.dumps(error_data, ensure_ascii=False)}\n\n"
 
+        if client_disconnected:
+            logger.info("Interactive story streaming aborted due to client disconnect; session was not saved")
+
     return StreamingResponse(
         event_generator(),
         media_type="text/event-stream",
@@ -453,6 +470,7 @@ async def start_interactive_story_stream(
     description="Make a choice in the interactive story, use SSE streaming to return the next segment"
 )
 async def choose_story_branch_stream(
+    http_request: Request,
     session_id: str = PathParam(..., description="Session ID"),
     request: ChoiceRequest = ...,
     user: UserData = Depends(get_current_user),
@@ -474,6 +492,7 @@ async def choose_story_branch_stream(
         tracker = ProvenanceTracker(db_manager)
         run_id = None
         segment_number = len(session.segments) + 1
+        client_disconnected = False
 
         try:
             # Stream next segment generation
@@ -491,6 +510,12 @@ async def choose_story_branch_stream(
                 enable_audio=session.enable_audio,
                 voice=session.voice
             ):
+                # Check if client has disconnected
+                if await http_request.is_disconnected():
+                    logger.info("Client disconnected during interactive story branch, aborting")
+                    client_disconnected = True
+                    break
+
                 event_type = event.get("type", "message")
                 event_data = event.get("data", {})
 
@@ -498,6 +523,12 @@ async def choose_story_branch_stream(
                     next_data = event_data
                     segment_data = next_data.get("segment", {})
                     is_ending = next_data.get("is_ending", False)
+
+                    # Final disconnect check before persisting
+                    if await http_request.is_disconnected():
+                        logger.info("Client disconnected before branch save, skipping persist")
+                        client_disconnected = True
+                        break
 
                     # Handle audio URL from agent result
                     audio_url = None
@@ -618,6 +649,9 @@ async def choose_story_branch_stream(
                     logger.warning("Failed to mark provenance run as failed", exc_info=True)
             error_data = {"error": str(e), "message": "Story branch generation failed"}
             yield f"event: error\ndata: {json.dumps(error_data, ensure_ascii=False)}\n\n"
+
+        if client_disconnected:
+            logger.info("Interactive story branch streaming aborted due to client disconnect; segment was not saved")
 
     return StreamingResponse(
         event_generator(),

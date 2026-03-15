@@ -14,7 +14,7 @@ from typing import AsyncGenerator
 
 from ...utils.text import count_words
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 
 from ..models import (
@@ -196,6 +196,7 @@ async def convert_news(
     description="Convert news with SSE streaming progress updates",
 )
 async def convert_news_stream(
+    http_request: Request,
     request: NewsToKidsRequest,
     user: UserData = Depends(get_current_user),
 ):
@@ -215,6 +216,7 @@ async def convert_news_stream(
         news_text = await _fetch_text_from_url(request.news_url)
 
     async def event_generator() -> AsyncGenerator[str, None]:
+        client_disconnected = False
         try:
             async for event in stream_news_to_kids(
                 news_text=news_text,
@@ -225,10 +227,22 @@ async def convert_news_stream(
                 enable_audio=request.enable_audio,
                 voice=request.voice.value if request.voice else None,
             ):
+                # Check if client has disconnected
+                if await http_request.is_disconnected():
+                    logger.info("Client disconnected during news conversion, aborting")
+                    client_disconnected = True
+                    break
+
                 event_type = event.get("type", "message")
                 event_data = event.get("data", {})
 
                 if event_type == "result":
+                    # Final disconnect check before persisting
+                    if await http_request.is_disconnected():
+                        logger.info("Client disconnected before news save, skipping persist")
+                        client_disconnected = True
+                        break
+
                     # Save to DB and enrich the response
                     conversion_id = str(uuid.uuid4())
                     audio_url = None
@@ -286,6 +300,9 @@ async def convert_news_stream(
         except Exception as e:
             error_data = {"error": str(e), "message": "News conversion failed"}
             yield f"event: error\ndata: {json.dumps(error_data, ensure_ascii=False)}\n\n"
+
+        if client_disconnected:
+            logger.info("News streaming aborted due to client disconnect; content was not saved")
 
     return StreamingResponse(
         event_generator(),
