@@ -20,7 +20,7 @@ const TOPIC_CARDS: Array<{ topic: NewsCategory; titleZh: string; titleEn: string
 ]
 
 const MAX_SUBSCRIPTIONS = 5
-const ONBOARD_KEY = 'morning_show_onboarding_done'
+const onboardKey = (childId: string) => `morning_show_onboarding_done_${childId}`
 
 function MorningShowSubscriptionsPage() {
   const queryClient = useQueryClient()
@@ -49,7 +49,7 @@ function MorningShowSubscriptionsPage() {
 
   useEffect(() => {
     if (isLoading || !childId) return
-    const onboardingDone = localStorage.getItem(ONBOARD_KEY) === 'true'
+    const onboardingDone = localStorage.getItem(onboardKey(childId)) === 'true'
     if (!onboardingDone && activeCount === 0) {
       setShowOnboarding(true)
       setOnboardingStep(0)
@@ -107,7 +107,7 @@ function MorningShowSubscriptionsPage() {
           await storyService.subscribeTopic({ child_id: childId, topic })
         }
       }
-      localStorage.setItem(ONBOARD_KEY, 'true')
+      localStorage.setItem(onboardKey(childId), 'true')
       setShowOnboarding(false)
       await queryClient.invalidateQueries({ queryKey: ['morning-show-subscriptions', childId] })
       await queryClient.invalidateQueries({ queryKey: ['library'] })
