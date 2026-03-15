@@ -60,6 +60,19 @@ function ProfilePage() {
     }
   }
 
+  const getStoryRoute = (story: { story_id: string; story_type: string | null }) => {
+    switch (story.story_type) {
+      case 'morning_show':
+        return `/morning-show/${story.story_id}`
+      case 'news':
+        return '/news'
+      case 'interactive':
+        return `/interactive?session=${story.story_id}`
+      default:
+        return `/story/${story.story_id}`
+    }
+  }
+
   const formatDate = (dateStr: string) => {
     return new Date(dateStr).toLocaleDateString('en-US', {
       year: 'numeric',
@@ -231,7 +244,7 @@ function ProfilePage() {
               <Card
                 key={story.story_id}
                 className="p-3 cursor-pointer"
-                onClick={() => navigate(`/story/${story.story_id}`)}
+                onClick={() => navigate(getStoryRoute(story))}
               >
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary/20 to-secondary/10 flex items-center justify-center overflow-hidden flex-shrink-0">
@@ -289,7 +302,11 @@ function ProfilePage() {
         ) : sessionsData?.sessions && sessionsData.sessions.length > 0 ? (
           <div className="space-y-2">
             {sessionsData.sessions.map((session) => (
-              <Card key={session.session_id} className="p-3">
+              <Card
+                key={session.session_id}
+                className="p-3 cursor-pointer"
+                onClick={() => navigate(`/interactive?session=${session.session_id}`)}
+              >
                 <div className="flex items-center gap-3">
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-gray-700 truncate">
