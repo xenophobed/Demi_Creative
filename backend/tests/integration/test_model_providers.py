@@ -206,7 +206,7 @@ class TestTTSProvider:
 
 
 # ===========================================================================
-# 4. Image Generation Provider (OpenAI gpt-image-1)
+# 4. Image Generation Provider (OpenAI gpt-image-1-mini)
 # ===========================================================================
 
 @pytest.mark.integration
