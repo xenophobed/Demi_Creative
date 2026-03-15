@@ -113,13 +113,8 @@ class DailyDropScheduler:
             return AgeGroup(row["age_group"])
         return AgeGroup.AGE_6_8
 
-    async def _fetch_news_text(self, topic: str) -> str:
-        """Return real headlines for *topic* from Tavily, or a stub if unavailable."""
-        _STUB = (
-            f"Daily Drop topic: {topic}. "
-            "Today we found a kid-friendly update and a fun fact to discuss. "
-            "If no major news is available, explain one practical discovery kids can try at home or school."
-        )
+    async def _fetch_news_text(self, topic: str) -> Optional[str]:
+        """Return real headlines for *topic* from Tavily, or None if unavailable."""
         try:
             from ..mcp_servers import get_headlines_by_topic
             import json as _json
@@ -128,11 +123,13 @@ class DailyDropScheduler:
             data = _json.loads(result["content"][0]["text"])
             headlines = data.get("headlines", [])
             if not headlines:
-                return _STUB
+                return None
             lines = [f"- {h['title']}: {h['description']}" for h in headlines if h.get("title")]
+            if not lines:
+                return None
             return f"Today's news about {topic}:\n" + "\n".join(lines)
         except Exception:
-            return _STUB
+            return None
 
     async def run_daily_drop(self) -> None:
         """Generate one episode per active subscription (max 1/day/topic)."""
@@ -156,6 +153,9 @@ class DailyDropScheduler:
                     continue
 
                 news_text = await self._fetch_news_text(topic)
+                if news_text is None:
+                    print(f"⏭️ Skipping Daily Drop for topic '{topic}': no headlines available")
+                    continue
 
                 user = UserData(
                     user_id=user_id,

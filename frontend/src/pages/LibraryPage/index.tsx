@@ -711,8 +711,8 @@ function LibraryPage() {
       navigate(`/interactive?session=${item.id}`)
     } else if (item.type === 'morning-show') {
       navigate(`/morning-show/${item.id}`)
-    } else if (item.type === 'news') {
-      navigate(`/news`)
+    } else if (item.type === 'news' || item.type === 'kids-news') {
+      navigate(`/news/${item.id}`)
     }
   }
 

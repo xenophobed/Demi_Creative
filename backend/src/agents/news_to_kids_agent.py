@@ -385,11 +385,16 @@ async def convert_news_to_kids(
 
     if not _should_use_mock():
         try:
-            return await _convert_news_to_kids_live(
+            result = await _convert_news_to_kids_live(
                 source, age_group, category, enable_audio, voice, child_id
             )
-        except Exception:
-            pass
+            result["used_mock"] = False
+            result["degraded_reason"] = None
+            return result
+        except Exception as exc:
+            degraded_reason = f"live_generation_failed: {exc}"
+    else:
+        degraded_reason = "mock_environment"
 
     content = _build_kid_content(source, age_group, category)
     why_care = _build_why_care(category)
@@ -403,6 +408,8 @@ async def convert_news_to_kids(
         "key_concepts": key_concepts,
         "interactive_questions": questions,
         "audio_path": None,
+        "used_mock": True,
+        "degraded_reason": degraded_reason,
     }
 
 

@@ -968,3 +968,85 @@ class TestSafetyScoreExtraction:
         # Safety floor: score < 0.85 → fallback to mock with 0.95
         assert result["used_mock"] is True
         assert result["safety_score"] == 0.95
+
+
+# ---------------------------------------------------------------------------
+# Character Display Names (#140)
+# ---------------------------------------------------------------------------
+class TestCharacterDisplayNames:
+    """Contract: Duo and Mimi character names on DialogueLine."""
+
+    def test_display_name_field_optional(self):
+        """Contract: display_name defaults to None."""
+        line = DialogueLine(
+            role="curious_kid", text="Hi!", timestamp_start=0.0, timestamp_end=1.0
+        )
+        assert line.display_name is None
+
+    def test_display_name_field_set(self):
+        """Contract: display_name can be set to a string."""
+        line = DialogueLine(
+            role="curious_kid", text="Hi!", display_name="Mimi",
+            timestamp_start=0.0, timestamp_end=1.0,
+        )
+        assert line.display_name == "Mimi"
+
+    def test_role_display_names_mapping(self):
+        """Contract: ROLE_DISPLAY_NAMES maps roles to character names."""
+        from backend.src.agents.morning_show_agent import ROLE_DISPLAY_NAMES
+
+        assert ROLE_DISPLAY_NAMES == {
+            "curious_kid": "Mimi",
+            "fun_expert": "Duo",
+            "guest": None,
+        }
+
+    def test_agent_output_includes_role_display_names(self):
+        """Contract: generate_morning_show_dialogue output includes role_display_names."""
+        agent_output = {
+            "dialogue_script": {"lines": [], "total_duration": 0.0},
+            "safety_score": 0.95,
+            "used_mock": True,
+            "degraded_reason": "mock_environment",
+            "guest_character": "Professor Owl",
+            "role_display_names": {"curious_kid": "Mimi", "fun_expert": "Duo", "guest": None},
+        }
+        assert "role_display_names" in agent_output
+        assert agent_output["role_display_names"]["curious_kid"] == "Mimi"
+        assert agent_output["role_display_names"]["fun_expert"] == "Duo"
+
+
+# ---------------------------------------------------------------------------
+# Degraded Metadata (#179)
+# ---------------------------------------------------------------------------
+class TestDegradedMetadata:
+    """Contract: degraded generation metadata on episode and metadata models."""
+
+    def test_episode_is_degraded_defaults_false(self):
+        """Contract: is_degraded defaults to False."""
+        ep = MorningShowEpisode(
+            episode_id="ep_d1", child_id="c1", age_group="6-8",
+            category="science", kid_title="T", kid_content="C", why_care="W",
+            dialogue_script=DialogueScript(lines=[], total_duration=0.0),
+        )
+        assert ep.is_degraded is False
+        assert ep.degraded_reason is None
+
+    def test_metadata_is_degraded_defaults_false(self):
+        """Contract: MorningShowGenerationMetadata.is_degraded defaults to False."""
+        meta = MorningShowGenerationMetadata(
+            generation_id="g1", safety_score=0.95,
+        )
+        assert meta.is_degraded is False
+        assert meta.degraded_reason is None
+
+    def test_degraded_metadata_round_trip(self):
+        """Contract: degraded fields survive serialization."""
+        meta = MorningShowGenerationMetadata(
+            generation_id="g2", safety_score=0.95, used_mock=True,
+            is_degraded=True, degraded_reason="mock_environment",
+        )
+        data = meta.model_dump()
+        restored = MorningShowGenerationMetadata(**data)
+        assert restored.is_degraded is True
+        assert restored.degraded_reason == "mock_environment"
