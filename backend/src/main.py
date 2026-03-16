@@ -56,6 +56,15 @@ async def lifespan(app: FastAPI):
     if scheduler_enabled and os.getenv("ENVIRONMENT") != "test":
         await daily_drop_scheduler.start()
 
+    # MCP server diagnostics
+    from .mcp_servers import MCP_SERVER_STATUS
+    print("🔌 MCP Servers:")
+    for server, status in MCP_SERVER_STATUS.items():
+        icon = "✅" if status == "ok" else "❌"
+        short_status = "OK" if status == "ok" else status
+        print(f"  {icon} {server}: {short_status}")
+
+
     yield
 
     # On shutdown
@@ -205,17 +214,27 @@ async def health_check():
     else:
         scheduler_status = "stopped"
 
+    # MCP server import status
+    from .mcp_servers import MCP_SERVER_STATUS
+
+    mcp_all_ok = all(v == "ok" for v in MCP_SERVER_STATUS.values())
+
     services_status = {
         "api": "running",
         "database": "running" if db_connected else "degraded",
         "session_manager": "running" if db_connected else "degraded",
         "environment": "configured" if env_vars_set else "missing_keys",
-        "daily_drop_scheduler": scheduler_status
+        "daily_drop_scheduler": scheduler_status,
+        "mcp_servers": dict(MCP_SERVER_STATUS),
     }
 
-    overall_status = "healthy" if all(
-        s in ["running", "configured"] for s in services_status.values()
-    ) else "degraded"
+    # Determine overall health — ignore nested mcp_servers dict in top-level check
+    top_level_ok = all(
+        s in ["running", "configured"]
+        for k, s in services_status.items()
+        if isinstance(s, str)
+    )
+    overall_status = "healthy" if (top_level_ok and mcp_all_ok) else "degraded"
 
     return HealthCheckResponse(
         status=overall_status,

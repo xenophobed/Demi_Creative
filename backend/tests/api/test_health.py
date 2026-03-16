@@ -61,10 +61,16 @@ class TestHealthCheck:
             assert result["status"] in ["healthy", "degraded", "unhealthy"]
 
             services = result["services"]
-            valid_statuses = ["running", "degraded", "configured", "missing_keys"]
+            valid_statuses = ["running", "degraded", "configured", "missing_keys",
+                              "disabled", "stopped"]
 
             for service, status in services.items():
-                assert status in valid_statuses
+                if isinstance(status, dict):
+                    # Nested status (e.g. mcp_servers) — each value is "ok" or "error: ..."
+                    for sub_key, sub_val in status.items():
+                        assert isinstance(sub_val, str), f"{service}.{sub_key} must be str"
+                else:
+                    assert status in valid_statuses
 
 
 @pytest.mark.asyncio
