@@ -19,6 +19,7 @@ from .paths import DATA_DIR, UPLOAD_DIR, AUDIO_DIR, VIDEO_DIR, VIDEO_JOBS_DIR
 from .services.database import db_manager, session_repo
 from .services.database.schema import init_schema, migrate_json_sessions
 from .services.morning_show_scheduler import daily_drop_scheduler
+from .services.retention_scheduler import retention_scheduler
 
 
 # Load environment variables
@@ -56,6 +57,11 @@ async def lifespan(app: FastAPI):
     if scheduler_enabled and os.getenv("ENVIRONMENT") != "test":
         await daily_drop_scheduler.start()
 
+    # Start retention cleanup scheduler (#145) outside test env.
+    retention_enabled = os.getenv("RETENTION_CLEANUP_ENABLED", "1") != "0"
+    if retention_enabled and os.getenv("ENVIRONMENT") != "test":
+        await retention_scheduler.start()
+
     # MCP server diagnostics
     from .mcp_servers import MCP_SERVER_STATUS
     print("🔌 MCP Servers:")
@@ -73,6 +79,9 @@ async def lifespan(app: FastAPI):
     # Disconnect from database
     if scheduler_enabled and os.getenv("ENVIRONMENT") != "test":
         await daily_drop_scheduler.stop()
+
+    if retention_enabled and os.getenv("ENVIRONMENT") != "test":
+        await retention_scheduler.stop()
 
     # Disconnect from database
     await db_manager.disconnect()
@@ -214,6 +223,15 @@ async def health_check():
     else:
         scheduler_status = "stopped"
 
+    # Determine retention scheduler status
+    retention_enabled = os.getenv("RETENTION_CLEANUP_ENABLED", "1") != "0"
+    if not retention_enabled:
+        retention_status = "disabled"
+    elif retention_scheduler._task and not retention_scheduler._task.done():
+        retention_status = "running"
+    else:
+        retention_status = "stopped"
+
     # MCP server import status
     from .mcp_servers import MCP_SERVER_STATUS
 
@@ -225,6 +243,7 @@ async def health_check():
         "session_manager": "running" if db_connected else "degraded",
         "environment": "configured" if env_vars_set else "missing_keys",
         "daily_drop_scheduler": scheduler_status,
+        "retention_scheduler": retention_status,
         "mcp_servers": dict(MCP_SERVER_STATUS),
     }
 
