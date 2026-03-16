@@ -553,7 +553,7 @@ class HealthCheckResponse(BaseModel):
         default_factory=datetime.now,
         description="检查时间"
     )
-    services: Dict[str, str] = Field(
+    services: Dict[str, Any] = Field(
         default_factory=dict,
         description="依赖服务状态"
     )
