@@ -38,6 +38,7 @@ function MorningShowPage() {
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const startTrackedRef = useRef(false)
   const completionTrackedRef = useRef(false)
+  const progressThresholdsRef = useRef<Set<number>>(new Set())
 
   const { data: episode, isLoading, error } = useQuery({
     queryKey: ['morning-show-episode', episodeId],
@@ -87,6 +88,27 @@ function MorningShowPage() {
       // Playback should continue even if tracking fails.
     }
   }
+
+  // Reset progress thresholds when episode changes
+  useEffect(() => {
+    progressThresholdsRef.current = new Set()
+  }, [episodeId])
+
+  // Emit progress events at 25%, 50%, 75% thresholds (#198)
+  useEffect(() => {
+    if (!episode || !hasStarted || !isPlaying) return
+
+    const THRESHOLDS = [0.25, 0.5, 0.75] as const
+    for (const threshold of THRESHOLDS) {
+      if (
+        progressRatio >= threshold &&
+        !progressThresholdsRef.current.has(threshold)
+      ) {
+        progressThresholdsRef.current.add(threshold)
+        void trackEvent('progress', progressRatio)
+      }
+    }
+  }, [episode, hasStarted, isPlaying, progressRatio])
 
   useEffect(() => {
     if (!episode || !audioRef.current || lines.length === 0) return
