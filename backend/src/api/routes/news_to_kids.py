@@ -194,7 +194,13 @@ async def convert_news(
                 description="Converted news text for kids",
                 safety_score=result.get("safety_score"),
                 agent_name="news_to_kids",
-                metadata=ArtifactMetadata(word_count=count_words(result.get("kid_content", ""))),
+                metadata=ArtifactMetadata(
+                    word_count=count_words(result.get("kid_content", "")),
+                    custom={
+                        "is_degraded": is_degraded,
+                        "degraded_reason": degraded_reason,
+                    },
+                ),
             )
             await tracker.complete_step(step1_id, output_data={"text_artifact_id": text_art_id})
 
@@ -312,6 +318,10 @@ async def convert_news_stream(
                         audio_filename = Path(event_data["audio_path"]).name
                         audio_url = f"/data/audio/{audio_filename}"
 
+                    used_mock = bool(event_data.get("used_mock", False))
+                    degraded_reason = event_data.get("degraded_reason")
+                    is_degraded = used_mock
+
                     story_data = {
                         "story_id": conversion_id,
                         "user_id": user.user_id,
@@ -333,6 +343,9 @@ async def convert_news_stream(
                             "category": request.category.value,
                             "original_url": request.news_url,
                             "kid_title": event_data.get("kid_title", ""),
+                            "used_mock": used_mock,
+                            "is_degraded": is_degraded,
+                            "degraded_reason": degraded_reason,
                         },
                         "story_type": "news_to_kids",
                         "safety_score": event_data.get("safety_score", 0.0),

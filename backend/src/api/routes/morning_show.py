@@ -534,7 +534,13 @@ async def _build_episode(
             description="Morning show converted news text",
             safety_score=safety_score,
             agent_name="morning_show",
-            metadata=ArtifactMetadata(word_count=count_words(episode.kid_content)),
+            metadata=ArtifactMetadata(
+                word_count=count_words(episode.kid_content),
+                custom={
+                    "is_degraded": is_degraded,
+                    "degraded_reason": degraded_reason,
+                },
+            ),
         )
         await tracker.complete_step(step1_id, output_data={"text_artifact_id": text_art_id})
 
