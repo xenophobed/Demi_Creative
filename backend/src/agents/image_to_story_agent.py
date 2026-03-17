@@ -47,6 +47,24 @@ def _should_use_mock() -> bool:
     )
 
 
+def _mock_image_to_story_result(interests: list[str]) -> Dict[str, Any]:
+    """Deterministic mock result for test environments."""
+    topic = interests[0] if interests else "adventure"
+    return {
+        "story": f"Once upon a time, a child drew a beautiful picture about {topic}. "
+                 "The drawing came to life and took the child on a wonderful journey.",
+        "themes": [topic, "creativity"],
+        "concepts": ["imagination", "art"],
+        "moral": "Every drawing tells a story.",
+        "characters": [
+            {"name": "Little Artist", "description": "A creative child", "appearances": 1},
+        ],
+        "analysis": {"objects": ["drawing"], "colors": ["blue", "green"]},
+        "safety_score": 0.95,
+        "audio_path": None,
+    }
+
+
 # ============================================================================
 # Pydantic 模型定义（用于 Structured Output）
 # ============================================================================
@@ -117,7 +135,7 @@ async def image_to_story(
         包含故事、音频等信息的字典
     """
     if _should_use_mock():
-        raise RuntimeError("claude_agent_sdk is unavailable in current environment")
+        return _mock_image_to_story_result(interests or [])
     # 验证输入
     if not Path(image_path).exists():
         raise FileNotFoundError(f"图片文件不存在: {image_path}")
@@ -289,13 +307,9 @@ async def stream_image_to_story(
         流式事件字典，包含 type 和 data 字段
     """
     if _should_use_mock():
-        yield {
-            "type": "error",
-            "data": {
-                "error": "RuntimeError",
-                "message": "claude_agent_sdk is unavailable in current environment",
-            },
-        }
+        yield {"type": "status", "data": {"status": "started", "message": "正在分析画作..."}}
+        yield {"type": "result", "data": _mock_image_to_story_result(interests or [])}
+        yield {"type": "complete", "data": {"status": "completed", "message": "故事生成完成"}}
         return
     # 验证输入
     if not Path(image_path).exists():

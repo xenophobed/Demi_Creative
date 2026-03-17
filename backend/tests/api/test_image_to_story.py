@@ -161,12 +161,11 @@ class TestImageToStoryAPI:
 
 @pytest.mark.asyncio
 class TestImageToStoryResponseFormat:
-    """响应格式测试"""
+    """响应格式测试 — uses agent mock fallback for test env."""
 
-    @pytest.mark.skip(reason="需要 mock Agent 响应")
-    async def test_response_structure(self, sample_image):
+    async def test_response_structure(self, sample_image, test_client):
         """测试响应结构"""
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        async with test_client as client:
             files = {
                 "image": ("drawing.png", sample_image, "image/png")
             }
