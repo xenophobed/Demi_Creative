@@ -10,8 +10,6 @@ import json
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
 
-from backend.src.api.routes.image_to_story import event_generator  # noqa – we test indirectly
-
 
 # ---------------------------------------------------------------------------
 # Helpers

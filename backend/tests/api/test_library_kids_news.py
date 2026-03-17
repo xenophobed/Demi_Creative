@@ -67,7 +67,7 @@ class TestLibraryKidsNewsFilter:
             "user_id": "test_user",
             "child_id": "child_001",
             "age_group": "6-8",
-            "story": {"text": "Today in kid news: pandas learn to dance.", "word_count": 8},
+            "story": {"text": "Today in kids news: pandas learn to dance.", "word_count": 8},
             "educational_value": {"themes": ["animals"]},
             "characters": [],
             "safety_score": 0.95,

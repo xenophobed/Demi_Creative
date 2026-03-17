@@ -58,6 +58,25 @@ async def create_test_story(db, story_id: str = None) -> str:
     return sid
 
 
+async def create_test_session(db, session_id: str) -> str:
+    """Helper: insert a minimal session record to satisfy FK constraints."""
+    from datetime import datetime, timezone, timedelta
+
+    now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    expires = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat().replace("+00:00", "Z")
+    await db.execute(
+        """
+        INSERT INTO sessions (
+            session_id, child_id, age_group, story_title, theme,
+            created_at, updated_at, expires_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (session_id, "child-1", "6-8", "Test Session", "adventure", now, now, expires),
+    )
+    await db.commit()
+    return session_id
+
+
 @pytest.mark.asyncio
 async def test_interactive_story_provenance_chain(db):
     """
@@ -71,6 +90,7 @@ async def test_interactive_story_provenance_chain(db):
     Step 3 (safety_check): Final safety check → safety result recorded
     """
     story_id = await create_test_story(db)
+    await create_test_session(db, "session-123")
     tracker = ProvenanceTracker(db)
 
     # Start run for interactive story workflow
@@ -243,6 +263,7 @@ async def test_interactive_story_publish_and_link(db):
     complete chain for interactive stories.
     """
     story_id = await create_test_story(db)
+    await create_test_session(db, "session-456")
     tracker = ProvenanceTracker(db)
     artifact_repo = ArtifactRepository(db)
     link_repo = StoryArtifactLinkRepository(db)

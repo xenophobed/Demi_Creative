@@ -31,9 +31,10 @@ class TestMemoryPreferencesEndpoints:
     async def test_delete_preferences(self, test_client):
         child_id = f"child-del-{uuid.uuid4().hex[:8]}"
         async with test_client as client:
-            # Create some preference data first
+            # Create some preference data first, using the same user_id
+            # that the auth context provides so keys match (#178 composite keys)
             from backend.src.services.database import preference_repo
-            await preference_repo.update_from_story_result(child_id, {"themes": ["space"]})
+            await preference_repo.update_from_story_result(child_id, {"themes": ["space"]}, user_id="test_user")
 
             # Verify it exists
             resp = await client.get(f"/api/v1/memory/preferences/{child_id}")
