@@ -128,7 +128,7 @@ class DailyDropScheduler:
     async def _fetch_news_text(self, topic: str) -> Optional[str]:
         """Return real headlines for *topic* from Tavily, retrying on transient failures.
 
-        Retries up to ``_MAX_HEADLINE_RETRIES`` times with exponential backoff.
+        Retries up to ``_MAX_HEADLINE_RETRIES`` times with linear backoff.
         Returns ``None`` only after all attempts are exhausted.
         """
         if get_headlines_by_topic is None:
