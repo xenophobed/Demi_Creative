@@ -25,6 +25,7 @@ export interface User {
   avatar_url: string | null
   is_active: boolean
   is_verified: boolean
+  role: 'child' | 'parent'
   created_at: string
   last_login_at: string | null
 }

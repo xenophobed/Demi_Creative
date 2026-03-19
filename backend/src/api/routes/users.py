@@ -51,6 +51,7 @@ def _user_to_response(user: UserData) -> UserResponse:
         avatar_url=user.avatar_url,
         is_active=user.is_active,
         is_verified=user.is_verified,
+        role=user.role,
         created_at=datetime.fromisoformat(user.created_at),
         last_login_at=datetime.fromisoformat(user.last_login_at) if user.last_login_at else None
     )
@@ -272,6 +273,7 @@ async def get_me_stats(user: UserData = Depends(get_current_user)):
         avatar_url=user_with_stats.avatar_url,
         is_active=user_with_stats.is_active,
         is_verified=user_with_stats.is_verified,
+        role=user_with_stats.role,
         created_at=datetime.fromisoformat(user_with_stats.created_at),
         last_login_at=datetime.fromisoformat(user_with_stats.last_login_at) if user_with_stats.last_login_at else None,
         story_count=user_with_stats.story_count,

@@ -612,10 +612,12 @@ function LibraryPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { storyHistory, clearHistory, setCurrentStory, removeStory } = useStoryStore()
-  const { isAuthenticated } = useAuthStore()
+  const { isAuthenticated, user } = useAuthStore()
   const { currentChild } = useChildStore()
   const { viewMode, toggleViewMode } = useLibraryPreferences()
   const ageLayout = getAgeLayoutConfig(currentChild?.age_group)
+  const isParent = user?.role === 'parent'
+  const canShowGrowthTimeline = ageLayout.showGrowthTimeline || isParent
 
   const [activeTab, setActiveTab] = useState<ContentTab>('all')
   const [sortOrder, setSortOrder] = useState<LibrarySortOrder>('newest')
@@ -773,8 +775,8 @@ function LibraryPage() {
           My Library
         </h1>
         <div className="flex items-center gap-2">
-          {/* Growth Timeline toggle — only for 9-12 age group (#134) */}
-          {ageLayout.showGrowthTimeline && isAuthenticated && (
+          {/* Growth Timeline toggle — 9-12 age group or parent role (#134, #232) */}
+          {canShowGrowthTimeline && isAuthenticated && (
             <motion.button
               onClick={() => setShowGrowthView((v) => !v)}
               className={`p-2 rounded-lg transition-colors ${showGrowthView
@@ -869,8 +871,8 @@ function LibraryPage() {
         </select>
       </motion.div>
 
-      {/* Growth Timeline view (#134) — replaces content area when active */}
-      {showGrowthView && ageLayout.showGrowthTimeline && isAuthenticated ? (
+      {/* Growth Timeline view (#134, #232) — replaces content area when active */}
+      {showGrowthView && canShowGrowthTimeline && isAuthenticated ? (
         <GrowthTimeline />
       ) : (
         <>

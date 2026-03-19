@@ -685,6 +685,7 @@ class UserResponse(BaseModel):
     avatar_url: Optional[str] = Field(None, description="头像URL")
     is_active: bool = Field(..., description="是否激活")
     is_verified: bool = Field(..., description="是否已验证")
+    role: str = Field(default="child", description="User role: 'child' or 'parent'")
     created_at: datetime = Field(..., description="注册时间")
     last_login_at: Optional[datetime] = Field(None, description="最后登录时间")
 
