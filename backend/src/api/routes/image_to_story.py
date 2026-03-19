@@ -56,6 +56,29 @@ MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 CHILD_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,100}$")
 
+# PRD §3.1 age-group word count ranges (#233)
+AGE_GROUP_WORD_RANGE = {
+    "3-5": (100, 200),
+    "6-8": (200, 400),
+    "9-12": (400, 800),
+}
+
+
+def validate_story_length(word_count: int, age_group: str) -> dict:
+    """Check if story length falls within the age-group target range.
+
+    Returns a dict with 'in_range' bool and optional 'degraded_length' flag.
+    Uses soft validation: logs a warning but never rejects the story.
+    """
+    lo, hi = AGE_GROUP_WORD_RANGE.get(age_group, (200, 400))
+    if lo <= word_count <= hi:
+        return {"in_range": True, "degraded_length": False}
+    logger.warning(
+        "Story length %d words outside target %d-%d for age group %s",
+        word_count, lo, hi, age_group,
+    )
+    return {"in_range": False, "degraded_length": True}
+
 
 def validate_image_file(file: UploadFile) -> None:
     """
@@ -312,6 +335,9 @@ async def create_story_from_image(
         story_text = result.get("story", "")
         word_count = count_words(story_text)
 
+        # Validate story length against age-group target (#233)
+        length_check = validate_story_length(word_count, age_group.value)
+
         # Extract educational value
         educational_value = EducationalValue(
             themes=result.get("themes", []),
@@ -437,7 +463,8 @@ async def create_story_from_image(
             "story": {
                 "text": story_text,
                 "word_count": word_count,
-                "age_adapted": True
+                "age_adapted": True,
+                "degraded_length": length_check["degraded_length"],
             },
             "image_url": image_url,
             "audio_url": audio_url,
@@ -586,6 +613,38 @@ async def create_story_from_image_stream(
         result_data = None
         client_disconnected = False
 
+        # --- Provenance tracking (#234) ---
+        tracker = ProvenanceTracker(db_manager)
+        run_id = None
+        try:
+            run_id = await tracker.start_run(story_id, WorkflowType.IMAGE_TO_STORY)
+        except Exception:
+            logger.warning("Stream: failed to start provenance run", exc_info=True)
+
+        # Record uploaded image as artifact
+        image_artifact_id = None
+        if run_id:
+            try:
+                upload_step_id = await tracker.start_step(
+                    run_id, "image_upload", 1,
+                    input_data={"image_path": str(image_path), "child_id": safe_child_id},
+                )
+                mime, _ = mimetypes.guess_type(str(image_path))
+                file_size = image_path.stat().st_size if image_path.exists() else None
+                image_artifact_id = await tracker.record_artifact(
+                    upload_step_id,
+                    ArtifactType.IMAGE,
+                    run_id=run_id,
+                    artifact_path=str(image_path),
+                    description="Uploaded child drawing",
+                    mime_type=mime,
+                    file_size=file_size,
+                    agent_name="image_upload",
+                )
+                await tracker.complete_step(upload_step_id, output_data={"artifact_id": image_artifact_id})
+            except Exception:
+                logger.warning("Stream: failed to record image artifact", exc_info=True)
+
         try:
             # Stream story generation
             async for event in stream_image_to_story(
@@ -619,6 +678,9 @@ async def create_story_from_image_stream(
                     story_text = result_data.get("story", "")
                     word_count = count_words(story_text)
 
+                    # Validate story length against age-group target (#233)
+                    length_check = validate_story_length(word_count, age_group.value)
+
                     # Handle audio URL from agent result
                     audio_url = None
                     if result_data.get("audio_path"):
@@ -631,7 +693,8 @@ async def create_story_from_image_stream(
                         "story": {
                             "text": story_text,
                             "word_count": word_count,
-                            "age_adapted": True
+                            "age_adapted": True,
+                            "degraded_length": length_check["degraded_length"],
                         },
                         "image_url": image_url,
                         "audio_url": audio_url,
@@ -663,11 +726,95 @@ async def create_story_from_image_stream(
                     story_save_data["user_id"] = user.user_id
                     await story_repo.create(story_save_data)
 
+                    # Sync detected characters (#235)
+                    for char_data in result_data.get("characters", []):
+                        try:
+                            await character_repo.upsert_character(
+                                child_id=safe_child_id,
+                                name=char_data.get("name", ""),
+                                description=char_data.get("description", ""),
+                            )
+                        except Exception:
+                            pass  # Non-critical
+
                     # Update child preferences (Advanced Memory)
                     try:
                         await preference_repo.update_from_story_result(safe_child_id, result_data)
                     except Exception:
                         pass  # Non-critical
+
+                    # --- Record story text artifact (#234) ---
+                    text_artifact_id = None
+                    if run_id:
+                        try:
+                            text_step_id = await tracker.start_step(
+                                run_id, "text_artifact", 3,
+                                input_data={"story_id": story_id},
+                            )
+                            text_artifact_id = await tracker.record_artifact(
+                                text_step_id,
+                                ArtifactType.TEXT,
+                                run_id=run_id,
+                                artifact_payload=story_text,
+                                description="Generated story text",
+                                safety_score=result_data.get("safety_score", 0.0),
+                                agent_name="story_generation",
+                                input_artifact_ids=[image_artifact_id] if image_artifact_id else None,
+                                metadata=ArtifactMetadata(
+                                    char_count=len(story_text),
+                                    word_count=word_count,
+                                ),
+                            )
+                            await tracker.complete_step(text_step_id, output_data={"artifact_id": text_artifact_id})
+                        except Exception:
+                            logger.warning("Stream: failed to record text artifact", exc_info=True)
+
+                    # --- Record audio artifact (#234) ---
+                    audio_artifact_id = None
+                    if run_id and audio_url and result_data.get("audio_path"):
+                        try:
+                            audio_step_id = await tracker.start_step(
+                                run_id, "tts_artifact", 4,
+                                input_data={"audio_path": result_data["audio_path"]},
+                            )
+                            audio_mime, _ = mimetypes.guess_type(result_data["audio_path"])
+                            audio_artifact_id = await tracker.record_artifact(
+                                audio_step_id,
+                                ArtifactType.AUDIO,
+                                run_id=run_id,
+                                artifact_path=result_data["audio_path"],
+                                artifact_url=audio_url,
+                                description="TTS narration audio",
+                                mime_type=audio_mime,
+                                agent_name="tts_generation",
+                                input_artifact_ids=[text_artifact_id] if text_artifact_id else None,
+                            )
+                            await tracker.complete_step(audio_step_id, output_data={"artifact_id": audio_artifact_id})
+                        except Exception:
+                            logger.warning("Stream: failed to record audio artifact", exc_info=True)
+
+                    # --- Link artifacts to story and complete run (#234) ---
+                    if run_id:
+                        try:
+                            art_repo = tracker._artifact_repo
+
+                            for artifact_id, role in [
+                                (image_artifact_id, StoryArtifactRole.COVER),
+                                (text_artifact_id, StoryArtifactRole.STORY_TEXT),
+                                (audio_artifact_id, StoryArtifactRole.FINAL_AUDIO),
+                            ]:
+                                if not artifact_id:
+                                    continue
+                                await art_repo.update_lifecycle_state(artifact_id, "candidate")
+                                await art_repo.update_lifecycle_state(artifact_id, "published")
+                                await tracker.link_to_story(story_id, artifact_id, role)
+
+                            await tracker.complete_run(run_id, result_summary={
+                                "artifacts_created": sum(1 for a in [image_artifact_id, text_artifact_id, audio_artifact_id] if a),
+                                "story_id": story_id,
+                            })
+                        except Exception:
+                            logger.warning("Stream: failed to link artifacts and complete run", exc_info=True)
 
                     yield f"event: result\ndata: {json.dumps(response_data, ensure_ascii=False)}\n\n"
 
@@ -676,10 +823,23 @@ async def create_story_from_image_stream(
                     yield f"event: {event_type}\ndata: {json.dumps(event_data, ensure_ascii=False)}\n\n"
 
         except Exception as e:
+            # Mark provenance run as failed (#234)
+            if run_id:
+                try:
+                    await tracker.fail_run(run_id, str(e))
+                except Exception:
+                    logger.warning("Stream: failed to mark run as failed", exc_info=True)
+
             error_data = {"error": str(type(e).__name__), "message": f"Story generation failed: {str(e)}"}
             yield f"event: error\ndata: {json.dumps(error_data, ensure_ascii=False)}\n\n"
 
         if client_disconnected:
+            # Mark provenance run as cancelled (#234)
+            if run_id:
+                try:
+                    await tracker.fail_run(run_id, "client_disconnected")
+                except Exception:
+                    logger.warning("Stream: failed to mark run as cancelled", exc_info=True)
             logger.info("Streaming aborted for story_id=%s due to client disconnect; story was not saved", story_id)
 
     return StreamingResponse(
