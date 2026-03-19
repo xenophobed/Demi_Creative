@@ -313,14 +313,14 @@ function LibraryCard({
     ? [`${progress}% complete`, ...themeTags].slice(0, 3)
     : item.type === 'morning-show'
       ? [durationLabel, item.is_new ? 'New episode' : null, ...themeTags].filter(Boolean).slice(0, 3)
-    : themeTags
+      : themeTags
   const previewText = item.preview
     ? truncatePreview(item.preview)
     : item.type === 'interactive'
       ? 'Continue this adventure to unlock the next branch.'
       : item.type === 'morning-show'
         ? 'Tap to play today\'s Morning Show episode.'
-      : ''
+        : ''
 
   // Badge label: use category for news / morning-show
   const badgeLabel =
@@ -487,7 +487,7 @@ function ListRow({
       ? 'Continue this adventure to see what happens next.'
       : item.type === 'morning-show'
         ? 'Tap to play the latest Morning Show episode.'
-      : ''
+        : ''
   const badgeLabel =
     (item.type === 'news' || item.type === 'morning-show') && item.category
       ? item.category.charAt(0).toUpperCase() + item.category.slice(1)
@@ -777,11 +777,10 @@ function LibraryPage() {
           {ageLayout.showGrowthTimeline && isAuthenticated && (
             <motion.button
               onClick={() => setShowGrowthView((v) => !v)}
-              className={`p-2 rounded-lg transition-colors ${
-                showGrowthView
+              className={`p-2 rounded-lg transition-colors ${showGrowthView
                   ? 'text-primary bg-primary/10'
                   : 'text-gray-500 hover:text-primary hover:bg-primary/10'
-              }`}
+                }`}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               title={showGrowthView ? 'Back to library' : 'View growth timeline'}
@@ -844,11 +843,10 @@ function LibraryPage() {
             <motion.button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-btn font-medium whitespace-nowrap transition-colors ${
-                activeTab === tab.id
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-btn font-medium whitespace-nowrap transition-colors ${activeTab === tab.id
                   ? 'bg-primary text-white shadow-button'
                   : 'text-gray-600 bg-white/70 hover:bg-gray-100'
-              }`}
+                }`}
               whileHover={{ scale: 1.03 }}
               whileTap={{ scale: 0.97 }}
             >
@@ -875,144 +873,144 @@ function LibraryPage() {
       {showGrowthView && ageLayout.showGrowthTimeline && isAuthenticated ? (
         <GrowthTimeline />
       ) : (
-      <>
-      {/* Loading indicator */}
-      {isLoading && visibleItems.length === 0 && (
-        <motion.div
-          className="text-center py-4 text-gray-400 text-sm"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-        >
-          {isSearching ? 'Searching...' : 'Loading your library...'}
-        </motion.div>
-      )}
+        <>
+          {/* Loading indicator */}
+          {isLoading && visibleItems.length === 0 && (
+            <motion.div
+              className="text-center py-4 text-gray-400 text-sm"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+            >
+              {isSearching ? 'Searching...' : 'Loading your library...'}
+            </motion.div>
+          )}
 
-      {/* Content — grid or list */}
-      <AnimatePresence mode="popLayout">
-        {visibleItems.length > 0 ? (
-          <motion.div className={viewMode === 'grid' ? `grid ${ageLayout.gridClass} gap-4` : 'space-y-2'}>
-            {visibleItems.map((item, index) => (
-              <motion.div
-                key={`${item.type}-${item.id}`}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, x: -100 }}
-                transition={{ delay: Math.min(index * 0.04, 0.3) }}
-              >
-                {viewMode === 'list' ? (
-                  <ListRow
-                    item={item}
-                    onClick={() => handleItemClick(item)}
-                    onDelete={() => setDeleteTarget(item)}
-                    showFavorite={isAuthenticated}
-                    onFavoriteToggled={handleFavoriteToggled}
-                    showWordCount={ageLayout.showWordCount}
-                  />
-                ) : (
-                  <LibraryCard
-                    item={item}
-                    onClick={() => handleItemClick(item)}
-                    onDelete={() => setDeleteTarget(item)}
-                    showFavorite={isAuthenticated}
-                    onFavoriteToggled={handleFavoriteToggled}
-                    showWordCount={ageLayout.showWordCount}
-                  />
+          {/* Content — grid or list */}
+          <AnimatePresence mode="popLayout">
+            {visibleItems.length > 0 ? (
+              <motion.div className={viewMode === 'grid' ? `grid ${ageLayout.gridClass} gap-4` : 'space-y-2'}>
+                {visibleItems.map((item, index) => (
+                  <motion.div
+                    key={`${item.type}-${item.id}`}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, x: -100 }}
+                    transition={{ delay: Math.min(index * 0.04, 0.3) }}
+                  >
+                    {viewMode === 'list' ? (
+                      <ListRow
+                        item={item}
+                        onClick={() => handleItemClick(item)}
+                        onDelete={() => setDeleteTarget(item)}
+                        showFavorite={isAuthenticated}
+                        onFavoriteToggled={handleFavoriteToggled}
+                        showWordCount={ageLayout.showWordCount}
+                      />
+                    ) : (
+                      <LibraryCard
+                        item={item}
+                        onClick={() => handleItemClick(item)}
+                        onDelete={() => setDeleteTarget(item)}
+                        showFavorite={isAuthenticated}
+                        onFavoriteToggled={handleFavoriteToggled}
+                        showWordCount={ageLayout.showWordCount}
+                      />
+                    )}
+                  </motion.div>
+                ))}
+
+                {/* Load more */}
+                {hasMore && (
+                  <motion.div
+                    className="text-center pt-2"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                  >
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleLoadMore}
+                      isLoading={isLoading && offset > 0}
+                    >
+                      Load More
+                    </Button>
+                  </motion.div>
                 )}
               </motion.div>
-            ))}
-
-            {/* Load more */}
-            {hasMore && (
+            ) : !isLoading ? (
+              // Empty state
               <motion.div
-                className="text-center pt-2"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
+                className="text-center py-16"
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
               >
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleLoadMore}
-                  isLoading={isLoading && offset > 0}
+                <motion.div
+                  className="text-8xl mb-6"
+                  animate={{ y: [0, -10, 0] }}
+                  transition={{ duration: 2, repeat: Infinity }}
                 >
-                  Load More
-                </Button>
+                  {isSearching ? '🔍' : '📭'}
+                </motion.div>
+                <h2 className="text-xl font-bold text-gray-800 mb-2">
+                  {isSearching
+                    ? 'No results found'
+                    : activeTab === 'all'
+                      ? 'Nothing here yet'
+                      : activeTab === 'art-stories'
+                        ? 'No art stories yet'
+                        : activeTab === 'interactive'
+                          ? 'No interactive stories yet'
+                          : activeTab === 'kids-news'
+                            ? 'No kids news yet'
+                            : 'Nothing here yet'}
+                </h2>
+                <p className="text-gray-500 mb-6">
+                  {isSearching
+                    ? 'Try a different search term or clear the search.'
+                    : activeTab === 'kids-news'
+                      ? 'Visit the News Hub to read or listen to kid-friendly news!'
+                      : activeTab === 'interactive'
+                        ? 'Try the Interactive Story mode to create branching adventures!'
+                        : 'Upload your first artwork and start creating amazing stories!'}
+                </p>
+                {!isSearching && (
+                  <Link
+                    to={
+                      activeTab === 'kids-news'
+                        ? '/news'
+                        : activeTab === 'interactive'
+                          ? '/interactive'
+                          : '/upload'
+                    }
+                  >
+                    <Button size="lg" leftIcon={<span>✨</span>}>
+                      {activeTab === 'kids-news'
+                        ? 'Explore Kids News'
+                        : activeTab === 'interactive'
+                          ? 'Start an Adventure'
+                          : 'Start Creating'}
+                    </Button>
+                  </Link>
+                )}
               </motion.div>
-            )}
-          </motion.div>
-        ) : !isLoading ? (
-          // Empty state
-          <motion.div
-            className="text-center py-16"
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-          >
-            <motion.div
-              className="text-8xl mb-6"
-              animate={{ y: [0, -10, 0] }}
-              transition={{ duration: 2, repeat: Infinity }}
-            >
-              {isSearching ? '🔍' : '📭'}
-            </motion.div>
-              <h2 className="text-xl font-bold text-gray-800 mb-2">
-                {isSearching
-                  ? 'No results found'
-                  : activeTab === 'all'
-                  ? 'Nothing here yet'
-                  : activeTab === 'art-stories'
-                  ? 'No art stories yet'
-                  : activeTab === 'interactive'
-                  ? 'No interactive stories yet'
-                  : activeTab === 'kids-news'
-                  ? 'No kids news yet'
-                  : 'Nothing here yet'}
-              </h2>
-              <p className="text-gray-500 mb-6">
-                {isSearching
-                  ? 'Try a different search term or clear the search.'
-                  : activeTab === 'kids-news'
-                  ? 'Visit the News Hub to read or listen to kid-friendly news!'
-                  : activeTab === 'interactive'
-                  ? 'Try the Interactive Story mode to create branching adventures!'
-                  : 'Upload your first artwork and start creating amazing stories!'}
-              </p>
-              {!isSearching && (
-                <Link
-                  to={
-                    activeTab === 'kids-news'
-                      ? '/news'
-                      : activeTab === 'interactive'
-                        ? '/interactive'
-                        : '/upload'
-                  }
-                >
-                  <Button size="lg" leftIcon={<span>✨</span>}>
-                    {activeTab === 'kids-news'
-                      ? 'Explore Kids News'
-                      : activeTab === 'interactive'
-                        ? 'Start an Adventure'
-                      : 'Start Creating'}
-                  </Button>
-                </Link>
-              )}
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
+            ) : null}
+          </AnimatePresence>
 
-      {/* Footer statistics */}
-      {totalItems > 0 && !isSearching && (
-        <motion.div
-          className="text-center py-4 text-gray-500"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.5 }}
-        >
-          <p>
-            Total:{' '}
-            <span className="font-bold text-primary">{totalItems}</span> creations
-          </p>
-        </motion.div>
-      )}
-      </>
+          {/* Footer statistics */}
+          {totalItems > 0 && !isSearching && (
+            <motion.div
+              className="text-center py-4 text-gray-500"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.5 }}
+            >
+              <p>
+                Total:{' '}
+                <span className="font-bold text-primary">{totalItems}</span> creations
+              </p>
+            </motion.div>
+          )}
+        </>
       )}
 
       {/* Delete confirmation modal */}
@@ -1020,8 +1018,8 @@ function LibraryPage() {
         isOpen={deleteTarget !== null}
         itemLabel={
           deleteTarget?.type === 'art-story' ? 'this art story' :
-          deleteTarget?.type === 'interactive' ? 'this interactive story' :
-          deleteTarget?.type === 'morning-show' ? 'this Morning Show episode' : 'this news article'
+            deleteTarget?.type === 'interactive' ? 'this interactive story' :
+              deleteTarget?.type === 'morning-show' ? 'this Morning Show episode' : 'this news article'
         }
         onCancel={() => setDeleteTarget(null)}
         onConfirm={() => {
