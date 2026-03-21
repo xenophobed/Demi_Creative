@@ -9,7 +9,6 @@ import type {
   SessionResumeResponse,
   HealthCheckResponse,
   AgeGroup,
-  VoiceType,
   StreamCallbacks,
   NewsToKidsRequest,
   NewsToKidsResponse,
@@ -66,7 +65,7 @@ export const storyService = {
       childId: string
       ageGroup: AgeGroup
       interests?: string[]
-      voice?: VoiceType
+      voice?: string
       enableAudio?: boolean
     }
   ): Promise<ImageToStoryResponse> {
@@ -109,7 +108,7 @@ export const storyService = {
       childId: string
       ageGroup: AgeGroup
       interests?: string[]
-      voice?: VoiceType
+      voice?: string
       enableAudio?: boolean
     },
     callbacks: StreamCallbacks,

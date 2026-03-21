@@ -247,18 +247,25 @@ class ElevenLabsTTSProvider:
             )
 
             client = _elevenlabs_AsyncClient(api_key=api_key)
-            audio_stream = await client.text_to_speech.convert(
-                voice_id=voice,
-                text=text,
-                model_id=self.DEFAULT_MODEL,
-                voice_settings=voice_settings,
-                output_format="mp3_44100_128",
-            )
+
+            convert_kwargs: Dict[str, Any] = {
+                "voice_id": voice,
+                "text": text,
+                "model_id": self.DEFAULT_MODEL,
+                "voice_settings": voice_settings,
+                "output_format": "mp3_44100_128",
+            }
+            # ElevenLabs supports speed on Flash v2.5 (0.7-1.2 range)
+            if speed != 1.0:
+                convert_kwargs["speed"] = max(0.7, min(1.2, speed))
+
+            audio_stream = await client.text_to_speech.convert(**convert_kwargs)
 
             # Collect audio bytes from async iterator
-            audio_bytes = b""
+            chunks = []
             async for chunk in audio_stream:
-                audio_bytes += chunk
+                chunks.append(chunk)
+            audio_bytes = b"".join(chunks)
 
             Path(audio_path).write_bytes(audio_bytes)
             return {"success": True, "provider": "elevenlabs"}

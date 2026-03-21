@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { ImageToStoryResponse, UploadStatus, VoiceType, SSEStatusData, SSEThinkingData } from '@/types/api'
+import type { ImageToStoryResponse, UploadStatus, SSEStatusData, SSEThinkingData } from '@/types/api'
 
 export interface StreamingState {
   isStreaming: boolean
@@ -31,7 +31,8 @@ interface StoryState {
   imagePreviewUrl: string | null
 
   // Voice settings
-  selectedVoice: VoiceType
+  selectedVoice: string
+  selectedProvider: string | null
   enableAudio: boolean
 
   // Story history (local cache)
@@ -48,7 +49,7 @@ interface StoryState {
   setUploadProgress: (progress: number) => void
   setUploadError: (error: string | null) => void
   setSelectedImage: (file: File | null) => void
-  setSelectedVoice: (voice: VoiceType) => void
+  setSelectedVoice: (voice: string, provider?: string) => void
   setEnableAudio: (enable: boolean) => void
   addToHistory: (story: ImageToStoryResponse) => void
   removeStory: (storyId: string) => void
@@ -73,6 +74,7 @@ const useStoryStore = create<StoryState>((set, get) => ({
   selectedImage: null,
   imagePreviewUrl: null,
   selectedVoice: 'nova',
+  selectedProvider: null,
   enableAudio: true,
   storyHistory: [],
   streaming: initialStreamingState,
@@ -118,7 +120,7 @@ const useStoryStore = create<StoryState>((set, get) => ({
     }
   },
 
-  setSelectedVoice: (voice) => set({ selectedVoice: voice }),
+  setSelectedVoice: (voice, provider) => set({ selectedVoice: voice, selectedProvider: provider ?? null }),
 
   setEnableAudio: (enable) => set({ enableAudio: enable }),
 

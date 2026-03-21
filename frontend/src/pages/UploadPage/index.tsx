@@ -12,7 +12,7 @@ import useStoryStore from '@/store/useStoryStore'
 import useAuthStore from '@/store/useAuthStore'
 import useChildStore, { DEFAULT_INTERESTS } from '@/store/useChildStore'
 import useStoryGeneration from '@/hooks/useStoryGeneration'
-import type { AgeGroup, VoiceType } from '@/types/api'
+import type { AgeGroup } from '@/types/api'
 import type { AnimationPhase } from '@/types/streaming'
 import LoginPrompt from '@/components/common/LoginPrompt'
 import VoicePicker from '@/components/common/VoicePicker'
@@ -342,7 +342,7 @@ function UploadPage() {
                     <VoicePicker
                       ageGroup={selectedAgeGroup}
                       selectedVoice={selectedVoice}
-                      onVoiceChange={(voiceId) => setSelectedVoice(voiceId as VoiceType)}
+                      onVoiceChange={(voiceId, provider) => setSelectedVoice(voiceId, provider)}
                     />
                   </motion.div>
                 )}

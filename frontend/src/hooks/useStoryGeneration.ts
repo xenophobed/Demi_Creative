@@ -6,7 +6,7 @@ import { getErrorMessage } from '@/api/client'
 import useStoryStore from '@/store/useStoryStore'
 import useChildStore from '@/store/useChildStore'
 import { storyGenerationManager } from '@/services/storyGenerationManager'
-import type { AgeGroup, VoiceType } from '@/types/api'
+import type { AgeGroup } from '@/types/api'
 
 interface UseStoryGenerationOptions {
   onSuccess?: () => void
@@ -38,7 +38,7 @@ export function useStoryGeneration(options?: UseStoryGenerationOptions) {
       image: File
       ageGroup: AgeGroup
       interests?: string[]
-      voice?: VoiceType
+      voice?: string
       enableAudio?: boolean
     }) => {
       setUploadStatus('uploading')
