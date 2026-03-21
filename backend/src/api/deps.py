@@ -67,6 +67,7 @@ async def get_current_user(authorization: Optional[str] = Header(None)) -> UserD
                 avatar_url=None,
                 is_active=True,
                 is_verified=True,
+                role="child",
                 created_at="",
                 updated_at="",
                 last_login_at=None,

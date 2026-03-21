@@ -14,7 +14,7 @@ from httpx import AsyncClient, ASGITransport
 
 from backend.src.main import app
 from backend.src.api.deps import get_current_user
-from backend.src.services.user_service import UserData
+from backend.src.services.database.user_repository import UserData
 from backend.src.services.database import db_manager
 from backend.src.services.database.schema import init_schema
 

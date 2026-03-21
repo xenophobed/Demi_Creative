@@ -23,6 +23,7 @@ class UserData:
     avatar_url: Optional[str] = None
     is_active: bool = True
     is_verified: bool = False
+    role: str = "child"
     created_at: str = ""
     updated_at: str = ""
     last_login_at: Optional[str] = None
@@ -46,7 +47,8 @@ class UserRepository:
         username: str,
         email: str,
         password_hash: str,
-        display_name: Optional[str] = None
+        display_name: Optional[str] = None,
+        role: str = "child",
     ) -> UserData:
         """
         Create a new user.
@@ -67,8 +69,8 @@ class UserRepository:
             """
             INSERT INTO users (
                 user_id, username, email, password_hash, display_name,
-                is_active, is_verified, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                is_active, is_verified, role, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 user_id,
@@ -78,6 +80,7 @@ class UserRepository:
                 display_name or username,
                 1,
                 0,
+                role,
                 now,
                 now
             )
@@ -92,6 +95,7 @@ class UserRepository:
             display_name=display_name or username,
             is_active=True,
             is_verified=False,
+            role=role,
             created_at=now,
             updated_at=now,
             last_login_at=None
@@ -447,6 +451,7 @@ class UserRepository:
             avatar_url=row.get('avatar_url'),
             is_active=bool(row.get('is_active', 1)),
             is_verified=bool(row.get('is_verified', 0)),
+            role=row.get('role', 'child'),
             created_at=row['created_at'],
             updated_at=row['updated_at'],
             last_login_at=row.get('last_login_at')

@@ -119,6 +119,7 @@ CREATE TABLE IF NOT EXISTS users (
     avatar_url TEXT,
     is_active INTEGER DEFAULT 1,
     is_verified INTEGER DEFAULT 0,
+    role TEXT DEFAULT 'child',
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     last_login_at TEXT
@@ -284,6 +285,7 @@ async def init_schema(db: "DatabaseManager") -> None:
     # Run migrations FIRST to add user_id columns if they don't exist
     await _migrate_add_user_id(db)
     await _migrate_add_story_type(db)
+    await _migrate_add_user_role(db)
     await _migrate_backfill_word_counts(db)
 
     # Now create all indexes (including user_id indexes) after migration
@@ -351,6 +353,16 @@ async def _migrate_add_story_type(db: "DatabaseManager") -> None:
 
     if 'story_type' not in stories_columns:
         await db.execute("ALTER TABLE stories ADD COLUMN story_type TEXT DEFAULT 'image_to_story'")
+        await db.commit()
+
+
+async def _migrate_add_user_role(db: "DatabaseManager") -> None:
+    """Migration: Add role column to users table (#232)."""
+    users_info = await db.fetchall("PRAGMA table_info(users)")
+    users_columns = [col['name'] for col in users_info]
+
+    if 'role' not in users_columns:
+        await db.execute("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'child'")
         await db.commit()
 
 
