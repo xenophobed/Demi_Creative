@@ -27,9 +27,9 @@ def sample_image():
 class TestImageToStoryAPI:
     """画作转故事 API 测试"""
 
-    async def test_upload_valid_image(self, sample_image):
-        """测试上传有效图片"""
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async def test_upload_valid_image(self, sample_image, test_client):
+        """测试上传有效图片 — uses agent mock fallback for test env."""
+        async with test_client as client:
             files = {
                 "image": ("drawing.png", sample_image, "image/png")
             }
@@ -47,9 +47,35 @@ class TestImageToStoryAPI:
                 data=data
             )
 
-            # 注意：由于依赖外部服务，这里可能需要 mock
-            # assert response.status_code == 201
-            # assert "story_id" in response.json()
+            assert response.status_code == 201
+            result = response.json()
+
+            # Core fields
+            assert "story_id" in result
+
+            # Story text exists and has content
+            assert "story" in result
+            assert "text" in result["story"]
+            assert len(result["story"]["text"]) > 0
+
+            # Word count is positive
+            assert "word_count" in result["story"]
+            assert result["story"]["word_count"] > 0
+
+            # Safety score present and in valid range
+            assert "safety_score" in result
+            assert 0.0 <= result["safety_score"] <= 1.0
+
+            # Age group adaptation flag
+            assert result["story"]["age_adapted"] is True
+
+            # Educational value fields present
+            assert "educational_value" in result
+            edu = result["educational_value"]
+            assert "themes" in edu
+            assert "concepts" in edu
+            assert isinstance(edu["themes"], list)
+            assert isinstance(edu["concepts"], list)
 
     async def test_upload_invalid_file_type(self):
         """测试上传无效文件类型"""
