@@ -109,6 +109,17 @@ class ProvenanceTracker:
             run_id, "failed", result_summary=summary
         )
 
+    async def cancel_run(
+        self,
+        run_id: str,
+        reason: Optional[str] = None,
+    ) -> None:
+        """Mark a Run as cancelled (e.g. client disconnect)."""
+        summary = {"reason": reason} if reason else None
+        await self._run_repo.update_status(
+            run_id, "cancelled", result_summary=summary
+        )
+
     # ------------------------------------------------------------------
     # Step lifecycle
     # ------------------------------------------------------------------

@@ -1118,7 +1118,7 @@ class RunRepository:
 
         if status == "running" and not started_at:
             started_at = now
-        elif status in ["completed", "failed"] and not completed_at:
+        elif status in ["completed", "failed", "cancelled"] and not completed_at:
             completed_at = now
 
         summary_json = json.dumps(result_summary) if result_summary else None
