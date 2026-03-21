@@ -16,12 +16,90 @@ from ..models import AgeGroup, EmotionType, TTSProviderEnum
 from ...services.database import session_repo, story_repo
 from ...services.user_service import UserData
 from ...services.tts_service import generate_story_audio_file
+from ...mcp_servers.tts_generator_server import (
+    OPENAI_VOICES,
+    MINIMAX_VOICES,
+    ELEVENLABS_VOICES,
+)
 
 
 router = APIRouter(
     prefix="/api/v1/audio",
     tags=["Audio"]
 )
+
+
+# ---------------------------------------------------------------------------
+# Voice catalog models (#244)
+# ---------------------------------------------------------------------------
+
+
+class VoiceEntry(BaseModel):
+    """A single voice in the catalog."""
+    voice_id: str = Field(..., description="Voice identifier")
+    provider: str = Field(..., description="TTS provider (openai, replicate, elevenlabs)")
+    display_name: str = Field(..., description="Human-readable name")
+    description: str = Field(..., description="Voice description")
+    recommended_for: str = Field(..., description="Age group / use case recommendation")
+
+
+class VoiceCatalogResponse(BaseModel):
+    """Voice catalog response."""
+    voices: list[VoiceEntry] = Field(..., description="Available voices")
+    total: int = Field(..., description="Total number of voices")
+
+
+# Age group → recommended_for keyword mapping for filtering
+_AGE_KEYWORDS = {
+    "3-5": ["3-5", "3-6", "All", "bedtime"],
+    "6-8": ["6-8", "6-9", "All", "fairy tales", "playful", "adventure", "educational"],
+    "9-12": ["9-12", "All", "narration", "educational", "adventure", "action"],
+}
+
+
+@router.get(
+    "/voices",
+    response_model=VoiceCatalogResponse,
+    summary="List available TTS voices",
+    description="Returns the merged voice catalog from all TTS providers, with optional filtering",
+)
+async def list_voices(
+    age_group: Optional[str] = None,
+    provider: Optional[str] = None,
+):
+    """
+    List available TTS voices (public — no auth required). (#244)
+    """
+    voices: list[dict] = []
+
+    catalogs = [
+        ("openai", OPENAI_VOICES),
+        ("replicate", MINIMAX_VOICES),
+        ("elevenlabs", ELEVENLABS_VOICES),
+    ]
+
+    for prov, catalog in catalogs:
+        if provider and prov != provider:
+            continue
+        for voice_id, meta in catalog.items():
+            entry = {
+                "voice_id": voice_id,
+                "provider": prov,
+                "display_name": meta["display_name"],
+                "description": meta["description"],
+                "recommended_for": meta["recommended_for"],
+            }
+
+            # Apply age_group filter
+            if age_group and age_group in _AGE_KEYWORDS:
+                keywords = _AGE_KEYWORDS[age_group]
+                rec = meta["recommended_for"].lower()
+                if not any(kw.lower() in rec for kw in keywords):
+                    continue
+
+            voices.append(entry)
+
+    return VoiceCatalogResponse(voices=voices, total=len(voices))
 
 
 class AudioGenerateRequest(BaseModel):

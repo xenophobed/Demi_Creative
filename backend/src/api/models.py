@@ -22,9 +22,18 @@ class AgeGroup(str, Enum):
 
 
 class TTSProviderEnum(str, Enum):
-    """TTS provider selection (#149)"""
+    """TTS provider selection (#149, #243)"""
     OPENAI = "openai"
     REPLICATE = "replicate"
+    ELEVENLABS = "elevenlabs"
+
+
+class SceneProfile(str, Enum):
+    """TTS scene profile presets (#245)"""
+    BEDTIME = "bedtime"
+    ADVENTURE = "adventure"
+    SPOOKY = "spooky"
+    EDUCATIONAL = "educational"
 
 
 class EmotionType(str, Enum):

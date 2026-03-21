@@ -18,7 +18,7 @@ import pytest
 
 
 class TestTTSProviderEnumContract:
-    """TTSProviderEnum must have openai and replicate members."""
+    """TTSProviderEnum must have openai, replicate, and elevenlabs members."""
 
     def test_enum_has_openai(self):
         from backend.src.api.models import TTSProviderEnum
@@ -29,6 +29,11 @@ class TestTTSProviderEnumContract:
         from backend.src.api.models import TTSProviderEnum
 
         assert TTSProviderEnum.REPLICATE.value == "replicate"
+
+    def test_enum_has_elevenlabs(self):
+        from backend.src.api.models import TTSProviderEnum
+
+        assert TTSProviderEnum.ELEVENLABS.value == "elevenlabs"
 
 
 class TestEmotionTypeContract:
@@ -90,7 +95,7 @@ class TestEmotionFilterContract:
 
 
 class TestProviderProtocolContract:
-    """Both providers must implement the generate() method with correct signature."""
+    """All providers must implement the generate() method with correct signature."""
 
     def test_openai_provider_has_generate(self):
         from backend.src.services.tts_service import OpenAITTSProvider
@@ -102,6 +107,12 @@ class TestProviderProtocolContract:
         from backend.src.services.tts_service import ReplicateTTSProvider
 
         provider = ReplicateTTSProvider()
+        assert callable(getattr(provider, "generate", None))
+
+    def test_elevenlabs_provider_has_generate(self):
+        from backend.src.services.tts_service import ElevenLabsTTSProvider
+
+        provider = ElevenLabsTTSProvider()
         assert callable(getattr(provider, "generate", None))
 
 
@@ -141,3 +152,67 @@ class TestGenerateStoryAudioBackwardCompat:
             age_group="6-8",
         )
         assert "success" in result
+
+
+# ---------------------------------------------------------------------------
+# Scene profile contracts (#245)
+# ---------------------------------------------------------------------------
+
+
+class TestSceneProfileContract:
+    """Scene profiles must exist and map to valid voice settings."""
+
+    def test_scene_profile_enum_has_required_values(self):
+        from backend.src.api.models import SceneProfile
+
+        expected = {"bedtime", "adventure", "spooky", "educational"}
+        actual = {p.value for p in SceneProfile}
+        assert actual == expected
+
+    def test_resolve_scene_profile_returns_dict(self):
+        from backend.src.services.tts_service import resolve_scene_profile
+
+        result = resolve_scene_profile("bedtime")
+        assert isinstance(result, dict)
+        assert "speed" in result
+        assert "stability" in result
+        assert "style" in result
+
+    def test_all_profiles_resolve(self):
+        from backend.src.services.tts_service import resolve_scene_profile
+
+        for profile in ("bedtime", "adventure", "spooky", "educational"):
+            result = resolve_scene_profile(profile)
+            assert result is not None, f"Profile {profile} returned None"
+
+    def test_spooky_restricted_for_young_children(self):
+        from backend.src.services.tts_service import resolve_scene_profile
+
+        # For young children, spooky should fall back to adventure
+        result = resolve_scene_profile("spooky", age_group="3-5")
+        adventure = resolve_scene_profile("adventure")
+        assert result == adventure
+
+    def test_unknown_profile_returns_none(self):
+        from backend.src.services.tts_service import resolve_scene_profile
+
+        result = resolve_scene_profile("nonexistent")
+        assert result is None
+
+
+# ---------------------------------------------------------------------------
+# ElevenLabs voice catalog contract (#243)
+# ---------------------------------------------------------------------------
+
+
+class TestElevenLabsVoiceCatalogContract:
+    """ElevenLabs voice catalog must be present in list_available_voices."""
+
+    def test_elevenlabs_voices_dict_exists(self):
+        from backend.src.mcp_servers.tts_generator_server import ELEVENLABS_VOICES
+
+        assert len(ELEVENLABS_VOICES) >= 6
+        for voice_id, meta in ELEVENLABS_VOICES.items():
+            assert "display_name" in meta
+            assert "description" in meta
+            assert "recommended_for" in meta
