@@ -29,6 +29,58 @@ except Exception:  # pragma: no cover - import fallback for test env
     ToolResultBlock = object
 
 
+import logging
+
+from ..utils.text import count_words
+
+logger = logging.getLogger(__name__)
+
+
+# ============================================================================
+# Story length validation per age group (#233)
+# ============================================================================
+
+AGE_GROUP_WORD_RANGES = {
+    "3-5": (100, 200),
+    "6-8": (200, 400),
+    "9-12": (400, 800),
+}
+
+
+def validate_story_length(story_text: str, age_group: str) -> dict:
+    """Validate story word count against age-group range.
+
+    Returns a dict with:
+      - word_count: int
+      - in_range: bool (within min..max)
+      - degraded_length: bool (out of range)
+      - needs_retry: bool (drastically out of range: <50% min or >150% max)
+    """
+    word_count = count_words(story_text)
+    min_words, max_words = AGE_GROUP_WORD_RANGES.get(age_group, (200, 400))
+
+    in_range = min_words <= word_count <= max_words
+    drastically_short = word_count < min_words * 0.5
+    drastically_long = word_count > max_words * 1.5
+
+    needs_retry = drastically_short or drastically_long
+    degraded_length = not in_range
+
+    if degraded_length:
+        logger.warning(
+            "Story length out of range for age group %s: %d words (expected %d-%d)%s",
+            age_group, word_count, min_words, max_words,
+            " — needs retry" if needs_retry else "",
+        )
+
+    return {
+        "word_count": word_count,
+        "in_range": in_range,
+        "degraded_length": degraded_length,
+        "needs_retry": needs_retry,
+    }
+
+
 from ..mcp_servers import (
     vision_server,
     vector_server,
@@ -48,11 +100,38 @@ def _should_use_mock() -> bool:
 
 
 def _mock_image_to_story_result(interests: list[str]) -> Dict[str, Any]:
-    """Deterministic mock result for test environments."""
+    """Deterministic mock result for test environments.
+
+    The story text is sized for the 6-8 age group (200-400 words) so that
+    post-generation length validation passes without a retry.
+    """
     topic = interests[0] if interests else "adventure"
+    # ~210 words — comfortably inside the 6-8 range and above the 3-5 minimum
+    story = (
+        f"Once upon a time, a child drew a beautiful picture about {topic}. "
+        "The drawing came to life and took the child on a wonderful journey "
+        "through a magical land filled with colorful flowers and friendly animals. "
+        "The child met a talking rabbit who loved to paint and a wise old owl "
+        "who knew every story ever told. Together they explored a forest where "
+        "the trees whispered secrets and the rivers sang gentle songs. "
+        "The rabbit showed the child how to mix colors to make new ones, "
+        "and the owl told tales of brave adventurers from long ago. "
+        "As the sun began to set, the sky turned orange and pink, "
+        "and the child realized it was time to go home. "
+        "But the magical friends promised they would always be there, "
+        "waiting inside the drawing whenever the child wanted to visit again. "
+        "The child smiled and waved goodbye, feeling happy and inspired. "
+        "Back at home, the child picked up the crayons once more "
+        "and started a brand new drawing, imagining all the wonderful places "
+        "they would visit next time. Every line and color held a promise "
+        "of another adventure waiting to unfold. The child knew that "
+        "creativity was the key to unlocking endless worlds of wonder. "
+        "And so the story continued, one drawing at a time, "
+        "each picture opening a door to a new and exciting journey "
+        "that only the imagination could create. The end."
+    )
     return {
-        "story": f"Once upon a time, a child drew a beautiful picture about {topic}. "
-                 "The drawing came to life and took the child on a wonderful journey.",
+        "story": story,
         "themes": [topic, "creativity"],
         "concepts": ["imagination", "art"],
         "moral": "Every drawing tells a story.",

@@ -129,6 +129,7 @@ class StoryContent(BaseModel):
     text: str = Field(..., description="故事文本")
     word_count: int = Field(..., description="字数")
     age_adapted: bool = Field(..., description="是否经过年龄适配")
+    degraded_length: bool = Field(False, description="Story length outside expected range for age group")
 
 
 class EducationalValue(BaseModel):
