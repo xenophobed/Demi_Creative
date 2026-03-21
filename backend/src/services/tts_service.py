@@ -30,6 +30,13 @@ try:
 except Exception:  # pragma: no cover - import fallback for test env
     _replicate_module = None
 
+try:
+    from elevenlabs.client import AsyncElevenLabs as _elevenlabs_AsyncClient
+    from elevenlabs import VoiceSettings as _elevenlabs_VoiceSettings
+except Exception:  # pragma: no cover - import fallback for test env
+    _elevenlabs_AsyncClient = None
+    _elevenlabs_VoiceSettings = None
+
 
 # ---------------------------------------------------------------------------
 # Age-based emotion filtering (#149)
@@ -189,17 +196,121 @@ class ReplicateTTSProvider:
 
 
 # ---------------------------------------------------------------------------
+# ElevenLabs provider (#243)
+# ---------------------------------------------------------------------------
+
+# Emotion → ElevenLabs voice settings mapping
+_EMOTION_VOICE_SETTINGS: Dict[str, Dict[str, float]] = {
+    "happy": {"stability": 0.35, "similarity_boost": 0.75, "style": 0.4},
+    "sad": {"stability": 0.45, "similarity_boost": 0.80, "style": 0.3},
+    "neutral": {"stability": 0.65, "similarity_boost": 0.75, "style": 0.0},
+    "surprised": {"stability": 0.25, "similarity_boost": 0.70, "style": 0.5},
+    "disgusted": {"stability": 0.50, "similarity_boost": 0.75, "style": 0.2},
+}
+
+
+class ElevenLabsTTSProvider:
+    """ElevenLabs TTS provider with expressive voice settings (#243)."""
+
+    DEFAULT_MODEL = "eleven_flash_v2_5"
+
+    def _emotion_to_voice_settings(self, emotion: Optional[str]) -> Dict[str, float]:
+        """Map emotion string to ElevenLabs voice settings."""
+        if emotion and emotion in _EMOTION_VOICE_SETTINGS:
+            return dict(_EMOTION_VOICE_SETTINGS[emotion])
+        return dict(_EMOTION_VOICE_SETTINGS["neutral"])
+
+    async def generate(
+        self,
+        text: str,
+        voice: str,
+        speed: float,
+        audio_path: str,
+        emotion: Optional[str] = None,
+        pitch: Optional[int] = None,
+        volume: Optional[float] = None,
+        language_boost: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        api_key = os.getenv("ELEVENLABS_API_KEY")
+        if not api_key:
+            return {"success": False, "error": "ELEVENLABS_API_KEY not configured"}
+
+        if _elevenlabs_AsyncClient is None or _elevenlabs_VoiceSettings is None:
+            return {"success": False, "error": "elevenlabs SDK not installed"}
+
+        try:
+            settings = self._emotion_to_voice_settings(emotion)
+            voice_settings = _elevenlabs_VoiceSettings(
+                stability=settings["stability"],
+                similarity_boost=settings["similarity_boost"],
+                style=settings["style"],
+            )
+
+            client = _elevenlabs_AsyncClient(api_key=api_key)
+            audio_stream = await client.text_to_speech.convert(
+                voice_id=voice,
+                text=text,
+                model_id=self.DEFAULT_MODEL,
+                voice_settings=voice_settings,
+                output_format="mp3_44100_128",
+            )
+
+            # Collect audio bytes from async iterator
+            audio_bytes = b""
+            async for chunk in audio_stream:
+                audio_bytes += chunk
+
+            Path(audio_path).write_bytes(audio_bytes)
+            return {"success": True, "provider": "elevenlabs"}
+
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+
+# ---------------------------------------------------------------------------
+# Scene profile presets (#245)
+# ---------------------------------------------------------------------------
+
+SCENE_PROFILES: Dict[str, Dict[str, float]] = {
+    "bedtime": {"speed": 0.85, "stability": 0.7, "style": 0.1},
+    "adventure": {"speed": 1.1, "stability": 0.3, "style": 0.5},
+    "spooky": {"speed": 0.95, "stability": 0.4, "style": 0.3},
+    "educational": {"speed": 1.0, "stability": 0.65, "style": 0.0},
+}
+
+
+def resolve_scene_profile(
+    profile: str, *, age_group: Optional[str] = None
+) -> Optional[Dict[str, float]]:
+    """Resolve a scene profile name to voice settings.
+
+    Returns None for unknown profiles. Restricts 'spooky' to 9-12 age group,
+    falling back to 'adventure' for younger children.
+    """
+    if profile not in SCENE_PROFILES:
+        return None
+
+    if profile == "spooky" and age_group in ("3-5", "6-8"):
+        return dict(SCENE_PROFILES["adventure"])
+
+    return dict(SCENE_PROFILES[profile])
+
+
+# ---------------------------------------------------------------------------
 # Provider factory
 # ---------------------------------------------------------------------------
 
 _openai_provider = OpenAITTSProvider()
 _replicate_provider = ReplicateTTSProvider()
+_elevenlabs_provider = ElevenLabsTTSProvider()
 _OPENAI_VOICE_IDS = {"alloy", "echo", "fable", "onyx", "nova", "shimmer"}
 
 
 def _select_provider(provider: Optional[str]) -> TTSProvider:
     if provider == "replicate":
         return _replicate_provider
+    if provider == "elevenlabs":
+        return _elevenlabs_provider
     return _openai_provider
 
 
@@ -285,17 +396,18 @@ async def generate_story_audio_file(
             language_boost=language_boost,
         )
 
-        # Fallback: if Replicate failed, retry once (transient) then fall back to OpenAI
-        if not result.get("success") and provider == "replicate":
+        # Fallback: if non-OpenAI provider failed, retry once then fall back to OpenAI
+        if not result.get("success") and provider in ("replicate", "elevenlabs"):
             error_msg = result.get("error", "")
-            # Skip retry for deterministic failures (missing token, SDK not installed)
-            is_deterministic = any(
-                s in error_msg for s in ("REPLICATE_API_TOKEN", "SDK not installed")
+            # Skip retry for deterministic failures (missing token/key, SDK not installed)
+            deterministic_markers = (
+                "REPLICATE_API_TOKEN", "ELEVENLABS_API_KEY", "SDK not installed",
             )
+            is_deterministic = any(s in error_msg for s in deterministic_markers)
 
             if not is_deterministic:
-                logger.warning("Replicate TTS failed (%s), retrying once...", error_msg)
-                result = await _replicate_provider.generate(
+                logger.warning("%s TTS failed (%s), retrying once...", provider, error_msg)
+                result = await chosen_provider.generate(
                     text=text,
                     voice=voice,
                     speed=resolved_speed,
@@ -307,8 +419,8 @@ async def generate_story_audio_file(
                 )
 
             if not result.get("success"):
-                logger.warning("Replicate failed (%s), falling back to OpenAI", error_msg)
-                # Map Replicate voice IDs to a safe OpenAI default
+                logger.warning("%s failed (%s), falling back to OpenAI", provider, error_msg)
+                # Map non-OpenAI voice IDs to a safe OpenAI default
                 fallback_voice = voice if voice in _OPENAI_VOICE_IDS else "nova"
                 result = await _openai_provider.generate(
                     text=text,

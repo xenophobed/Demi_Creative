@@ -15,19 +15,12 @@ import useStoryGeneration from '@/hooks/useStoryGeneration'
 import type { AgeGroup, VoiceType } from '@/types/api'
 import type { AnimationPhase } from '@/types/streaming'
 import LoginPrompt from '@/components/common/LoginPrompt'
+import VoicePicker from '@/components/common/VoicePicker'
 
 const AGE_GROUPS: { value: AgeGroup; label: string; emoji: string; description: string }[] = [
   { value: '3-5', label: '3-5 yrs', emoji: '🧒', description: 'Simple & Fun' },
   { value: '6-8', label: '6-8 yrs', emoji: '👦', description: 'Engaging' },
   { value: '9-12', label: '9-12 yrs', emoji: '🧑', description: 'Rich Stories' },
-]
-
-const VOICE_OPTIONS: { value: VoiceType; label: string; emoji: string }[] = [
-  { value: 'nova', label: 'Gentle', emoji: '👩' },
-  { value: 'shimmer', label: 'Lively', emoji: '💃' },
-  { value: 'fable', label: 'Storyteller', emoji: '📖' },
-  { value: 'echo', label: 'Warm', emoji: '👨' },
-  { value: 'alloy', label: 'Robot', emoji: '🤖' },
 ]
 
 function UploadPage() {
@@ -338,52 +331,19 @@ function UploadPage() {
                 <span className="text-gray-700">Generate audio narration</span>
               </label>
 
-              {/* Voice selection */}
+              {/* Voice selection (#151) */}
               <AnimatePresence>
                 {enableAudio && (
                   <motion.div
-                    className="grid grid-cols-2 md:grid-cols-5 gap-3"
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: 'auto' }}
                     exit={{ opacity: 0, height: 0 }}
                   >
-                    {VOICE_OPTIONS.map((voice, index) => (
-                      <motion.button
-                        key={voice.value}
-                        className={`voice-card p-3 rounded-lg border-2 transition-all preserve-3d ${
-                          selectedVoice === voice.value
-                            ? 'border-secondary bg-secondary/10 shadow-lg'
-                            : 'border-gray-200 hover:border-gray-300'
-                        }`}
-                        onClick={() => setSelectedVoice(voice.value)}
-                        initial={{ opacity: 0, scale: 0.8 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        transition={{ delay: index * 0.05 }}
-                        whileHover={
-                          prefersReducedMotion
-                            ? {}
-                            : {
-                                scale: 1.05,
-                                rotateY: 5,
-                              }
-                        }
-                        whileTap={{ scale: 0.95 }}
-                      >
-                        <div className="text-center">
-                          <motion.span
-                            className="text-2xl block mb-1"
-                            animate={
-                              selectedVoice === voice.value
-                                ? { scale: [1, 1.2, 1] }
-                                : {}
-                            }
-                          >
-                            {voice.emoji}
-                          </motion.span>
-                          <span className="text-sm text-gray-700">{voice.label}</span>
-                        </div>
-                      </motion.button>
-                    ))}
+                    <VoicePicker
+                      ageGroup={selectedAgeGroup}
+                      selectedVoice={selectedVoice}
+                      onVoiceChange={(voiceId) => setSelectedVoice(voiceId as VoiceType)}
+                    />
                   </motion.div>
                 )}
               </AnimatePresence>

@@ -43,6 +43,18 @@ MINIMAX_VOICES = {
     "Sweet_Girl_2": {"display_name": "Sweet Girl", "description": "Sweet, cheerful female voice", "recommended_for": "Ages 6-9, playful"},
 }
 
+# Available voice options — ElevenLabs curated catalog (#243)
+ELEVENLABS_VOICES = {
+    "CwhRBWXzGAHq8TQ4Fs17": {"display_name": "Roger", "description": "Warm, confident male storyteller", "recommended_for": "Ages 9-12, adventure and narration"},
+    "EXAVITQu4vr4xnSDxMaL": {"display_name": "Sarah", "description": "Soft, natural female voice", "recommended_for": "Ages 3-6, bedtime stories"},
+    "FGY2WhTYpPnrIDTdsKH5": {"display_name": "Laura", "description": "Gentle, nurturing female voice", "recommended_for": "Ages 3-6, bedtime and educational"},
+    "IKne3meq5aSn9XLyUdCD": {"display_name": "Charlie", "description": "Friendly, energetic male voice", "recommended_for": "Ages 6-9, playful stories"},
+    "JBFqnCBsd6RMkjVDRZzb": {"display_name": "George", "description": "Warm British male, great for narration", "recommended_for": "Traditional fairy tales"},
+    "XB0fDUnXU5powFXDhCwa": {"display_name": "Charlotte", "description": "Expressive, lively female voice", "recommended_for": "Ages 6-9, adventure stories"},
+    "pFZP5JQG7iQjIQuC4Bku": {"display_name": "Lily", "description": "Sweet, cheerful female voice", "recommended_for": "Ages 3-6, playful and educational"},
+    "nPczCjzI2devNBz1zQrb": {"display_name": "Brian", "description": "Deep, resonant male narrator", "recommended_for": "Ages 9-12, educational content"},
+}
+
 # Backward-compatible flat dict for legacy code
 AVAILABLE_VOICES = {vid: meta["description"] for vid, meta in OPENAI_VOICES.items()}
 
@@ -124,6 +136,15 @@ async def list_available_voices(args: Dict[str, Any]) -> Dict[str, Any]:
         voices.append({
             "voice_id": voice_id,
             "provider": "replicate",
+            "display_name": meta["display_name"],
+            "description": meta["description"],
+            "recommended_for": meta["recommended_for"],
+        })
+
+    for voice_id, meta in ELEVENLABS_VOICES.items():
+        voices.append({
+            "voice_id": voice_id,
+            "provider": "elevenlabs",
             "display_name": meta["display_name"],
             "description": meta["description"],
             "recommended_for": meta["recommended_for"],
