@@ -77,6 +77,19 @@ async def _init_database():
         await db_manager.connect()
         await init_schema(db_manager)
 
+    # Ensure the test user exists in the users table so FK constraints pass
+    from datetime import datetime
+    now = datetime.now().isoformat()
+    await db_manager.execute(
+        """
+        INSERT OR IGNORE INTO users (user_id, username, email, password_hash, display_name, is_active, is_verified, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, 1, 1, ?, ?)
+        """,
+        (_TEST_USER.user_id, _TEST_USER.username, _TEST_USER.email,
+         _TEST_USER.password_hash, _TEST_USER.display_name, now, now),
+    )
+    await db_manager.commit()
+
     yield
 
     await db_manager.disconnect()

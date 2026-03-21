@@ -4,6 +4,9 @@ Tests for Image to Story API
 画作转故事 API 单元测试
 """
 
+import json
+import uuid
+
 import pytest
 from httpx import AsyncClient, ASGITransport
 from pathlib import Path
@@ -11,6 +14,7 @@ from io import BytesIO
 from PIL import Image
 
 from backend.src.main import app
+from backend.src.services.database import character_repo
 
 
 @pytest.fixture
@@ -192,3 +196,53 @@ class TestImageToStoryResponseFormat:
             assert "educational_value" in result
             assert "safety_score" in result
             assert 0.0 <= result["safety_score"] <= 1.0
+
+
+@pytest.mark.asyncio
+class TestStreamingCharacterSync:
+    """Streaming path must sync detected characters to the character table (#235)."""
+
+    async def test_streaming_syncs_characters_to_character_table(self, sample_image, test_client):
+        """Stream a story with characters and verify they appear in the character table."""
+        child_id = f"child-char-stream-{uuid.uuid4().hex[:8]}"
+
+        async with test_client as client:
+            files = {
+                "image": ("drawing.png", sample_image, "image/png")
+            }
+            data = {
+                "child_id": child_id,
+                "age_group": "6-8",
+                "interests": "animals",
+            }
+
+            response = await client.post(
+                "/api/v1/image-to-story/stream",
+                files=files,
+                data=data,
+            )
+            assert response.status_code == 200
+            body = response.text
+
+            # Extract characters from SSE result event
+            result_characters = []
+            for line in body.split("\n"):
+                if line.startswith("data:") and "story_id" in line:
+                    event_data = json.loads(line[len("data:"):])
+                    result_characters = event_data.get("characters", [])
+                    break
+
+            # The mock agent returns at least one character
+            assert len(result_characters) > 0, (
+                "Mock agent must return at least one character for this test to be meaningful"
+            )
+
+            # Verify characters were persisted to the character table
+            db_characters = await character_repo.get_characters(child_id)
+            streamed_names = {c["character_name"] for c in result_characters}
+            db_names = {c["name"] for c in db_characters}
+
+            assert streamed_names.issubset(db_names), (
+                f"Characters from stream not found in DB. "
+                f"Stream returned: {streamed_names}, DB has: {db_names}"
+            )

@@ -669,6 +669,17 @@ async def create_story_from_image_stream(
                     except Exception:
                         pass  # Non-critical
 
+                    # Sync detected characters to characters table (#235)
+                    for char_data in result_data.get("characters", []):
+                        try:
+                            await character_repo.upsert_character(
+                                child_id=safe_child_id,
+                                name=char_data.get("name", ""),
+                                description=char_data.get("description", ""),
+                            )
+                        except Exception:
+                            pass  # Non-critical
+
                     yield f"event: result\ndata: {json.dumps(response_data, ensure_ascii=False)}\n\n"
 
                 else:
