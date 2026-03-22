@@ -210,6 +210,31 @@ CREATE INDEX IF NOT EXISTS idx_characters_child_name ON characters(child_id, nam
 CREATE INDEX IF NOT EXISTS idx_characters_appearance ON characters(appearance_count DESC);
 """
 
+# ============================================================================
+# Cloned Voices Table (#150)
+# ============================================================================
+
+CLONED_VOICES_TABLE = """
+CREATE TABLE IF NOT EXISTS cloned_voices (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    voice_id TEXT UNIQUE NOT NULL,
+    user_id TEXT NOT NULL,
+    child_id TEXT NOT NULL,
+    display_name TEXT NOT NULL,
+    replicate_voice_id TEXT NOT NULL,
+    voice_file_hash TEXT NOT NULL,
+    is_active INTEGER DEFAULT 1,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+);
+"""
+
+CLONED_VOICES_INDEXES = """
+CREATE INDEX IF NOT EXISTS idx_cloned_voices_user_id ON cloned_voices(user_id);
+CREATE INDEX IF NOT EXISTS idx_cloned_voices_child_id ON cloned_voices(child_id);
+CREATE INDEX IF NOT EXISTS idx_cloned_voices_active ON cloned_voices(is_active);
+"""
+
 
 # ============================================================================
 # Schema Initialization
@@ -274,6 +299,15 @@ async def init_schema(db: "DatabaseManager") -> None:
     # Create characters table (#160)
     await db.execute(CHARACTERS_TABLE)
     for stmt in CHARACTERS_INDEXES.strip().split(";"):
+        if stmt.strip():
+            try:
+                await db.execute(stmt)
+            except Exception:
+                pass
+
+    # Create cloned voices table (#150)
+    await db.execute(CLONED_VOICES_TABLE)
+    for stmt in CLONED_VOICES_INDEXES.strip().split(";"):
         if stmt.strip():
             try:
                 await db.execute(stmt)

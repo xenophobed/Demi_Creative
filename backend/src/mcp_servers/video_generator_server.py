@@ -13,8 +13,21 @@ from pathlib import Path
 import uuid
 from datetime import datetime, timedelta
 
-from openai import OpenAI
-from claude_agent_sdk import tool, create_sdk_mcp_server
+try:
+    from openai import OpenAI
+except Exception:  # pragma: no cover - import fallback for test env
+    OpenAI = None
+
+try:
+    from claude_agent_sdk import tool, create_sdk_mcp_server
+except Exception:  # pragma: no cover - import fallback for test env
+    def tool(*_args, **_kwargs):
+        def decorator(func):
+            return func
+        return decorator
+
+    def create_sdk_mcp_server(**kwargs):
+        return kwargs
 
 
 # Video style prompts for child-friendly animation
@@ -214,20 +227,19 @@ async def generate_painting_video(args: Dict[str, Any]) -> Dict[str, Any]:
     except Exception as e:
         error_message = str(e)
 
-        # 如果是 API 不支持的错误，创建一个待处理的任务
-        # 实际生产中可能需要使用队列系统
+        # Fail fast (#182): no async worker exists to resolve pending jobs,
+        # so report the failure immediately instead of creating a phantom job.
         job_id = str(uuid.uuid4())
         job_data = {
             "job_id": job_id,
             "story_id": story_id,
-            "status": "pending",
+            "status": "failed",
             "progress_percent": 0,
             "style": style,
             "duration_seconds": duration_seconds,
             "image_path": image_path,
             "created_at": datetime.now().isoformat(),
-            "estimated_completion": (datetime.now() + timedelta(minutes=5)).isoformat(),
-            "error": error_message if "sora" in error_message.lower() else None
+            "error": error_message,
         }
         save_job_status(job_id, job_data)
 
@@ -235,12 +247,10 @@ async def generate_painting_video(args: Dict[str, Any]) -> Dict[str, Any]:
             "content": [{
                 "type": "text",
                 "text": json.dumps({
-                    "success": True,
+                    "success": False,
                     "job_id": job_id,
-                    "status": "pending",
-                    "message": "视频生成任务已创建，请稍后查询状态",
-                    "estimated_completion": job_data["estimated_completion"],
-                    "note": "Sora API 可能需要一些时间处理，请使用 check_video_status 工具查询进度"
+                    "status": "failed",
+                    "error": f"Video generation failed: {error_message}",
                 }, ensure_ascii=False, indent=2)
             }]
         }

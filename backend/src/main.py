@@ -288,6 +288,7 @@ from .api.routes import (
     interactive_story,
     audio,
     video,
+    voice,
     users,
     news_to_kids,
     morning_show,
@@ -302,6 +303,7 @@ app.include_router(image_to_story.router)
 app.include_router(interactive_story.router)
 app.include_router(audio.router)
 app.include_router(video.router)
+app.include_router(voice.router)
 app.include_router(users.router)
 app.include_router(news_to_kids.router)
 app.include_router(morning_show.router)
