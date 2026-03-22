@@ -704,6 +704,9 @@ class UserWithStatsResponse(UserResponse):
     """User info with content statistics"""
     story_count: int = Field(0, description="Total stories created")
     session_count: int = Field(0, description="Total interactive sessions")
+    art_story_count: int = Field(0, description="Stories from image-to-story")
+    interactive_count: int = Field(0, description="Interactive story sessions")
+    news_count: int = Field(0, description="News-to-kids and morning show stories")
 
 
 class TokenResponse(BaseModel):

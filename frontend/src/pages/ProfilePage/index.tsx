@@ -33,20 +33,6 @@ function ProfilePage() {
     enabled: isAuthenticated,
   })
 
-  // Fetch recent stories
-  const { data: storiesData, isLoading: storiesLoading } = useQuery({
-    queryKey: ['my-stories'],
-    queryFn: () => authService.getMyStories({ limit: 5 }),
-    enabled: isAuthenticated,
-  })
-
-  // Fetch recent sessions
-  const { data: sessionsData, isLoading: sessionsLoading } = useQuery({
-    queryKey: ['my-sessions'],
-    queryFn: () => authService.getMySessions({ limit: 5 }),
-    enabled: isAuthenticated,
-  })
-
   const handleSaveProfile = async () => {
     setSaving(true)
     try {
@@ -57,19 +43,6 @@ function ProfilePage() {
       console.error('Failed to update profile:', err)
     } finally {
       setSaving(false)
-    }
-  }
-
-  const getStoryRoute = (story: { story_id: string; story_type: string | null }) => {
-    switch (story.story_type) {
-      case 'morning_show':
-        return `/morning-show/${story.story_id}`
-      case 'news':
-        return '/news'
-      case 'interactive':
-        return `/interactive?session=${story.story_id}`
-      default:
-        return `/story/${story.story_id}`
     }
   }
 
@@ -182,27 +155,36 @@ function ProfilePage() {
 
       {/* Stats Cards */}
       <motion.div
-        className="grid grid-cols-2 gap-4"
+        className="grid grid-cols-3 gap-4"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1 }}
       >
-        <TiltCard maxTilt={10} glare className="cursor-default">
+        <TiltCard maxTilt={10} glare className="cursor-pointer" onClick={() => navigate('/library?tab=art-stories')}>
           <div className="bg-gradient-to-br from-primary/10 to-primary/5 rounded-card p-5 text-center">
-            <div className="text-4xl mb-2">📖</div>
+            <div className="text-4xl mb-2">🎨</div>
             <div className="text-3xl font-bold text-gray-800">
-              {statsLoading ? '...' : stats?.story_count ?? 0}
+              {statsLoading ? '...' : stats?.art_story_count ?? 0}
             </div>
-            <div className="text-sm text-gray-500 mt-1">Stories Created</div>
+            <div className="text-sm text-gray-500 mt-1">Art Stories</div>
           </div>
         </TiltCard>
-        <TiltCard maxTilt={10} glare className="cursor-default">
+        <TiltCard maxTilt={10} glare className="cursor-pointer" onClick={() => navigate('/library?tab=interactive')}>
           <div className="bg-gradient-to-br from-accent/20 to-accent/10 rounded-card p-5 text-center">
             <div className="text-4xl mb-2">🎭</div>
             <div className="text-3xl font-bold text-gray-800">
-              {statsLoading ? '...' : stats?.session_count ?? 0}
+              {statsLoading ? '...' : stats?.interactive_count ?? 0}
             </div>
-            <div className="text-sm text-gray-500 mt-1">Interactive Sessions</div>
+            <div className="text-sm text-gray-500 mt-1">Interactive Tales</div>
+          </div>
+        </TiltCard>
+        <TiltCard maxTilt={10} glare className="cursor-pointer" onClick={() => navigate('/library?tab=kids-news')}>
+          <div className="bg-gradient-to-br from-secondary/20 to-secondary/10 rounded-card p-5 text-center">
+            <div className="text-4xl mb-2">📰</div>
+            <div className="text-3xl font-bold text-gray-800">
+              {statsLoading ? '...' : stats?.news_count ?? 0}
+            </div>
+            <div className="text-sm text-gray-500 mt-1">Kids News</div>
           </div>
         </TiltCard>
       </motion.div>
@@ -226,133 +208,6 @@ function ProfilePage() {
             Manage Channels
           </Button>
         </Card>
-      </motion.section>
-
-      {/* Recent Stories */}
-      <motion.section
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2 }}
-      >
-        <h2 className="text-lg font-bold text-gray-800 mb-3 flex items-center gap-2">
-          <span>📚</span> Recent Stories
-        </h2>
-        {storiesLoading ? (
-          <p className="text-gray-400 text-sm">Loading stories...</p>
-        ) : storiesData?.stories && storiesData.stories.length > 0 ? (
-          <div className="space-y-2">
-            {storiesData.stories.map((story) => (
-              <Card
-                key={story.story_id}
-                className="p-3 cursor-pointer"
-                onClick={() => navigate(getStoryRoute(story))}
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary/20 to-secondary/10 flex items-center justify-center overflow-hidden flex-shrink-0">
-                    {story.image_url ? (
-                      <img
-                        src={resolveMediaUrl(story.image_url) || ''}
-                        alt="Artwork"
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <span className="text-lg">📖</span>
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm text-gray-700 truncate">
-                      {story.story_preview || `Story #${story.story_id.slice(0, 8)}`}
-                    </p>
-                    <div className="flex items-center gap-2 text-xs text-gray-400 mt-0.5">
-                      <span>{story.word_count} words</span>
-                      <span>{formatDate(story.created_at)}</span>
-                    </div>
-                  </div>
-                  {story.themes && story.themes.length > 0 && (
-                    <div className="flex gap-1 flex-shrink-0">
-                      {story.themes.slice(0, 2).map((theme) => (
-                        <span
-                          key={theme}
-                          className="text-xs px-1.5 py-0.5 bg-primary/10 text-primary rounded-full"
-                        >
-                          {theme}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </Card>
-            ))}
-          </div>
-        ) : (
-          <p className="text-gray-400 text-sm">No stories yet. Start creating!</p>
-        )}
-      </motion.section>
-
-      {/* Recent Sessions */}
-      <motion.section
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.3 }}
-      >
-        <h2 className="text-lg font-bold text-gray-800 mb-3 flex items-center gap-2">
-          <span>🎭</span> Recent Sessions
-        </h2>
-        {sessionsLoading ? (
-          <p className="text-gray-400 text-sm">Loading sessions...</p>
-        ) : sessionsData?.sessions && sessionsData.sessions.length > 0 ? (
-          <div className="space-y-2">
-            {sessionsData.sessions.map((session) => (
-              <Card
-                key={session.session_id}
-                className="p-3 cursor-pointer"
-                onClick={() => navigate(`/interactive?session=${session.session_id}`)}
-              >
-                <div className="flex items-center gap-3">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-700 truncate">
-                      {session.story_title}
-                    </p>
-                    <div className="flex items-center gap-2 text-xs text-gray-400 mt-0.5">
-                      <span
-                        className={`px-1.5 py-0.5 rounded-full text-xs font-medium ${
-                          session.status === 'active'
-                            ? 'bg-green-100 text-green-700'
-                            : session.status === 'completed'
-                              ? 'bg-blue-100 text-blue-700'
-                              : 'bg-gray-100 text-gray-500'
-                        }`}
-                      >
-                        {session.status}
-                      </span>
-                      <span>{formatDate(session.created_at)}</span>
-                    </div>
-                  </div>
-                  {/* Progress bar */}
-                  <div className="w-20 flex-shrink-0">
-                    <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-gradient-to-r from-primary to-secondary rounded-full transition-all"
-                        style={{
-                          width: `${
-                            session.total_segments > 0
-                              ? (session.current_segment / session.total_segments) * 100
-                              : 0
-                          }%`,
-                        }}
-                      />
-                    </div>
-                    <p className="text-xs text-gray-400 text-center mt-0.5">
-                      {session.current_segment}/{session.total_segments}
-                    </p>
-                  </div>
-                </div>
-              </Card>
-            ))}
-          </div>
-        ) : (
-          <p className="text-gray-400 text-sm">No interactive sessions yet.</p>
-        )}
       </motion.section>
     </div>
   )

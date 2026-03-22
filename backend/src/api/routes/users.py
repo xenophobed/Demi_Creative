@@ -278,6 +278,9 @@ async def get_me_stats(user: UserData = Depends(get_current_user)):
         last_login_at=datetime.fromisoformat(user_with_stats.last_login_at) if user_with_stats.last_login_at else None,
         story_count=user_with_stats.story_count,
         session_count=user_with_stats.session_count,
+        art_story_count=user_with_stats.art_story_count,
+        interactive_count=user_with_stats.interactive_count,
+        news_count=user_with_stats.news_count,
     )
 
 

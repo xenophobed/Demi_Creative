@@ -8,7 +8,17 @@ and Replicate minimax/speech-02-turbo (#149).
 import json
 from typing import Any, Dict, Optional
 
-from claude_agent_sdk import tool, create_sdk_mcp_server
+try:
+    from claude_agent_sdk import tool, create_sdk_mcp_server
+except Exception:  # pragma: no cover - import fallback for test env
+    def tool(*_args, **_kwargs):
+        def decorator(func):
+            return func
+        return decorator
+
+    def create_sdk_mcp_server(**kwargs):
+        return kwargs
+
 from ..services.tts_service import generate_story_audio_file
 
 

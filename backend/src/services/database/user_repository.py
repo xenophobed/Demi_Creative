@@ -34,6 +34,9 @@ class UserWithStats(UserData):
     """User data with story statistics."""
     story_count: int = 0
     session_count: int = 0
+    art_story_count: int = 0
+    interactive_count: int = 0
+    news_count: int = 0
 
 
 class UserRepository:
@@ -309,7 +312,10 @@ class UserRepository:
             SELECT
                 u.*,
                 (SELECT COUNT(*) FROM stories WHERE user_id = u.user_id) as story_count,
-                (SELECT COUNT(*) FROM sessions WHERE user_id = u.user_id) as session_count
+                (SELECT COUNT(*) FROM sessions WHERE user_id = u.user_id) as session_count,
+                (SELECT COUNT(*) FROM stories WHERE user_id = u.user_id AND story_type = 'image_to_story') as art_story_count,
+                (SELECT COUNT(*) FROM sessions WHERE user_id = u.user_id) as interactive_count,
+                (SELECT COUNT(*) FROM stories WHERE user_id = u.user_id AND story_type IN ('news_to_kids', 'morning_show')) as news_count
             FROM users u
             WHERE u.user_id = ?
             """,
@@ -323,7 +329,10 @@ class UserRepository:
         return UserWithStats(
             **{k: v for k, v in user.__dict__.items()},
             story_count=row.get('story_count', 0),
-            session_count=row.get('session_count', 0)
+            session_count=row.get('session_count', 0),
+            art_story_count=row.get('art_story_count', 0),
+            interactive_count=row.get('interactive_count', 0),
+            news_count=row.get('news_count', 0),
         )
 
     async def get_user_stories(
