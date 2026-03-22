@@ -141,15 +141,15 @@ function LoginPage() {
           animate={{ scale: 1 }}
           transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
         >
-          <Link to="/" className="inline-block">
+          <Link to="/" className="inline-flex flex-col items-center gap-1 sm:gap-2">
             <motion.span
-              className="text-6xl inline-block"
+              className="text-5xl sm:text-6xl inline-block"
               whileHover={{ rotate: [0, -10, 10, 0] }}
               transition={{ duration: 0.5 }}
             >
               🎨
             </motion.span>
-            <h1 className="text-3xl font-bold text-gradient mt-2">Creative Workshop</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold text-gradient">Creative Workshop</h1>
           </Link>
           <p className="text-gray-600 mt-2">
             {mode === 'login' ? 'Welcome back!' : 'Join the creative fun!'}

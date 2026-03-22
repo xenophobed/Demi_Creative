@@ -93,7 +93,7 @@ function ProfilePage() {
         animate={{ opacity: 1, y: 0 }}
       >
         <Card className="p-6">
-          <div className="flex items-center gap-4">
+          <div className="flex flex-col items-center text-center sm:flex-row sm:items-center sm:text-left gap-4">
             <div className="w-16 h-16 rounded-full bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center text-3xl overflow-hidden flex-shrink-0">
               {user?.avatar_url ? (
                 <img
@@ -120,6 +120,7 @@ function ProfilePage() {
             <Button
               variant="outline"
               size="sm"
+              className="w-full sm:w-auto"
               onClick={() => {
                 setEditForm({
                   display_name: user?.display_name || '',
