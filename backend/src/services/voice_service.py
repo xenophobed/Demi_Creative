@@ -71,16 +71,17 @@ async def clone_voice(
 
     # Call Replicate voice cloning
     try:
-        output = _replicate_module.run(
-            VOICE_CLONE_MODEL,
-            input={
-                "model": "speech-02-turbo",
-                "accuracy": 0.7,
-                "voice_file": open(voice_file_path, "rb"),
-                "need_noise_reduction": False,
-                "need_volume_normalization": False,
-            },
-        )
+        with open(voice_file_path, "rb") as voice_fh:
+            output = _replicate_module.run(
+                VOICE_CLONE_MODEL,
+                input={
+                    "model": "speech-02-turbo",
+                    "accuracy": 0.7,
+                    "voice_file": voice_fh,
+                    "need_noise_reduction": False,
+                    "need_volume_normalization": False,
+                },
+            )
 
         # Replicate returns the cloned voice_id in output
         replicate_voice_id = str(output) if output else None
