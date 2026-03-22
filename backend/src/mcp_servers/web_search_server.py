@@ -13,7 +13,16 @@ import json
 from typing import Any, Dict
 from urllib.parse import urlparse
 
-from claude_agent_sdk import tool, create_sdk_mcp_server
+try:
+    from claude_agent_sdk import tool, create_sdk_mcp_server
+except Exception:  # pragma: no cover - import fallback for test env
+    def tool(*_args, **_kwargs):
+        def decorator(func):
+            return func
+        return decorator
+
+    def create_sdk_mcp_server(**kwargs):
+        return kwargs
 
 _MAX_RESULTS_LIMIT = 10
 _MAX_RESULTS_DEFAULT = 5

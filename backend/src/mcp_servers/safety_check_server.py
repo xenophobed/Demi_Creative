@@ -8,8 +8,21 @@ import os
 import json
 from typing import Any, Dict, List
 
-from anthropic import Anthropic
-from claude_agent_sdk import tool, create_sdk_mcp_server
+try:
+    from anthropic import Anthropic
+except Exception:  # pragma: no cover - import fallback for test env
+    Anthropic = None
+
+try:
+    from claude_agent_sdk import tool, create_sdk_mcp_server
+except Exception:  # pragma: no cover - import fallback for test env
+    def tool(*_args, **_kwargs):
+        def decorator(func):
+            return func
+        return decorator
+
+    def create_sdk_mcp_server(**kwargs):
+        return kwargs
 
 
 # 安全检查规则
