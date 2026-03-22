@@ -11,7 +11,7 @@ import { performFullLogout } from '@/utils/logout'
 function PageContainer() {
   const location = useLocation()
   const navigate = useNavigate()
-  const { isAuthenticated, user, logout } = useAuthStore()
+  const { isAuthenticated, user } = useAuthStore()
 
   useGenerationNavigator()
 

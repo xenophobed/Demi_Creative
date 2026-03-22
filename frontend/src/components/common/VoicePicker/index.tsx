@@ -74,10 +74,13 @@ function saveLastVoice(voiceId: string, provider: string) {
   }
 }
 
+const COLLAPSED_LIMIT = 6
+
 function VoicePicker({ ageGroup, selectedVoice, onVoiceChange, className = '' }: VoicePickerProps) {
   const [voices, setVoices] = useState<VoiceEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [previewingId, setPreviewingId] = useState<string | null>(null)
+  const [expanded, setExpanded] = useState(false)
   const previewAudioRef = useRef<HTMLAudioElement | null>(null)
 
   // Fetch voices from API
@@ -131,8 +134,12 @@ function VoicePicker({ ageGroup, selectedVoice, onVoiceChange, className = '' }:
     setTimeout(() => setPreviewingId(null), 3000)
   }
 
-  // Limit voices for young children
-  const displayVoices = ageGroup === '3-5' ? voices.slice(0, MAX_VOICES_YOUNG) : voices
+  // Limit voices for young children, or collapse for other age groups
+  const filteredVoices = ageGroup === '3-5' ? voices.slice(0, MAX_VOICES_YOUNG) : voices
+  const displayVoices = (!expanded && ageGroup !== '3-5' && filteredVoices.length > COLLAPSED_LIMIT)
+    ? filteredVoices.slice(0, COLLAPSED_LIMIT)
+    : filteredVoices
+  const canExpand = ageGroup !== '3-5' && filteredVoices.length > COLLAPSED_LIMIT
 
   // Group by provider for 9-12 age group
   const showProviderInfo = ageGroup === '9-12'
@@ -173,10 +180,12 @@ function VoicePicker({ ageGroup, selectedVoice, onVoiceChange, className = '' }:
             const isPreviewing = previewingId === voice.voice_id
 
             return (
-              <motion.button
+              <motion.div
                 key={voice.voice_id}
                 layout
-                className={`relative p-3 rounded-xl border-2 transition-all text-left ${
+                role="button"
+                tabIndex={0}
+                className={`relative p-3 rounded-xl border-2 transition-all text-left cursor-pointer ${
                   isSelected
                     ? 'border-secondary bg-secondary/10 shadow-md ring-2 ring-secondary/30'
                     : showProviderInfo
@@ -184,6 +193,7 @@ function VoicePicker({ ageGroup, selectedVoice, onVoiceChange, className = '' }:
                       : 'border-gray-200 hover:border-gray-300'
                 }`}
                 onClick={() => handleSelect(voice)}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleSelect(voice) } }}
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ delay: index * 0.03 }}
@@ -235,11 +245,20 @@ function VoicePicker({ ageGroup, selectedVoice, onVoiceChange, className = '' }:
                     )}
                   </motion.button>
                 </div>
-              </motion.button>
+              </motion.div>
             )
           })}
         </AnimatePresence>
       </div>
+      {canExpand && (
+        <motion.button
+          className="mt-3 w-full py-2 text-sm font-medium text-gray-500 hover:text-primary bg-gray-50 hover:bg-primary/5 rounded-xl transition-colors"
+          onClick={() => setExpanded(!expanded)}
+          whileTap={{ scale: 0.98 }}
+        >
+          {expanded ? 'Show fewer voices' : `Show all voices (${filteredVoices.length})`}
+        </motion.button>
+      )}
     </div>
   )
 }

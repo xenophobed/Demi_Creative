@@ -813,6 +813,26 @@ Month 3: 儿童创作了 20+ 个故事，形成自己的"故事宇宙"
 - 🔲 TTS & 音频管线升级（ElevenLabs SOTA 供应商 + 场景预设 + 语音选择器）— 见 §3.8
 - 🔲 频道订阅系统（Daily Drop 自动生成）
 
+### 跨阶段 — 响应式 UI 质量 (Responsive UI Polish) [In Progress]
+
+**必须有** (MVP 质量门槛):
+- 🔲 全局导航栏移动端适配（汉堡菜单或图标化）
+- 🔲 Library 筛选标签横向滚动（移动端不截断）
+- 🔲 Library 卡片标题双行截断（避免过度截断）
+- 🔲 Upload 页步骤排序修复（CTA 按钮位置）
+- 🔲 Login 页移动端 Logo 裁剪修复
+- 🔲 Profile 页移动端布局修复（Edit Profile 按钮重叠）
+
+**应该有**:
+- 🔲 Library「New」徽章时效规则（创建 7 天后自动消失）
+- 🔲 Library 字数标签友好化（`60w` → `~1 分钟` 或 `60 words`）
+- 🔲 Upload 语音选择器折叠/分页（28 个选项过长）
+- 🔲 React Router v7 future flag 迁移
+- 🔲 Upload 页 DOM 嵌套校验错误修复
+
+**可以有**:
+- 🔲 Library/Profile 卡片 hover 反馈（桌面端 lift 效果）
+
 ### Phase 3 - 第三阶段
 
 **可以有**:
