@@ -329,7 +329,7 @@ function LibraryCard({
       : badge.label
 
   return (
-    <Card className="cursor-pointer h-full" onClick={onClick} padding="sm">
+    <Card className="cursor-pointer h-full hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200" onClick={onClick} padding="sm">
       <div className="flex gap-4 h-full">
         {/* Thumbnail / Icon */}
         <div className={`flex-shrink-0 w-20 h-20 rounded-xl bg-gradient-to-br ${style.gradient} flex items-center justify-center overflow-hidden`}>
@@ -359,13 +359,13 @@ function LibraryCard({
                     {statusLabel(item.status)}
                   </span>
                 )}
-                {item.type === 'morning-show' && item.is_new && (
+                {item.type === 'morning-show' && item.is_new && item.created_at && (Date.now() - new Date(item.created_at).getTime()) < 7 * 86400000 && (
                   <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
                     New
                   </span>
                 )}
               </div>
-              <h3 className="text-base font-bold text-gray-800 truncate">{item.title}</h3>
+              <h3 className="text-base font-bold text-gray-800 line-clamp-2">{item.title}</h3>
             </div>
             <div className="flex items-center gap-1.5 flex-shrink-0">
               {showFavorite && (
@@ -425,7 +425,7 @@ function LibraryCard({
             <div className="flex items-center gap-1.5 text-xs text-gray-400">
               {showWordCount && item.word_count !== undefined && item.word_count > 0 && (
                 <>
-                  <span>{item.word_count}w</span>
+                  <span>{item.word_count} words</span>
                   <span aria-hidden="true">·</span>
                 </>
               )}
@@ -529,13 +529,13 @@ function ListRow({
                       {statusLabel(item.status)}
                     </span>
                   )}
-                  {item.type === 'morning-show' && item.is_new && (
+                  {item.type === 'morning-show' && item.is_new && item.created_at && (Date.now() - new Date(item.created_at).getTime()) < 7 * 86400000 && (
                     <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
                       New
                     </span>
                   )}
                 </div>
-                <h4 className="text-base font-semibold text-gray-800 truncate">{item.title}</h4>
+                <h4 className="text-base font-semibold text-gray-800 line-clamp-2">{item.title}</h4>
               </div>
               <div className="flex items-center gap-1.5 flex-shrink-0">
                 {showFavorite && (
@@ -582,7 +582,7 @@ function ListRow({
               <div className="flex items-center gap-1.5 text-xs text-gray-400">
                 {showWordCount && item.word_count !== undefined && item.word_count > 0 && (
                   <>
-                    <span>{item.word_count}w</span>
+                    <span>{item.word_count} words</span>
                     <span aria-hidden="true">·</span>
                   </>
                 )}
@@ -840,7 +840,7 @@ function LibraryPage() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1 }}
       >
-        <div className="flex gap-2 overflow-x-auto pb-1">
+        <div className="flex gap-2 flex-nowrap overflow-x-auto pb-1 scrollbar-hide">
           {TABS.map((tab) => (
             <motion.button
               key={tab.id}

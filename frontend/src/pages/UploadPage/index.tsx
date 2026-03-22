@@ -371,7 +371,7 @@ function UploadPage() {
 
       {/* Generate button with glow effect */}
       <motion.div
-        className="sticky bottom-4 z-10"
+        className="z-10"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.5 }}
