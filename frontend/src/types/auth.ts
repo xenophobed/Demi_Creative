@@ -59,6 +59,9 @@ export interface ChangePasswordRequest {
 export interface UserWithStats extends User {
   story_count: number
   session_count: number
+  art_story_count?: number
+  interactive_count?: number
+  news_count?: number
 }
 
 // Story summary for user's story list

@@ -739,6 +739,7 @@ function LibraryPage() {
     queryClient.invalidateQueries({ queryKey: ['library-search'] })
     queryClient.invalidateQueries({ queryKey: ['library-child-art-stories'] })
     queryClient.invalidateQueries({ queryKey: ['library-news-history'] })
+    queryClient.invalidateQueries({ queryKey: ['user-stats'] })
   }, [queryClient, removeStory])
 
   const handleClearHistory = () => {
