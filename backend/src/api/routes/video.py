@@ -101,7 +101,14 @@ async def generate_video(
             )
 
         job_id = result_data["job_id"]
-        job_status = result_data.get("status", "pending")
+        job_status = result_data.get("status", "failed")
+
+        # Fail fast (#182): if generation failed, report error immediately
+        if job_status == "failed":
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=result_data.get("error", "Video generation failed"),
+            )
 
         # Calculate estimated completion time
         estimated_completion = None

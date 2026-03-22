@@ -638,6 +638,17 @@ async def create_story_from_image_stream(
                     except Exception:
                         pass
 
+                    # Sync detected characters to characters table (#235)
+                    for c in result_data.get("characters", []):
+                        try:
+                            await character_repo.upsert_character(
+                                child_id=safe_child_id,
+                                name=c.get("name", ""),
+                                description=c.get("description", ""),
+                            )
+                        except Exception:
+                            pass  # Non-critical
+
                     # --- Provenance: record run + all artifacts (Issue #234) ---
                     # Provenance is recorded after story_repo.create() so that the
                     # runs.story_id FK constraint is satisfied.
