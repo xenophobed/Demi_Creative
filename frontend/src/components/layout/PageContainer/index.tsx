@@ -4,6 +4,7 @@ import { AnimatedBackground } from '@/components/depth/AnimatedBackground'
 import { ConfettiController } from '@/components/effects/Confetti'
 import GenerationStatusBar from '@/components/layout/GenerationStatusBar'
 import useGenerationNavigator from '@/hooks/useGenerationNavigator'
+import AvatarDisplay from '@/components/common/AvatarDisplay'
 import useAuthStore from '@/store/useAuthStore'
 import { authService } from '@/api/services/authService'
 import { performFullLogout } from '@/utils/logout'
@@ -62,17 +63,7 @@ function PageContainer() {
                       className="flex items-center gap-2 text-gray-600"
                       whileHover={{ scale: 1.02 }}
                     >
-                      <span className="text-xl">
-                        {user?.avatar_url ? (
-                          <img
-                            src={user.avatar_url}
-                            alt="avatar"
-                            className="w-7 h-7 rounded-full object-cover"
-                          />
-                        ) : (
-                          '👤'
-                        )}
-                      </span>
+                      <AvatarDisplay avatarUrl={user?.avatar_url} size="sm" />
                       <span className="text-sm font-medium hidden sm:inline">
                         {user?.display_name || user?.username}
                       </span>

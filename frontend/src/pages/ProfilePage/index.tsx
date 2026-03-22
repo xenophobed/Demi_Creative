@@ -9,6 +9,13 @@ import useAuthStore from '@/store/useAuthStore'
 import { authService } from '@/api/services/authService'
 import type { UpdateProfileRequest } from '@/types/auth'
 import { resolveMediaUrl } from '@/utils/mediaUrl'
+import AvatarDisplay from '@/components/common/AvatarDisplay'
+
+const ANIMAL_EMOJIS = [
+  '🐶', '🐱', '🐼', '🐨', '🦊', '🐰', '🐸', '🦁',
+  '🐯', '🐮', '🐷', '🐵', '🐔', '🐧', '🦄', '🐲',
+  '🐢', '🦋', '🐬', '🐙',
+]
 
 function ProfilePage() {
   const navigate = useNavigate()
@@ -67,17 +74,7 @@ function ProfilePage() {
       >
         <Card className="p-6">
           <div className="flex flex-col items-center text-center sm:flex-row sm:items-center sm:text-left gap-4">
-            <div className="w-16 h-16 rounded-full bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center text-3xl overflow-hidden flex-shrink-0">
-              {user?.avatar_url ? (
-                <img
-                  src={resolveMediaUrl(user.avatar_url) || user.avatar_url}
-                  alt="avatar"
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                '👤'
-              )}
-            </div>
+            <AvatarDisplay avatarUrl={user?.avatar_url} size="lg" />
             <div className="flex-1 min-w-0">
               <h1 className="text-2xl font-bold text-gray-800 truncate">
                 {user?.display_name || user?.username}
@@ -128,18 +125,41 @@ function ProfilePage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-600 mb-1">
-                  Avatar URL
+                <label className="block text-sm font-medium text-gray-600 mb-2">
+                  Choose Your Avatar
                 </label>
-                <input
-                  type="text"
-                  value={editForm.avatar_url || ''}
-                  onChange={(e) =>
-                    setEditForm({ ...editForm, avatar_url: e.target.value })
-                  }
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-                  placeholder="https://example.com/avatar.png"
-                />
+                <div className="flex items-center gap-3 mb-3">
+                  <AvatarDisplay avatarUrl={editForm.avatar_url || undefined} size="md" />
+                  <span className="text-sm text-gray-500">
+                    {editForm.avatar_url?.startsWith('emoji:')
+                      ? 'Tap an animal to change'
+                      : 'Pick your favorite animal!'}
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {ANIMAL_EMOJIS.map((emoji) => {
+                    const emojiValue = `emoji:${emoji}`
+                    const isSelected = editForm.avatar_url === emojiValue
+                    return (
+                      <motion.button
+                        key={emoji}
+                        type="button"
+                        className={`w-10 h-10 rounded-lg text-xl flex items-center justify-center transition-all ${
+                          isSelected
+                            ? 'border-2 border-primary bg-primary/10 shadow-md'
+                            : 'border border-gray-200 hover:border-gray-300 hover:shadow-sm'
+                        }`}
+                        onClick={() =>
+                          setEditForm({ ...editForm, avatar_url: emojiValue })
+                        }
+                        whileHover={{ scale: 1.15, y: -2 }}
+                        whileTap={{ scale: 0.9 }}
+                      >
+                        {emoji}
+                      </motion.button>
+                    )
+                  })}
+                </div>
               </div>
               <Button
                 size="sm"

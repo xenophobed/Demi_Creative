@@ -4,6 +4,7 @@ API Request/Response Models
 Pydantic 模型定义所有 API 端点的请求和响应格式
 """
 
+import re
 from datetime import datetime
 from enum import Enum
 from typing import List, Optional, Dict, Any, Literal
@@ -741,8 +742,24 @@ class UpdateProfileRequest(BaseModel):
     )
     avatar_url: Optional[str] = Field(
         None,
-        description="头像URL"
+        description="头像URL — emoji:🐼 格式或 https:// URL"
     )
+
+    @field_validator('avatar_url', mode='before')
+    @classmethod
+    def validate_avatar_url(cls, v: Any) -> Any:
+        if v is None:
+            return v
+        if not isinstance(v, str):
+            raise ValueError('avatar_url must be a string')
+        if v.startswith('https://'):
+            return v
+        if v.startswith('emoji:'):
+            emoji_part = v[6:]
+            if emoji_part and re.match(r'^[\U0001F300-\U0001FAFF\U00002702-\U000027B0\U0000FE00-\U0000FE0F\U0000200D]{1,7}$', emoji_part):
+                return v
+            raise ValueError('emoji: prefix must be followed by a valid emoji character')
+        raise ValueError('avatar_url must be emoji:🐼 format or a valid https:// URL')
 
 
 # ============================================================================
