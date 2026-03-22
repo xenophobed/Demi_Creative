@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { motion, useSpring, useTransform } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import Button from '@/components/common/Button'
+import FeatureTile from '@/components/common/FeatureTile'
 import TiltCard from '@/components/depth/TiltCard'
 import { FloatingElement } from '@/components/depth/ParallaxContainer'
 import { DepthLayer } from '@/components/depth/DepthLayer'
@@ -224,40 +224,32 @@ function HomePage() {
                 Transform your artwork into magical stories!
               </motion.p>
               <motion.div
-                className="flex flex-col sm:flex-row gap-3 mt-2"
+                className="grid grid-cols-3 gap-3 mt-2 w-full"
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.4 }}
               >
-                <Link to="/upload">
-                  <Button
-                    size="lg"
-                    rightIcon={<span>🖼️</span>}
-                    className="shadow-lg hover:shadow-xl transition-shadow w-full sm:w-auto"
-                  >
-                    Art to Story
-                  </Button>
-                </Link>
-                <Link to="/interactive">
-                  <Button
-                    size="lg"
-                    variant="secondary"
-                    rightIcon={<span>🎭</span>}
-                    className="shadow-lg hover:shadow-xl transition-shadow w-full sm:w-auto"
-                  >
-                    Interactive Tales
-                  </Button>
-                </Link>
-                <Link to="/news">
-                  <Button
-                    size="lg"
-                    variant="outline"
-                    rightIcon={<span>📰</span>}
-                    className="shadow-lg hover:shadow-xl transition-shadow w-full sm:w-auto"
-                  >
-                    Kids News
-                  </Button>
-                </Link>
+                <FeatureTile
+                  to="/upload"
+                  icon="🖼️"
+                  label="Art to Story"
+                  accentColor="primary"
+                  description="Draw & narrate"
+                />
+                <FeatureTile
+                  to="/interactive"
+                  icon="🎭"
+                  label="Interactive Tales"
+                  accentColor="secondary"
+                  description="Choose your path"
+                />
+                <FeatureTile
+                  to="/news"
+                  icon="📰"
+                  label="Kids News"
+                  accentColor="accent"
+                  description="World made simple"
+                />
               </motion.div>
             </div>
           </div>
