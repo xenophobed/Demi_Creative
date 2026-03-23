@@ -8,7 +8,6 @@ import TiltCard from '@/components/depth/TiltCard'
 import useAuthStore from '@/store/useAuthStore'
 import { authService } from '@/api/services/authService'
 import type { UpdateProfileRequest } from '@/types/auth'
-import { resolveMediaUrl } from '@/utils/mediaUrl'
 import AvatarDisplay from '@/components/common/AvatarDisplay'
 
 const ANIMAL_EMOJIS = [
