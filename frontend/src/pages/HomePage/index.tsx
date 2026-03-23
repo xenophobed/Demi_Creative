@@ -1,6 +1,6 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { motion, useSpring, useTransform } from 'framer-motion'
+import { motion, AnimatePresence, useSpring, useTransform } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import FeatureTile from '@/components/common/FeatureTile'
@@ -8,11 +8,24 @@ import TiltCard from '@/components/depth/TiltCard'
 import { FloatingElement } from '@/components/depth/ParallaxContainer'
 import { DepthLayer } from '@/components/depth/DepthLayer'
 import { useStreamVisualizationContext } from '@/providers/StreamVisualizationProvider'
-import useStoryStore from '@/store/useStoryStore'
 import useAuthStore from '@/store/useAuthStore'
-import useChildStore from '@/store/useChildStore'
-import { storyService } from '@/api/services/storyService'
+import { libraryService, type LibraryItem } from '@/api/services/libraryService'
 import { StoryCard } from '@/components/story/StoryDisplay'
+
+const TIPS = [
+  { icon: '🎨', tip: 'The more colorful and detailed your artwork, the more magical your story! Try drawing your favorite animals, characters, or imaginary worlds~' },
+  { icon: '🎭', tip: 'In interactive tales, every choice you make leads to a different adventure! Try being brave and see what happens~' },
+  { icon: '📰', tip: 'Kids News turns real-world events into fun, easy-to-understand stories! Pick a topic you are curious about~' },
+]
+
+function getItemRoute(item: LibraryItem): string {
+  switch (item.type) {
+    case 'art-story': return `/story/${item.id}`
+    case 'interactive': return `/interactive?session=${item.id}`
+    case 'morning-show': return `/morning-show/${item.id}`
+    default: return `/news/${item.id}`
+  }
+}
 
 interface StarPosition {
   top: number
@@ -63,25 +76,25 @@ function FloatingStar({
 
 function HomePage() {
   const navigate = useNavigate()
-  const { storyHistory } = useStoryStore()
   const { isAuthenticated } = useAuthStore()
-  const { currentChild, defaultChildId } = useChildStore()
   const { mousePosition, prefersReducedMotion } = useStreamVisualizationContext()
 
-  const childId = currentChild?.child_id || defaultChildId
-
-  // Fetch stories from server (persisted child_id survives refresh)
-  const { data: serverStories } = useQuery({
-    queryKey: ['child-stories', childId],
-    queryFn: () => storyService.getStoryHistory(childId),
-    enabled: !!childId && isAuthenticated,
+  // Fetch latest 3 items from unified library API (all content types)
+  const { data: libraryData } = useQuery({
+    queryKey: ['homepage-recent'],
+    queryFn: () => libraryService.getLibrary({ sort: 'newest', limit: 3 }),
+    enabled: isAuthenticated,
   })
+  const recentItems = libraryData?.items ?? []
 
-  // Use server stories, fall back to in-memory store; filter to image-to-story only (#197)
-  const allStories = serverStories ?? storyHistory
-  const recentStories = allStories
-    .filter((s: any) => !s.story_type || s.story_type === 'image_to_story')
-    .slice(0, 3)
+  // Rotating tips
+  const [tipIndex, setTipIndex] = useState(0)
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setTipIndex((i) => (i + 1) % TIPS.length)
+    }, 5000)
+    return () => clearInterval(timer)
+  }, [])
 
   // Mouse springs for parallax
   const mouseXSpring = useSpring(mousePosition.x, { stiffness: 80, damping: 25 })
@@ -256,8 +269,8 @@ function HomePage() {
         </DepthLayer>
       </motion.div>
 
-      {/* Recent Stories */}
-      {recentStories.length > 0 && (
+      {/* Recent Creations */}
+      {recentItems.length > 0 && (
         <motion.section
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -268,30 +281,31 @@ function HomePage() {
               <FloatingElement depth="near" float floatDistance={5}>
                 <span>📖</span>
               </FloatingElement>
-              Recent Stories
+              Recent Creations
             </h2>
             <Link
               to="/library"
               className="text-primary hover:underline text-sm font-medium"
             >
-              View all →
+              More →
             </Link>
           </div>
 
           <div className="space-y-3">
-            {recentStories.map((story, index) => (
+            {recentItems.map((item, index) => (
               <motion.div
-                key={story.story_id}
+                key={item.id}
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.6 + index * 0.1 }}
               >
                 <StoryCard
-                  title={`Story #${story.story_id.slice(0, 6)}`}
-                  preview={story.story.text.slice(0, 100) + '...'}
-                  createdAt={story.created_at}
-                  imageUrl={story.image_url}
-                  onClick={() => navigate(`/story/${story.story_id}`)}
+                  title={item.title}
+                  preview={item.preview}
+                  createdAt={item.created_at}
+                  imageUrl={item.image_url}
+                  onClick={() => navigate(getItemRoute(item))}
+                  className="relative"
                 />
               </motion.div>
             ))}
@@ -299,8 +313,8 @@ function HomePage() {
         </motion.section>
       )}
 
-      {/* Empty state with floating animation */}
-      {recentStories.length === 0 && (
+      {/* Empty state */}
+      {recentItems.length === 0 && (
         <motion.div
           className="text-center py-12 preserve-3d"
           initial={{ opacity: 0, scale: 0.9 }}
@@ -319,15 +333,15 @@ function HomePage() {
               ease: 'easeInOut',
             }}
           >
-            📝
+            🌟
           </motion.div>
           <p className="text-gray-500">
-            No stories yet, upload your first artwork to get started!
+            Start creating! Pick a feature above to begin your first adventure.
           </p>
         </motion.div>
       )}
 
-      {/* Tips section with depth */}
+      {/* Rotating tips section */}
       <motion.div
         className="relative overflow-hidden"
         initial={{ opacity: 0, y: 20 }}
@@ -346,13 +360,21 @@ function HomePage() {
               <FloatingElement depth="near" float floatDistance={8}>
                 <span className="text-2xl">💡</span>
               </FloatingElement>
-              <div>
+              <div className="flex-1 min-h-[3rem]">
                 <p className="font-semibold text-gray-800 mb-1">Tips</p>
-                <p className="text-gray-600 text-sm">
-                  The more colorful and detailed your artwork, the more magical your
-                  story! Try drawing your favorite animals, characters, or imaginary
-                  worlds~
-                </p>
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={tipIndex}
+                    className="flex items-start gap-2"
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -8 }}
+                    transition={{ duration: 0.3 }}
+                  >
+                    <span className="text-lg flex-shrink-0">{TIPS[tipIndex].icon}</span>
+                    <p className="text-gray-600 text-sm">{TIPS[tipIndex].tip}</p>
+                  </motion.div>
+                </AnimatePresence>
               </div>
             </div>
           </div>
