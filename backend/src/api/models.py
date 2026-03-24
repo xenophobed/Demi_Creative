@@ -76,6 +76,18 @@ class VideoStyle(str, Enum):
     STORYBOOK = "storybook"                # 绘本风格
 
 
+class ArtTheme(str, Enum):
+    """Art style transfer theme for image-to-story (PRD §3.1.1)"""
+    CARTOON = "cartoon"
+    OIL_PAINTING = "oil_painting"
+    WATERCOLOR = "watercolor"
+    PIXEL_ART = "pixel_art"
+    ANIME = "anime"
+    CRAYON = "crayon"
+    STORYBOOK = "storybook"
+    NONE = "none"
+
+
 class VideoStatus(str, Enum):
     """视频生成状态"""
     PENDING = "pending"

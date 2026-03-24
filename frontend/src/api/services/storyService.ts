@@ -67,6 +67,7 @@ export const storyService = {
       interests?: string[]
       voice?: string
       enableAudio?: boolean
+      artTheme?: string
     }
   ): Promise<ImageToStoryResponse> {
     const formData = new FormData()
@@ -82,6 +83,9 @@ export const storyService = {
     }
     if (params.enableAudio !== undefined) {
       formData.append('enable_audio', String(params.enableAudio))
+    }
+    if (params.artTheme && params.artTheme !== 'none') {
+      formData.append('art_theme', params.artTheme)
     }
 
     const response = await apiClient.post<ImageToStoryResponse>(
@@ -110,6 +114,7 @@ export const storyService = {
       interests?: string[]
       voice?: string
       enableAudio?: boolean
+      artTheme?: string
     },
     callbacks: StreamCallbacks,
     signal?: AbortSignal
@@ -127,6 +132,9 @@ export const storyService = {
     }
     if (params.enableAudio !== undefined) {
       formData.append('enable_audio', String(params.enableAudio))
+    }
+    if (params.artTheme && params.artTheme !== 'none') {
+      formData.append('art_theme', params.artTheme)
     }
 
     const response = await fetch(`${API_BASE_URL}/image-to-story/stream`, {

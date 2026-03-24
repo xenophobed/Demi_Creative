@@ -23,15 +23,30 @@ const AGE_GROUPS: { value: AgeGroup; label: string; emoji: string; description: 
   { value: '9-12', label: '9-12 yrs', emoji: '🧑', description: 'Rich Stories' },
 ]
 
+const ART_THEMES = [
+  { value: 'none', label: 'Keep Original', emoji: '🖼️', description: 'Use your drawing as-is' },
+  { value: 'cartoon', label: 'Cartoon', emoji: '🎨', description: 'Fun cartoon style' },
+  { value: 'oil_painting', label: 'Oil Painting', emoji: '🖌️', description: 'Classic oil painting' },
+  { value: 'watercolor', label: 'Watercolor', emoji: '💧', description: 'Soft watercolor' },
+  { value: 'pixel_art', label: 'Pixel Art', emoji: '👾', description: 'Retro pixel style' },
+  { value: 'anime', label: 'Anime', emoji: '✨', description: 'Anime illustration' },
+  { value: 'crayon', label: 'Crayon', emoji: '🖍️', description: 'Crayon drawing' },
+  { value: 'storybook', label: 'Storybook', emoji: '📖', description: 'Storybook illustration' },
+] as const
+
+const YOUNG_CHILD_THEMES = new Set(['none', 'cartoon', 'crayon', 'watercolor', 'storybook'])
+
 function UploadPage() {
   const {
     selectedImage,
     imagePreviewUrl,
     selectedVoice,
+    selectedArtTheme,
     enableAudio,
     uploadError,
     setSelectedImage,
     setSelectedVoice,
+    setSelectedArtTheme,
     setEnableAudio,
   } = useStoryStore()
 
@@ -253,7 +268,50 @@ function UploadPage() {
         </TiltCard>
       </motion.div>
 
-      {/* Step 3: Interests with floating tags */}
+      {/* Step 3: Art Style */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.25 }}
+      >
+        <TiltCard maxTilt={4} glare={false} dynamicShadow className="w-full">
+          <div className="bg-white rounded-card p-6">
+            <StepHeader number={3} title="Choose Art Style" emoji="🎨" optional />
+            <p className="text-gray-500 text-sm mb-4">
+              Transform your drawing into a different art style
+            </p>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {ART_THEMES
+                .filter(t => {
+                  if (!selectedAgeGroup || selectedAgeGroup !== '3-5') return true
+                  return YOUNG_CHILD_THEMES.has(t.value)
+                })
+                .map((theme, index) => (
+                  <motion.button
+                    key={theme.value}
+                    className={`p-3 rounded-card border-2 transition-all text-center ${
+                      selectedArtTheme === theme.value
+                        ? 'border-primary bg-primary/10 shadow-lg'
+                        : 'border-gray-200 hover:border-gray-300 hover:shadow-md'
+                    }`}
+                    onClick={() => setSelectedArtTheme(theme.value)}
+                    whileHover={prefersReducedMotion ? {} : { scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: 0.25 + index * 0.03 }}
+                  >
+                    <span className="text-2xl block mb-1">{theme.emoji}</span>
+                    <span className="font-medium text-gray-800 text-sm block">{theme.label}</span>
+                    <span className="text-xs text-gray-500">{theme.description}</span>
+                  </motion.button>
+                ))}
+            </div>
+          </div>
+        </TiltCard>
+      </motion.div>
+
+      {/* Step 4: Interests with floating tags */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -262,7 +320,7 @@ function UploadPage() {
         <TiltCard maxTilt={4} glare={false} dynamicShadow className="w-full">
           <div className="bg-white rounded-card p-6">
             <StepHeader
-              number={3}
+              number={4}
               title="What Do You Like?"
               emoji="❤️"
               optional
@@ -305,7 +363,7 @@ function UploadPage() {
         </TiltCard>
       </motion.div>
 
-      {/* Step 4: Voice selection with 3D effect */}
+      {/* Step 5: Voice selection with 3D effect */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -314,7 +372,7 @@ function UploadPage() {
         <TiltCard maxTilt={4} glare={false} dynamicShadow className="w-full">
           <div className="bg-white rounded-card p-6">
             <StepHeader
-              number={4}
+              number={5}
               title="Choose a Narrator"
               emoji="🎙️"
               optional

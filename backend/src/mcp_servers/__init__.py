@@ -58,6 +58,9 @@ generate_painting_video = create_unavailable_tool("video_generator_server")
 check_video_status = create_unavailable_tool("video_generator_server")
 combine_video_audio = create_unavailable_tool("video_generator_server")
 
+image_style_server = {}
+transform_art_style = create_unavailable_tool("image_style_server")
+
 web_search_server = {}
 get_headlines_by_topic = create_unavailable_tool("web_search_server")
 fetch_article_text = create_unavailable_tool("web_search_server")
@@ -110,6 +113,13 @@ except Exception as exc:
     logger.error("❌ Failed to import MCP server 'video_generator_server': %s", exc, exc_info=True)
 
 try:
+    from .image_style_server import image_style_server, transform_art_style
+    MCP_SERVER_STATUS["image_style_server"] = "ok"
+except Exception as exc:
+    MCP_SERVER_STATUS["image_style_server"] = f"error: {exc}"
+    logger.error("❌ Failed to import MCP server 'image_style_server': %s", exc, exc_info=True)
+
+try:
     from .web_search_server import (
         web_search_server,
         get_headlines_by_topic,
@@ -141,6 +151,8 @@ __all__ = [
     "generate_painting_video",
     "check_video_status",
     "combine_video_audio",
+    "image_style_server",
+    "transform_art_style",
     "web_search_server",
     "get_headlines_by_topic",
     "fetch_article_text",
