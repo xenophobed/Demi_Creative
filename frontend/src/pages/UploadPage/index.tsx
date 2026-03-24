@@ -57,14 +57,6 @@ function UploadPage() {
 
   const { prefersReducedMotion } = useStreamVisualizationContext()
 
-  if (!isAuthenticated) {
-    return (
-      <div className="max-w-lg mx-auto mt-12">
-        <LoginPrompt feature="create stories" />
-      </div>
-    )
-  }
-
   const [selectedAgeGroup, setSelectedAgeGroup] = useState<AgeGroup | null>(
     currentChild?.age_group || null
   )
@@ -73,6 +65,14 @@ function UploadPage() {
   )
 
   const { generateStream, cancel, isLoading, isGenerating, streaming, uploadStatus: currentUploadStatus } = useStoryGeneration()
+
+  if (!isAuthenticated) {
+    return (
+      <div className="max-w-lg mx-auto mt-12">
+        <LoginPrompt feature="create stories" />
+      </div>
+    )
+  }
 
   const handleAgeGroupSelect = (ageGroup: AgeGroup) => {
     setSelectedAgeGroup(ageGroup)
