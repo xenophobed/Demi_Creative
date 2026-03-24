@@ -20,6 +20,7 @@ export function useStoryGeneration(options?: UseStoryGenerationOptions) {
     selectedImage,
     selectedVoice,
     enableAudio,
+    selectedArtTheme,
     uploadStatus,
     streaming,
     generationInProgress,
@@ -40,6 +41,7 @@ export function useStoryGeneration(options?: UseStoryGenerationOptions) {
       interests?: string[]
       voice?: string
       enableAudio?: boolean
+      artTheme?: string
     }) => {
       setUploadStatus('uploading')
       setUploadError(null)
@@ -52,6 +54,7 @@ export function useStoryGeneration(options?: UseStoryGenerationOptions) {
         interests: params.interests,
         voice: params.voice || selectedVoice,
         enableAudio: params.enableAudio ?? enableAudio,
+        artTheme: params.artTheme || selectedArtTheme,
       })
     },
     onMutate: () => {

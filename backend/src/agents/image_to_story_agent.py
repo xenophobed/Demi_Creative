@@ -85,7 +85,8 @@ from ..mcp_servers import (
     vision_server,
     vector_server,
     safety_server,
-    tts_server
+    tts_server,
+    image_style_server,
 )
 from ..services.story_memory import get_story_memory_prompt
 
@@ -99,7 +100,7 @@ def _should_use_mock() -> bool:
     )
 
 
-def _mock_image_to_story_result(interests: list[str]) -> Dict[str, Any]:
+def _mock_image_to_story_result(interests: list[str], art_theme: str = None) -> Dict[str, Any]:
     """Deterministic mock result for test environments.
 
     The story text is sized for the 6-8 age group (200-400 words) so that
@@ -141,6 +142,7 @@ def _mock_image_to_story_result(interests: list[str]) -> Dict[str, Any]:
         "analysis": {"objects": ["drawing"], "colors": ["blue", "green"]},
         "safety_score": 0.95,
         "audio_path": None,
+        "styled_image_path": f"data/styled/mock_{art_theme}.jpg" if art_theme else None,
     }
 
 
@@ -197,7 +199,8 @@ async def image_to_story(
     child_age: int,
     interests: list[str] = None,
     enable_audio: bool = True,
-    voice: str = None
+    voice: str = None,
+    art_theme: str = None,
 ) -> Dict[str, Any]:
     """
     将儿童画作转化为个性化故事
@@ -209,12 +212,13 @@ async def image_to_story(
         interests: 儿童兴趣标签列表
         enable_audio: 是否生成语音
         voice: 语音类型（可选，默认根据年龄组选择）
+        art_theme: 艺术风格主题（可选，如 "cartoon", "watercolor" 等）
 
     Returns:
         包含故事、音频等信息的字典
     """
     if _should_use_mock():
-        return _mock_image_to_story_result(interests or [])
+        return _mock_image_to_story_result(interests or [], art_theme=art_theme)
     # 验证输入
     if not Path(image_path).exists():
         raise FileNotFoundError(f"图片文件不存在: {image_path}")
@@ -272,6 +276,20 @@ async def image_to_story(
 安全检查通过后才能继续后续步骤。
 """
 
+    # Add style transfer instruction if art_theme is specified
+    if art_theme and art_theme != "none":
+        prompt += f"""
+**画作风格转换**：
+在分析画作之后、创作故事之前，使用 `mcp__image-style__transform_art_style` 工具将画作转换为"{art_theme}"风格。参数：
+- image_path: {image_path}
+- theme: {art_theme}
+- child_age: {child_age}
+- session_id: {child_id}
+
+转换后的图片将作为故事封面。请在故事创作中考虑这种艺术风格，让故事的语调和氛围与风格相配。
+如果风格转换失败，请继续使用原始画作。
+"""
+
     # Add TTS instruction if audio should be generated
     if should_generate_audio:
         prompt += f"""
@@ -283,25 +301,33 @@ async def image_to_story(
 """
 
     # 配置 Agent 选项（使用 Structured Output）
+    mcp_servers = {
+        "vision-analysis": vision_server,
+        "vector-search": vector_server,
+        "safety-check": safety_server,
+        "tts-generation": tts_server,
+    }
+
+    allowed_tools = [
+        # Vision Analysis Tools
+        "mcp__vision-analysis__analyze_children_drawing",
+        # Vector Search Tools
+        "mcp__vector-search__search_similar_drawings",
+        "mcp__vector-search__store_drawing_embedding",
+        # Safety Check Tools
+        "mcp__safety-check__check_content_safety",
+        "mcp__safety-check__suggest_content_improvements",
+        # TTS Tools
+        "mcp__tts-generation__generate_story_audio",
+    ]
+
+    if art_theme and art_theme != "none":
+        mcp_servers["image-style"] = image_style_server
+        allowed_tools.append("mcp__image-style__transform_art_style")
+
     options = ClaudeAgentOptions(
-        mcp_servers={
-            "vision-analysis": vision_server,
-            "vector-search": vector_server,
-            "safety-check": safety_server,
-            "tts-generation": tts_server
-        },
-        allowed_tools=[
-            # Vision Analysis Tools
-            "mcp__vision-analysis__analyze_children_drawing",
-            # Vector Search Tools
-            "mcp__vector-search__search_similar_drawings",
-            "mcp__vector-search__store_drawing_embedding",
-            # Safety Check Tools
-            "mcp__safety-check__check_content_safety",
-            "mcp__safety-check__suggest_content_improvements",
-            # TTS Tools
-            "mcp__tts-generation__generate_story_audio",
-        ],
+        mcp_servers=mcp_servers,
+        allowed_tools=allowed_tools,
         cwd=".",
         permission_mode="acceptEdits",
         max_turns=15,  # 增加 turns 以适应更多工具调用
@@ -315,6 +341,7 @@ async def image_to_story(
     # 使用 ClaudeSDKClient 调用 Agent
     result_data = {}
     audio_path = None
+    styled_image_path = None
 
     async with ClaudeSDKClient(options=options) as client:
         await client.query(prompt)
@@ -333,6 +360,8 @@ async def image_to_story(
                                     result_json = json.loads(result_content)
                                     if 'audio_path' in result_json:
                                         audio_path = result_json['audio_path']
+                                    if 'styled_image_path' in result_json:
+                                        styled_image_path = result_json['styled_image_path']
                                 except (json.JSONDecodeError, TypeError):
                                     pass
 
@@ -360,6 +389,10 @@ async def image_to_story(
     if audio_path:
         result_data["audio_path"] = audio_path
 
+    # Add styled image path to result if available
+    if styled_image_path:
+        result_data["styled_image_path"] = styled_image_path
+
     return result_data
 
 
@@ -369,7 +402,8 @@ async def stream_image_to_story(
     child_age: int,
     interests: list[str] = None,
     enable_audio: bool = True,
-    voice: str = None
+    voice: str = None,
+    art_theme: str = None,
 ) -> AsyncGenerator[Dict[str, Any], None]:
     """
     流式返回故事生成过程
@@ -381,13 +415,14 @@ async def stream_image_to_story(
         interests: 兴趣标签列表
         enable_audio: 是否生成语音
         voice: 语音类型（可选）
+        art_theme: 艺术风格主题（可选，如 "cartoon", "watercolor" 等）
 
     Yields:
         流式事件字典，包含 type 和 data 字段
     """
     if _should_use_mock():
         yield {"type": "status", "data": {"status": "started", "message": "正在分析画作..."}}
-        yield {"type": "result", "data": _mock_image_to_story_result(interests or [])}
+        yield {"type": "result", "data": _mock_image_to_story_result(interests or [], art_theme=art_theme)}
         yield {"type": "complete", "data": {"status": "completed", "message": "故事生成完成"}}
         return
     # 验证输入
@@ -469,6 +504,20 @@ async def stream_image_to_story(
 安全检查通过后才能继续后续步骤。
 """
 
+    # Add style transfer instruction if art_theme is specified
+    if art_theme and art_theme != "none":
+        prompt += f"""
+**画作风格转换**：
+在分析画作之后、创作故事之前，使用 `mcp__image-style__transform_art_style` 工具将画作转换为"{art_theme}"风格。参数：
+- image_path: {image_path}
+- theme: {art_theme}
+- child_age: {child_age}
+- session_id: {child_id}
+
+转换后的图片将作为故事封面。请在故事创作中考虑这种艺术风格，让故事的语调和氛围与风格相配。
+如果风格转换失败，请继续使用原始画作。
+"""
+
     # Add TTS instruction if audio should be generated
     if should_generate_audio:
         prompt += f"""
@@ -479,21 +528,29 @@ async def stream_image_to_story(
 - 儿童ID: {child_id}
 """
 
+    mcp_servers = {
+        "vision-analysis": vision_server,
+        "vector-search": vector_server,
+        "safety-check": safety_server,
+        "tts-generation": tts_server,
+    }
+
+    allowed_tools = [
+        "mcp__vision-analysis__analyze_children_drawing",
+        "mcp__vector-search__search_similar_drawings",
+        "mcp__vector-search__store_drawing_embedding",
+        "mcp__safety-check__check_content_safety",
+        "mcp__safety-check__suggest_content_improvements",
+        "mcp__tts-generation__generate_story_audio",
+    ]
+
+    if art_theme and art_theme != "none":
+        mcp_servers["image-style"] = image_style_server
+        allowed_tools.append("mcp__image-style__transform_art_style")
+
     options = ClaudeAgentOptions(
-        mcp_servers={
-            "vision-analysis": vision_server,
-            "vector-search": vector_server,
-            "safety-check": safety_server,
-            "tts-generation": tts_server
-        },
-        allowed_tools=[
-            "mcp__vision-analysis__analyze_children_drawing",
-            "mcp__vector-search__search_similar_drawings",
-            "mcp__vector-search__store_drawing_embedding",
-            "mcp__safety-check__check_content_safety",
-            "mcp__safety-check__suggest_content_improvements",
-            "mcp__tts-generation__generate_story_audio",
-        ],
+        mcp_servers=mcp_servers,
+        allowed_tools=allowed_tools,
         cwd=".",
         permission_mode="acceptEdits",
         max_turns=15,  # 增加 turns 以适应更多工具调用
@@ -506,6 +563,7 @@ async def stream_image_to_story(
     result_data = {}
     turn_count = 0
     audio_path = None
+    styled_image_path = None
 
     try:
         async with ClaudeSDKClient(options=options) as client:
@@ -537,6 +595,7 @@ async def stream_image_to_story(
                                     "mcp__vector-search__store_drawing_embedding": "正在保存画作到记忆库...",
                                     "mcp__safety-check__check_content_safety": "正在检查内容安全...",
                                     "mcp__tts-generation__generate_story_audio": "正在生成语音...",
+                                    "mcp__image-style__transform_art_style": "正在转换画作风格...",
                                 }
                                 yield {
                                     "type": "tool_use",
@@ -546,7 +605,7 @@ async def stream_image_to_story(
                                     }
                                 }
                             elif isinstance(block, ToolResultBlock):
-                                # Try to extract audio path from TTS result
+                                # Try to extract audio/styled image path from tool results
                                 result_content = getattr(block, 'content', None)
                                 if result_content and isinstance(result_content, str):
                                     try:
@@ -560,6 +619,8 @@ async def stream_image_to_story(
                                                     "message": "语音生成完成"
                                                 }
                                             }
+                                        if 'styled_image_path' in result_json:
+                                            styled_image_path = result_json['styled_image_path']
                                     except (json.JSONDecodeError, TypeError):
                                         pass
 
@@ -612,6 +673,10 @@ async def stream_image_to_story(
     # Add audio path to result if available
     if audio_path:
         result_data["audio_path"] = audio_path
+
+    # Add styled image path to result if available
+    if styled_image_path:
+        result_data["styled_image_path"] = styled_image_path
 
     # 发送最终结果
     yield {

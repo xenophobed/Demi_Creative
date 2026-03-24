@@ -35,6 +35,9 @@ interface StoryState {
   selectedProvider: string | null
   enableAudio: boolean
 
+  // Art theme
+  selectedArtTheme: string
+
   // Story history (local cache)
   storyHistory: ImageToStoryResponse[]
 
@@ -51,6 +54,7 @@ interface StoryState {
   setSelectedImage: (file: File | null) => void
   setSelectedVoice: (voice: string, provider?: string) => void
   setEnableAudio: (enable: boolean) => void
+  setSelectedArtTheme: (theme: string) => void
   addToHistory: (story: ImageToStoryResponse) => void
   removeStory: (storyId: string) => void
   clearHistory: () => void
@@ -76,6 +80,7 @@ const useStoryStore = create<StoryState>((set, get) => ({
   selectedVoice: 'nova',
   selectedProvider: null,
   enableAudio: true,
+  selectedArtTheme: 'none',
   storyHistory: [],
   streaming: initialStreamingState,
   generationInProgress: false,
@@ -124,6 +129,8 @@ const useStoryStore = create<StoryState>((set, get) => ({
 
   setEnableAudio: (enable) => set({ enableAudio: enable }),
 
+  setSelectedArtTheme: (theme) => set({ selectedArtTheme: theme }),
+
   addToHistory: (story) => {
     const history = get().storyHistory
     // 避免重复
@@ -155,6 +162,7 @@ const useStoryStore = create<StoryState>((set, get) => ({
       uploadError: null,
       selectedImage: null,
       imagePreviewUrl: null,
+      selectedArtTheme: 'none',
       streaming: initialStreamingState,
       generationInProgress: false,
       generationError: null,

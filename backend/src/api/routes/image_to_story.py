@@ -22,7 +22,8 @@ from ..models import (
     StoryContent,
     EducationalValue,
     CharacterMemory,
-    AgeGroup
+    AgeGroup,
+    ArtTheme,
 )
 from ..deps import get_current_user, get_story_for_owner
 from ...agents.image_to_story_agent import (
@@ -199,6 +200,7 @@ async def create_story_from_image(
     interests: Optional[str] = Form(None, description="Interest tags, comma-separated (max 5)"),
     voice: str = Form("nova", description="Voice type"),
     enable_audio: bool = Form(True, description="Whether to generate audio"),
+    art_theme: ArtTheme = Form(ArtTheme.NONE, description="Art style theme for image transformation"),
     user: UserData = Depends(get_current_user),
 ):
     """
@@ -230,6 +232,15 @@ async def create_story_from_image(
 
         # 3. Parse parameters
         child_age = parse_age_group(age_group.value)
+
+        # Validate art_theme for age group (#270)
+        YOUNG_CHILD_THEMES = {ArtTheme.CARTOON, ArtTheme.CRAYON, ArtTheme.WATERCOLOR, ArtTheme.STORYBOOK, ArtTheme.NONE}
+        if child_age <= 5 and art_theme not in YOUNG_CHILD_THEMES:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Art theme '{art_theme.value}' is not available for age group 3-5"
+            )
+
         interests_list = None
         if interests:
             interests_list = [i.strip() for i in interests.split(",") if i.strip()]
@@ -250,7 +261,8 @@ async def create_story_from_image(
             child_age=child_age,
             interests=interests_list if interests_list is not None else [],
             enable_audio=enable_audio,
-            voice=voice
+            voice=voice,
+            art_theme=art_theme.value if art_theme != ArtTheme.NONE else None,
         )
 
         # 4b. Validate story length per age group (#233)
@@ -268,6 +280,7 @@ async def create_story_from_image(
                 interests=interests_list if interests_list is not None else [],
                 enable_audio=enable_audio,
                 voice=voice,
+                art_theme=art_theme.value if art_theme != ArtTheme.NONE else None,
             )
             length_info = validate_story_length(result.get("story", ""), age_group.value)
 
@@ -301,6 +314,12 @@ async def create_story_from_image(
         if result.get("audio_path"):
             audio_filename = Path(result["audio_path"]).name
             audio_url = f"/data/audio/{audio_filename}"
+
+        # Use styled image as cover if available (#273)
+        styled_image_path = result.get("styled_image_path")
+        cover_image_url = image_url
+        if styled_image_path and Path(styled_image_path).exists():
+            cover_image_url = f"/data/styled/{Path(styled_image_path).name}"
 
         # Build response
         created_at = datetime.now()
@@ -354,7 +373,10 @@ async def create_story_from_image(
             "created_at": created_at.isoformat(),
             "child_id": safe_child_id,
             "age_group": age_group.value,
-            "image_path": str(image_path)
+            "image_path": str(image_path),
+            "art_theme": art_theme.value if art_theme != ArtTheme.NONE else None,
+            "styled_image_path": styled_image_path,
+            "cover_image_url": cover_image_url,
         }
         story_data["user_id"] = user.user_id
         await story_repo.create(story_data)
@@ -402,11 +424,32 @@ async def create_story_from_image(
             except Exception:
                 logger.warning("Failed to record image artifact", exc_info=True)
 
+        styled_artifact_id = None
+        if run_id and styled_image_path and Path(styled_image_path).exists():
+            try:
+                styled_step_id = await tracker.start_step(
+                    run_id, "style_transfer", 2,
+                    input_data={"image_path": str(image_path), "theme": art_theme.value if art_theme else "none"},
+                )
+                styled_mime, _ = mimetypes.guess_type(styled_image_path)
+                styled_file_size = Path(styled_image_path).stat().st_size
+                styled_artifact_id = await tracker.record_artifact(
+                    styled_step_id, ArtifactType.IMAGE, run_id=run_id,
+                    artifact_path=styled_image_path,
+                    description=f"Style-transferred image ({art_theme.value if art_theme else 'none'})",
+                    mime_type=styled_mime, file_size=styled_file_size,
+                    agent_name="style_transfer",
+                    input_artifact_ids=[image_artifact_id] if image_artifact_id else None,
+                )
+                await tracker.complete_step(styled_step_id, output_data={"artifact_id": styled_artifact_id})
+            except Exception:
+                logger.warning("Failed to record styled image artifact", exc_info=True)
+
         text_artifact_id = None
         if run_id:
             try:
                 text_step_id = await tracker.start_step(
-                    run_id, "text_artifact", 2, input_data={"story_id": story_id},
+                    run_id, "text_artifact", 3, input_data={"story_id": story_id},
                 )
                 text_artifact_id = await tracker.record_artifact(
                     text_step_id, ArtifactType.TEXT, run_id=run_id,
@@ -423,7 +466,7 @@ async def create_story_from_image(
         if run_id and audio_url and result.get("audio_path"):
             try:
                 audio_step_id = await tracker.start_step(
-                    run_id, "tts_artifact", 3, input_data={"audio_path": result["audio_path"]},
+                    run_id, "tts_artifact", 4, input_data={"audio_path": result["audio_path"]},
                 )
                 audio_mime, _ = mimetypes.guess_type(result["audio_path"])
                 audio_artifact_id = await tracker.record_artifact(
@@ -442,6 +485,7 @@ async def create_story_from_image(
                 art_repo = tracker._artifact_repo
                 for artifact_id, role in [
                     (image_artifact_id, StoryArtifactRole.COVER),
+                    (styled_artifact_id, StoryArtifactRole.COVER),
                     (text_artifact_id, StoryArtifactRole.STORY_TEXT),
                     (audio_artifact_id, StoryArtifactRole.FINAL_AUDIO),
                 ]:
@@ -451,7 +495,7 @@ async def create_story_from_image(
                     await art_repo.update_lifecycle_state(artifact_id, "published")
                     await tracker.link_to_story(story_id, artifact_id, role)
                 await tracker.complete_run(run_id, result_summary={
-                    "artifacts_created": sum(1 for a in [image_artifact_id, text_artifact_id, audio_artifact_id] if a),
+                    "artifacts_created": sum(1 for a in [image_artifact_id, styled_artifact_id, text_artifact_id, audio_artifact_id] if a),
                     "story_id": story_id,
                 })
             except Exception:
@@ -511,6 +555,7 @@ async def create_story_from_image_stream(
     interests: Optional[str] = Form(None, description="Interest tags, comma-separated (max 5)"),
     voice: str = Form("nova", description="Voice type"),
     enable_audio: bool = Form(True, description="Whether to generate audio"),
+    art_theme: ArtTheme = Form(ArtTheme.NONE, description="Art style theme for image transformation"),
     user: UserData = Depends(get_current_user),
 ):
     """
@@ -546,6 +591,15 @@ async def create_story_from_image_stream(
 
     # Parse parameters
     child_age = parse_age_group(age_group.value)
+
+    # Validate art_theme for age group (#270)
+    YOUNG_CHILD_THEMES = {ArtTheme.CARTOON, ArtTheme.CRAYON, ArtTheme.WATERCOLOR, ArtTheme.STORYBOOK, ArtTheme.NONE}
+    if child_age <= 5 and art_theme not in YOUNG_CHILD_THEMES:
+        err_msg = f"Art theme '{art_theme.value}' is not available for age group 3-5"
+        async def error_generator():
+            yield f"event: error\ndata: {json.dumps({'error': 'ValidationError', 'message': err_msg}, ensure_ascii=False)}\n\n"
+        return StreamingResponse(error_generator(), media_type="text/event-stream")
+
     interests_list = None
     if interests:
         interests_list = [i.strip() for i in interests.split(",") if i.strip()]
@@ -571,7 +625,8 @@ async def create_story_from_image_stream(
                 child_age=child_age,
                 interests=interests_list if interests_list is not None else [],
                 enable_audio=enable_audio,
-                voice=voice
+                voice=voice,
+                art_theme=art_theme.value if art_theme != ArtTheme.NONE else None,
             ):
                 if await request.is_disconnected():
                     logger.info("Client disconnected during story generation (story_id=%s), aborting", story_id)
@@ -603,6 +658,12 @@ async def create_story_from_image_stream(
                         audio_filename = Path(result_data["audio_path"]).name
                         audio_url = f"/data/audio/{audio_filename}"
 
+                    # Use styled image as cover if available (#273)
+                    styled_image_path = result_data.get("styled_image_path")
+                    cover_image_url = image_url
+                    if styled_image_path and Path(styled_image_path).exists():
+                        cover_image_url = f"/data/styled/{Path(styled_image_path).name}"
+
                     # Build complete response data
                     response_data = {
                         "story_id": story_id,
@@ -629,7 +690,7 @@ async def create_story_from_image_stream(
                     }
 
                     # Save story to database (must happen before provenance — FK constraint)
-                    story_save_data = {**response_data, "child_id": safe_child_id, "age_group": age_group.value, "image_path": str(image_path)}
+                    story_save_data = {**response_data, "child_id": safe_child_id, "age_group": age_group.value, "image_path": str(image_path), "art_theme": art_theme.value if art_theme != ArtTheme.NONE else None, "styled_image_path": styled_image_path, "cover_image_url": cover_image_url}
                     story_save_data["user_id"] = user.user_id
                     await story_repo.create(story_save_data)
 
@@ -652,7 +713,7 @@ async def create_story_from_image_stream(
                     # --- Provenance: record run + all artifacts (Issue #234) ---
                     # Provenance is recorded after story_repo.create() so that the
                     # runs.story_id FK constraint is satisfied.
-                    image_artifact_id = text_artifact_id = audio_artifact_id = None
+                    image_artifact_id = styled_artifact_id = text_artifact_id = audio_artifact_id = None
                     try:
                         run_id = await tracker.start_run(story_id, WorkflowType.IMAGE_TO_STORY)
                     except Exception:
@@ -668,9 +729,20 @@ async def create_story_from_image_stream(
                         except Exception:
                             logger.warning("Failed to record image artifact (streaming)", exc_info=True)
 
+                    styled_artifact_id = None
+                    if run_id and styled_image_path and Path(styled_image_path).exists():
+                        try:
+                            styled_step_id = await tracker.start_step(run_id, "style_transfer", 2, input_data={"image_path": str(image_path), "theme": art_theme.value if art_theme else "none"})
+                            styled_mime, _ = mimetypes.guess_type(styled_image_path)
+                            styled_file_size = Path(styled_image_path).stat().st_size
+                            styled_artifact_id = await tracker.record_artifact(styled_step_id, ArtifactType.IMAGE, run_id=run_id, artifact_path=styled_image_path, description=f"Style-transferred image ({art_theme.value if art_theme else 'none'})", mime_type=styled_mime, file_size=styled_file_size, agent_name="style_transfer", input_artifact_ids=[image_artifact_id] if image_artifact_id else None)
+                            await tracker.complete_step(styled_step_id, output_data={"artifact_id": styled_artifact_id})
+                        except Exception:
+                            logger.warning("Failed to record styled image artifact (streaming)", exc_info=True)
+
                     if run_id:
                         try:
-                            text_step_id = await tracker.start_step(run_id, "text_artifact", 2, input_data={"story_id": story_id})
+                            text_step_id = await tracker.start_step(run_id, "text_artifact", 3, input_data={"story_id": story_id})
                             text_artifact_id = await tracker.record_artifact(text_step_id, ArtifactType.TEXT, run_id=run_id, artifact_payload=story_text, description="Generated story text", safety_score=result_data.get("safety_score", 0.0), agent_name="story_generation", input_artifact_ids=[image_artifact_id] if image_artifact_id else None, metadata=ArtifactMetadata(char_count=len(story_text), word_count=word_count))
                             await tracker.complete_step(text_step_id, output_data={"artifact_id": text_artifact_id})
                         except Exception:
@@ -678,7 +750,7 @@ async def create_story_from_image_stream(
 
                     if run_id and audio_url and result_data.get("audio_path"):
                         try:
-                            audio_step_id = await tracker.start_step(run_id, "tts_artifact", 3, input_data={"audio_path": result_data["audio_path"]})
+                            audio_step_id = await tracker.start_step(run_id, "tts_artifact", 4, input_data={"audio_path": result_data["audio_path"]})
                             audio_mime, _ = mimetypes.guess_type(result_data["audio_path"])
                             audio_artifact_id = await tracker.record_artifact(audio_step_id, ArtifactType.AUDIO, run_id=run_id, artifact_path=result_data["audio_path"], artifact_url=audio_url, description="TTS narration audio", mime_type=audio_mime, agent_name="tts_generation", input_artifact_ids=[text_artifact_id] if text_artifact_id else None)
                             await tracker.complete_step(audio_step_id, output_data={"artifact_id": audio_artifact_id})
@@ -690,6 +762,7 @@ async def create_story_from_image_stream(
                             art_repo = tracker._artifact_repo
                             for artifact_id, role in [
                                 (image_artifact_id, StoryArtifactRole.COVER),
+                                (styled_artifact_id, StoryArtifactRole.COVER),
                                 (text_artifact_id, StoryArtifactRole.STORY_TEXT),
                                 (audio_artifact_id, StoryArtifactRole.FINAL_AUDIO),
                             ]:
@@ -699,7 +772,7 @@ async def create_story_from_image_stream(
                                 await art_repo.update_lifecycle_state(artifact_id, "published")
                                 await tracker.link_to_story(story_id, artifact_id, role)
                             await tracker.complete_run(run_id, result_summary={
-                                "artifacts_created": sum(1 for a in [image_artifact_id, text_artifact_id, audio_artifact_id] if a),
+                                "artifacts_created": sum(1 for a in [image_artifact_id, styled_artifact_id, text_artifact_id, audio_artifact_id] if a),
                                 "story_id": story_id,
                             })
                             run_id = None  # Prevent double-close in finally
