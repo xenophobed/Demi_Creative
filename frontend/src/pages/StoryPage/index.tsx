@@ -17,8 +17,18 @@ function StoryPage() {
   const { storyId } = useParams<{ storyId: string }>()
   const navigate = useNavigate()
 
-  const { currentStory, setCurrentStory, reset } = useStoryStore()
+  const { currentStory, setCurrentStory, reset, justGenerated, setJustGenerated } = useStoryStore()
   const { currentChild } = useChildStore()
+
+  // Show banner only when navigating directly from the upload/generation flow
+  const [showBanner, setShowBanner] = useState(false)
+
+  useEffect(() => {
+    if (justGenerated) {
+      setShowBanner(true)
+      setJustGenerated(false) // clear from store immediately so re-mounts don't re-show
+    }
+  }, [justGenerated, setJustGenerated])
 
   // On-demand audio state (for 9-12 age group)
   const [onDemandAudioUrl, setOnDemandAudioUrl] = useState<string | null>(null)
@@ -128,27 +138,29 @@ function StoryPage() {
         <div className="w-10" />
       </motion.header>
 
-      {/* Success notification */}
-      <motion.div
-        className="success-banner"
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 }}
-      >
-        <motion.span
-          className="text-2xl"
-          animate={{ scale: [1, 1.2, 1] }}
-          transition={{ duration: 0.5 }}
+      {/* Success notification — only shown when navigating from the generation flow */}
+      {showBanner && (
+        <motion.div
+          className="success-banner"
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
         >
-          🎉
-        </motion.span>
-        <div>
-          <p className="font-bold text-gray-800">Story created successfully!</p>
-          <p className="text-sm text-gray-600">
-            AI crafted this unique story from your artwork
-          </p>
-        </div>
-      </motion.div>
+          <motion.span
+            className="text-2xl"
+            animate={{ scale: [1, 1.2, 1] }}
+            transition={{ duration: 0.5 }}
+          >
+            🎉
+          </motion.span>
+          <div>
+            <p className="font-bold text-gray-800">Story created successfully!</p>
+            <p className="text-sm text-gray-600">
+              AI crafted this unique story from your artwork
+            </p>
+          </div>
+        </motion.div>
+      )}
 
       {/* Book container with story - age-aware display */}
       <AgeAwareContent

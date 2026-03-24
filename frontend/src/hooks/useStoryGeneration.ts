@@ -63,6 +63,7 @@ export function useStoryGeneration(options?: UseStoryGenerationOptions) {
     onSuccess: (data) => {
       setUploadStatus('success')
       setCurrentStory(data)
+      useStoryStore.getState().setJustGenerated(true)
       options?.onSuccess?.()
       navigate(`/story/${data.story_id}`)
     },
