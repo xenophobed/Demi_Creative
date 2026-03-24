@@ -24,14 +24,14 @@ const AGE_GROUPS: { value: AgeGroup; label: string; emoji: string; description: 
 ]
 
 const ART_THEMES = [
-  { value: 'none', label: 'Keep Original', emoji: '🖼️', description: 'Use your drawing as-is' },
-  { value: 'cartoon', label: 'Cartoon', emoji: '🎨', description: 'Fun cartoon style' },
-  { value: 'oil_painting', label: 'Oil Painting', emoji: '🖌️', description: 'Classic oil painting' },
-  { value: 'watercolor', label: 'Watercolor', emoji: '💧', description: 'Soft watercolor' },
-  { value: 'pixel_art', label: 'Pixel Art', emoji: '👾', description: 'Retro pixel style' },
-  { value: 'anime', label: 'Anime', emoji: '✨', description: 'Anime illustration' },
-  { value: 'crayon', label: 'Crayon', emoji: '🖍️', description: 'Crayon drawing' },
-  { value: 'storybook', label: 'Storybook', emoji: '📖', description: 'Storybook illustration' },
+  { value: 'none', label: 'Keep Original', emoji: '🖼️', description: 'Use your drawing as-is', swatch: 'linear-gradient(135deg, #e5e7eb, #d1d5db)' },
+  { value: 'cartoon', label: 'Cartoon', emoji: '🎨', description: 'Fun cartoon style', swatch: 'linear-gradient(135deg, #FFD700, #FF6B6B)' },
+  { value: 'oil_painting', label: 'Oil Painting', emoji: '🖌️', description: 'Classic oil painting', swatch: 'linear-gradient(135deg, #8B4513, #DAA520)' },
+  { value: 'watercolor', label: 'Watercolor', emoji: '💧', description: 'Soft watercolor', swatch: 'linear-gradient(135deg, #87CEEB, #98FB98)' },
+  { value: 'pixel_art', label: 'Pixel Art', emoji: '👾', description: 'Retro pixel style', swatch: 'linear-gradient(135deg, #00FF00, #0000FF)' },
+  { value: 'anime', label: 'Anime', emoji: '✨', description: 'Anime illustration', swatch: 'linear-gradient(135deg, #FF69B4, #9370DB)' },
+  { value: 'crayon', label: 'Crayon', emoji: '🖍️', description: 'Crayon drawing', swatch: 'linear-gradient(135deg, #FF4500, #FFD700)' },
+  { value: 'storybook', label: 'Storybook', emoji: '📖', description: 'Storybook illustration', swatch: 'linear-gradient(135deg, #DEB887, #8FBC8F)' },
 ] as const
 
 const YOUNG_CHILD_THEMES = new Set(['none', 'cartoon', 'crayon', 'watercolor', 'storybook'])
@@ -289,9 +289,9 @@ function UploadPage() {
                 .map((theme, index) => (
                   <motion.button
                     key={theme.value}
-                    className={`p-3 rounded-card border-2 transition-all text-center ${
+                    className={`rounded-card border-2 transition-all text-center overflow-hidden ${
                       selectedArtTheme === theme.value
-                        ? 'border-primary bg-primary/10 shadow-lg'
+                        ? 'border-primary bg-primary/10 shadow-lg ring-2 ring-purple-500 scale-105'
                         : 'border-gray-200 hover:border-gray-300 hover:shadow-md'
                     }`}
                     onClick={() => setSelectedArtTheme(theme.value)}
@@ -301,9 +301,15 @@ function UploadPage() {
                     animate={{ opacity: 1, scale: 1 }}
                     transition={{ delay: 0.25 + index * 0.03 }}
                   >
-                    <span className="text-2xl block mb-1">{theme.emoji}</span>
-                    <span className="font-medium text-gray-800 text-sm block">{theme.label}</span>
-                    <span className="text-xs text-gray-500">{theme.description}</span>
+                    <div
+                      className="w-full h-8 rounded-t-lg"
+                      style={{ background: theme.swatch }}
+                    />
+                    <div className="p-3 pt-2">
+                      <span className="text-2xl block mb-1">{theme.emoji}</span>
+                      <span className="font-medium text-gray-800 text-sm block">{theme.label}</span>
+                      <span className="text-xs text-gray-500">{theme.description}</span>
+                    </div>
                   </motion.button>
                 ))}
             </div>
