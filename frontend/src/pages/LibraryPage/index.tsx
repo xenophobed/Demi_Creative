@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { BookOpen, Palette, Map, Newspaper, Compass, Globe, ChevronRight, Podcast, TrendingUp } from 'lucide-react'
@@ -941,61 +941,59 @@ function LibraryPage() {
                 )}
               </motion.div>
             ) : !isLoading ? (
-              // Empty state
-              <motion.div
-                className="text-center py-16"
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-              >
-                <motion.div
-                  className="text-8xl mb-6"
-                  animate={{ y: [0, -10, 0] }}
-                  transition={{ duration: 2, repeat: Infinity }}
-                >
-                  {isSearching ? '🔍' : '📭'}
-                </motion.div>
-                <h2 className="text-xl font-bold text-gray-800 mb-2">
-                  {isSearching
-                    ? 'No results found'
-                    : activeTab === 'all'
-                      ? 'Nothing here yet'
-                      : activeTab === 'art-stories'
-                        ? 'No art stories yet'
-                        : activeTab === 'interactive'
-                          ? 'No interactive stories yet'
-                          : activeTab === 'kids-news'
-                            ? 'No kids news yet'
-                            : 'Nothing here yet'}
-                </h2>
-                <p className="text-gray-500 mb-6">
-                  {isSearching
-                    ? 'Try a different search term or clear the search.'
-                    : activeTab === 'kids-news'
-                      ? 'Visit the News Hub to read or listen to kid-friendly news!'
-                      : activeTab === 'interactive'
-                        ? 'Try the Interactive Story mode to create branching adventures!'
-                        : 'Upload your first artwork and start creating amazing stories!'}
-                </p>
-                {!isSearching && (
-                  <Link
-                    to={
-                      activeTab === 'kids-news'
-                        ? '/news'
-                        : activeTab === 'interactive'
-                          ? '/interactive'
-                          : '/upload'
-                    }
+              // Per-tab empty state (#279)
+              (() => {
+                if (isSearching) {
+                  return (
+                    <motion.div
+                      className="text-center py-16"
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                    >
+                      <motion.div
+                        className="text-8xl mb-6"
+                        animate={{ y: [0, -10, 0] }}
+                        transition={{ duration: 2, repeat: Infinity }}
+                      >
+                        🔍
+                      </motion.div>
+                      <h2 className="text-xl font-bold text-gray-800 mb-2">No results found</h2>
+                      <p className="text-gray-500">Try a different search term or clear the search.</p>
+                    </motion.div>
+                  )
+                }
+
+                const TAB_EMPTY_STATES: Record<ContentTab, { icon: string; message: string; cta: string; route: string }> = {
+                  'all': { icon: '🎨', message: 'No creations yet — start your first story!', cta: 'Upload a Drawing', route: '/upload' },
+                  'art-stories': { icon: '🖼️', message: 'No art stories yet — upload a drawing!', cta: 'Upload a Drawing', route: '/upload' },
+                  'interactive': { icon: '📖', message: 'No interactive tales yet — start one now!', cta: 'Start a Story', route: '/interactive' },
+                  'kids-news': { icon: '📰', message: 'No news stories yet — explore kids news!', cta: 'Read Kids News', route: '/news' },
+                }
+                const emptyState = TAB_EMPTY_STATES[activeTab] ?? TAB_EMPTY_STATES['all']
+
+                return (
+                  <motion.div
+                    className="flex flex-col items-center justify-center py-16 text-center"
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
                   >
-                    <Button size="lg" leftIcon={<span>✨</span>}>
-                      {activeTab === 'kids-news'
-                        ? 'Explore Kids News'
-                        : activeTab === 'interactive'
-                          ? 'Start an Adventure'
-                          : 'Start Creating'}
-                    </Button>
-                  </Link>
-                )}
-              </motion.div>
+                    <motion.div
+                      className="text-6xl mb-4"
+                      animate={{ y: [0, -10, 0] }}
+                      transition={{ duration: 2, repeat: Infinity }}
+                    >
+                      {emptyState.icon}
+                    </motion.div>
+                    <p className="text-lg text-gray-500 mb-6">{emptyState.message}</p>
+                    <button
+                      onClick={() => navigate(emptyState.route)}
+                      className="px-6 py-3 bg-purple-500 text-white rounded-xl font-semibold hover:bg-purple-600 transition-colors"
+                    >
+                      {emptyState.cta}
+                    </button>
+                  </motion.div>
+                )
+              })()
             ) : null}
           </AnimatePresence>
 
