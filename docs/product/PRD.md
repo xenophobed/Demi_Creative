@@ -943,6 +943,7 @@ Month 3: 儿童创作了 20+ 个故事，形成自己的"故事宇宙"
 - 🔲 Upload 页步骤排序修复（CTA 按钮位置）
 - 🔲 Login 页移动端 Logo 裁剪修复
 - 🔲 Profile 页移动端布局修复（Edit Profile 按钮重叠）
+- 🔲 UploadPage React 钩子顺序修复（useState 在条件 return 之后调用，违反 React 规则，可能导致状态损坏）
 
 **应该有**:
 - 🔲 Library「New」徽章时效规则（创建 7 天后自动消失）
@@ -950,9 +951,13 @@ Month 3: 儿童创作了 20+ 个故事，形成自己的"故事宇宙"
 - 🔲 Upload 语音选择器折叠/分页（28 个选项过长）
 - 🔲 React Router v7 future flag 迁移
 - 🔲 Upload 页 DOM 嵌套校验错误修复
+- 🔲 StoryPage 成功横幅条件显示（仅在 `justGenerated === true` 时出现，从 Library 打开时不显示）
+- 🔲 LibraryPage 每标签页独立空状态 UI（含 CTA 指引至对应创建页）
 
 **可以有**:
 - 🔲 Library/Profile 卡片 hover 反馈（桌面端 lift 效果）
+- 🔲 UploadPage 艺术风格选择器可视化卡片（色块/渐变背景）— 完成 §3.1.1 验收标准「可视化卡片」
+- 🔲 AvatarDisplay 组件去重（统一为目录版本，平级文件改为重新导出或删除）
 
 ### Phase 3 - 第三阶段
 
