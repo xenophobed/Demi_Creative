@@ -70,6 +70,7 @@ export const storyGenerationManager = {
         const s = useStoryStore.getState()
         s.setUploadStatus('success')
         s.setCurrentStory(storyData)
+        s.setJustGenerated(true)
         s.stopStreaming()
 
         const path = `/story/${storyData.story_id}`

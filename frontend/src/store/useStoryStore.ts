@@ -46,6 +46,9 @@ interface StoryState {
   generationInProgress: boolean
   generationError: string | null
 
+  // Flag: true only when story was just generated (not when browsing library)
+  justGenerated: boolean
+
   // Actions
   setCurrentStory: (story: ImageToStoryResponse | null) => void
   setUploadStatus: (status: UploadStatus) => void
@@ -68,6 +71,7 @@ interface StoryState {
   stopStreaming: () => void
   setGenerationError: (error: string | null) => void
   resetStreaming: () => void
+  setJustGenerated: (value: boolean) => void
 }
 
 const useStoryStore = create<StoryState>((set, get) => ({
@@ -85,6 +89,7 @@ const useStoryStore = create<StoryState>((set, get) => ({
   streaming: initialStreamingState,
   generationInProgress: false,
   generationError: null,
+  justGenerated: false,
 
   setCurrentStory: (story) => {
     set({ currentStory: story })
@@ -166,6 +171,7 @@ const useStoryStore = create<StoryState>((set, get) => ({
       streaming: initialStreamingState,
       generationInProgress: false,
       generationError: null,
+      justGenerated: false,
     })
   },
 
@@ -235,6 +241,8 @@ const useStoryStore = create<StoryState>((set, get) => ({
       generationError: null,
     })
   },
+
+  setJustGenerated: (value) => set({ justGenerated: value }),
 }))
 
 export default useStoryStore
