@@ -89,6 +89,40 @@ from ..mcp_servers import (
     image_style_server,
 )
 from ..services.story_memory import get_story_memory_prompt
+from ..mcp_servers import search_similar_stories
+
+
+async def _search_story_dedup(child_id: str, description: str, threshold: float = 0.9) -> str:
+    """Search for similar past stories and return a variation nudge if duplicates found.
+
+    Returns an empty string if no similar stories are found or if the search
+    fails (best-effort — never blocks generation). (#290)
+    """
+    if not child_id or not description:
+        return ""
+    try:
+        result = await search_similar_stories({
+            "child_id": child_id,
+            "story_description": description,
+            "top_k": 3,
+        })
+        import json as _json
+        data = _json.loads(result["content"][0]["text"])
+        similar = data.get("similar_stories", [])
+        high_sim = [s for s in similar if s.get("similarity_score", 0) >= threshold]
+        if not high_sim:
+            return ""
+        summaries = "\n".join(
+            f"- {s.get('story_text_preview', 'N/A')}" for s in high_sim[:3]
+        )
+        return f"""
+**Story Freshness — Variation Required** (#290):
+The child has heard similar stories before. Here are summaries of past stories with high similarity:
+{summaries}
+Please create a FRESH, DIFFERENT story with a new angle, different plot structure, and different character dynamics. Avoid repeating the same themes and conclusions.
+"""
+    except Exception:
+        return ""  # Best-effort: proceed without dedup
 
 
 def _should_use_mock() -> bool:
@@ -243,6 +277,13 @@ async def image_to_story(
     except Exception:
         pass  # Non-critical
 
+    # Story dedup check (#290): search for similar past stories
+    dedup_nudge = ""
+    try:
+        dedup_nudge = await _search_story_dedup(child_id, interests_str)
+    except Exception:
+        pass  # Best-effort
+
     # 构建提示词
     prompt = f"""请为这幅儿童画作创作一个适合{child_age}岁儿童的故事。
 
@@ -251,7 +292,7 @@ async def image_to_story(
 - 儿童ID: {child_id}
 - 儿童年龄: {child_age}岁
 - 兴趣爱好: {interests_str}
-{story_memory_section}
+{story_memory_section}{dedup_nudge}
 **要求**：
 1. 首先使用 `mcp__vision-analysis__analyze_children_drawing` 工具分析画作
 2. 使用 `mcp__vector-search__search_similar_drawings` 工具搜索该儿童之前的相似画作，以保持角色和故事的连续性
@@ -472,6 +513,13 @@ async def stream_image_to_story(
     except Exception:
         pass
 
+    # Story dedup check for streaming path (#290)
+    stream_dedup_nudge = ""
+    try:
+        stream_dedup_nudge = await _search_story_dedup(child_id, interests_str)
+    except Exception:
+        pass  # Best-effort
+
     prompt = f"""请为这幅儿童画作创作一个适合{child_age}岁儿童的故事。
 
 **任务信息**：
@@ -479,7 +527,7 @@ async def stream_image_to_story(
 - 儿童ID: {child_id}
 - 儿童年龄: {child_age}岁
 - 兴趣爱好: {interests_str}
-{stream_memory_section}
+{stream_memory_section}{stream_dedup_nudge}
 **要求**：
 1. 首先使用 `mcp__vision-analysis__analyze_children_drawing` 工具分析画作
 2. 使用 `mcp__vector-search__search_similar_drawings` 工具搜索该儿童之前的相似画作，以保持角色和故事的连续性

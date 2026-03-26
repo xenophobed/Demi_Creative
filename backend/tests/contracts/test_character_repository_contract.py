@@ -5,7 +5,7 @@ Defines the expected interface and behavior of CharacterRepository
 before implementation. Tests CRUD operations and constraints.
 
 Parent Epic: #42 (Memory System)
-Issue: #160
+Issue: #160, #288
 """
 
 import json
@@ -34,6 +34,7 @@ async def db():
         """
         CREATE TABLE IF NOT EXISTS characters (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT NOT NULL DEFAULT '',
             child_id TEXT NOT NULL,
             name TEXT NOT NULL,
             description TEXT,
@@ -42,12 +43,12 @@ async def db():
             appearance_count INTEGER DEFAULT 1,
             first_seen_at TEXT NOT NULL,
             last_seen_at TEXT NOT NULL,
-            UNIQUE(child_id, name)
+            UNIQUE(user_id, child_id, name)
         )
         """
     )
     await manager.execute(
-        "CREATE INDEX IF NOT EXISTS idx_characters_child_id ON characters(child_id)"
+        "CREATE INDEX IF NOT EXISTS idx_characters_user_child ON characters(user_id, child_id)"
     )
     await manager.commit()
     yield manager
@@ -73,6 +74,7 @@ class TestUpsertCharacter:
     @pytest.mark.asyncio
     async def test_insert_new_character(self, repo):
         result = await repo.upsert_character(
+            user_id="user-1",
             child_id="child-1",
             name="Lightning Dog",
             description="A fast golden retriever with lightning bolts",
@@ -83,16 +85,19 @@ class TestUpsertCharacter:
         assert result is not None
         assert result["name"] == "Lightning Dog"
         assert result["child_id"] == "child-1"
+        assert result["user_id"] == "user-1"
         assert result["appearance_count"] == 1
 
     @pytest.mark.asyncio
     async def test_upsert_existing_character_increments_count(self, repo):
         await repo.upsert_character(
+            user_id="user-1",
             child_id="child-1",
             name="Lightning Dog",
             description="A fast golden retriever",
         )
         result = await repo.upsert_character(
+            user_id="user-1",
             child_id="child-1",
             name="Lightning Dog",
             description="A fast golden retriever with lightning bolts",
@@ -104,10 +109,12 @@ class TestUpsertCharacter:
     @pytest.mark.asyncio
     async def test_upsert_updates_last_seen(self, repo):
         first = await repo.upsert_character(
+            user_id="user-1",
             child_id="child-1",
             name="Star Cat",
         )
         second = await repo.upsert_character(
+            user_id="user-1",
             child_id="child-1",
             name="Star Cat",
         )
@@ -116,14 +123,97 @@ class TestUpsertCharacter:
 
     @pytest.mark.asyncio
     async def test_different_children_same_character_name(self, repo):
-        await repo.upsert_character(child_id="child-1", name="Hero")
-        await repo.upsert_character(child_id="child-2", name="Hero")
+        await repo.upsert_character(user_id="user-1", child_id="child-1", name="Hero")
+        await repo.upsert_character(user_id="user-1", child_id="child-2", name="Hero")
 
-        chars_1 = await repo.get_characters("child-1")
-        chars_2 = await repo.get_characters("child-2")
+        chars_1 = await repo.get_characters("user-1", "child-1")
+        chars_2 = await repo.get_characters("user-1", "child-2")
 
         assert len(chars_1) == 1
         assert len(chars_2) == 1
+
+
+# ============================================================================
+# user_id scoping (#288)
+# ============================================================================
+
+
+class TestUserIdScoping:
+    """Contract: characters are scoped by user_id to prevent cross-user data leakage."""
+
+    @pytest.mark.asyncio
+    async def test_two_users_same_child_id_get_separate_characters(self, repo):
+        """Two users with the same child_id must not see each other's characters."""
+        await repo.upsert_character(
+            user_id="user-alice",
+            child_id="child-1",
+            name="Lightning Dog",
+            description="Alice's dog",
+        )
+        await repo.upsert_character(
+            user_id="user-bob",
+            child_id="child-1",
+            name="Lightning Dog",
+            description="Bob's dog",
+        )
+
+        alice_chars = await repo.get_characters("user-alice", "child-1")
+        bob_chars = await repo.get_characters("user-bob", "child-1")
+
+        assert len(alice_chars) == 1
+        assert len(bob_chars) == 1
+        assert alice_chars[0]["description"] == "Alice's dog"
+        assert bob_chars[0]["description"] == "Bob's dog"
+
+    @pytest.mark.asyncio
+    async def test_get_character_scoped_by_user_id(self, repo):
+        """get_character must only return the character belonging to the given user."""
+        await repo.upsert_character(
+            user_id="user-alice",
+            child_id="child-1",
+            name="Star Cat",
+            description="Alice's cat",
+        )
+
+        found = await repo.get_character("user-alice", "child-1", "Star Cat")
+        not_found = await repo.get_character("user-bob", "child-1", "Star Cat")
+
+        assert found is not None
+        assert found["description"] == "Alice's cat"
+        assert not_found is None
+
+    @pytest.mark.asyncio
+    async def test_increment_appearance_scoped_by_user_id(self, repo):
+        """increment_appearance must only affect the character for the given user."""
+        await repo.upsert_character(
+            user_id="user-alice", child_id="child-1", name="Dog"
+        )
+        await repo.upsert_character(
+            user_id="user-bob", child_id="child-1", name="Dog"
+        )
+
+        result = await repo.increment_appearance("user-alice", "child-1", "Dog")
+        assert result is True
+
+        alice_char = await repo.get_character("user-alice", "child-1", "Dog")
+        bob_char = await repo.get_character("user-bob", "child-1", "Dog")
+
+        assert alice_char["appearance_count"] == 2
+        assert bob_char["appearance_count"] == 1
+
+    @pytest.mark.asyncio
+    async def test_empty_user_id_is_valid_default(self, repo):
+        """Empty string user_id works as default for backward compatibility."""
+        result = await repo.upsert_character(
+            user_id="",
+            child_id="child-1",
+            name="Bunny",
+        )
+        assert result is not None
+        assert result["user_id"] == ""
+
+        chars = await repo.get_characters("", "child-1")
+        assert len(chars) == 1
 
 
 # ============================================================================
@@ -136,28 +226,28 @@ class TestGetCharacters:
 
     @pytest.mark.asyncio
     async def test_returns_all_characters_for_child(self, repo):
-        await repo.upsert_character(child_id="child-1", name="Dog")
-        await repo.upsert_character(child_id="child-1", name="Cat")
-        await repo.upsert_character(child_id="child-2", name="Bird")
+        await repo.upsert_character(user_id="user-1", child_id="child-1", name="Dog")
+        await repo.upsert_character(user_id="user-1", child_id="child-1", name="Cat")
+        await repo.upsert_character(user_id="user-1", child_id="child-2", name="Bird")
 
-        chars = await repo.get_characters("child-1")
+        chars = await repo.get_characters("user-1", "child-1")
         assert len(chars) == 2
         names = {c["name"] for c in chars}
         assert names == {"Dog", "Cat"}
 
     @pytest.mark.asyncio
     async def test_returns_empty_list_for_unknown_child(self, repo):
-        chars = await repo.get_characters("nonexistent")
+        chars = await repo.get_characters("user-1", "nonexistent")
         assert chars == []
 
     @pytest.mark.asyncio
     async def test_ordered_by_appearance_count_desc(self, repo):
-        await repo.upsert_character(child_id="child-1", name="Rare")
-        await repo.upsert_character(child_id="child-1", name="Popular")
-        await repo.upsert_character(child_id="child-1", name="Popular")
-        await repo.upsert_character(child_id="child-1", name="Popular")
+        await repo.upsert_character(user_id="user-1", child_id="child-1", name="Rare")
+        await repo.upsert_character(user_id="user-1", child_id="child-1", name="Popular")
+        await repo.upsert_character(user_id="user-1", child_id="child-1", name="Popular")
+        await repo.upsert_character(user_id="user-1", child_id="child-1", name="Popular")
 
-        chars = await repo.get_characters("child-1")
+        chars = await repo.get_characters("user-1", "child-1")
         assert chars[0]["name"] == "Popular"
         assert chars[0]["appearance_count"] == 3
 
@@ -173,19 +263,20 @@ class TestGetCharacter:
     @pytest.mark.asyncio
     async def test_returns_character_when_found(self, repo):
         await repo.upsert_character(
+            user_id="user-1",
             child_id="child-1",
             name="Lightning Dog",
             description="fast dog",
         )
 
-        char = await repo.get_character("child-1", "Lightning Dog")
+        char = await repo.get_character("user-1", "child-1", "Lightning Dog")
         assert char is not None
         assert char["name"] == "Lightning Dog"
         assert char["description"] == "fast dog"
 
     @pytest.mark.asyncio
     async def test_returns_none_when_not_found(self, repo):
-        char = await repo.get_character("child-1", "Nonexistent")
+        char = await repo.get_character("user-1", "child-1", "Nonexistent")
         assert char is None
 
 
@@ -199,17 +290,17 @@ class TestIncrementAppearance:
 
     @pytest.mark.asyncio
     async def test_increments_count(self, repo):
-        await repo.upsert_character(child_id="child-1", name="Dog")
+        await repo.upsert_character(user_id="user-1", child_id="child-1", name="Dog")
 
-        result = await repo.increment_appearance("child-1", "Dog")
+        result = await repo.increment_appearance("user-1", "child-1", "Dog")
         assert result is True
 
-        char = await repo.get_character("child-1", "Dog")
+        char = await repo.get_character("user-1", "child-1", "Dog")
         assert char["appearance_count"] == 2
 
     @pytest.mark.asyncio
     async def test_returns_false_for_unknown_character(self, repo):
-        result = await repo.increment_appearance("child-1", "Ghost")
+        result = await repo.increment_appearance("user-1", "child-1", "Ghost")
         assert result is False
 
 
@@ -225,22 +316,77 @@ class TestJsonFields:
     async def test_visual_features_roundtrip(self, repo):
         features = {"colors": ["red", "blue"], "shapes": ["circle"]}
         await repo.upsert_character(
+            user_id="user-1",
             child_id="child-1",
             name="Shape Monster",
             visual_features=features,
         )
 
-        char = await repo.get_character("child-1", "Shape Monster")
+        char = await repo.get_character("user-1", "child-1", "Shape Monster")
         assert char["visual_features"] == features
 
     @pytest.mark.asyncio
     async def test_traits_roundtrip(self, repo):
         traits = ["brave", "curious", "kind"]
         await repo.upsert_character(
+            user_id="user-1",
             child_id="child-1",
             name="Hero",
             traits=traits,
         )
 
-        char = await repo.get_character("child-1", "Hero")
+        char = await repo.get_character("user-1", "child-1", "Hero")
         assert char["traits"] == traits
+
+    @pytest.mark.asyncio
+    async def test_enriched_upsert_stores_and_retrieves_all_fields(self, repo):
+        """Issue #289: upsert with visual_features + traits stores both,
+        and get_characters returns them deserialized."""
+        visual_features = {
+            "features": ["蓝色衣服", "尖耳朵", "长尾巴"],
+            "description_summary": "穿蓝色衣服的小狗",
+        }
+        traits = ["brave", "loyal", "playful"]
+
+        await repo.upsert_character(
+            user_id="user-1",
+            child_id="child-enrich",
+            name="Lightning Dog",
+            description="A fast golden retriever",
+            visual_features=visual_features,
+            traits=traits,
+        )
+
+        # Verify via get_characters (the list query used by routes)
+        chars = await repo.get_characters("user-1", "child-enrich")
+        assert len(chars) == 1
+        char = chars[0]
+        assert char["name"] == "Lightning Dog"
+        assert char["description"] == "A fast golden retriever"
+        assert char["visual_features"] == visual_features
+        assert char["traits"] == traits
+        assert char["appearance_count"] == 1
+
+    @pytest.mark.asyncio
+    async def test_enriched_upsert_updates_features_on_conflict(self, repo):
+        """Issue #289: second upsert with richer data overwrites previous."""
+        await repo.upsert_character(
+            user_id="user-1",
+            child_id="child-enrich2",
+            name="Star Cat",
+            description="A cat",
+            visual_features={"description_summary": "A cat"},
+        )
+        await repo.upsert_character(
+            user_id="user-1",
+            child_id="child-enrich2",
+            name="Star Cat",
+            description="A sparkly cat with a star on its forehead",
+            visual_features={"features": ["star forehead", "sparkly fur"]},
+            traits=["curious", "gentle"],
+        )
+
+        char = await repo.get_character("user-1", "child-enrich2", "Star Cat")
+        assert char["appearance_count"] == 2
+        assert char["visual_features"] == {"features": ["star forehead", "sparkly fur"]}
+        assert char["traits"] == ["curious", "gentle"]

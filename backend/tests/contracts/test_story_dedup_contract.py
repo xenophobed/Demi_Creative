@@ -1,9 +1,10 @@
 """
-Story Deduplication Contract Tests (#161)
+Story Deduplication Contract Tests (#161, #290)
 
-Tests store_story_embedding and search_similar_stories MCP tools.
+Tests store_story_embedding and search_similar_stories MCP tools,
+including the round-trip dedup detection workflow.
 
-Parent Epic: #42 | Issue: #161
+Parent Epic: #42 | Issues: #161, #290
 """
 
 import importlib
@@ -119,3 +120,94 @@ class TestSearchSimilarStories:
         assert "similar_stories" in payload
         assert "total_found" in payload
         assert "query" in payload
+
+
+class TestStoryDedupRoundTrip:
+    """Round-trip tests: store then search to verify dedup detection (#290)."""
+
+    @pytest.mark.asyncio
+    async def test_near_duplicate_detected(self, vs, tmp_path):
+        """Store a story, then search with nearly identical text; expect high similarity."""
+        pytest.importorskip("chromadb")
+        import os
+        os.environ["CHROMA_PATH"] = str(tmp_path / "vectors")
+
+        # Store original story
+        await _call(vs.store_story_embedding, {
+            "child_id": "child-rt",
+            "story_id": "rt-story-1",
+            "story_text": "A brave dog named Lightning flew to the moon on a shiny rocket and found a glowing crystal.",
+            "themes": "space, adventure",
+            "age_group": "6-8",
+        })
+
+        # Search with very similar text
+        result = await _call(vs.search_similar_stories, {
+            "child_id": "child-rt",
+            "story_description": "A brave dog named Lightning flew to the moon on a rocket and found a glowing crystal.",
+            "top_k": 3,
+        })
+        payload = json.loads(result["content"][0]["text"])
+        assert payload["total_found"] >= 1
+        top_match = payload["similar_stories"][0]
+        # Near-duplicate should have high similarity (the exact score depends on
+        # ChromaDB's default embedding model, but near-identical text should be
+        # well above 0.5)
+        assert top_match["similarity_score"] > 0.5
+        assert top_match["story_id"] == "rt-story-1"
+
+    @pytest.mark.asyncio
+    async def test_different_child_not_found(self, vs, tmp_path):
+        """Stories from one child should not appear in another child's search."""
+        pytest.importorskip("chromadb")
+        import os
+        os.environ["CHROMA_PATH"] = str(tmp_path / "vectors")
+
+        # Store story for child-a
+        await _call(vs.store_story_embedding, {
+            "child_id": "child-a",
+            "story_id": "iso-story-1",
+            "story_text": "A cat explored a magical garden full of singing flowers.",
+            "themes": "nature",
+            "age_group": "3-5",
+        })
+
+        # Search as child-b — should find nothing
+        result = await _call(vs.search_similar_stories, {
+            "child_id": "child-b",
+            "story_description": "A cat explored a magical garden full of singing flowers.",
+            "top_k": 3,
+        })
+        payload = json.loads(result["content"][0]["text"])
+        assert payload["total_found"] == 0
+
+    @pytest.mark.asyncio
+    async def test_upsert_updates_existing(self, vs, tmp_path):
+        """Calling store with the same story_id should upsert, not duplicate."""
+        pytest.importorskip("chromadb")
+        import os
+        os.environ["CHROMA_PATH"] = str(tmp_path / "vectors")
+
+        args = {
+            "child_id": "child-up",
+            "story_id": "upsert-1",
+            "story_text": "Original text about a dragon.",
+            "themes": "fantasy",
+            "age_group": "9-12",
+        }
+        r1 = await _call(vs.store_story_embedding, args)
+        assert json.loads(r1["content"][0]["text"])["success"] is True
+
+        # Upsert with updated text
+        args["story_text"] = "Updated text about a friendly dragon who bakes cakes."
+        r2 = await _call(vs.store_story_embedding, args)
+        assert json.loads(r2["content"][0]["text"])["success"] is True
+
+        # Search — should find only 1 result (not 2)
+        result = await _call(vs.search_similar_stories, {
+            "child_id": "child-up",
+            "story_description": "dragon",
+            "top_k": 5,
+        })
+        payload = json.loads(result["content"][0]["text"])
+        assert payload["total_found"] == 1

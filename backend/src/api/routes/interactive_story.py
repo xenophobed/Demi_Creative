@@ -1052,15 +1052,50 @@ async def save_interactive_story(
 
         await story_repo.create(story_data)
 
-        # Sync detected characters to characters table (#160)
+        # Store story embedding for dedup detection (#290)
+        try:
+            from ...mcp_servers import store_story_embedding
+            await store_story_embedding({
+                "child_id": session.child_id,
+                "story_id": story_id,
+                "story_text": full_text,
+                "themes": ", ".join(educational.get("themes", [])),
+                "age_group": session.age_group,
+            })
+        except Exception:
+            logger.debug("store_story_embedding skipped (non-critical)", exc_info=True)
+
+        # Sync detected characters to characters table (#160, #289)
         for char_data in story_data.get("characters", []):
             try:
                 name = char_data.get("character_name") or char_data.get("name", "")
                 if name:
+                    # Extract enrichment from available character data
+                    visual_features = None
+                    desc = char_data.get("description", "")
+                    if desc:
+                        visual_features = {"description_summary": desc}
+                    # Check for explicit visual_features on the character dict
+                    if char_data.get("visual_features"):
+                        raw_vf = char_data["visual_features"]
+                        if isinstance(raw_vf, dict):
+                            visual_features = raw_vf
+                        elif isinstance(raw_vf, list):
+                            visual_features = {"features": raw_vf}
+                    traits = None
+                    if char_data.get("traits"):
+                        raw_traits = char_data["traits"]
+                        if isinstance(raw_traits, list):
+                            traits = raw_traits
+                        elif isinstance(raw_traits, str):
+                            traits = [t.strip() for t in raw_traits.split(",") if t.strip()]
                     await character_repo.upsert_character(
+                        user_id=user.user_id,
                         child_id=session.child_id,
                         name=name,
-                        description=char_data.get("description", ""),
+                        description=desc,
+                        visual_features=visual_features,
+                        traits=traits,
                     )
             except Exception:
                 pass  # Non-critical

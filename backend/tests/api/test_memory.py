@@ -67,6 +67,7 @@ class TestMemoryCharactersEndpoints:
             # Insert a character directly
             from backend.src.services.database import character_repo
             await character_repo.upsert_character(
+                user_id="test_user",
                 child_id=child_id,
                 name="Lightning Dog",
                 description="A fast golden dog",

@@ -20,6 +20,7 @@ class CharacterRepository:
 
     async def upsert_character(
         self,
+        user_id: str,
         child_id: str,
         name: str,
         description: Optional[str] = None,
@@ -28,8 +29,13 @@ class CharacterRepository:
     ) -> Dict[str, Any]:
         """Insert a new character or update an existing one.
 
-        On conflict (same child_id + name): increments appearance_count,
+        On conflict (same user_id + child_id + name): increments appearance_count,
         updates description/visual_features/traits/last_seen_at.
+
+        Args:
+            user_id: Owner's user ID — scopes characters per account (#288).
+            child_id: Child profile ID.
+            name: Character name.
 
         Returns the character row as a dict.
         """
@@ -39,9 +45,9 @@ class CharacterRepository:
 
         await self._db.execute(
             """
-            INSERT INTO characters (child_id, name, description, visual_features, traits, appearance_count, first_seen_at, last_seen_at)
-            VALUES (?, ?, ?, ?, ?, 1, ?, ?)
-            ON CONFLICT(child_id, name)
+            INSERT INTO characters (user_id, child_id, name, description, visual_features, traits, appearance_count, first_seen_at, last_seen_at)
+            VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)
+            ON CONFLICT(user_id, child_id, name)
             DO UPDATE SET
                 description = COALESCE(excluded.description, characters.description),
                 visual_features = COALESCE(excluded.visual_features, characters.visual_features),
@@ -49,31 +55,31 @@ class CharacterRepository:
                 appearance_count = characters.appearance_count + 1,
                 last_seen_at = excluded.last_seen_at
             """,
-            (child_id, name, description, features_json, traits_json, now, now),
+            (user_id, child_id, name, description, features_json, traits_json, now, now),
         )
         await self._db.commit()
 
-        return await self.get_character(child_id, name)
+        return await self.get_character(user_id, child_id, name)
 
-    async def get_characters(self, child_id: str) -> List[Dict[str, Any]]:
+    async def get_characters(self, user_id: str, child_id: str) -> List[Dict[str, Any]]:
         """Return all characters for a child, ordered by appearance_count DESC."""
         rows = await self._db.fetchall(
-            "SELECT * FROM characters WHERE child_id = ? ORDER BY appearance_count DESC",
-            (child_id,),
+            "SELECT * FROM characters WHERE user_id = ? AND child_id = ? ORDER BY appearance_count DESC",
+            (user_id, child_id),
         )
         return [self._deserialize(row) for row in rows]
 
-    async def get_character(self, child_id: str, name: str) -> Optional[Dict[str, Any]]:
+    async def get_character(self, user_id: str, child_id: str, name: str) -> Optional[Dict[str, Any]]:
         """Return a single character or None."""
         row = await self._db.fetchone(
-            "SELECT * FROM characters WHERE child_id = ? AND name = ?",
-            (child_id, name),
+            "SELECT * FROM characters WHERE user_id = ? AND child_id = ? AND name = ?",
+            (user_id, child_id, name),
         )
         if not row:
             return None
         return self._deserialize(row)
 
-    async def increment_appearance(self, child_id: str, name: str) -> bool:
+    async def increment_appearance(self, user_id: str, child_id: str, name: str) -> bool:
         """Increment appearance_count and update last_seen_at.
 
         Returns True if character existed, False otherwise.
@@ -83,9 +89,9 @@ class CharacterRepository:
             """
             UPDATE characters
             SET appearance_count = appearance_count + 1, last_seen_at = ?
-            WHERE child_id = ? AND name = ?
+            WHERE user_id = ? AND child_id = ? AND name = ?
             """,
-            (now, child_id, name),
+            (now, user_id, child_id, name),
         )
         await self._db.commit()
         return cursor.rowcount > 0
