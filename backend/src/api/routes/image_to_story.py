@@ -330,10 +330,13 @@ async def create_story_from_image(
             age_adapted=True,
             degraded_length=degraded_length,
         )
+        styled_image_url = cover_image_url if cover_image_url != image_url else None
+
         response = ImageToStoryResponse(
             story_id=story_id,
             story=story_content,
             image_url=image_url,
+            styled_image_url=styled_image_url,
             audio_url=audio_url,
             video_url=None,
             video_job_id=None,
@@ -674,6 +677,7 @@ async def create_story_from_image_stream(
                             "degraded_length": degraded_length,
                         },
                         "image_url": image_url,
+                        "styled_image_url": cover_image_url if cover_image_url != image_url else None,
                         "audio_url": audio_url,
                         "educational_value": {
                             "themes": result_data.get("themes", []),
