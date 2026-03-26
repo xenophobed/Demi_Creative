@@ -173,6 +173,7 @@ class ImageToStoryResponse(BaseModel):
     story_id: str = Field(..., description="故事唯一ID")
     story: StoryContent = Field(..., description="故事内容")
     image_url: Optional[str] = Field(None, description="画作图片URL")
+    styled_image_url: Optional[str] = Field(None, description="风格化图片URL")
     audio_url: Optional[str] = Field(None, description="语音文件URL")
     video_url: Optional[str] = Field(None, description="视频文件URL")
     video_job_id: Optional[str] = Field(None, description="视频生成任务ID")

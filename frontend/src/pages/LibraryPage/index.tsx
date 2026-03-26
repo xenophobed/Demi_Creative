@@ -1060,7 +1060,7 @@ function buildLocalItems(
         type: 'art-story',
         title: `Story #${s.story_id.slice(0, 8)}`,
         preview: text.slice(0, 150),
-        image_url: s.image_url ?? null,
+        image_url: s.styled_image_url || s.cover_image_url || (s.image_url ?? null),
         audio_url: s.audio_url ?? null,
         created_at: s.created_at,
         is_favorited: false,

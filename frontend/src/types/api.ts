@@ -46,6 +46,8 @@ export interface ImageToStoryResponse {
   story_id: string;
   story: StoryContent;
   image_url: string | null;
+  styled_image_url?: string | null;
+  cover_image_url?: string | null;
   audio_url: string | null;
   age_group?: AgeGroup;
   educational_value: EducationalValue;

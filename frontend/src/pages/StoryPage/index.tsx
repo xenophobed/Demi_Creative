@@ -107,7 +107,7 @@ function StoryPage() {
     )
   }
 
-  const imageUrl = resolveMediaUrl(story.image_url)
+  const imageUrl = resolveMediaUrl(story.styled_image_url || story.cover_image_url || story.image_url)
   // Use the story's age_group (content was generated for it), fall back to child store
   const ageGroup = story.age_group || currentChild?.age_group || null
 
