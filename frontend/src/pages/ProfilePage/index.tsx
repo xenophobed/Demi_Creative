@@ -6,9 +6,13 @@ import Button from '@/components/common/Button'
 import Card from '@/components/common/Card'
 import TiltCard from '@/components/depth/TiltCard'
 import useAuthStore from '@/store/useAuthStore'
+import useChildStore from '@/store/useChildStore'
 import { authService } from '@/api/services/authService'
 import type { UpdateProfileRequest } from '@/types/auth'
 import AvatarDisplay from '@/components/common/AvatarDisplay'
+import CharacterGallery from './CharacterGallery'
+import PreferenceSummary from './PreferenceSummary'
+import { useMemoryApi } from '@/hooks/useMemoryApi'
 
 const ANIMAL_EMOJIS = [
   '🐶', '🐱', '🐼', '🐨', '🦊', '🐰', '🐸', '🦁',
@@ -19,12 +23,24 @@ const ANIMAL_EMOJIS = [
 function ProfilePage() {
   const navigate = useNavigate()
   const { isAuthenticated, user, setUser } = useAuthStore()
+  const { currentChild, defaultChildId } = useChildStore()
+  const childId = currentChild?.child_id || defaultChildId
   const [isEditing, setIsEditing] = useState(false)
   const [editForm, setEditForm] = useState<UpdateProfileRequest>({
     display_name: user?.display_name || '',
     avatar_url: user?.avatar_url || '',
   })
   const [saving, setSaving] = useState(false)
+  const [showClearConfirm, setShowClearConfirm] = useState(false)
+  const [clearSuccess, setClearSuccess] = useState(false)
+
+  const {
+    characters,
+    preferences,
+    isLoading: memoryLoading,
+    deletePreferences,
+    isDeleting,
+  } = useMemoryApi(isAuthenticated ? childId : null)
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -58,6 +74,17 @@ function ProfilePage() {
       month: 'long',
       day: 'numeric',
     })
+  }
+
+  const handleClearMemory = async () => {
+    try {
+      await deletePreferences()
+      setShowClearConfirm(false)
+      setClearSuccess(true)
+      setTimeout(() => setClearSuccess(false), 3000)
+    } catch (err) {
+      console.error('Failed to clear memory:', err)
+    }
   }
 
   if (!isAuthenticated) {
@@ -226,6 +253,76 @@ function ProfilePage() {
           >
             Manage Channels
           </Button>
+        </Card>
+      </motion.section>
+
+      {/* Character Gallery */}
+      <motion.section
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.2 }}
+      >
+        <CharacterGallery characters={characters} isLoading={memoryLoading} />
+      </motion.section>
+
+      {/* Preference Summary */}
+      <motion.section
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.25 }}
+      >
+        <PreferenceSummary preferences={preferences} isLoading={memoryLoading} />
+      </motion.section>
+
+      {/* Privacy / Clear Memory */}
+      <motion.section
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.3 }}
+      >
+        <Card className="p-4">
+          <h2 className="text-base font-bold text-gray-800 mb-1">Privacy</h2>
+          <p className="text-sm text-gray-500 mb-3">
+            Clear all saved characters, themes, and preference data.
+          </p>
+
+          {clearSuccess && (
+            <div className="mb-3 rounded-lg bg-green-50 border border-green-200 px-3 py-2 text-sm text-green-700">
+              Memory cleared successfully.
+            </div>
+          )}
+
+          {!showClearConfirm ? (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setShowClearConfirm(true)}
+            >
+              Clear Memory
+            </Button>
+          ) : (
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-sm text-red-600 font-medium">
+                Are you sure? This cannot be undone.
+              </p>
+              <Button
+                size="sm"
+                variant="primary"
+                className="bg-red-500 hover:bg-red-600"
+                onClick={handleClearMemory}
+                isLoading={isDeleting}
+              >
+                Yes, Clear
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setShowClearConfirm(false)}
+              >
+                Cancel
+              </Button>
+            </div>
+          )}
         </Card>
       </motion.section>
     </div>
