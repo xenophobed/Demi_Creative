@@ -43,6 +43,60 @@ from ...services.models.artifact_models import (
 logger = logging.getLogger(__name__)
 
 
+def _extract_character_enrichment(
+    char_data: dict,
+    analysis: dict,
+) -> tuple:
+    """Extract visual_features and traits for a character from available data.
+
+    Looks up the character by name in the vision analysis recurring_characters
+    to get visual_features. Derives simple personality traits from the
+    character description when explicit trait data is not available.
+
+    Returns (visual_features_dict | None, traits_list | None).
+    """
+    name = char_data.get("character_name") or char_data.get("name", "")
+
+    # --- visual_features ---
+    visual_features = None
+    # First try: direct visual_features on the character dict (if agent provides it)
+    if char_data.get("visual_features"):
+        raw = char_data["visual_features"]
+        if isinstance(raw, dict):
+            visual_features = raw
+        elif isinstance(raw, list):
+            visual_features = {"features": raw}
+
+    # Second try: match against recurring_characters from vision analysis
+    if not visual_features and analysis:
+        for rc in analysis.get("recurring_characters", []):
+            rc_name = rc.get("name", "")
+            if rc_name and rc_name.lower() == name.lower():
+                vf = rc.get("visual_features")
+                if isinstance(vf, list):
+                    visual_features = {"features": vf}
+                elif isinstance(vf, dict):
+                    visual_features = vf
+                break
+
+    # Third try: extract from description
+    if not visual_features:
+        desc = char_data.get("description", "")
+        if desc:
+            visual_features = {"description_summary": desc}
+
+    # --- traits ---
+    traits = None
+    if char_data.get("traits"):
+        raw_traits = char_data["traits"]
+        if isinstance(raw_traits, list):
+            traits = raw_traits
+        elif isinstance(raw_traits, str):
+            traits = [t.strip() for t in raw_traits.split(",") if t.strip()]
+
+    return visual_features, traits
+
+
 router = APIRouter(
     prefix="/api/v1",
     tags=["Image to Story"]
@@ -263,6 +317,7 @@ async def create_story_from_image(
             enable_audio=enable_audio,
             voice=voice,
             art_theme=art_theme.value if art_theme != ArtTheme.NONE else None,
+            user_id=user.user_id,
         )
 
         # 4b. Validate story length per age group (#233)
@@ -281,6 +336,7 @@ async def create_story_from_image(
                 enable_audio=enable_audio,
                 voice=voice,
                 art_theme=art_theme.value if art_theme != ArtTheme.NONE else None,
+                user_id=user.user_id,
             )
             length_info = validate_story_length(result.get("story", ""), age_group.value)
 
@@ -384,19 +440,38 @@ async def create_story_from_image(
         story_data["user_id"] = user.user_id
         await story_repo.create(story_data)
 
+        # Store story embedding for dedup detection (#290)
+        try:
+            from ...mcp_servers import store_story_embedding
+            await store_story_embedding({
+                "child_id": safe_child_id,
+                "story_id": story_id,
+                "story_text": story_text,
+                "themes": ", ".join(result.get("themes", [])),
+                "age_group": age_group.value,
+            })
+        except Exception:
+            logger.debug("store_story_embedding skipped (non-critical)", exc_info=True)
+
         # Update child preferences (Advanced Memory)
         try:
             await preference_repo.update_from_story_result(safe_child_id, result)
         except Exception:
             pass  # Non-critical: don't fail the request
 
-        # Sync detected characters to characters table (#160)
+        # Sync detected characters to characters table (#160, #288, #289)
+        analysis = result.get("analysis", {})
         for c in characters:
             try:
+                char_data = {"character_name": c.character_name, "description": c.description}
+                visual_features, traits = _extract_character_enrichment(char_data, analysis)
                 await character_repo.upsert_character(
+                    user_id=user.user_id,
                     child_id=safe_child_id,
                     name=c.character_name,
                     description=c.description,
+                    visual_features=visual_features,
+                    traits=traits,
                 )
             except Exception:
                 pass  # Non-critical
@@ -630,6 +705,7 @@ async def create_story_from_image_stream(
                 enable_audio=enable_audio,
                 voice=voice,
                 art_theme=art_theme.value if art_theme != ArtTheme.NONE else None,
+                user_id=user.user_id,
             ):
                 if await request.is_disconnected():
                     logger.info("Client disconnected during story generation (story_id=%s), aborting", story_id)
@@ -698,18 +774,36 @@ async def create_story_from_image_stream(
                     story_save_data["user_id"] = user.user_id
                     await story_repo.create(story_save_data)
 
+                    # Store story embedding for dedup detection (#290)
+                    try:
+                        from ...mcp_servers import store_story_embedding
+                        await store_story_embedding({
+                            "child_id": safe_child_id,
+                            "story_id": story_id,
+                            "story_text": result_data.get("story", {}).get("text", ""),
+                            "themes": ", ".join(result_data.get("themes", [])),
+                            "age_group": age_group.value,
+                        })
+                    except Exception:
+                        logger.debug("store_story_embedding skipped (non-critical)", exc_info=True)
+
                     try:
                         await preference_repo.update_from_story_result(safe_child_id, result_data)
                     except Exception:
                         pass
 
-                    # Sync detected characters to characters table (#235)
+                    # Sync detected characters to characters table (#235, #288, #289)
+                    stream_analysis = result_data.get("analysis", {})
                     for c in result_data.get("characters", []):
                         try:
+                            visual_features, traits = _extract_character_enrichment(c, stream_analysis)
                             await character_repo.upsert_character(
+                                user_id=user.user_id,
                                 child_id=safe_child_id,
                                 name=c.get("name", ""),
                                 description=c.get("description", ""),
+                                visual_features=visual_features,
+                                traits=traits,
                             )
                         except Exception:
                             pass  # Non-critical

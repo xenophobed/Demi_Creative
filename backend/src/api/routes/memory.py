@@ -103,5 +103,5 @@ async def get_characters(
 ):
     """Return all characters for a child, sorted by appearance count."""
     child_id = _validate_child_id(child_id)
-    characters = await character_repo.get_characters(child_id)
+    characters = await character_repo.get_characters(user.user_id, child_id)
     return {"child_id": child_id, "characters": characters}

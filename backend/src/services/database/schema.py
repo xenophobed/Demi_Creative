@@ -192,6 +192,7 @@ CREATE INDEX IF NOT EXISTS idx_topic_subscriptions_is_active ON topic_subscripti
 CHARACTERS_TABLE = """
 CREATE TABLE IF NOT EXISTS characters (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL DEFAULT '',
     child_id TEXT NOT NULL,
     name TEXT NOT NULL,
     description TEXT,
@@ -200,13 +201,13 @@ CREATE TABLE IF NOT EXISTS characters (
     appearance_count INTEGER DEFAULT 1,
     first_seen_at TEXT NOT NULL,
     last_seen_at TEXT NOT NULL,
-    UNIQUE(child_id, name)
+    UNIQUE(user_id, child_id, name)
 );
 """
 
 CHARACTERS_INDEXES = """
-CREATE INDEX IF NOT EXISTS idx_characters_child_id ON characters(child_id);
-CREATE INDEX IF NOT EXISTS idx_characters_child_name ON characters(child_id, name);
+CREATE INDEX IF NOT EXISTS idx_characters_user_child ON characters(user_id, child_id);
+CREATE INDEX IF NOT EXISTS idx_characters_child_name ON characters(user_id, child_id, name);
 CREATE INDEX IF NOT EXISTS idx_characters_appearance ON characters(appearance_count DESC);
 """
 
@@ -321,6 +322,7 @@ async def init_schema(db: "DatabaseManager") -> None:
     await _migrate_add_story_type(db)
     await _migrate_add_user_role(db)
     await _migrate_backfill_word_counts(db)
+    await _migrate_characters_user_id(db)
 
     # Now create all indexes (including user_id indexes) after migration
     for stmt in STORIES_INDEXES.strip().split(";"):
@@ -424,6 +426,66 @@ async def _migrate_backfill_word_counts(db: "DatabaseManager") -> None:
     if updated > 0:
         await db.commit()
         print(f"📝 Backfilled word counts for {updated} stories")
+
+
+async def _migrate_characters_user_id(db: "DatabaseManager") -> None:
+    """Migration: Add user_id column to characters table (#288).
+
+    SQLite cannot ALTER UNIQUE constraints, so we recreate the table
+    with the new UNIQUE(user_id, child_id, name) constraint.
+    Existing rows get user_id='' (empty string) for backward compatibility.
+    """
+    # Check if the UNIQUE constraint includes user_id by inspecting the CREATE TABLE SQL.
+    # We need to handle both cases: (1) table has no user_id column at all,
+    # (2) user_id was added via ALTER TABLE but UNIQUE still only covers (child_id, name).
+    table_sql_rows = await db.fetchall(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='characters'"
+    )
+    needs_migration = True
+    if table_sql_rows:
+        create_sql = table_sql_rows[0]['sql'] or ""
+        # If the CREATE TABLE already has UNIQUE(user_id, child_id, name), no migration needed
+        if 'user_id' in create_sql and 'UNIQUE(user_id' in create_sql.replace(' ', ''):
+            needs_migration = False
+
+    if needs_migration:
+        print("Migrating characters table: adding user_id column (#288)...")
+        # SQLite requires table recreation to change UNIQUE constraints
+        await db.execute(
+            """
+            CREATE TABLE characters_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id TEXT NOT NULL DEFAULT '',
+                child_id TEXT NOT NULL,
+                name TEXT NOT NULL,
+                description TEXT,
+                visual_features TEXT,
+                traits TEXT,
+                appearance_count INTEGER DEFAULT 1,
+                first_seen_at TEXT NOT NULL,
+                last_seen_at TEXT NOT NULL,
+                UNIQUE(user_id, child_id, name)
+            )
+            """
+        )
+        await db.execute(
+            """
+            INSERT INTO characters_new
+                (id, user_id, child_id, name, description, visual_features,
+                 traits, appearance_count, first_seen_at, last_seen_at)
+            SELECT id, '', child_id, name, description, visual_features,
+                   traits, appearance_count, first_seen_at, last_seen_at
+            FROM characters
+            """
+        )
+        await db.execute("DROP TABLE characters")
+        await db.execute("ALTER TABLE characters_new RENAME TO characters")
+        # Recreate indexes
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_characters_user_child ON characters(user_id, child_id)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_characters_child_name ON characters(user_id, child_id, name)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_characters_appearance ON characters(appearance_count DESC)")
+        await db.commit()
+        print("Characters table migration completed")
 
 
 # ============================================================================

@@ -13,13 +13,21 @@ from typing import List, Dict, Any
 from .database import story_repo
 
 
-async def get_story_memory_prompt(child_id: str, limit: int = 3) -> str:
+async def get_story_memory_prompt(child_id: str, limit: int = 3, *, user_id: str = "") -> str:
     """Build a story memory prompt section for a child.
+
+    Args:
+        child_id: Child profile ID.
+        limit: Maximum number of recent stories to include.
+        user_id: Owner's user ID — when provided, scopes stories per account (#288).
 
     Returns an empty string if the child has no previous stories,
     so callers can simply append without checking.
     """
-    stories = await story_repo.list_by_child(child_id, limit=limit)
+    if user_id:
+        stories = await story_repo.list_by_user_and_child(user_id, child_id, limit=limit)
+    else:
+        stories = await story_repo.list_by_child(child_id, limit=limit)
     if not stories:
         return ""
 

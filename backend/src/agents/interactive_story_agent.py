@@ -31,10 +31,43 @@ except Exception:  # pragma: no cover - import fallback for test env
 from ..mcp_servers import (
     safety_server,
     tts_server,
-    vector_server
+    vector_server,
+    search_similar_stories,
 )
 from ..services.database import preference_repo
 from ..services.story_memory import get_story_memory_prompt
+
+
+async def _search_story_dedup(child_id: str, description: str, threshold: float = 0.9) -> str:
+    """Search for similar past stories and return a variation nudge if duplicates found.
+
+    Best-effort: returns empty string on any failure. (#290)
+    """
+    if not child_id or not description:
+        return ""
+    try:
+        result = await search_similar_stories({
+            "child_id": child_id,
+            "story_description": description,
+            "top_k": 3,
+        })
+        import json as _json
+        data = _json.loads(result["content"][0]["text"])
+        similar = data.get("similar_stories", [])
+        high_sim = [s for s in similar if s.get("similarity_score", 0) >= threshold]
+        if not high_sim:
+            return ""
+        summaries = "\n".join(
+            f"- {s.get('story_text_preview', 'N/A')}" for s in high_sim[:3]
+        )
+        return f"""
+**Story Freshness — Variation Required** (#290):
+The child has heard similar stories before:
+{summaries}
+Please create a FRESH, DIFFERENT story with a new angle, different plot structure, and different character dynamics.
+"""
+    except Exception:
+        return ""
 
 
 def _should_use_mock() -> bool:
@@ -190,6 +223,7 @@ def _build_opening_prompt(
     config: Dict[str, Any],
     preference_context: str = "",
     story_memory_section: str = "",
+    dedup_nudge: str = "",
 ) -> str:
     """
     Build the full prompt for interactive story opening generation.
@@ -222,6 +256,10 @@ def _build_opening_prompt(
     # Inject cross-story memory (#165)
     if story_memory_section:
         prompt += f"\n{story_memory_section}\n"
+
+    # Inject dedup variation nudge (#290)
+    if dedup_nudge:
+        prompt += f"\n{dedup_nudge}\n"
 
     # Character continuity (#73)
     prompt += f"""
@@ -381,7 +419,8 @@ async def generate_story_opening(
     interests: List[str],
     theme: str = None,
     enable_audio: bool = True,
-    voice: str = None
+    voice: str = None,
+    user_id: str = "",
 ) -> Dict[str, Any]:
     """
     生成互动故事开场
@@ -409,9 +448,16 @@ async def generate_story_opening(
     # Build story memory section for cross-story references (#165)
     story_memory_section = ""
     try:
-        story_memory_section = await get_story_memory_prompt(child_id)
+        story_memory_section = await get_story_memory_prompt(child_id, user_id=user_id)
     except Exception:
         pass  # Non-critical
+
+    # Story dedup check (#290)
+    dedup_nudge = ""
+    try:
+        dedup_nudge = await _search_story_dedup(child_id, interests_str)
+    except Exception:
+        pass  # Best-effort
 
     # Build prompt with preference + character continuity (#72, #73)
     prompt = _build_opening_prompt(
@@ -422,6 +468,7 @@ async def generate_story_opening(
         config=config,
         preference_context=preference_context,
         story_memory_section=story_memory_section,
+        dedup_nudge=dedup_nudge,
     )
 
     # Determine if we should generate audio based on age_group audio_mode
@@ -444,6 +491,7 @@ async def generate_story_opening(
             "mcp__safety-check__check_content_safety",
             "mcp__vector-search__search_similar_drawings",
             "mcp__vector-search__store_drawing_embedding",
+            "mcp__vector-search__search_similar_stories",
             "mcp__tts-generation__generate_story_audio"
         ],
         cwd=".",
@@ -512,7 +560,8 @@ async def generate_story_opening_stream(
     interests: List[str],
     theme: str = None,
     enable_audio: bool = True,
-    voice: str = None
+    voice: str = None,
+    user_id: str = "",
 ) -> AsyncGenerator[Dict[str, Any], None]:
     """
     流式生成互动故事开场
@@ -552,7 +601,7 @@ async def generate_story_opening_stream(
     # Build story memory section for cross-story references (#165)
     story_memory_section = ""
     try:
-        story_memory_section = await get_story_memory_prompt(child_id)
+        story_memory_section = await get_story_memory_prompt(child_id, user_id=user_id)
     except Exception:
         pass  # Non-critical
 
