@@ -321,6 +321,53 @@ export interface MorningShowTrackResponse {
   profile_updated_at: string;
 }
 
+// ============================================================================
+// Memory Types
+// ============================================================================
+
+export interface MemoryCharacter {
+  name: string
+  description: string | null
+  visual_features: Record<string, unknown> | null
+  traits: string[] | null
+  appearance_count: number
+  first_seen_at: string
+  last_seen_at: string
+}
+
+export interface MemoryCharactersResponse {
+  child_id: string
+  characters: MemoryCharacter[]
+}
+
+export interface PreferenceProfile {
+  themes: Record<string, number>
+  concepts: Record<string, number>
+  interests: Record<string, number>
+  recent_choices: string[]
+  morning_show: {
+    topic_scores: Record<string, number>
+    topic_stats: Record<string, unknown>
+    last_event_at: string | null
+  }
+}
+
+export interface MemoryPreferencesResponse {
+  child_id: string
+  profile: PreferenceProfile
+  data_collected_since: string | null
+  last_updated_at: string | null
+}
+
+export interface MemoryDeleteResponse {
+  child_id: string
+  deleted: boolean
+  deleted_records: {
+    preferences: number
+    vectors: number
+  }
+}
+
 // Frontend-specific types
 
 // Story history item
