@@ -43,6 +43,16 @@ export const memoryService = {
   },
 
   /**
+   * Get user's primary child_id from story history
+   */
+  async getChildId(): Promise<{ child_id: string | null }> {
+    const response = await apiClient.get<{ child_id: string | null }>(
+      `${MEMORY_BASE}/child-id`
+    )
+    return response.data
+  },
+
+  /**
    * Get personalised theme recommendations based on preference history (#292)
    */
   async getRecommendations(

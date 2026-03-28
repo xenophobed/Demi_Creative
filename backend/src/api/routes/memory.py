@@ -11,7 +11,7 @@ import re
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from ..deps import get_current_user
-from ...services.database import preference_repo, character_repo
+from ...services.database import preference_repo, character_repo, story_repo
 from ...services.theme_recommender import theme_recommender
 from ...services.user_service import UserData
 
@@ -127,3 +127,18 @@ async def get_recommendations(
         user.user_id, child_id, limit=limit,
     )
     return {"child_id": child_id, "recommendations": recommendations}
+
+
+@router.get(
+    "/child-id",
+    summary="Get user's primary child_id",
+)
+async def get_child_id(
+    user: UserData = Depends(get_current_user),
+):
+    """Return the child_id most recently used by this user, derived from story history."""
+    row = await story_repo._db.fetchone(
+        "SELECT child_id FROM stories WHERE user_id = ? ORDER BY created_at DESC LIMIT 1",
+        (user.user_id,),
+    )
+    return {"child_id": row["child_id"] if row else None}
