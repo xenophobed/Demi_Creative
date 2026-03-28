@@ -3,13 +3,19 @@ Image Style Transfer MCP Server
 
 Transforms children's drawings into different art styles using
 black-forest-labs/flux-kontext-pro on Replicate.
+
+Includes post-generation safety validation (#273): every styled image
+is checked via vision analysis for child-appropriateness before use.
 """
 
+import logging
 import os
 import json
-from typing import Any, Dict
+from typing import Any, Dict, List
 from pathlib import Path
 import uuid
+
+logger = logging.getLogger(__name__)
 
 try:
     import replicate
@@ -202,6 +208,169 @@ async def transform_art_style(args: Dict[str, Any]) -> Dict[str, Any]:
                     "error": f"Style transfer failed: {str(e)}",
                 }, ensure_ascii=False)
             }]
+        }
+
+
+# ============================================================================
+# Styled image safety validation (#273)
+# ============================================================================
+
+# Keywords that indicate the styled image may not be child-appropriate.
+# Matched case-insensitively against all text fields in vision analysis output.
+UNSAFE_IMAGE_KEYWORDS: List[str] = [
+    # Violence
+    "violence", "violent", "weapon", "gun", "knife", "sword", "blood",
+    "bleeding", "gore", "fighting", "attack", "kill", "murder", "war",
+    # Horror / fear
+    "horror", "scary", "terrifying", "nightmare", "demon", "devil",
+    "zombie", "corpse", "skull", "death", "dead",
+    # Inappropriate content
+    "nudity", "nude", "sexual", "drug", "alcohol", "smoking",
+    "tobacco", "injection",
+    # Distressing themes
+    "abuse", "torture", "suicide", "self-harm",
+]
+
+
+def check_styled_image_safety(analysis: Dict[str, Any]) -> Dict[str, Any]:
+    """Check vision analysis output for unsafe content using keyword heuristic.
+
+    Scans all string values in the analysis dict (objects, scene, mood,
+    story_potential, etc.) for flagged keywords.
+
+    Args:
+        analysis: Parsed JSON from vision analysis tool output.
+
+    Returns:
+        Dict with keys: safe (bool), reason (str|None), flagged_keywords (list[str]).
+    """
+    if not analysis:
+        return {"safe": True, "reason": None, "flagged_keywords": []}
+
+    # Collect all text from the analysis into one searchable blob
+    text_parts: List[str] = []
+    for key, value in analysis.items():
+        if isinstance(value, str):
+            text_parts.append(value)
+        elif isinstance(value, list):
+            for item in value:
+                if isinstance(item, str):
+                    text_parts.append(item)
+                elif isinstance(item, dict):
+                    text_parts.extend(
+                        str(v) for v in item.values() if isinstance(v, str)
+                    )
+
+    combined_text = " ".join(text_parts).lower()
+
+    flagged: List[str] = []
+    for keyword in UNSAFE_IMAGE_KEYWORDS:
+        if keyword.lower() in combined_text:
+            flagged.append(keyword.lower())
+
+    if flagged:
+        reason = (
+            f"Styled image flagged as unsafe: found keywords [{', '.join(flagged)}] "
+            f"in vision analysis output"
+        )
+        return {"safe": False, "reason": reason, "flagged_keywords": flagged}
+
+    return {"safe": True, "reason": None, "flagged_keywords": []}
+
+
+async def validate_and_fallback(
+    styled_image_path: str,
+    original_image_path: str,
+    child_age: int,
+    theme: str,
+    session_id: str,
+) -> Dict[str, Any]:
+    """Validate a styled image for child safety and fall back if unsafe.
+
+    Calls the vision analysis tool on the styled image, then checks the
+    analysis for concerning content. If the image is unsafe or vision
+    analysis fails, falls back to the original drawing (fail-closed).
+
+    Args:
+        styled_image_path: Path to the AI-generated styled image.
+        original_image_path: Path to the original child's drawing.
+        child_age: Age of the child (for vision analysis context).
+        theme: Art theme that was applied.
+        session_id: Session/child ID for logging.
+
+    Returns:
+        Dict with: used_image_path, safety_passed, fell_back,
+        flagged_keywords, reason.
+    """
+    from . import analyze_children_drawing
+
+    try:
+        # Call vision analysis on the styled image
+        vision_result = await analyze_children_drawing({
+            "image_path": styled_image_path,
+            "child_age": child_age,
+        })
+
+        # Parse analysis JSON from MCP tool output
+        analysis_text = vision_result["content"][0]["text"]
+        analysis = json.loads(analysis_text)
+
+        # If vision returned an error, treat as unsafe (fail-closed)
+        if "error" in analysis:
+            logger.warning(
+                "Styled image safety check failed — vision analysis error: %s | "
+                "original=%s styled=%s theme=%s session=%s",
+                analysis.get("error", "unknown"),
+                original_image_path, styled_image_path, theme, session_id,
+            )
+            return {
+                "used_image_path": original_image_path,
+                "safety_passed": False,
+                "fell_back": True,
+                "flagged_keywords": [],
+                "reason": f"Vision analysis error: {analysis.get('error', 'unknown')}",
+            }
+
+        # Check analysis for unsafe content
+        safety_result = check_styled_image_safety(analysis)
+
+        if not safety_result["safe"]:
+            logger.warning(
+                "Styled image unsafe — falling back to original | "
+                "reason=%s flagged=%s original=%s styled=%s theme=%s session=%s",
+                safety_result["reason"], safety_result["flagged_keywords"],
+                original_image_path, styled_image_path, theme, session_id,
+            )
+            return {
+                "used_image_path": original_image_path,
+                "safety_passed": False,
+                "fell_back": True,
+                "flagged_keywords": safety_result["flagged_keywords"],
+                "reason": safety_result["reason"],
+            }
+
+        # Image is safe — use styled version
+        return {
+            "used_image_path": styled_image_path,
+            "safety_passed": True,
+            "fell_back": False,
+            "flagged_keywords": [],
+            "reason": None,
+        }
+
+    except Exception as exc:
+        # Any exception = fail-closed, use original
+        logger.warning(
+            "Styled image safety validation exception — falling back to original | "
+            "error=%s original=%s styled=%s theme=%s session=%s",
+            str(exc), original_image_path, styled_image_path, theme, session_id,
+        )
+        return {
+            "used_image_path": original_image_path,
+            "safety_passed": False,
+            "fell_back": True,
+            "flagged_keywords": [],
+            "reason": f"Safety validation exception: {str(exc)}",
         }
 
 
