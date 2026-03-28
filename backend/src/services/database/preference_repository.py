@@ -104,7 +104,14 @@ class PreferenceRepository:
 
     async def get_profile(self, child_id: str, *, user_id: str = "") -> Dict[str, Any]:
         key = self._composite_key(user_id, child_id) if user_id else child_id
-        return await self._get_profile(key)
+        profile = await self._get_profile(key)
+        # Fallback: if composite key is empty, try bare child_id and migrate
+        if user_id and self._is_empty_profile(profile):
+            legacy = await self._get_profile(child_id)
+            if not self._is_empty_profile(legacy):
+                await self._save_profile(key, legacy)
+                profile = legacy
+        return profile
 
     async def get_profile_with_metadata(self, child_id: str, *, user_id: str = "") -> Dict[str, Any]:
         """Return profile with data_collected_since and last_updated_at timestamps."""
@@ -113,6 +120,21 @@ class PreferenceRepository:
             "SELECT profile_json, updated_at FROM child_preferences WHERE child_id = ?",
             (key,),
         )
+        # Fallback: if composite key has no row, try bare child_id and migrate
+        if not row and user_id:
+            legacy_row = await self._db.fetchone(
+                "SELECT profile_json, updated_at FROM child_preferences WHERE child_id = ?",
+                (child_id,),
+            )
+            if legacy_row:
+                row = legacy_row
+                # Migrate: copy to composite key so future reads hit it directly
+                try:
+                    loaded = json.loads(legacy_row.get("profile_json") or "{}")
+                    await self._save_profile(key, self._normalize_profile(loaded))
+                except Exception:
+                    pass
+
         if not row:
             profile = self._empty_profile()
             return {"profile": profile, "data_collected_since": None, "last_updated_at": None}
@@ -176,6 +198,15 @@ class PreferenceRepository:
             (child_id, json.dumps(payload, ensure_ascii=False), now),
         )
         await self._db.commit()
+
+    def _is_empty_profile(self, profile: Dict[str, Any]) -> bool:
+        """Check if a profile has no meaningful data."""
+        return (
+            not profile.get("themes")
+            and not profile.get("concepts")
+            and not profile.get("interests")
+            and not profile.get("recent_choices")
+        )
 
     def _empty_profile(self) -> Dict[str, Any]:
         return {

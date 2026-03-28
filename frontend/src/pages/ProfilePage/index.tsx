@@ -23,8 +23,8 @@ const ANIMAL_EMOJIS = [
 function ProfilePage() {
   const navigate = useNavigate()
   const { isAuthenticated, user, setUser } = useAuthStore()
-  const { currentChild, defaultChildId } = useChildStore()
-  const childId = currentChild?.child_id || defaultChildId
+  const { currentChild } = useChildStore()
+  const childId = currentChild?.child_id || null
   const [isEditing, setIsEditing] = useState(false)
   const [editForm, setEditForm] = useState<UpdateProfileRequest>({
     display_name: user?.display_name || '',
