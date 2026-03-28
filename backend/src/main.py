@@ -107,13 +107,20 @@ app = FastAPI(
 # CORS Middleware
 # ============================================================================
 
+_default_origins = "http://localhost:3000,http://localhost:5173"
+_allowed_origins = [
+    origin.strip()
+    for origin in os.getenv("ALLOWED_ORIGINS", _default_origins).split(",")
+    if origin.strip()
+]
+# Keep FRONTEND_URL for backward compatibility
+_frontend_url = os.getenv("FRONTEND_URL", "")
+if _frontend_url and _frontend_url not in _allowed_origins:
+    _allowed_origins.append(_frontend_url)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",  # React frontend
-        "http://localhost:5173",  # Vite frontend
-        os.getenv("FRONTEND_URL", "http://localhost:3000")
-    ],
+    allow_origins=_allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
