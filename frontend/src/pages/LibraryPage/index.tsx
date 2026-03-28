@@ -329,10 +329,10 @@ function LibraryCard({
       : badge.label
 
   return (
-    <Card className="cursor-pointer h-full hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200" onClick={onClick} padding="sm">
-      <div className="flex gap-4 h-full">
-        {/* Thumbnail / Icon */}
-        <div className={`flex-shrink-0 w-20 h-20 rounded-xl bg-gradient-to-br ${style.gradient} flex items-center justify-center overflow-hidden`}>
+    <Card className="cursor-pointer h-full hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200" onClick={onClick} padding="none">
+      <div className="flex flex-col h-full">
+        {/* Thumbnail — full-width hero image */}
+        <div className={`w-full h-36 rounded-t-xl bg-gradient-to-br ${style.gradient} flex items-center justify-center overflow-hidden`}>
           {imgSrc && !imgError ? (
             <img
               src={resolveMediaUrl(imgSrc) || ''}
@@ -345,12 +345,12 @@ function LibraryCard({
           )}
         </div>
 
-        {/* Content column */}
-        <div className="flex-1 min-w-0 flex flex-col">
+        {/* Content area */}
+        <div className="flex-1 min-w-0 flex flex-col p-5">
           {/* Row 1: Badge + Title + Actions */}
           <div className="flex items-start gap-2">
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-1">
+              <div className="flex items-center gap-2 mb-1.5">
                 <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${style.badgeColor}`}>
                   {badgeLabel}
                 </span>
@@ -382,12 +382,12 @@ function LibraryCard({
 
           {/* Row 2: Preview text (+ progress for interactive) */}
           {previewText && (
-            <p className="text-gray-500 text-sm mt-1.5 line-clamp-2 leading-relaxed">
+            <p className="text-gray-500 text-sm mt-2.5 line-clamp-2 leading-relaxed">
               {previewText}
             </p>
           )}
           {item.type === 'interactive' && (
-            <div className="mt-2">
+            <div className="mt-3">
               <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
                 <span>Progress</span>
                 <span>{progress}%</span>
@@ -405,11 +405,11 @@ function LibraryCard({
 
           {/* Row 3: Info tags */}
           {infoTags.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 mt-2">
+            <div className="flex flex-wrap gap-1.5 mt-3">
               {infoTags.map((theme) => (
                 <span
                   key={theme}
-                  className="text-xs px-2 py-0.5 bg-gray-100 text-gray-500 rounded-full"
+                  className="text-xs px-2.5 py-1 bg-gray-100 text-gray-500 rounded-full"
                 >
                   {theme}
                 </span>
@@ -418,10 +418,10 @@ function LibraryCard({
           )}
 
           {/* Spacer pushes footer to bottom */}
-          <div className="flex-1 min-h-2" />
+          <div className="flex-1 min-h-3" />
 
           {/* Row 4: Footer — meta left, audio + chevron right */}
-          <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-100">
+          <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100">
             <div className="flex items-center gap-1.5 text-xs text-gray-400">
               {showWordCount && item.word_count !== undefined && item.word_count > 0 && (
                 <>
@@ -891,7 +891,7 @@ function LibraryPage() {
           {/* Content — grid or list */}
           <AnimatePresence mode="popLayout">
             {visibleItems.length > 0 ? (
-              <motion.div className={viewMode === 'grid' ? `grid ${ageLayout.gridClass} gap-4` : 'space-y-2'}>
+              <motion.div className={viewMode === 'grid' ? `grid ${ageLayout.gridClass} gap-5` : 'space-y-2'}>
                 {visibleItems.map((item, index) => (
                   <motion.div
                     key={`${item.type}-${item.id}`}
