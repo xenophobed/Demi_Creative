@@ -142,6 +142,9 @@ async def convert_news(
                 "category": request.category.value,
                 "original_url": request.news_url,
                 "kid_title": result.get("kid_title", ""),
+                "why_care": result.get("why_care", ""),
+                "key_concepts": result.get("key_concepts", []),
+                "interactive_questions": result.get("interactive_questions", []),
                 "used_mock": used_mock,
                 "is_degraded": is_degraded,
                 "degraded_reason": degraded_reason,
@@ -344,6 +347,9 @@ async def convert_news_stream(
                             "category": request.category.value,
                             "original_url": request.news_url,
                             "kid_title": event_data.get("kid_title", ""),
+                            "why_care": event_data.get("why_care", ""),
+                            "key_concepts": event_data.get("key_concepts", []),
+                            "interactive_questions": event_data.get("interactive_questions", []),
                             "used_mock": used_mock,
                             "is_degraded": is_degraded,
                             "degraded_reason": degraded_reason,
@@ -423,15 +429,21 @@ async def get_news_conversion(
         except (json.JSONDecodeError, ValueError):
             educational_value = {}
 
+    raw_concepts = analysis.get("key_concepts", [])
     key_concepts = [
         KeyConceptResponse(
             term=c.get("term", ""),
             explanation=c.get("explanation", ""),
             emoji=c.get("emoji", "💡"),
         )
-        for c in analysis.get("key_concepts", [])
+        for c in raw_concepts
         if isinstance(c, dict)
     ]
+    # Fallback: if no rich concepts in analysis, build from educational_value.concepts
+    if not key_concepts:
+        for term in educational_value.get("concepts", []):
+            if isinstance(term, str) and term.strip():
+                key_concepts.append(KeyConceptResponse(term=term, explanation="", emoji="💡"))
 
     interactive_questions = [
         InteractiveQuestionResponse(
@@ -447,7 +459,7 @@ async def get_news_conversion(
         conversion_id=story["story_id"],
         kid_title=analysis.get("kid_title", "News for Kids"),
         kid_content=story.get("story", {}).get("text", ""),
-        why_care=educational_value.get("moral", ""),
+        why_care=analysis.get("why_care") or educational_value.get("moral", ""),
         key_concepts=key_concepts,
         interactive_questions=interactive_questions,
         category=analysis.get("category", "general"),
