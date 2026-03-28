@@ -41,6 +41,20 @@ export const memoryService = {
     )
     return response.data
   },
+
+  /**
+   * Get personalised theme recommendations based on preference history (#292)
+   */
+  async getRecommendations(
+    childId: string,
+    limit: number = 5
+  ): Promise<{ child_id: string; recommendations: string[] }> {
+    const response = await apiClient.get<{
+      child_id: string
+      recommendations: string[]
+    }>(`${MEMORY_BASE}/recommendations/${childId}`, { params: { limit } })
+    return response.data
+  },
 }
 
 export default memoryService

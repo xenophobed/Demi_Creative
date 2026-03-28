@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from ..deps import get_current_user
 from ...services.database import preference_repo, character_repo
+from ...services.theme_recommender import theme_recommender
 from ...services.user_service import UserData
 
 logger = logging.getLogger(__name__)
@@ -105,3 +106,24 @@ async def get_characters(
     child_id = _validate_child_id(child_id)
     characters = await character_repo.get_characters(user.user_id, child_id)
     return {"child_id": child_id, "characters": characters}
+
+
+@router.get(
+    "/recommendations/{child_id}",
+    summary="Get personalised theme recommendations",
+)
+async def get_recommendations(
+    child_id: str,
+    limit: int = 5,
+    user: UserData = Depends(get_current_user),
+):
+    """Return theme suggestions based on the child's preference history (#292)."""
+    child_id = _validate_child_id(child_id)
+    if limit < 1:
+        limit = 1
+    elif limit > 20:
+        limit = 20
+    recommendations = await theme_recommender.get_recommendations(
+        user.user_id, child_id, limit=limit,
+    )
+    return {"child_id": child_id, "recommendations": recommendations}
