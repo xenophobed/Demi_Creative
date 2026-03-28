@@ -107,7 +107,9 @@ function StoryPage() {
     )
   }
 
-  const imageUrl = resolveMediaUrl(story.styled_image_url || story.cover_image_url || story.image_url)
+  const originalImageUrl = resolveMediaUrl(story.image_url)
+  const styledImageUrl = resolveMediaUrl(story.styled_image_url || story.cover_image_url)
+  const imageUrl = styledImageUrl || originalImageUrl
   // Use the story's age_group (content was generated for it), fall back to child store
   const ageGroup = story.age_group || currentChild?.age_group || null
 
@@ -175,6 +177,8 @@ function StoryPage() {
               story={story.story}
               title={story.story.text.split('\n')[0]?.slice(0, 50) || `Story #${story.story_id.slice(0, 6)}`}
               imageUrl={imageUrl}
+              originalImageUrl={originalImageUrl}
+              styledImageUrl={styledImageUrl}
             />
           </BookContainer>
         }

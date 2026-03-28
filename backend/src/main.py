@@ -15,7 +15,7 @@ from fastapi.exceptions import RequestValidationError
 from dotenv import load_dotenv
 
 from .api.models import ErrorResponse, ErrorDetail, HealthCheckResponse
-from .paths import DATA_DIR, UPLOAD_DIR, AUDIO_DIR, VIDEO_DIR, VIDEO_JOBS_DIR
+from .paths import DATA_DIR, UPLOAD_DIR, AUDIO_DIR, VIDEO_DIR, VIDEO_JOBS_DIR, STYLED_DIR
 from .services.database import db_manager, session_repo
 from .services.database.schema import init_schema, migrate_json_sessions
 from .services.morning_show_scheduler import daily_drop_scheduler
@@ -272,11 +272,13 @@ AUDIO_DIR.mkdir(parents=True, exist_ok=True)
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 VIDEO_DIR.mkdir(parents=True, exist_ok=True)
 VIDEO_JOBS_DIR.mkdir(parents=True, exist_ok=True)
+STYLED_DIR.mkdir(parents=True, exist_ok=True)
 
 # Scoped static file mounts (blocks access to DB files, sessions, vectors, video_jobs)
 app.mount("/data/audio", StaticFiles(directory=str(AUDIO_DIR)), name="audio")
 app.mount("/data/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
 app.mount("/data/videos", StaticFiles(directory=str(VIDEO_DIR)), name="videos")
+app.mount("/data/styled", StaticFiles(directory=str(STYLED_DIR)), name="styled")
 
 
 # ============================================================================
