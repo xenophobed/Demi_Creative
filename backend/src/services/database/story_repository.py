@@ -40,9 +40,9 @@ class StoryRepository:
             INSERT INTO stories (
                 story_id, user_id, child_id, age_group, story_text, word_count,
                 themes, concepts, moral, characters, analysis,
-                safety_score, image_path, image_url, audio_url,
+                safety_score, image_path, image_url, styled_image_url, audio_url,
                 story_type, created_at, stored_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 story_id,
@@ -59,6 +59,7 @@ class StoryRepository:
                 story_data.get('safety_score', 0.9),
                 story_data.get('image_path'),
                 story_data.get('image_url'),
+                story_data.get('styled_image_url'),
                 story_data.get('audio_url'),
                 story_data.get('story_type', 'image_to_story'),
                 story_data.get('created_at', now),
@@ -412,6 +413,7 @@ class StoryRepository:
                 "age_adapted": True
             },
             "image_url": row.get('image_url'),
+            "styled_image_url": row.get('styled_image_url'),
             "image_path": row.get('image_path'),
             "audio_url": row.get('audio_url'),
             "educational_value": {

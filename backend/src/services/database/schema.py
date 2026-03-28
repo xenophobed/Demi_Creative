@@ -39,6 +39,7 @@ CREATE TABLE IF NOT EXISTS stories (
     safety_score REAL DEFAULT 0.9,
     image_path TEXT,
     image_url TEXT,
+    styled_image_url TEXT,
     audio_url TEXT,
     story_type TEXT DEFAULT 'image_to_story',
     created_at TEXT NOT NULL,
@@ -323,6 +324,7 @@ async def init_schema(db: "DatabaseManager") -> None:
     await _migrate_add_user_role(db)
     await _migrate_backfill_word_counts(db)
     await _migrate_characters_user_id(db)
+    await _migrate_add_styled_image_url(db)
 
     # Now create all indexes (including user_id indexes) after migration
     for stmt in STORIES_INDEXES.strip().split(";"):
@@ -486,6 +488,44 @@ async def _migrate_characters_user_id(db: "DatabaseManager") -> None:
         await db.execute("CREATE INDEX IF NOT EXISTS idx_characters_appearance ON characters(appearance_count DESC)")
         await db.commit()
         print("Characters table migration completed")
+
+
+async def _migrate_add_styled_image_url(db: "DatabaseManager") -> None:
+    """Migration: Add styled_image_url column to stories table.
+
+    Persists the styled/cover image URL so it can be returned in GET responses.
+    Backfills from analysis.styled_image for existing stories.
+    """
+    stories_info = await db.fetchall("PRAGMA table_info(stories)")
+    stories_columns = [col['name'] for col in stories_info]
+
+    if 'styled_image_url' not in stories_columns:
+        print("Migrating stories table: adding styled_image_url column...")
+        await db.execute("ALTER TABLE stories ADD COLUMN styled_image_url TEXT")
+
+        # Backfill from analysis JSON for existing stories
+        rows = await db.fetchall(
+            "SELECT story_id, analysis FROM stories WHERE analysis IS NOT NULL"
+        )
+        import json as _json
+        backfilled = 0
+        for row in rows:
+            try:
+                analysis = _json.loads(row['analysis'] or '{}')
+                styled_image = analysis.get('styled_image', '')
+                if styled_image:
+                    # Convert path to URL format
+                    from pathlib import Path as _Path
+                    url = f"/data/styled/{_Path(styled_image).name}"
+                    await db.execute(
+                        "UPDATE stories SET styled_image_url = ? WHERE story_id = ?",
+                        (url, row['story_id']),
+                    )
+                    backfilled += 1
+            except Exception:
+                pass
+        await db.commit()
+        print(f"Stories styled_image_url migration completed (backfilled {backfilled} rows)")
 
 
 # ============================================================================

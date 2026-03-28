@@ -455,6 +455,7 @@ async def create_story_from_image(
             "image_path": str(image_path),
             "art_theme": art_theme.value if art_theme != ArtTheme.NONE else None,
             "styled_image_path": styled_image_path,
+            "styled_image_url": styled_image_url,
             "cover_image_url": cover_image_url,
         }
         story_data["user_id"] = user.user_id

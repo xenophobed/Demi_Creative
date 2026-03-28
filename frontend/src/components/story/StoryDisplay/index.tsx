@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { motion } from 'framer-motion'
 import type { StoryContent } from '@/types/api'
 import FloatingImage from '../FloatingImage'
@@ -7,6 +8,8 @@ interface StoryDisplayProps {
   story: StoryContent
   title?: string
   imageUrl?: string | null
+  originalImageUrl?: string | null
+  styledImageUrl?: string | null
   className?: string
 }
 
@@ -18,8 +21,18 @@ interface StoryDisplayProps {
  * - Text wraps around floated image on desktop
  * - Sparkle decorations around title
  * - Immersive reading experience
+ * - Toggle between original and styled image when both available
  */
-function StoryDisplay({ story, title, imageUrl, className = '' }: StoryDisplayProps) {
+function StoryDisplay({ story, title, imageUrl, originalImageUrl, styledImageUrl, className = '' }: StoryDisplayProps) {
+  const hasStyled = !!styledImageUrl
+  const hasOriginal = !!originalImageUrl
+  const hasBothImages = hasStyled && hasOriginal
+  const [showStyled, setShowStyled] = useState(hasStyled)
+
+  // Determine which image to display
+  const displayImageUrl = hasBothImages
+    ? (showStyled ? styledImageUrl : originalImageUrl)
+    : imageUrl
   // Split story text into paragraphs
   const paragraphs = story.text.split('\n\n').filter(p => p.trim())
 
@@ -46,13 +59,33 @@ function StoryDisplay({ story, title, imageUrl, className = '' }: StoryDisplayPr
 
       {/* Story content with floating image */}
       <div className="story-content-wrapper">
-        {/* Floating artwork */}
-        {imageUrl && (
-          <FloatingImage
-            src={imageUrl}
-            alt="Your artwork that inspired this story"
-            caption="Your artwork"
-          />
+        {/* Floating artwork with optional toggle */}
+        {displayImageUrl && (
+          <div className="relative">
+            <FloatingImage
+              src={displayImageUrl}
+              alt={showStyled ? "AI-styled artwork" : "Your artwork that inspired this story"}
+              caption={showStyled ? "Styled artwork" : "Your artwork"}
+            />
+            {hasBothImages && (
+              <div className="flex justify-center mt-2 mb-3">
+                <div className="inline-flex rounded-full bg-gray-100 p-0.5 text-xs">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setShowStyled(false) }}
+                    className={`px-3 py-1 rounded-full transition-colors ${!showStyled ? 'bg-white shadow-sm text-gray-800 font-medium' : 'text-gray-500 hover:text-gray-700'}`}
+                  >
+                    Original
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setShowStyled(true) }}
+                    className={`px-3 py-1 rounded-full transition-colors ${showStyled ? 'bg-white shadow-sm text-gray-800 font-medium' : 'text-gray-500 hover:text-gray-700'}`}
+                  >
+                    Styled
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         )}
 
         {/* Story paragraphs with drop cap */}
