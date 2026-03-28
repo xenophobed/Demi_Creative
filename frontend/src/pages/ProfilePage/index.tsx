@@ -33,6 +33,7 @@ function ProfilePage() {
   const [saving, setSaving] = useState(false)
   const [showClearConfirm, setShowClearConfirm] = useState(false)
   const [clearSuccess, setClearSuccess] = useState(false)
+  const [clearError, setClearError] = useState<string | null>(null)
 
   const {
     characters,
@@ -77,6 +78,7 @@ function ProfilePage() {
   }
 
   const handleClearMemory = async () => {
+    setClearError(null)
     try {
       await deletePreferences()
       setShowClearConfirm(false)
@@ -84,6 +86,7 @@ function ProfilePage() {
       setTimeout(() => setClearSuccess(false), 3000)
     } catch (err) {
       console.error('Failed to clear memory:', err)
+      setClearError('Failed to clear memory. Please try again.')
     }
   }
 
@@ -305,6 +308,9 @@ function ProfilePage() {
               <p className="text-sm text-red-600 font-medium">
                 Are you sure? This cannot be undone.
               </p>
+              {clearError && (
+                <p className="text-sm text-red-500 w-full">{clearError}</p>
+              )}
               <Button
                 size="sm"
                 variant="primary"
@@ -317,7 +323,7 @@ function ProfilePage() {
               <Button
                 size="sm"
                 variant="ghost"
-                onClick={() => setShowClearConfirm(false)}
+                onClick={() => { setShowClearConfirm(false); setClearError(null) }}
               >
                 Cancel
               </Button>

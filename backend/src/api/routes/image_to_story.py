@@ -317,6 +317,7 @@ async def create_story_from_image(
             enable_audio=enable_audio,
             voice=voice,
             art_theme=art_theme.value if art_theme != ArtTheme.NONE else None,
+            user_id=user.user_id,
         )
 
         # 4b. Validate story length per age group (#233)
@@ -335,6 +336,7 @@ async def create_story_from_image(
                 enable_audio=enable_audio,
                 voice=voice,
                 art_theme=art_theme.value if art_theme != ArtTheme.NONE else None,
+                user_id=user.user_id,
             )
             length_info = validate_story_length(result.get("story", ""), age_group.value)
 
@@ -703,6 +705,7 @@ async def create_story_from_image_stream(
                 enable_audio=enable_audio,
                 voice=voice,
                 art_theme=art_theme.value if art_theme != ArtTheme.NONE else None,
+                user_id=user.user_id,
             ):
                 if await request.is_disconnected():
                     logger.info("Client disconnected during story generation (story_id=%s), aborting", story_id)

@@ -419,7 +419,8 @@ async def generate_story_opening(
     interests: List[str],
     theme: str = None,
     enable_audio: bool = True,
-    voice: str = None
+    voice: str = None,
+    user_id: str = "",
 ) -> Dict[str, Any]:
     """
     生成互动故事开场
@@ -447,7 +448,7 @@ async def generate_story_opening(
     # Build story memory section for cross-story references (#165)
     story_memory_section = ""
     try:
-        story_memory_section = await get_story_memory_prompt(child_id)
+        story_memory_section = await get_story_memory_prompt(child_id, user_id=user_id)
     except Exception:
         pass  # Non-critical
 
@@ -559,7 +560,8 @@ async def generate_story_opening_stream(
     interests: List[str],
     theme: str = None,
     enable_audio: bool = True,
-    voice: str = None
+    voice: str = None,
+    user_id: str = "",
 ) -> AsyncGenerator[Dict[str, Any], None]:
     """
     流式生成互动故事开场
@@ -599,7 +601,7 @@ async def generate_story_opening_stream(
     # Build story memory section for cross-story references (#165)
     story_memory_section = ""
     try:
-        story_memory_section = await get_story_memory_prompt(child_id)
+        story_memory_section = await get_story_memory_prompt(child_id, user_id=user_id)
     except Exception:
         pass  # Non-critical
 

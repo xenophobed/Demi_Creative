@@ -131,7 +131,8 @@ async def start_interactive_story(
             interests=request.interests,
             theme=request.theme,
             enable_audio=request.enable_audio,
-            voice=request.voice.value
+            voice=request.voice.value,
+            user_id=user.user_id,
         )
 
         # 2. Create session (determine total segments based on age group)
@@ -317,7 +318,8 @@ async def start_interactive_story_stream(
                 interests=request.interests,
                 theme=request.theme,
                 enable_audio=request.enable_audio,
-                voice=request.voice.value
+                voice=request.voice.value,
+                user_id=user.user_id,
             ):
                 # Check if client has disconnected
                 if await http_request.is_disconnected():

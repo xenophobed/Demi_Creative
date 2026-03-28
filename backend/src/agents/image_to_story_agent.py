@@ -235,6 +235,7 @@ async def image_to_story(
     enable_audio: bool = True,
     voice: str = None,
     art_theme: str = None,
+    user_id: str = "",
 ) -> Dict[str, Any]:
     """
     将儿童画作转化为个性化故事
@@ -273,7 +274,7 @@ async def image_to_story(
     # Build story memory section for cross-story references (#165)
     story_memory_section = ""
     try:
-        story_memory_section = await get_story_memory_prompt(child_id)
+        story_memory_section = await get_story_memory_prompt(child_id, user_id=user_id)
     except Exception:
         pass  # Non-critical
 
@@ -445,6 +446,7 @@ async def stream_image_to_story(
     enable_audio: bool = True,
     voice: str = None,
     art_theme: str = None,
+    user_id: str = "",
 ) -> AsyncGenerator[Dict[str, Any], None]:
     """
     流式返回故事生成过程
@@ -509,7 +511,7 @@ async def stream_image_to_story(
     # Build story memory section for streaming path (#165)
     stream_memory_section = ""
     try:
-        stream_memory_section = await get_story_memory_prompt(child_id)
+        stream_memory_section = await get_story_memory_prompt(child_id, user_id=user_id)
     except Exception:
         pass
 
