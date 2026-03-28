@@ -19,6 +19,7 @@ import useChildStore, { DEFAULT_INTERESTS } from '@/store/useChildStore'
 import type { AgeGroup } from '@/types/api'
 import type { AnimationPhase } from '@/types/streaming'
 import LoginPrompt from '@/components/common/LoginPrompt'
+import SuggestedThemes from '@/components/common/SuggestedThemes'
 
 type PageState = 'setup' | 'playing' | 'completed'
 
@@ -370,6 +371,9 @@ function InteractiveStoryPage() {
               className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-primary focus:outline-none transition-colors"
               maxLength={50}
             />
+            <div className="mt-4">
+              <SuggestedThemes onSelect={(t) => setTheme(t)} />
+            </div>
           </Card>
 
           {/* Enhanced Streaming Progress with 2.5D Visualizer */}

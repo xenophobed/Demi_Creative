@@ -16,6 +16,7 @@ import type { AgeGroup } from '@/types/api'
 import type { AnimationPhase } from '@/types/streaming'
 import LoginPrompt from '@/components/common/LoginPrompt'
 import VoicePicker from '@/components/common/VoicePicker'
+import SuggestedThemes from '@/components/common/SuggestedThemes'
 
 const AGE_GROUPS: { value: AgeGroup; label: string; emoji: string; description: string }[] = [
   { value: '3-5', label: '3-5 yrs', emoji: '🧒', description: 'Simple & Fun' },
@@ -369,7 +370,29 @@ function UploadPage() {
         </TiltCard>
       </motion.div>
 
-      {/* Step 5: Voice selection with 3D effect */}
+      {/* Suggested Themes — personalised recommendations (#292) */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.35 }}
+      >
+        <TiltCard maxTilt={4} glare={false} dynamicShadow className="w-full">
+          <div className="bg-white rounded-card p-6">
+            <StepHeader number={5} title="Suggested Themes" emoji="💡" optional />
+            <SuggestedThemes
+              onSelect={(theme) => {
+                if (!selectedInterestsList.includes(theme) && selectedInterestsList.length < 5) {
+                  const newList = [...selectedInterestsList, theme]
+                  setSelectedInterestsList(newList)
+                  addInterest(theme)
+                }
+              }}
+            />
+          </div>
+        </TiltCard>
+      </motion.div>
+
+      {/* Step 6: Voice selection with 3D effect */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -378,7 +401,7 @@ function UploadPage() {
         <TiltCard maxTilt={4} glare={false} dynamicShadow className="w-full">
           <div className="bg-white rounded-card p-6">
             <StepHeader
-              number={5}
+              number={6}
               title="Choose a Narrator"
               emoji="🎙️"
               optional
