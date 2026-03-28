@@ -30,8 +30,8 @@ const AGE_CONFIGS: Record<string, AgeLayoutConfig> = {
     showGrowthTimeline: false,
   },
   '9-12': {
-    gridCols: 4,
-    gridClass: 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4',
+    gridCols: 3,
+    gridClass: 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3',
     cardSize: 'sm',
     fontSize: 'text-sm',
     showWordCount: true,
