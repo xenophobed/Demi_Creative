@@ -11,8 +11,9 @@ import os
 from fastapi import Header, HTTPException, status, Depends
 
 from ..services.user_service import user_service, UserData
-from ..services.database import story_repo, session_repo, db_manager, usage_repo
+from ..services.database import story_repo, session_repo, db_manager, usage_repo, user_repo
 from ..services.database.session_repository import SessionData
+from ..services.supabase_auth import decode_supabase_token
 
 _DEFAULT_DAILY_QUOTA = 3
 
@@ -93,7 +94,17 @@ async def get_current_user(authorization: Optional[str] = Header(None)) -> UserD
             detail="Invalid authentication token format",
         )
 
-    user = await user_service.validate_token(parts[1])
+    token = parts[1]
+
+    # Try Supabase JWT first (if SUPABASE_JWT_SECRET is configured)
+    claims = decode_supabase_token(token)
+    if claims:
+        user = await _get_or_create_supabase_user(claims)
+        if user:
+            return user
+
+    # Fall back to legacy custom token validation
+    user = await user_service.validate_token(token)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -101,6 +112,41 @@ async def get_current_user(authorization: Optional[str] = Header(None)) -> UserD
         )
 
     return user
+
+
+async def _get_or_create_supabase_user(claims) -> Optional[UserData]:
+    """Look up local user by Supabase UID, or auto-create one."""
+    from datetime import datetime
+
+    user = await user_repo.get_by_id(claims.sub)
+    if user:
+        return user
+
+    # Auto-create local user from Supabase claims
+    now = datetime.now().isoformat()
+    username = claims.email.split("@")[0][:50] if claims.email else claims.sub[:50]
+
+    # Ensure unique username
+    existing = await user_repo.get_by_username(username)
+    if existing:
+        username = f"{username}_{claims.sub[:8]}"
+
+    now = datetime.now().isoformat()
+    await db_manager.execute(
+        """
+        INSERT OR IGNORE INTO users (
+            user_id, username, email, password_hash, display_name,
+            is_active, is_verified, role, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            claims.sub, username, claims.email, "supabase_managed",
+            username, 1, 1 if claims.email_confirmed else 0,
+            "child", now, now,
+        ),
+    )
+    await db_manager.commit()
+    return await user_repo.get_by_id(claims.sub)
 
 
 async def get_admin_user(

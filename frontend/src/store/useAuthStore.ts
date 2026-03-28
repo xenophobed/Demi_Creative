@@ -1,10 +1,17 @@
 /**
- * Auth Store - Manages authentication state with persistence
+ * Auth Store - Manages authentication state with persistence.
+ *
+ * Works with both Supabase Auth and legacy custom tokens.
+ * When Supabase is enabled, listens for token refresh events and
+ * auto-updates the stored token.
+ *
+ * Issue: #318 | Parent Epic: #313
  */
 
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { User } from '@/types/auth'
+import supabase, { isSupabaseEnabled } from '@/lib/supabase'
 
 interface AuthState {
   // State
@@ -76,5 +83,23 @@ const useAuthStore = create<AuthState>()(
     }
   )
 )
+
+// Listen for Supabase auth state changes (token refresh, sign out)
+if (isSupabaseEnabled()) {
+  supabase!.auth.onAuthStateChange((event, session) => {
+    const store = useAuthStore.getState()
+
+    if (event === 'TOKEN_REFRESHED' && session) {
+      // Update the stored token so API calls use the fresh one
+      if (store.isAuthenticated) {
+        useAuthStore.setState({ token: session.access_token })
+      }
+    }
+
+    if (event === 'SIGNED_OUT') {
+      store.logout()
+    }
+  })
+}
 
 export default useAuthStore

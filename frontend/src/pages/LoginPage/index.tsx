@@ -31,7 +31,7 @@ function LoginPage() {
   // Validation
   const validateForm = (): string | null => {
     if (mode === 'login') {
-      if (!username.trim()) return 'Please enter your username or email'
+      if (!username.trim()) return 'Please enter your email'
       if (!password) return 'Please enter your password'
     } else {
       if (!username.trim()) return 'Please enter a username'
@@ -183,10 +183,10 @@ function LoginPage() {
                 )}
               </AnimatePresence>
 
-              {/* Username field */}
+              {/* Username / Email field */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {mode === 'login' ? 'Username or Email' : 'Username'}
+                  {mode === 'login' ? 'Email' : 'Username'}
                 </label>
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
@@ -196,7 +196,7 @@ function LoginPage() {
                     type="text"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
-                    placeholder={mode === 'login' ? 'Enter username or email' : 'Choose a username'}
+                    placeholder={mode === 'login' ? 'Enter your email' : 'Choose a username'}
                     className="input-kid pl-10"
                     autoComplete="username"
                   />
