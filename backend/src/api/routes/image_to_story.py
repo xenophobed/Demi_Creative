@@ -476,7 +476,7 @@ async def create_story_from_image(
 
         # Update child preferences (Advanced Memory)
         try:
-            await preference_repo.update_from_story_result(safe_child_id, result)
+            await preference_repo.update_from_story_result(safe_child_id, result, user_id=user.user_id)
         except Exception:
             pass  # Non-critical: don't fail the request
 
@@ -832,7 +832,7 @@ async def create_story_from_image_stream(
                         logger.debug("store_story_embedding skipped (non-critical)", exc_info=True)
 
                     try:
-                        await preference_repo.update_from_story_result(safe_child_id, result_data)
+                        await preference_repo.update_from_story_result(safe_child_id, result_data, user_id=user.user_id)
                     except Exception:
                         pass
 
