@@ -769,16 +769,16 @@
   text-indent: 0;
 }
 
-/* Drop cap for first paragraph */
-.story-paragraph.first-paragraph::first-letter {
+/* JS-rendered drop cap — handles CJK punctuation correctly */
+.story-drop-cap {
   float: left;
-  font-size: 4rem;
+  font-size: 3.5rem;
   line-height: 1;
   font-weight: bold;
   color: var(--color-primary);
   margin-right: 8px;
   margin-top: 4px;
-  font-family: 'Georgia', serif;
+  font-family: 'Georgia', 'Noto Serif SC', serif;
 }
 
 .story-meta {
@@ -993,8 +993,8 @@
     @apply text-xl;
   }
 
-  .story-paragraph.first-paragraph::first-letter {
-    font-size: 3rem;
+  .story-drop-cap {
+    font-size: 2.8rem;
   }
 
   .tabbed-metadata-tabs {

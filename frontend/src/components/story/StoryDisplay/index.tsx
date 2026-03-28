@@ -33,8 +33,11 @@ function StoryDisplay({ story, title, imageUrl, originalImageUrl, styledImageUrl
   const displayImageUrl = hasBothImages
     ? (showStyled ? styledImageUrl : originalImageUrl)
     : imageUrl
-  // Split story text into paragraphs
-  const paragraphs = story.text.split('\n\n').filter(p => p.trim())
+  // Split story text into paragraphs, dedup title from first paragraph
+  const rawParagraphs = story.text.split('\n\n').filter(p => p.trim())
+  const paragraphs = title && rawParagraphs.length > 0 && rawParagraphs[0].trim() === title.trim()
+    ? rawParagraphs.slice(1)
+    : rawParagraphs
 
   return (
     <motion.article
@@ -88,19 +91,43 @@ function StoryDisplay({ story, title, imageUrl, originalImageUrl, styledImageUrl
           </div>
         )}
 
-        {/* Story paragraphs with drop cap */}
+        {/* Story paragraphs with JS-rendered drop cap (handles CJK punctuation) */}
         <div className="story-text">
-          {paragraphs.map((paragraph, index) => (
-            <motion.p
-              key={index}
-              className={`story-paragraph ${index === 0 ? 'first-paragraph' : ''}`}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 + index * 0.1, duration: 0.3 }}
-            >
-              {paragraph}
-            </motion.p>
-          ))}
+          {paragraphs.map((paragraph, index) => {
+            if (index === 0) {
+              // Find the first real character, skipping CJK/Western punctuation
+              const match = paragraph.match(/^([\s\u3000-\u303F\uFF00-\uFFEF「」『』【】（）《》〈〉""''、。！？；：，…—·\-–—\[\](){}<>"'.,!?;:]+)?(.)([\s\S]*)/)
+              if (match) {
+                const leading = match[1] || ''
+                const dropChar = match[2]
+                const rest = match[3] || ''
+                return (
+                  <motion.p
+                    key={index}
+                    className="story-paragraph first-paragraph"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.2, duration: 0.3 }}
+                  >
+                    {leading && <span className="text-gray-400">{leading}</span>}
+                    <span className="story-drop-cap">{dropChar}</span>
+                    {rest}
+                  </motion.p>
+                )
+              }
+            }
+            return (
+              <motion.p
+                key={index}
+                className="story-paragraph"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 + index * 0.1, duration: 0.3 }}
+              >
+                {paragraph}
+              </motion.p>
+            )
+          })}
         </div>
       </div>
 
