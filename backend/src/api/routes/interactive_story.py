@@ -29,8 +29,8 @@ from ..models import (
     AgeGroup,
     SessionStatus as SessionStatusEnum
 )
-from ..deps import get_current_user, get_session_for_owner
-from ...services.database import session_repo, story_repo, preference_repo, character_repo, db_manager
+from ..deps import get_current_user, get_session_for_owner, check_generation_quota
+from ...services.database import session_repo, story_repo, preference_repo, character_repo, db_manager, usage_repo
 from ...services.user_service import UserData
 from ...services.provenance_tracker import ProvenanceTracker
 from ...services.models.artifact_models import (
@@ -94,7 +94,7 @@ async def _check_story_safety(text: str, age_group: str) -> float:
 )
 async def start_interactive_story(
     request: InteractiveStoryStartRequest,
-    user: UserData = Depends(get_current_user),
+    user: UserData = Depends(check_generation_quota),
 ):
     """
     Start an interactive story
@@ -150,6 +150,7 @@ async def start_interactive_story(
             total_segments=total_segments,
             user_id=user.user_id,
         )
+        await usage_repo.increment(user.user_id, "interactive_story")  # quota tracking (#314)
 
         # 3. Save opening segment
         segment_data = opening_data["segment"]
@@ -265,7 +266,7 @@ async def start_interactive_story(
 async def start_interactive_story_stream(
     http_request: Request,
     request: InteractiveStoryStartRequest,
-    user: UserData = Depends(get_current_user),
+    user: UserData = Depends(check_generation_quota),
 ):
     """
     Start an interactive story with streaming
@@ -355,6 +356,7 @@ async def start_interactive_story_stream(
                         total_segments=total_segments,
                         user_id=user.user_id,
                     )
+                    await usage_repo.increment(user.user_id, "interactive_story")  # quota tracking (#314)
 
                     # Save opening segment
                     segment_data = opening_data.get("segment", {})
