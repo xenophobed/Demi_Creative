@@ -585,23 +585,30 @@
 
 /* Story Page Layout */
 .story-page {
-  @apply space-y-6 max-w-4xl mx-auto;
+  @apply space-y-6 max-w-4xl mx-auto pb-8;
 }
 
 .story-page-header {
-  @apply flex items-center justify-between gap-4 py-2;
+  @apply flex items-center justify-between gap-4 py-3;
 }
 
 .back-button {
   @apply flex items-center gap-2 px-4 py-2 rounded-full;
-  @apply bg-white/80 hover:bg-white shadow-sm;
-  @apply text-gray-600 hover:text-gray-800;
+  @apply text-gray-500 hover:text-gray-700;
   @apply transition-all duration-200;
   @apply font-medium text-sm;
+  background: rgba(255, 255, 255, 0.4);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+}
+
+.back-button:hover {
+  background: rgba(255, 255, 255, 0.65);
 }
 
 .page-title {
-  @apply text-xl font-bold text-gray-800;
+  @apply text-lg font-bold text-gray-700;
+  font-family: 'Georgia', 'Noto Serif SC', serif;
 }
 
 .audio-button {
@@ -630,24 +637,33 @@
 }
 
 .success-banner {
-  @apply bg-gradient-to-r from-green-100 to-secondary/20;
   @apply rounded-2xl p-4 flex items-center gap-3;
+  background: rgba(236, 253, 245, 0.6);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(167, 243, 208, 0.3);
 }
 
-/* Book Container */
+/* Book Container — warm parchment with soft edges, no harsh white */
 .book-container {
   @apply relative overflow-hidden;
-  background: linear-gradient(to right, #F5EDE0 0%, #FFF9F0 5%, #FFF9F0 95%, #F5EDE0 100%);
+  background: linear-gradient(
+    170deg,
+    rgba(255, 250, 240, 0.85) 0%,
+    rgba(252, 245, 235, 0.75) 40%,
+    rgba(248, 240, 228, 0.8) 100%
+  );
+  backdrop-filter: blur(10px);
   box-shadow:
-    inset 5px 0 20px rgba(0, 0, 0, 0.08),
-    0 10px 40px rgba(0, 0, 0, 0.1);
-  border-radius: 4px 16px 16px 4px;
+    inset 5px 0 15px rgba(139, 115, 85, 0.06),
+    0 4px 24px rgba(139, 115, 85, 0.08);
+  border-radius: 8px 20px 20px 8px;
+  border: 1px solid rgba(210, 190, 165, 0.25);
   padding: 2rem;
 }
 
 @media (min-width: 768px) {
   .book-container {
-    padding: 3rem;
+    padding: 3rem 3.5rem;
   }
 }
 
@@ -668,15 +684,11 @@
   opacity: 0.5;
 }
 
-/* Floating Image (Polaroid style) */
+/* Floating Image — storybook illustration style */
 .floating-artwork {
-  @apply bg-white p-2 pb-8 shadow-lg;
-  @apply transform rotate-[-1deg];
   @apply m-0;
-  border-radius: 4px;
-  box-shadow:
-    0 4px 6px rgba(0, 0, 0, 0.1),
-    0 10px 20px rgba(0, 0, 0, 0.1);
+  border-radius: 12px;
+  overflow: hidden;
 }
 
 /* Desktop: float left with text wrap */
@@ -684,35 +696,62 @@
   .floating-artwork {
     float: left;
     shape-outside: margin-box;
-    margin: 0 24px 16px 0;
-    max-width: 45%;
+    margin: 0.25rem 1.75rem 1rem 0;
+    max-width: 42%;
   }
 }
 
 /* Mobile: full width stacked */
 @media (max-width: 767px) {
   .floating-artwork {
-    @apply w-full max-w-sm mx-auto mb-6;
+    @apply w-full mx-auto mb-5;
     float: none;
   }
 }
 
 .floating-artwork-frame {
-  @apply overflow-hidden rounded;
+  @apply overflow-hidden;
+  border-radius: 12px;
+  border: 2px solid rgba(210, 190, 165, 0.3);
+  box-shadow: 0 2px 12px rgba(139, 115, 85, 0.08);
 }
 
 .floating-artwork-image {
-  @apply w-full h-auto object-cover;
-  aspect-ratio: 1 / 1;
+  @apply w-full h-auto object-cover block;
+  aspect-ratio: 4 / 3;
+}
+
+.floating-artwork-fallback {
+  @apply flex items-center justify-center;
+  background: linear-gradient(135deg, rgba(248, 240, 228, 0.8), rgba(240, 230, 215, 0.6));
+  aspect-ratio: 4 / 3;
 }
 
 .floating-artwork-caption {
-  @apply flex items-center justify-center gap-2 mt-3;
-  @apply text-sm text-gray-600 font-medium;
+  @apply text-center mt-2 mb-1;
+  @apply text-xs text-gray-400 italic;
+  font-family: 'Georgia', 'Noto Serif SC', serif;
 }
 
-.caption-icon {
-  @apply text-base;
+/* Image toggle (Original / Styled) — sits below image inside the float */
+.image-toggle-bar {
+  @apply flex justify-center gap-0 mt-1.5 mb-0.5;
+}
+
+.image-toggle-btn {
+  @apply text-xs px-3 py-1 transition-colors;
+  color: rgba(139, 115, 85, 0.45);
+  font-family: 'Georgia', 'Noto Serif SC', serif;
+  border-bottom: 1.5px solid transparent;
+}
+
+.image-toggle-btn:hover {
+  color: rgba(139, 115, 85, 0.7);
+}
+
+.image-toggle-btn.active {
+  color: rgba(139, 115, 85, 0.8);
+  border-bottom-color: rgba(139, 115, 85, 0.4);
 }
 
 /* Story Display */
@@ -756,13 +795,15 @@
 }
 
 .story-text {
-  @apply text-lg leading-relaxed text-gray-700;
-  line-height: 1.8;
+  @apply text-lg leading-relaxed;
+  color: #4a4035;
+  line-height: 2;
+  font-family: 'Georgia', 'Noto Serif SC', serif;
 }
 
 .story-paragraph {
-  @apply mb-4;
-  text-indent: 1.5em;
+  @apply mb-5;
+  text-indent: 2em;
 }
 
 .story-paragraph.first-paragraph {
@@ -782,8 +823,9 @@
 }
 
 .story-meta {
-  @apply flex items-center gap-4 mt-8 pt-6 border-t border-gray-200;
-  @apply text-sm text-gray-500;
+  @apply flex items-center gap-4 mt-8 pt-6;
+  @apply text-sm text-gray-400;
+  border-top: 1px solid rgba(210, 190, 165, 0.3);
 }
 
 .story-meta-item {
@@ -798,41 +840,34 @@
   @apply text-base;
 }
 
-/* Tabbed Metadata */
+/* Tabbed Metadata — glass card */
 .tabbed-metadata {
-  @apply bg-white rounded-2xl shadow-lg overflow-hidden;
-}
-
-.tabbed-metadata-safety {
-  @apply flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-green-50 to-emerald-50;
-  @apply border-b border-gray-100;
-}
-
-.safety-icon {
-  @apply text-lg;
-}
-
-.safety-label {
-  @apply text-sm text-gray-600;
-}
-
-.safety-value {
-  @apply font-bold text-green-600;
+  @apply rounded-2xl overflow-hidden;
+  background: rgba(255, 255, 255, 0.5);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  box-shadow: 0 2px 16px rgba(139, 115, 85, 0.06);
 }
 
 .tabbed-metadata-tabs {
-  @apply flex border-b border-gray-100;
+  @apply flex;
+  border-bottom: 1px solid rgba(210, 190, 165, 0.2);
 }
 
 .tab-button {
   @apply flex-1 flex items-center justify-center gap-2 py-3 px-4;
-  @apply text-sm font-medium text-gray-600;
-  @apply hover:bg-gray-50 transition-colors;
+  @apply text-sm font-medium text-gray-500;
+  @apply transition-colors;
   @apply border-b-2 border-transparent;
 }
 
+.tab-button:hover {
+  background: rgba(255, 255, 255, 0.4);
+}
+
 .tab-button.tab-active {
-  @apply text-primary border-primary bg-primary/5;
+  @apply text-primary border-primary;
+  background: rgba(255, 255, 255, 0.5);
 }
 
 .tab-icon {
@@ -977,16 +1012,21 @@
   @apply flex flex-col sm:flex-row gap-3;
 }
 
+.action-buttons button {
+  @apply rounded-full shadow-sm;
+}
+
 /* Share Prompt */
 .share-prompt {
-  @apply text-center text-gray-500 text-sm;
+  @apply text-center text-gray-400 text-sm italic;
+  font-family: 'Georgia', 'Noto Serif SC', serif;
 }
 
 /* Mobile Responsive Adjustments */
 @media (max-width: 767px) {
   .book-container {
-    padding: 1.5rem;
-    border-radius: 8px;
+    padding: 1.5rem 1.25rem;
+    border-radius: 12px;
   }
 
   .story-title {
