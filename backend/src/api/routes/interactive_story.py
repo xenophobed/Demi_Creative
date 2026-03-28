@@ -610,10 +610,12 @@ async def choose_story_branch_stream(
                                     "theme": session.theme,
                                     "interests": session.interests,
                                 },
+                                user_id=user.user_id,
                             )
                             if next_data.get("educational_summary"):
                                 await preference_repo.update_from_story_result(
-                                    session.child_id, next_data["educational_summary"]
+                                    session.child_id, next_data["educational_summary"],
+                                    user_id=user.user_id,
                                 )
                         except Exception:
                             pass  # Non-critical
@@ -792,10 +794,12 @@ async def choose_story_branch(
                         "theme": session.theme,
                         "interests": session.interests,
                     },
+                    user_id=user.user_id,
                 )
                 if next_data.get("educational_summary"):
                     await preference_repo.update_from_story_result(
-                        session.child_id, next_data["educational_summary"]
+                        session.child_id, next_data["educational_summary"],
+                        user_id=user.user_id,
                     )
             except Exception:
                 pass  # Non-critical

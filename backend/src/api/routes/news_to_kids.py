@@ -158,6 +158,7 @@ async def convert_news(
                 child_id=request.child_id,
                 category=request.category.value,
                 key_concepts=result.get("key_concepts", []),
+                user_id=user.user_id,
             )
         except Exception:
             pass  # Non-critical
@@ -359,6 +360,7 @@ async def convert_news_stream(
                             child_id=request.child_id,
                             category=request.category.value,
                             key_concepts=event_data.get("key_concepts", []),
+                            user_id=user.user_id,
                         )
                     except Exception:
                         pass  # Non-critical
