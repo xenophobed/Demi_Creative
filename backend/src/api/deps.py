@@ -8,11 +8,20 @@ from typing import Optional
 import hmac
 import os
 
-from fastapi import Header, HTTPException, status
+from fastapi import Header, HTTPException, status, Depends
 
 from ..services.user_service import user_service, UserData
-from ..services.database import story_repo, session_repo, db_manager
+from ..services.database import story_repo, session_repo, db_manager, usage_repo
 from ..services.database.session_repository import SessionData
+
+_DEFAULT_DAILY_QUOTA = 3
+
+
+def _get_daily_quota() -> int:
+    try:
+        return int(os.getenv("DAILY_GENERATION_QUOTA", _DEFAULT_DAILY_QUOTA))
+    except (ValueError, TypeError):
+        return _DEFAULT_DAILY_QUOTA
 
 
 def _is_pytest_runtime() -> bool:
@@ -124,6 +133,35 @@ async def get_admin_user(
             detail="Admin privileges required",
         )
 
+    return user
+
+
+async def check_generation_quota(
+    user: UserData = Depends(get_current_user),
+) -> UserData:
+    """Raise HTTP 429 if the user has hit their daily generation quota.
+
+    Usage: user: UserData = Depends(check_generation_quota)
+    The caller receives the same UserData as get_current_user so no extra
+    dep is needed.
+    """
+    if _allow_test_auth_bypass():
+        return user
+
+    quota = _get_daily_quota()
+    used = await usage_repo.get_usage_today(user.user_id)
+    if used >= quota:
+        resets_at = (
+            await usage_repo.get_quota_status(user.user_id, quota)
+        )["resets_at"]
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail={
+                "error": "quota_exceeded",
+                "quota_remaining": 0,
+                "resets_at": resets_at,
+            },
+        )
     return user
 
 

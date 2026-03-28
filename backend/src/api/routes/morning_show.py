@@ -38,7 +38,8 @@ from ...services.tts_service import generate_multi_speaker_audio
 from ...services.user_service import UserData
 from ...utils.text import count_words
 from ...paths import AUDIO_DIR, UPLOAD_DIR
-from ..deps import get_current_user
+from ..deps import get_current_user, check_generation_quota
+from ...services.database import usage_repo
 from ..models import (
     DialogueScript,
     EpisodeIllustration,
@@ -608,9 +609,11 @@ async def _build_episode(
 )
 async def generate_morning_show(
     request: MorningShowRequest,
-    user: UserData = Depends(get_current_user),
+    user: UserData = Depends(check_generation_quota),
 ):
-    return await _build_episode(request, user)
+    result = await _build_episode(request, user)
+    await usage_repo.increment(user.user_id, "morning_show")  # quota tracking (#314)
+    return result
 
 
 @router.post(
@@ -620,7 +623,7 @@ async def generate_morning_show(
 async def generate_morning_show_stream(
     http_request: Request,
     request: MorningShowRequest,
-    user: UserData = Depends(get_current_user),
+    user: UserData = Depends(check_generation_quota),
 ):
     if not request.news_url and not request.news_text:
         raise HTTPException(
@@ -659,6 +662,7 @@ async def generate_morning_show_stream(
             return
 
         response = await _build_episode(request, user)
+        await usage_repo.increment(user.user_id, "morning_show")  # quota tracking (#314)
 
         yield f"event: result\ndata: {json.dumps(response.model_dump(mode='json'), ensure_ascii=False)}\n\n"
         yield f"event: complete\ndata: {json.dumps({'message': 'Morning Show generation complete'}, ensure_ascii=False)}\n\n"

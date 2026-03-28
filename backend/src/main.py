@@ -297,6 +297,7 @@ from .api.routes import (
     admin_artifacts,
     library,
     memory,
+    usage,
 )
 
 app.include_router(image_to_story.router)
@@ -312,6 +313,7 @@ app.include_router(artifacts.router)
 app.include_router(admin_artifacts.router)
 app.include_router(library.router)
 app.include_router(memory.router)
+app.include_router(usage.router)
 
 
 # ============================================================================

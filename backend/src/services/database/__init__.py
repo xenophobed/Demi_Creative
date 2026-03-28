@@ -18,6 +18,7 @@ from .subscription_repository import (
     DuplicateSubscriptionError,
     MaxSubscriptionsExceededError,
 )
+from .usage_repository import UsageRepository, usage_repo
 
 __all__ = [
     "DatabaseManager",
@@ -41,4 +42,6 @@ __all__ = [
     "subscription_repo",
     "DuplicateSubscriptionError",
     "MaxSubscriptionsExceededError",
+    "UsageRepository",
+    "usage_repo",
 ]

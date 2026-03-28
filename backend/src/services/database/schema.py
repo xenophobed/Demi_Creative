@@ -236,6 +236,25 @@ CREATE INDEX IF NOT EXISTS idx_cloned_voices_child_id ON cloned_voices(child_id)
 CREATE INDEX IF NOT EXISTS idx_cloned_voices_active ON cloned_voices(is_active);
 """
 
+# ============================================================================
+# Daily Usage Table (#314)
+# ============================================================================
+
+DAILY_USAGE_TABLE = """
+CREATE TABLE IF NOT EXISTS daily_usage (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL,
+    usage_date TEXT NOT NULL,
+    feature TEXT NOT NULL,
+    count INTEGER NOT NULL DEFAULT 0,
+    UNIQUE(user_id, usage_date, feature)
+);
+"""
+
+DAILY_USAGE_INDEXES = """
+CREATE INDEX IF NOT EXISTS idx_daily_usage_user_date ON daily_usage(user_id, usage_date);
+"""
+
 
 # ============================================================================
 # Schema Initialization
@@ -309,6 +328,15 @@ async def init_schema(db: "DatabaseManager") -> None:
     # Create cloned voices table (#150)
     await db.execute(CLONED_VOICES_TABLE)
     for stmt in CLONED_VOICES_INDEXES.strip().split(";"):
+        if stmt.strip():
+            try:
+                await db.execute(stmt)
+            except Exception:
+                pass
+
+    # Create daily usage quota table (#314)
+    await db.execute(DAILY_USAGE_TABLE)
+    for stmt in DAILY_USAGE_INDEXES.strip().split(";"):
         if stmt.strip():
             try:
                 await db.execute(stmt)

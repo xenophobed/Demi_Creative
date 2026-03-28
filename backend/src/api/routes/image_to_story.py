@@ -25,14 +25,14 @@ from ..models import (
     AgeGroup,
     ArtTheme,
 )
-from ..deps import get_current_user, get_story_for_owner
+from ..deps import get_current_user, get_story_for_owner, check_generation_quota
 from ...agents.image_to_story_agent import (
     image_to_story,
     stream_image_to_story,
     validate_story_length,
 )
 from ...utils.audio_strategy import get_audio_strategy
-from ...services.database import story_repo, preference_repo, character_repo, db_manager
+from ...services.database import story_repo, preference_repo, character_repo, db_manager, usage_repo
 from ...services.user_service import UserData
 from ...services.provenance_tracker import ProvenanceTracker
 from ...services.models.artifact_models import (
@@ -255,7 +255,7 @@ async def create_story_from_image(
     voice: str = Form("nova", description="Voice type"),
     enable_audio: bool = Form(True, description="Whether to generate audio"),
     art_theme: ArtTheme = Form(ArtTheme.NONE, description="Art style theme for image transformation"),
-    user: UserData = Depends(get_current_user),
+    user: UserData = Depends(check_generation_quota),
 ):
     """
     Image to Story API
@@ -439,6 +439,7 @@ async def create_story_from_image(
         }
         story_data["user_id"] = user.user_id
         await story_repo.create(story_data)
+        await usage_repo.increment(user.user_id, "image_to_story")  # quota tracking (#314)
 
         # Store story embedding for dedup detection (#290)
         try:
@@ -634,7 +635,7 @@ async def create_story_from_image_stream(
     voice: str = Form("nova", description="Voice type"),
     enable_audio: bool = Form(True, description="Whether to generate audio"),
     art_theme: ArtTheme = Form(ArtTheme.NONE, description="Art style theme for image transformation"),
-    user: UserData = Depends(get_current_user),
+    user: UserData = Depends(check_generation_quota),
 ):
     """
     Streaming Image to Story API
@@ -773,6 +774,7 @@ async def create_story_from_image_stream(
                     story_save_data = {**response_data, "child_id": safe_child_id, "age_group": age_group.value, "image_path": str(image_path), "art_theme": art_theme.value if art_theme != ArtTheme.NONE else None, "styled_image_path": styled_image_path, "cover_image_url": cover_image_url}
                     story_save_data["user_id"] = user.user_id
                     await story_repo.create(story_save_data)
+                    await usage_repo.increment(user.user_id, "image_to_story")  # quota tracking (#314)
 
                     # Store story embedding for dedup detection (#290)
                     try:

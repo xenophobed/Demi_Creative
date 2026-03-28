@@ -932,7 +932,13 @@ Month 3: 儿童创作了 20+ 个故事，形成自己的"故事宇宙"
 - ✅ 基础记忆（识别重复角色）
 - 🔲 我的创作库（统一内容浏览、搜索、收藏）
 
-### Phase 2 - 第二阶段
+### Phase 2 - 第二阶段 (Launch Gate — §3.9)
+
+**生产发布前置条件 (blocks public launch)**:
+- 🔲 每用户每日生成配额 + 用量追踪（§3.9.1）
+- 🔲 邮箱注册 + 邮件验证（§3.9.2）
+- 🔲 Railway 后端部署 + Vercel 前端部署（§3.9.3）
+- 🔲 "Buy Me a Coffee" 捐赠入口（§3.9.4）
 
 **应该有**:
 - ✅ 互动故事生成（多分支）— 核心流程已完成，增强功能见 §3.2
@@ -1012,6 +1018,58 @@ Month 3: 儿童创作了 20+ 个故事，形成自己的"故事宇宙"
 
 ---
 
+## 3.9 Production Launch & Cost Sustainability [Phase 2 — Launch Gate]
+
+Goal: deploy the product to a public URL so real users can register and use it, while keeping AI API costs predictable.
+
+### 3.9.1 Per-User Generation Quota
+
+Every authenticated user has a daily generation quota (default: **3 AI generations per day**, resets midnight UTC).
+Quota covers: image-to-story, interactive story opening, morning show episode generation.
+
+**Acceptance Criteria:**
+- [ ] `usage_repository` tracks (user_id, date, feature, count) in SQLite
+- [ ] Quota middleware returns HTTP 429 with `{"quota_remaining": 0, "resets_at": "..."}` when exceeded
+- [ ] Frontend shows "X / 3 generations used today" on UploadPage and InteractiveStory start screen
+- [ ] Quota is configurable via env var `DAILY_GENERATION_QUOTA` (default 3)
+
+### 3.9.2 Email-Based Account Registration
+
+Users register with email + password. A verification email must be confirmed before AI features are accessible.
+Prevents throwaway accounts that drain quota.
+
+**Acceptance Criteria:**
+- [ ] Registration requires email + password (min 8 chars)
+- [ ] Verification email sent on signup; unverified accounts blocked from AI endpoints
+- [ ] Password reset flow (email link)
+- [ ] Implementation: Supabase Auth (free tier) or self-hosted with FastAPI + email via SendGrid free tier
+
+### 3.9.3 Production Hosting
+
+| Layer | Service | Notes |
+|-------|---------|-------|
+| Frontend | Vercel (free) | Auto-deploys from `main` |
+| Backend | Railway ($5–7/month) | FastAPI + SQLite + ChromaDB on same instance |
+| Domain | Optional Cloudflare domain | ~$10/year |
+
+**Acceptance Criteria:**
+- [ ] Backend live at a stable public URL with all env vars set
+- [ ] Frontend live on Vercel pointing to backend URL via `VITE_API_BASE_URL`
+- [ ] CORS configured for production frontend origin
+- [ ] Health check endpoint returns 200
+
+### 3.9.4 "Buy Me a Coffee" Donation Widget
+
+A voluntary tip widget on the home or profile page. Non-commercial — users choose to donate.
+Lets the creator receive appreciation without gating any features.
+
+**Acceptance Criteria:**
+- [ ] BMC widget/button visible on HomePage or ProfilePage
+- [ ] Clicking opens buymeacoffee.com/[creator] in a new tab
+- [ ] Does not obstruct any child-facing UI
+
+---
+
 ## 8. 风险与限制
 
 ### 产品风险
@@ -1024,12 +1082,15 @@ Month 3: 儿童创作了 20+ 个故事，形成自己的"故事宇宙"
 - **隐私担忧**: 家长担心儿童数据安全
   - 缓解：符合 COPPA 标准，透明的隐私政策
 
+- **API 成本失控**: 真实用户大量使用 AI 接口导致费用超出预算
+  - 缓解：每用户每日配额限制（§3.9.1）+ Anthropic/OpenAI 控制台月度消费上限（外部硬限制）
+
 ### 技术限制
 - **生成速度**: AI 生成需要 5-10 秒
   - 缓解：优化模型，使用流式输出
 
 - **成本**: TTS 和 AI 调用成本较高
-  - 缓解：缓存常用内容，批量处理
+  - 缓解：每用户配额限制（3次/天）；缓存常用内容；批量处理
 
 ---
 
