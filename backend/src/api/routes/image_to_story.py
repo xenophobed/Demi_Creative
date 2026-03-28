@@ -39,6 +39,7 @@ from ...services.models.artifact_models import (
     ArtifactType, WorkflowType, StoryArtifactRole,
     ArtifactMetadata, RunArtifactStage,
 )
+from ...mcp_servers.image_style_server import validate_and_fallback
 
 logger = logging.getLogger(__name__)
 
@@ -371,11 +372,30 @@ async def create_story_from_image(
             audio_filename = Path(result["audio_path"]).name
             audio_url = f"/data/audio/{audio_filename}"
 
-        # Use styled image as cover if available (#273)
+        # Validate styled image safety before use (#273)
         styled_image_path = result.get("styled_image_path")
         cover_image_url = image_url
+        styled_image_safety = None
         if styled_image_path and Path(styled_image_path).exists():
-            cover_image_url = f"/data/styled/{Path(styled_image_path).name}"
+            try:
+                styled_image_safety = await validate_and_fallback(
+                    styled_image_path=styled_image_path,
+                    original_image_path=str(image_path),
+                    child_age=child_age,
+                    theme=art_theme.value if art_theme else "none",
+                    session_id=safe_child_id,
+                )
+                if styled_image_safety["safety_passed"]:
+                    cover_image_url = f"/data/styled/{Path(styled_image_path).name}"
+                else:
+                    # Unsafe: discard styled image, fall back to original
+                    styled_image_path = None
+            except Exception:
+                logger.warning(
+                    "Styled image safety validation failed, using original",
+                    exc_info=True,
+                )
+                styled_image_path = None
 
         # Build response
         created_at = datetime.now()
@@ -519,7 +539,12 @@ async def create_story_from_image(
                     agent_name="style_transfer",
                     input_artifact_ids=[image_artifact_id] if image_artifact_id else None,
                 )
-                await tracker.complete_step(styled_step_id, output_data={"artifact_id": styled_artifact_id})
+                step_output = {"artifact_id": styled_artifact_id}
+                if styled_image_safety:
+                    step_output["image_safety_passed"] = styled_image_safety["safety_passed"]
+                    step_output["image_safety_fell_back"] = styled_image_safety["fell_back"]
+                    step_output["image_safety_flagged"] = styled_image_safety.get("flagged_keywords", [])
+                await tracker.complete_step(styled_step_id, output_data=step_output)
             except Exception:
                 logger.warning("Failed to record styled image artifact", exc_info=True)
 
@@ -737,11 +762,29 @@ async def create_story_from_image_stream(
                         audio_filename = Path(result_data["audio_path"]).name
                         audio_url = f"/data/audio/{audio_filename}"
 
-                    # Use styled image as cover if available (#273)
+                    # Validate styled image safety before use (#273)
                     styled_image_path = result_data.get("styled_image_path")
                     cover_image_url = image_url
+                    styled_image_safety = None
                     if styled_image_path and Path(styled_image_path).exists():
-                        cover_image_url = f"/data/styled/{Path(styled_image_path).name}"
+                        try:
+                            styled_image_safety = await validate_and_fallback(
+                                styled_image_path=styled_image_path,
+                                original_image_path=str(image_path),
+                                child_age=child_age,
+                                theme=art_theme.value if art_theme else "none",
+                                session_id=safe_child_id,
+                            )
+                            if styled_image_safety["safety_passed"]:
+                                cover_image_url = f"/data/styled/{Path(styled_image_path).name}"
+                            else:
+                                styled_image_path = None
+                        except Exception:
+                            logger.warning(
+                                "Styled image safety validation failed (streaming), using original",
+                                exc_info=True,
+                            )
+                            styled_image_path = None
 
                     # Build complete response data
                     response_data = {
@@ -834,7 +877,12 @@ async def create_story_from_image_stream(
                             styled_mime, _ = mimetypes.guess_type(styled_image_path)
                             styled_file_size = Path(styled_image_path).stat().st_size
                             styled_artifact_id = await tracker.record_artifact(styled_step_id, ArtifactType.IMAGE, run_id=run_id, artifact_path=styled_image_path, description=f"Style-transferred image ({art_theme.value if art_theme else 'none'})", mime_type=styled_mime, file_size=styled_file_size, agent_name="style_transfer", input_artifact_ids=[image_artifact_id] if image_artifact_id else None)
-                            await tracker.complete_step(styled_step_id, output_data={"artifact_id": styled_artifact_id})
+                            stream_step_output = {"artifact_id": styled_artifact_id}
+                            if styled_image_safety:
+                                stream_step_output["image_safety_passed"] = styled_image_safety["safety_passed"]
+                                stream_step_output["image_safety_fell_back"] = styled_image_safety["fell_back"]
+                                stream_step_output["image_safety_flagged"] = styled_image_safety.get("flagged_keywords", [])
+                            await tracker.complete_step(styled_step_id, output_data=stream_step_output)
                         except Exception:
                             logger.warning("Failed to record styled image artifact (streaming)", exc_info=True)
 
