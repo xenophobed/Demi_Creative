@@ -57,13 +57,6 @@ function TabbedMetadata({
 
   return (
     <div className={`tabbed-metadata ${className}`}>
-      {/* Safety badge */}
-      <div className="tabbed-metadata-safety">
-        <span className="safety-icon">⭐</span>
-        <span className="safety-label">Safety Score:</span>
-        <span className="safety-value">{Math.round(safetyScore * 100)}%</span>
-      </div>
-
       {/* Tab buttons */}
       <div className="tabbed-metadata-tabs">
         {tabs.map((tab) => (
@@ -100,7 +93,7 @@ function TabbedMetadata({
               <LearningContent educationalValue={educationalValue} />
             )}
             {activeTab === 'analysis' && (
-              <AnalysisContent analysis={analysis} />
+              <AnalysisContent analysis={analysis} safetyScore={safetyScore} />
             )}
           </motion.div>
         )}
@@ -263,7 +256,7 @@ function AnalysisObject({ data }: { data: Record<string, unknown> }) {
   )
 }
 
-function AnalysisContent({ analysis }: { analysis: Record<string, unknown> }) {
+function AnalysisContent({ analysis, safetyScore }: { analysis: Record<string, unknown>; safetyScore: number }) {
   const entries = Object.entries(analysis).filter(([, v]) => v != null)
 
   if (entries.length === 0) {
@@ -276,6 +269,14 @@ function AnalysisContent({ analysis }: { analysis: Record<string, unknown> }) {
 
   return (
     <div className="analysis-content">
+      <div className="analysis-section">
+        <h4 className="analysis-section-title">
+          <span>⭐</span> Safety Score
+        </h4>
+        <p className="analysis-value" style={{ paddingLeft: '1.5rem' }}>
+          <span className="font-semibold text-green-600">{Math.round(safetyScore * 100)}%</span>
+        </p>
+      </div>
       {entries.map(([key, value]) => (
         <div key={key} className="analysis-section">
           <h4 className="analysis-section-title">

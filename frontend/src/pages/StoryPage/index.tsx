@@ -134,7 +134,9 @@ function StoryPage() {
           <span>Back</span>
         </button>
 
-        <h1 className="page-title">Your Story</h1>
+        <h1 className="page-title">
+          {story.story.text.split('\n')[0]?.replace(/^[《「『【〈]|[》」』】〉]$/g, '').slice(0, 30) || 'Your Story'}
+        </h1>
 
         {/* Empty spacer to maintain layout */}
         <div className="w-10" />

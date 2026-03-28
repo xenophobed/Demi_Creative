@@ -64,31 +64,28 @@ function StoryDisplay({ story, title, imageUrl, originalImageUrl, styledImageUrl
       <div className="story-content-wrapper">
         {/* Floating artwork with optional toggle */}
         {displayImageUrl && (
-          <div className="relative">
-            <FloatingImage
-              src={displayImageUrl}
-              alt={showStyled ? "AI-styled artwork" : "Your artwork that inspired this story"}
-              caption={showStyled ? "Styled artwork" : "Your artwork"}
-            />
+          <FloatingImage
+            src={displayImageUrl}
+            alt={showStyled ? "AI-styled artwork" : "Your original artwork"}
+            caption={hasBothImages ? undefined : (showStyled ? "Styled" : "Original")}
+          >
             {hasBothImages && (
-              <div className="flex justify-center mt-2 mb-3">
-                <div className="inline-flex rounded-full bg-gray-100 p-0.5 text-xs">
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setShowStyled(false) }}
-                    className={`px-3 py-1 rounded-full transition-colors ${!showStyled ? 'bg-white shadow-sm text-gray-800 font-medium' : 'text-gray-500 hover:text-gray-700'}`}
-                  >
-                    Original
-                  </button>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setShowStyled(true) }}
-                    className={`px-3 py-1 rounded-full transition-colors ${showStyled ? 'bg-white shadow-sm text-gray-800 font-medium' : 'text-gray-500 hover:text-gray-700'}`}
-                  >
-                    Styled
-                  </button>
-                </div>
+              <div className="image-toggle-bar">
+                <button
+                  onClick={(e) => { e.stopPropagation(); setShowStyled(false) }}
+                  className={`image-toggle-btn ${!showStyled ? 'active' : ''}`}
+                >
+                  Original
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); setShowStyled(true) }}
+                  className={`image-toggle-btn ${showStyled ? 'active' : ''}`}
+                >
+                  Styled
+                </button>
               </div>
             )}
-          </div>
+          </FloatingImage>
         )}
 
         {/* Story paragraphs with JS-rendered drop cap (handles CJK punctuation) */}
