@@ -1007,6 +1007,143 @@
   @apply bg-purple-50 text-purple-700;
 }
 
+/* ===== News Detail — Newspaper Style ===== */
+
+.news-detail-headline {
+  font-family: 'Georgia', 'Noto Serif SC', serif;
+  font-size: 2rem;
+  font-weight: 800;
+  line-height: 1.2;
+  color: #1a1a1a;
+  letter-spacing: -0.02em;
+}
+
+@media (min-width: 768px) {
+  .news-detail-headline {
+    font-size: 2.5rem;
+  }
+}
+
+.news-article-body {
+  font-family: 'Georgia', 'Noto Serif SC', serif;
+  font-size: 1.125rem;
+  line-height: 1.9;
+  color: #333;
+}
+
+.news-article-body p {
+  @apply mb-5;
+  text-indent: 1.5em;
+}
+
+.news-article-body .first-news-para {
+  text-indent: 0;
+  font-size: 1.2rem;
+}
+
+.news-article-body .first-news-para::first-letter {
+  float: left;
+  font-size: 3.5rem;
+  line-height: 1;
+  font-weight: bold;
+  color: #1a1a1a;
+  margin-right: 6px;
+  margin-top: 4px;
+  font-family: 'Georgia', serif;
+}
+
+.news-callout {
+  @apply py-5 px-6;
+  border-left: 4px solid rgba(139, 115, 85, 0.4);
+  background: rgba(248, 240, 228, 0.4);
+  border-radius: 0 8px 8px 0;
+}
+
+.news-callout h2 {
+  font-family: 'Georgia', serif;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #555;
+  margin-bottom: 0.5rem;
+}
+
+.news-callout p {
+  font-family: 'Georgia', serif;
+  font-size: 0.95rem;
+  line-height: 1.7;
+  color: #555;
+  font-style: italic;
+}
+
+.news-concepts h2,
+.news-questions h2 {
+  font-family: 'Georgia', serif;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #444;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid rgba(210, 190, 165, 0.3);
+}
+
+.news-concepts-grid {
+  @apply space-y-2;
+}
+
+.news-concept-card {
+  @apply flex items-start gap-2 py-2 px-3;
+  background: rgba(248, 240, 228, 0.3);
+  border-radius: 6px;
+}
+
+.news-concept-emoji {
+  @apply text-lg flex-shrink-0;
+}
+
+.news-concept-term {
+  font-family: 'Georgia', serif;
+  font-weight: 700;
+  color: #333;
+  font-size: 0.9rem;
+}
+
+.news-concept-explanation {
+  font-family: 'Georgia', serif;
+  color: #666;
+  font-size: 0.85rem;
+}
+
+.news-question-item {
+  @apply flex items-start gap-2 py-2 px-3 mb-2;
+  border-radius: 6px;
+  border: 1px solid rgba(210, 190, 165, 0.25);
+}
+
+.news-question-emoji {
+  @apply text-lg flex-shrink-0;
+}
+
+.news-question-text {
+  font-family: 'Georgia', serif;
+  color: #444;
+  font-size: 0.9rem;
+}
+
+.news-question-hint {
+  font-family: 'Georgia', serif;
+  color: #999;
+  font-size: 0.8rem;
+  font-style: italic;
+  margin-top: 0.25rem;
+}
+
+.news-audio-bar {
+  @apply py-3 px-4;
+  background: rgba(248, 240, 228, 0.4);
+  border-radius: 8px;
+  border: 1px solid rgba(210, 190, 165, 0.2);
+}
+
 /* Action Buttons */
 .action-buttons {
   @apply flex flex-col sm:flex-row gap-3;

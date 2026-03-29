@@ -57,7 +57,8 @@ function PreferenceSummary({ preferences, isLoading }: PreferenceSummaryProps) {
 
   const themes = preferences ? topEntries(preferences.themes, 5) : []
   const interests = preferences ? topEntries(preferences.interests, 5) : []
-  const hasData = themes.length > 0 || interests.length > 0
+  const concepts = preferences ? topEntries(preferences.concepts, 5) : []
+  const hasData = themes.length > 0 || interests.length > 0 || concepts.length > 0
 
   return (
     <Card className="p-6">
@@ -106,6 +107,28 @@ function PreferenceSummary({ preferences, isLoading }: PreferenceSummaryProps) {
                   <motion.span
                     key={entry.label}
                     className={`inline-block rounded-full px-3 py-1 text-sm font-medium ${INTEREST_COLORS[index % INTEREST_COLORS.length]}`}
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: index * 0.05 }}
+                    whileHover={{ scale: 1.08 }}
+                  >
+                    {entry.label}
+                  </motion.span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {concepts.length > 0 && (
+            <div>
+              <h3 className="text-sm font-semibold text-gray-600 mb-2">
+                Things You Learned
+              </h3>
+              <div className="flex flex-wrap gap-2">
+                {concepts.map((entry, index) => (
+                  <motion.span
+                    key={entry.label}
+                    className={`inline-block rounded-full px-3 py-1 text-sm font-medium bg-gray-200 text-gray-700`}
                     initial={{ opacity: 0, scale: 0.8 }}
                     animate={{ opacity: 1, scale: 1 }}
                     transition={{ delay: index * 0.05 }}
