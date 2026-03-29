@@ -136,9 +136,9 @@ async def get_recommendations(
 async def get_child_id(
     user: UserData = Depends(get_current_user),
 ):
-    """Return the child_id most recently used by this user, derived from story history."""
+    """Return the user's primary child_id — the one with the most stories."""
     row = await story_repo._db.fetchone(
-        "SELECT child_id FROM stories WHERE user_id = ? ORDER BY created_at DESC LIMIT 1",
+        "SELECT child_id FROM stories WHERE user_id = ? GROUP BY child_id ORDER BY COUNT(*) DESC LIMIT 1",
         (user.user_id,),
     )
     return {"child_id": row["child_id"] if row else None}
