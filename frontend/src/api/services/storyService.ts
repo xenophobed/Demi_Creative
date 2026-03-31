@@ -436,6 +436,43 @@ export const storyService = {
   },
 
   /**
+   * Generate Morning Show episode on-demand (streaming)
+   */
+  async generateMorningShowOnDemandStream(
+    params: MorningShowOnDemandRequest,
+    callbacks: StreamCallbacks,
+    signal?: AbortSignal
+  ): Promise<void> {
+    const response = await fetch(`${API_BASE_URL}/morning-show/generate-now/stream`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAuthHeaders(),
+      },
+      body: JSON.stringify(params),
+      signal,
+    })
+
+    if (!response.ok) {
+      if (response.status === 429) {
+        const errorData = await response.json()
+        throw new Error(
+          `Rate limited: ${errorData.message || errorData.detail || 'Too many requests'}. Retry after ${errorData.retry_after || 60} seconds.`
+        )
+      }
+      if (response.status === 400) {
+        const errorData = await response.json()
+        throw new Error(
+          errorData.detail || 'Subscription required or invalid request.'
+        )
+      }
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+
+    await consumeSSEStream(response, callbacks)
+  },
+
+  /**
    * Track Morning Show playback event
    */
   async trackMorningShowEvent(
