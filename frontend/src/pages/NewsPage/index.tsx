@@ -370,13 +370,13 @@ function NewsPage() {
                         )}
                       </motion.button>
 
-                      {/* Morning Show */}
+                      {/* Kids Daily */}
                       <Link
                         to={`/morning-show/episodes?topic=${item.topic}`}
                         className="block"
                       >
                         <Button size="sm" variant="outline" className="w-full text-xs">
-                          Morning Show
+                          Kids Daily
                         </Button>
                       </Link>
 

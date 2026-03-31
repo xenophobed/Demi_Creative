@@ -328,7 +328,7 @@ export const storyService = {
   },
 
   /**
-   * Generate Morning Show episode
+   * Generate Kids Daily episode
    */
   async generateMorningShow(
     params: MorningShowRequest
@@ -341,7 +341,7 @@ export const storyService = {
   },
 
   /**
-   * Generate Morning Show episode (streaming)
+   * Generate Kids Daily episode (streaming)
    */
   async generateMorningShowStream(
     params: MorningShowRequest,
@@ -364,7 +364,7 @@ export const storyService = {
   },
 
   /**
-   * Get Morning Show episode details
+   * Get Kids Daily episode details
    */
   async getMorningShowEpisode(episodeId: string): Promise<MorningShowEpisode> {
     const response = await apiClient.get<MorningShowEpisode>(
@@ -374,7 +374,7 @@ export const storyService = {
   },
 
   /**
-   * List Morning Show episodes by child
+   * List Kids Daily episodes by child
    */
   async listMorningShowEpisodes(
     childId: string,
@@ -421,7 +421,7 @@ export const storyService = {
   },
 
   /**
-   * Generate Morning Show episode on-demand (instant)
+   * Generate Kids Daily episode on-demand (instant)
    */
   async generateMorningShowOnDemand(
     params: MorningShowOnDemandRequest,
@@ -436,7 +436,7 @@ export const storyService = {
   },
 
   /**
-   * Generate Morning Show episode on-demand (streaming)
+   * Generate Kids Daily episode on-demand (streaming)
    */
   async generateMorningShowOnDemandStream(
     params: MorningShowOnDemandRequest,
@@ -473,7 +473,7 @@ export const storyService = {
   },
 
   /**
-   * Track Morning Show playback event
+   * Track Kids Daily playback event
    */
   async trackMorningShowEvent(
     request: MorningShowTrackRequest
