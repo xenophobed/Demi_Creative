@@ -374,7 +374,7 @@ class NewsToKidsResponse(BaseModel):
 
 
 # ============================================================================
-# Morning Show API Models (#44)
+# Kids Daily API Models (#44)
 # ============================================================================
 
 ALLOWED_DIALOGUE_ROLES = {"curious_kid", "fun_expert", "guest"}
@@ -382,7 +382,7 @@ ALLOWED_ANIMATION_TYPES = {"pan", "zoom", "ken_burns"}
 
 
 class DialogueLine(BaseModel):
-    """Morning Show 对话行"""
+    """Kids Daily 对话行"""
     role: str = Field(..., description="角色: curious_kid | fun_expert | guest")
     text: str = Field(..., min_length=1, description="对话内容")
     display_name: Optional[str] = Field(None, description="角色显示名（Mimi / Duo）")
@@ -404,7 +404,7 @@ class DialogueLine(BaseModel):
 
 
 class DialogueScript(BaseModel):
-    """Morning Show 对话脚本"""
+    """Kids Daily 对话脚本"""
     lines: List[DialogueLine] = Field(default_factory=list, description="对话行列表")
     total_duration: float = Field(..., ge=0.0, description="总时长（秒）")
     guest_character: Optional[str] = Field(None, description="嘉宾角色名（可选）")
@@ -419,7 +419,7 @@ class DialogueScript(BaseModel):
 
 
 class EpisodeIllustration(BaseModel):
-    """Morning Show 插画元数据"""
+    """Kids Daily 插画元数据"""
     url: str = Field(..., min_length=1, description="插画 URL")
     description: str = Field(..., min_length=1, description="插画描述")
     display_order: int = Field(..., ge=0, description="显示顺序")
@@ -434,7 +434,7 @@ class EpisodeIllustration(BaseModel):
 
 
 class MorningShowEpisode(BaseModel):
-    """Morning Show 完整节目数据"""
+    """Kids Daily 完整节目数据"""
     episode_id: str = Field(..., description="节目唯一 ID")
     child_id: str = Field(..., description="儿童 ID")
     age_group: AgeGroup = Field(..., description="年龄组")
@@ -457,7 +457,7 @@ class MorningShowEpisode(BaseModel):
 
 
 class MorningShowRequest(BaseModel):
-    """Morning Show 生成请求"""
+    """Kids Daily 生成请求"""
     news_url: Optional[str] = Field(None, description="新闻 URL")
     news_text: Optional[str] = Field(None, description="新闻正文")
     age_group: AgeGroup = Field(..., description="年龄组")
@@ -466,7 +466,7 @@ class MorningShowRequest(BaseModel):
 
 
 class MorningShowOnDemandRequest(BaseModel):
-    """按需生成 Morning Show 请求 (#304)"""
+    """按需生成 Kids Daily 请求 (#304)"""
     child_id: str = Field(..., min_length=1, max_length=100, description="儿童 ID")
     category: NewsCategory = Field(default=NewsCategory.GENERAL, description="话题分类")
     age_group: AgeGroup = Field(..., description="年龄组")
@@ -479,7 +479,7 @@ class MorningShowRateLimitResponse(BaseModel):
 
 
 class MorningShowGenerationMetadata(BaseModel):
-    """Morning Show 生成元数据"""
+    """Kids Daily 生成元数据"""
     generation_id: str = Field(..., description="生成任务 ID")
     safety_score: float = Field(..., ge=0.0, le=1.0, description="内容安全分数")
     used_mock: bool = Field(default=False, description="是否使用 mock fallback")
@@ -489,13 +489,13 @@ class MorningShowGenerationMetadata(BaseModel):
 
 
 class MorningShowResponse(BaseModel):
-    """Morning Show 生成响应"""
+    """Kids Daily 生成响应"""
     episode: MorningShowEpisode = Field(..., description="节目数据")
     metadata: MorningShowGenerationMetadata = Field(..., description="生成元数据")
 
 
 class PaginatedMorningShowResponse(BaseModel):
-    """Morning Show 节目列表响应"""
+    """Kids Daily 节目列表响应"""
     items: List[MorningShowEpisode] = Field(default_factory=list, description="节目列表")
     total: int = Field(..., description="总数")
     limit: int = Field(..., description="分页大小")
@@ -528,7 +528,7 @@ class SubscriptionListResponse(BaseModel):
 
 
 class MorningShowTrackEvent(str, Enum):
-    """Morning Show 播放事件类型"""
+    """Kids Daily 播放事件类型"""
     START = "start"
     PROGRESS = "progress"
     COMPLETE = "complete"
@@ -536,7 +536,7 @@ class MorningShowTrackEvent(str, Enum):
 
 
 class MorningShowTrackRequest(BaseModel):
-    """Morning Show 播放行为跟踪请求"""
+    """Kids Daily 播放行为跟踪请求"""
     child_id: str = Field(..., min_length=1, max_length=100, description="儿童 ID")
     episode_id: str = Field(..., min_length=1, description="节目 ID")
     topic: NewsCategory = Field(..., description="节目话题")
@@ -547,7 +547,7 @@ class MorningShowTrackRequest(BaseModel):
 
 
 class MorningShowTrackResponse(BaseModel):
-    """Morning Show 跟踪响应"""
+    """Kids Daily 跟踪响应"""
     status: str = Field(..., description="状态")
     topic_score: float = Field(..., description="当前话题参与度分数")
     profile_updated_at: datetime = Field(default_factory=datetime.now, description="偏好更新时间")
@@ -829,7 +829,7 @@ class LibraryItem(BaseModel):
     status: Optional[str] = Field(None, description="Session status")
     # News specific
     category: Optional[str] = Field(None, description="News category")
-    # Morning Show specific
+    # Kids Daily specific
     duration_seconds: Optional[int] = Field(None, description="Episode duration in seconds")
     is_new: Optional[bool] = Field(None, description="Whether the episode is unplayed/new")
 

@@ -1,4 +1,4 @@
-"""Morning Show dialogue agent (#90).
+"""Kids Daily dialogue agent (#90).
 
 Transforms news content into a dual-character (plus optional guest) dialogue script.
 Uses Claude Agent SDK with MCP tool access for live generation.
@@ -67,7 +67,7 @@ class DialogueLineOutput(BaseModel):
 
 
 class DialogueScriptOutput(BaseModel):
-    """Structured output for Morning Show dialogue generation."""
+    """Structured output for Kids Daily dialogue generation."""
     lines: List[DialogueLineOutput] = []
     total_duration: float = 0.0
     guest_character: str = "Professor Owl"
@@ -436,7 +436,7 @@ async def generate_morning_show_dialogue(
     child_id: Optional[str] = None,
     news_url: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Generate Morning Show dialogue script with safety metadata."""
+    """Generate Kids Daily dialogue script with safety metadata."""
 
     source_text = _clean_source_text(news_text, news_url)
     topic = _headline_from_text(source_text)
@@ -488,7 +488,7 @@ async def convert_news_to_morning_show(
     category: str,
     news_url: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Compose kid summary + dialogue script payload for Morning Show."""
+    """Compose kid summary + dialogue script payload for Kids Daily."""
 
     base = await convert_news_to_kids(
         news_text=news_text,
@@ -508,7 +508,7 @@ async def convert_news_to_morning_show(
     )
 
     return {
-        "kid_title": base.get("kid_title", "Morning Show"),
+        "kid_title": base.get("kid_title", "Kids Daily"),
         "kid_content": base.get("kid_content", ""),
         "why_care": base.get("why_care", ""),
         "key_concepts": base.get("key_concepts", []),
@@ -529,9 +529,9 @@ async def stream_morning_show_generation(
     category: str,
     news_url: Optional[str] = None,
 ) -> AsyncGenerator[Dict[str, Any], None]:
-    """Stream Morning Show generation progress events."""
+    """Stream Kids Daily generation progress events."""
 
-    yield {"type": "status", "data": {"stage": "started", "message": "Starting Morning Show generation"}}
+    yield {"type": "status", "data": {"stage": "started", "message": "Starting Kids Daily generation"}}
     yield {"type": "progress", "data": {"percent": 25, "message": "Simplifying news for kids"}}
     yield {"type": "progress", "data": {"percent": 55, "message": "Generating dialogue script"}}
 
@@ -545,7 +545,7 @@ async def stream_morning_show_generation(
 
     yield {"type": "progress", "data": {"percent": 85, "message": "Validating safety and metadata"}}
     yield {"type": "result", "data": result}
-    yield {"type": "complete", "data": {"message": "Morning Show generation complete"}}
+    yield {"type": "complete", "data": {"message": "Kids Daily generation complete"}}
 
 
 def pick_age_voice(role: str, age_group: str) -> Tuple[str, float]:

@@ -27,7 +27,7 @@ export interface LibraryItem {
   status?: string
   // News
   category?: string
-  // Morning Show
+  // Kids Daily
   duration_seconds?: number
   is_new?: boolean
 }

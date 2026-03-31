@@ -237,7 +237,7 @@ const TYPE_BADGE: Record<LibraryItemType, { label: string; color: string }> = {
   'art-story': { label: 'Art Story', color: 'bg-primary/10 text-primary' },
   interactive: { label: 'Interactive', color: 'bg-secondary/10 text-secondary' },
   news: { label: 'News', color: 'bg-accent/10 text-accent' },
-  'morning-show': { label: 'Podcast', color: 'bg-orange-100 text-orange-700' },
+  'morning-show': { label: 'Kids Daily', color: 'bg-orange-100 text-orange-700' },
   'kids-news': { label: 'Kids News', color: 'bg-accent/10 text-accent' },
 }
 
@@ -354,7 +354,7 @@ function LibraryCard({
           ) : item.type === 'morning-show' ? (
             <div className="flex flex-col items-center gap-1">
               <span className="text-5xl">{PODCAST_CATEGORY_EMOJI[item.category || ''] || '\ud83c\udf99\ufe0f'}</span>
-              <span className="text-xs font-bold text-orange-600/80">Podcast</span>
+              <span className="text-xs font-bold text-orange-600/80">Kids Daily</span>
             </div>
           ) : (
             style.icon

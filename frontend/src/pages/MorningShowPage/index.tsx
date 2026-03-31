@@ -183,14 +183,14 @@ function MorningShowPage() {
   }, [episode, hasStarted, progressRatio])
 
   if (isLoading) {
-    return <div className="text-center py-16 text-gray-500">Loading Morning Show episode...</div>
+    return <div className="text-center py-16 text-gray-500">Loading Kids Daily episode...</div>
   }
 
   if (error || !episode) {
     return (
       <div className="max-w-2xl mx-auto text-center py-16 space-y-4">
         <h1 className="text-2xl font-bold text-gray-800">Episode not found</h1>
-        <p className="text-gray-500">This Morning Show episode may have been removed.</p>
+        <p className="text-gray-500">This Kids Daily episode may have been removed.</p>
         <Button onClick={() => navigate('/library')}>Back to Library</Button>
       </div>
     )

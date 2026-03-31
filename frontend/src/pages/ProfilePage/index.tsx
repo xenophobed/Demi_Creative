@@ -238,7 +238,7 @@ function ProfilePage() {
         </TiltCard>
       </motion.div>
 
-      {/* Morning Show settings shortcut */}
+      {/* Kids Daily settings shortcut */}
       <motion.section
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -246,8 +246,8 @@ function ProfilePage() {
       >
         <Card className="p-4 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="text-base font-bold text-gray-800">Morning Show Preferences</h2>
-            <p className="text-sm text-gray-500">Manage topic channels for Daily Drop episodes.</p>
+            <h2 className="text-base font-bold text-gray-800">Kids Daily Preferences</h2>
+            <p className="text-sm text-gray-500">Manage topic channels for Kids Daily episodes.</p>
           </div>
           <Button
             size="sm"

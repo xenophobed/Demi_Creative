@@ -209,7 +209,7 @@ export interface NewsToKidsResponse {
 }
 
 // ============================================================================
-// Morning Show Types
+// Kids Daily Types
 // ============================================================================
 
 export type DialogueRole = 'curious_kid' | 'fun_expert' | 'guest';

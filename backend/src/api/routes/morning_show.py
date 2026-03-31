@@ -1,4 +1,4 @@
-"""Morning Show API routes (#93)."""
+"""Kids Daily API routes (#93)."""
 
 from __future__ import annotations
 
@@ -61,7 +61,7 @@ from ..models import (
 
 router = APIRouter(
     prefix="/api/v1/morning-show",
-    tags=["Morning Show"],
+    tags=["Kids Daily"],
 )
 
 
@@ -329,7 +329,7 @@ def _story_analysis_to_episode(story: Dict[str, Any]) -> MorningShowEpisode:
         child_id=story.get("child_id", ""),
         age_group=story.get("age_group", "6-8"),
         category=category,
-        kid_title=analysis.get("kid_title", "Morning Show"),
+        kid_title=analysis.get("kid_title", "Kids Daily"),
         kid_content=story.get("story", {}).get("text", ""),
         why_care=analysis.get("why_care", ""),
         key_concepts=key_concepts,
@@ -401,7 +401,7 @@ async def _build_episode(
     except Exception:
         # Graceful fallback to deterministic baseline conversion
         generated = {
-            "kid_title": f"Morning Show: {request.category.value.title()}",
+            "kid_title": f"Kids Daily: {request.category.value.title()}",
             "kid_content": source_text,
             "why_care": "This topic helps kids understand how the world works.",
             "key_concepts": [],
@@ -438,7 +438,7 @@ async def _build_episode(
     episode_id = str(uuid.uuid4())
     illustrations = await _generate_illustrations(
         episode_id=episode_id,
-        kid_title=generated.get("kid_title", "Morning Show"),
+        kid_title=generated.get("kid_title", "Kids Daily"),
         topic=request.category.value,
         age_group=request.age_group.value,
     )
@@ -455,7 +455,7 @@ async def _build_episode(
         child_id=child_id,
         age_group=request.age_group,
         category=request.category,
-        kid_title=generated.get("kid_title", "Morning Show"),
+        kid_title=generated.get("kid_title", "Kids Daily"),
         kid_content=generated.get("kid_content", ""),
         why_care=generated.get("why_care", ""),
         key_concepts=key_concepts,
@@ -612,7 +612,7 @@ async def _build_episode(
 @router.post(
     "/generate",
     response_model=MorningShowResponse,
-    summary="Generate a Morning Show episode",
+    summary="Generate a Kids Daily episode",
 )
 async def generate_morning_show(
     request: MorningShowRequest,
@@ -629,7 +629,7 @@ _ON_DEMAND_MAX_PER_HOUR = 3
 @router.post(
     "/generate-now",
     response_model=MorningShowResponse,
-    summary="Generate a Morning Show episode on demand (auto-fetches headlines)",
+    summary="Generate a Kids Daily episode on demand (auto-fetches headlines)",
     responses={
         429: {"model": MorningShowRateLimitResponse, "description": "Rate limit exceeded"},
     },
@@ -695,7 +695,7 @@ async def generate_morning_show_on_demand(
 
 @router.post(
     "/generate-now/stream",
-    summary="Generate a Morning Show episode on demand with SSE progress",
+    summary="Generate a Kids Daily episode on demand with SSE progress",
     responses={
         429: {"model": MorningShowRateLimitResponse, "description": "Rate limit exceeded"},
     },
@@ -806,7 +806,7 @@ async def generate_morning_show_on_demand_stream(
 
             # Phase 5: complete
             yield f"event: result\ndata: {json.dumps(response.model_dump(mode='json'), ensure_ascii=False)}\n\n"
-            yield f"event: complete\ndata: {json.dumps({'phase': 'complete', 'message': 'Morning Show generation complete'}, ensure_ascii=False)}\n\n"
+            yield f"event: complete\ndata: {json.dumps({'phase': 'complete', 'message': 'Kids Daily generation complete'}, ensure_ascii=False)}\n\n"
         except Exception as exc:
             logger.error("On-demand morning show build failed: %s", exc)
             yield f"event: error\ndata: {json.dumps({'phase': 'error', 'message': '节目生成失败，请稍后重试 / Episode generation failed, please try again later'}, ensure_ascii=False)}\n\n"
@@ -825,7 +825,7 @@ async def generate_morning_show_on_demand_stream(
 
 @router.post(
     "/generate/stream",
-    summary="Generate a Morning Show episode with SSE progress",
+    summary="Generate a Kids Daily episode with SSE progress",
 )
 async def generate_morning_show_stream(
     http_request: Request,
@@ -872,7 +872,7 @@ async def generate_morning_show_stream(
         await usage_repo.increment(user.user_id, "morning_show")  # quota tracking (#314)
 
         yield f"event: result\ndata: {json.dumps(response.model_dump(mode='json'), ensure_ascii=False)}\n\n"
-        yield f"event: complete\ndata: {json.dumps({'message': 'Morning Show generation complete'}, ensure_ascii=False)}\n\n"
+        yield f"event: complete\ndata: {json.dumps({'message': 'Kids Daily generation complete'}, ensure_ascii=False)}\n\n"
 
     return StreamingResponse(
         event_generator(),
@@ -888,7 +888,7 @@ async def generate_morning_show_stream(
 @router.get(
     "/episode/{episode_id}",
     response_model=MorningShowEpisode,
-    summary="Get a Morning Show episode by ID",
+    summary="Get a Kids Daily episode by ID",
 )
 async def get_morning_show_episode(
     episode_id: str,
@@ -907,7 +907,7 @@ async def get_morning_show_episode(
 @router.get(
     "/episodes/{child_id}",
     response_model=PaginatedMorningShowResponse,
-    summary="List Morning Show episodes for a child",
+    summary="List Kids Daily episodes for a child",
 )
 async def list_morning_show_episodes(
     child_id: str,
@@ -940,7 +940,7 @@ async def list_morning_show_episodes(
 @router.post(
     "/track",
     response_model=MorningShowTrackResponse,
-    summary="Track Morning Show playback engagement",
+    summary="Track Kids Daily playback engagement",
 )
 async def track_morning_show_engagement(
     request: MorningShowTrackRequest,

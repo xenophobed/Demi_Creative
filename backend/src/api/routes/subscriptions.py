@@ -1,4 +1,4 @@
-"""Subscription CRUD routes for Morning Show topics (#94)."""
+"""Subscription CRUD routes for Kids Daily topics (#94)."""
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
@@ -28,7 +28,7 @@ router = APIRouter(
     "",
     response_model=SubscriptionResponse,
     status_code=status.HTTP_201_CREATED,
-    summary="Subscribe to a Morning Show topic",
+    summary="Subscribe to a Kids Daily topic",
 )
 async def subscribe_topic(
     request: SubscriptionRequest,
