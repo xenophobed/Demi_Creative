@@ -332,36 +332,38 @@ function MorningShowPage() {
             <p className="text-sm text-gray-600 leading-relaxed">{episode.kid_content}</p>
           </Card>
 
-          {isFinished && (
-            <>
-              <Card>
-                <h3 className="text-base font-bold text-gray-800 mb-2">Why Should I Care?</h3>
-                <p className="text-sm text-gray-600">{episode.why_care}</p>
-              </Card>
+          {episode.why_care && (
+            <Card>
+              <h3 className="text-base font-bold text-gray-800 mb-2">Why Should I Care?</h3>
+              <p className="text-sm text-gray-600">{episode.why_care}</p>
+            </Card>
+          )}
 
-              <Card>
-                <h3 className="text-base font-bold text-gray-800 mb-2">Key Concepts</h3>
-                <div className="space-y-2">
-                  {episode.key_concepts.map((concept) => (
-                    <div key={concept.term} className="text-sm bg-gray-50 rounded-lg p-2">
-                      <span className="font-semibold text-gray-800">{concept.emoji} {concept.term}:</span>{' '}
-                      <span className="text-gray-600">{concept.explanation}</span>
-                    </div>
-                  ))}
-                </div>
-              </Card>
+          {episode.key_concepts.length > 0 && (
+            <Card>
+              <h3 className="text-base font-bold text-gray-800 mb-2">Key Concepts</h3>
+              <div className="space-y-2">
+                {episode.key_concepts.map((concept) => (
+                  <div key={concept.term} className="text-sm bg-gray-50 rounded-lg p-2">
+                    <span className="font-semibold text-gray-800">{concept.emoji} {concept.term}:</span>{' '}
+                    <span className="text-gray-600">{concept.explanation}</span>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
 
-              <Card>
-                <h3 className="text-base font-bold text-gray-800 mb-2">Think About It</h3>
-                <div className="space-y-2">
-                  {episode.interactive_questions.map((q, idx) => (
-                    <div key={idx} className="text-sm bg-primary/5 border border-primary/15 rounded-lg p-2">
-                      <p className="text-gray-700">{q.emoji} {q.question}</p>
-                    </div>
-                  ))}
-                </div>
-              </Card>
-            </>
+          {episode.interactive_questions.length > 0 && (
+            <Card>
+              <h3 className="text-base font-bold text-gray-800 mb-2">Think About It</h3>
+              <div className="space-y-2">
+                {episode.interactive_questions.map((q, idx) => (
+                  <div key={idx} className="text-sm bg-primary/5 border border-primary/15 rounded-lg p-2">
+                    <p className="text-gray-700">{q.emoji} {q.question}</p>
+                  </div>
+                ))}
+              </div>
+            </Card>
           )}
         </aside>
       </div>

@@ -395,11 +395,23 @@ async def image_to_story(
                 if isinstance(content, list):
                     for block in content:
                         if isinstance(block, ToolResultBlock):
-                            # Try to extract audio path from TTS result
+                            # Try to extract audio/styled image path from tool result
                             result_content = getattr(block, 'content', None)
-                            if result_content and isinstance(result_content, str):
+                            result_text = None
+                            if isinstance(result_content, str):
+                                result_text = result_content
+                            elif isinstance(result_content, list):
+                                for item in result_content:
+                                    if isinstance(item, dict) and item.get('type') == 'text':
+                                        result_text = item.get('text')
+                                        break
+                                    text_val = getattr(item, 'text', None)
+                                    if text_val:
+                                        result_text = text_val
+                                        break
+                            if result_text:
                                 try:
-                                    result_json = json.loads(result_content)
+                                    result_json = json.loads(result_text)
                                     if 'audio_path' in result_json:
                                         audio_path = result_json['audio_path']
                                     if 'styled_image_path' in result_json:
@@ -657,9 +669,21 @@ async def stream_image_to_story(
                             elif isinstance(block, ToolResultBlock):
                                 # Try to extract audio/styled image path from tool results
                                 result_content = getattr(block, 'content', None)
-                                if result_content and isinstance(result_content, str):
+                                result_text = None
+                                if isinstance(result_content, str):
+                                    result_text = result_content
+                                elif isinstance(result_content, list):
+                                    for item in result_content:
+                                        if isinstance(item, dict) and item.get('type') == 'text':
+                                            result_text = item.get('text')
+                                            break
+                                        text_val = getattr(item, 'text', None)
+                                        if text_val:
+                                            result_text = text_val
+                                            break
+                                if result_text:
                                     try:
-                                        result_json = json.loads(result_content)
+                                        result_json = json.loads(result_text)
                                         if 'audio_path' in result_json:
                                             audio_path = result_json['audio_path']
                                             yield {

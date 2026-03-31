@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useEffect, useMemo, useState, useCallback, useRef } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import Card from '@/components/common/Card'
@@ -24,8 +24,10 @@ const onboardKey = (childId: string) => `morning_show_onboarding_done_${childId}
 
 function MorningShowSubscriptionsPage() {
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const { currentChild, defaultChildId } = useChildStore()
   const childId = currentChild?.child_id || defaultChildId
+  const ageGroup = currentChild?.age_group || '6-8'
 
   const [pendingTopic, setPendingTopic] = useState<NewsCategory | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -34,6 +36,54 @@ function MorningShowSubscriptionsPage() {
   const [onboardingStep, setOnboardingStep] = useState(0)
   const [draftTopics, setDraftTopics] = useState<Set<NewsCategory>>(new Set())
   const [onboardingBusy, setOnboardingBusy] = useState(false)
+
+  // On-demand generation state
+  const [generatingTopic, setGeneratingTopic] = useState<NewsCategory | null>(null)
+  const [rateLimitRetry, setRateLimitRetry] = useState<{ topic: NewsCategory; seconds: number } | null>(null)
+  const retryTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  const handleListenNow = useCallback(async (topic: NewsCategory) => {
+    if (!childId || generatingTopic) return
+
+    setError(null)
+    setGeneratingTopic(topic)
+
+    try {
+      const result = await storyService.generateMorningShowOnDemand({
+        child_id: childId,
+        category: topic,
+        age_group: ageGroup,
+      })
+      navigate(`/morning-show/${result.episode.episode_id}`)
+    } catch (err: unknown) {
+      const status = (err as { response?: { status?: number } })?.response?.status
+      const data = (err as { response?: { data?: { message?: string; retry_after?: number } } })?.response?.data
+
+      if (status === 429) {
+        const retryAfter = data?.retry_after ?? 60
+        setRateLimitRetry({ topic, seconds: retryAfter })
+        if (retryTimerRef.current) clearInterval(retryTimerRef.current)
+        retryTimerRef.current = setInterval(() => {
+          setRateLimitRetry((prev) => {
+            if (!prev || prev.seconds <= 1) {
+              if (retryTimerRef.current) clearInterval(retryTimerRef.current)
+              return null
+            }
+            return { ...prev, seconds: prev.seconds - 1 }
+          })
+        }, 1000)
+      } else if (status === 400) {
+        setError('Please subscribe to this topic first before listening.')
+      } else if (status === 502) {
+        setError('Headlines are temporarily unavailable. Please try again later.')
+      } else {
+        const message = err instanceof Error ? err.message : 'Failed to generate episode'
+        setError(message)
+      }
+    } finally {
+      setGeneratingTopic(null)
+    }
+  }, [childId, ageGroup, generatingTopic, navigate])
 
   const { data, isLoading } = useQuery({
     queryKey: ['morning-show-subscriptions', childId],
@@ -121,17 +171,22 @@ function MorningShowSubscriptionsPage() {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-800">Morning Show Channels</h1>
-          <p className="text-sm text-gray-500">Pick up to five channels for Daily Drop episodes.</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className={`text-sm px-3 py-1 rounded-full ${activeCount >= MAX_SUBSCRIPTIONS ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-600'}`}>
-            {activeCount}/{MAX_SUBSCRIPTIONS} selected
+      <div className="text-center space-y-2">
+        <motion.span
+          className="text-5xl inline-block"
+          animate={{ scale: [1, 1.15, 1] }}
+          transition={{ duration: 2, repeat: Infinity }}
+        >
+          🎧
+        </motion.span>
+        <h1 className="text-2xl md:text-3xl font-bold text-gray-800">Podcast time!</h1>
+        <p className="text-gray-600">Pick your favorite channels (up to {MAX_SUBSCRIPTIONS})</p>
+        <div className="flex items-center justify-center gap-3">
+          <div className={`text-sm px-3 py-1 rounded-full ${activeCount >= MAX_SUBSCRIPTIONS ? 'bg-amber-100 text-amber-700' : 'bg-primary/10 text-primary'}`}>
+            {activeCount}/{MAX_SUBSCRIPTIONS} picked
           </div>
-          <Link to="/library">
-            <Button variant="outline" size="sm">Back to Library</Button>
+          <Link to="/news">
+            <Button variant="outline" size="sm">Back to News</Button>
           </Link>
         </div>
       </div>
@@ -175,16 +230,34 @@ function MorningShowSubscriptionsPage() {
 
                     <p className="text-sm text-gray-600 min-h-[48px]">{card.description}</p>
 
-                    <Button
-                      size="sm"
-                      variant={active ? 'outline' : 'primary'}
-                      className="w-full"
-                      isLoading={busy}
-                      disabled={busy || disabled}
-                      onClick={() => toggleTopic(card.topic)}
-                    >
-                      {active ? 'Unsubscribe' : 'Subscribe'}
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant={active ? 'outline' : 'primary'}
+                        className="flex-1"
+                        isLoading={busy}
+                        disabled={busy || disabled}
+                        onClick={() => toggleTopic(card.topic)}
+                      >
+                        {active ? 'Unsubscribe' : 'Subscribe'}
+                      </Button>
+
+                      {active && (
+                        <Button
+                          size="sm"
+                          variant="primary"
+                          className="flex-1"
+                          isLoading={generatingTopic === card.topic}
+                          disabled={generatingTopic !== null}
+                          onClick={() => handleListenNow(card.topic)}
+                          leftIcon={<span>&#9654;</span>}
+                        >
+                          {rateLimitRetry?.topic === card.topic
+                            ? `Wait ${rateLimitRetry.seconds}s`
+                            : 'Listen Now'}
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 </Card>
               </motion.div>
@@ -198,8 +271,8 @@ function MorningShowSubscriptionsPage() {
           <Card className="w-full max-w-2xl">
             {onboardingStep === 0 && (
               <div className="space-y-4">
-                <h2 className="text-2xl font-bold text-gray-800">Welcome to Morning Show</h2>
-                <p className="text-gray-600">Pick your favorite topic channels and we will prepare a Daily Drop episode for tomorrow morning.</p>
+                <h2 className="text-2xl font-bold text-gray-800">Welcome to Podcast time!</h2>
+                <p className="text-gray-600">Pick your favorite topics and listen to fun news anytime!</p>
                 <div className="flex gap-2 justify-end">
                   <Button variant="outline" onClick={() => finishOnboarding(true)} isLoading={onboardingBusy}>Skip</Button>
                   <Button onClick={() => setOnboardingStep(1)}>Start Setup</Button>
@@ -235,8 +308,8 @@ function MorningShowSubscriptionsPage() {
 
             {onboardingStep === 2 && (
               <div className="space-y-4">
-                <h2 className="text-2xl font-bold text-gray-800">You&apos;re all set</h2>
-                <p className="text-gray-600">Your first Morning Show episode will be ready tomorrow morning. You can update channels anytime.</p>
+                <h2 className="text-2xl font-bold text-gray-800">You&apos;re all set!</h2>
+                <p className="text-gray-600">Tap any topic on the News page to start listening right away!</p>
                 <div className="flex flex-wrap gap-2">
                   {Array.from(draftTopics).map((topic) => {
                     const card = TOPIC_CARDS.find((item) => item.topic === topic)
@@ -250,6 +323,19 @@ function MorningShowSubscriptionsPage() {
                 <div className="flex gap-2 justify-end">
                   <Button variant="outline" onClick={() => setOnboardingStep(1)}>Back</Button>
                   <Button onClick={() => finishOnboarding(false)} isLoading={onboardingBusy}>Finish Setup</Button>
+                  <Button
+                    variant="primary"
+                    leftIcon={<span>&#9654;</span>}
+                    isLoading={generatingTopic !== null}
+                    disabled={draftTopics.size === 0 || onboardingBusy}
+                    onClick={async () => {
+                      await finishOnboarding(false)
+                      const firstTopic = Array.from(draftTopics)[0]
+                      if (firstTopic) handleListenNow(firstTopic)
+                    }}
+                  >
+                    {'Listen Now'}
+                  </Button>
                 </div>
               </div>
             )}

@@ -265,6 +265,42 @@ class StoryRepository:
         )
         return row['count'] if row else 0
 
+    async def count_recent_on_demand(self, child_id: str, since_iso: str) -> int:
+        """Count on-demand morning_show episodes for a child created after *since_iso*.
+
+        Uses JSON analysis field to identify source = 'on_demand'.
+        """
+        row = await self._db.fetchone(
+            """
+            SELECT COUNT(*) as count FROM stories
+            WHERE child_id = ?
+              AND story_type = 'morning_show'
+              AND created_at > ?
+              AND json_extract(analysis, '$.source') = 'on_demand'
+            """,
+            (child_id, since_iso),
+        )
+        return int(row["count"]) if row else 0
+
+    async def get_oldest_recent_on_demand_ts(self, child_id: str, since_iso: str) -> Optional[str]:
+        """Return the created_at of the oldest on-demand episode since *since_iso*.
+
+        Used to compute retry_after for rate limiting.
+        """
+        row = await self._db.fetchone(
+            """
+            SELECT created_at FROM stories
+            WHERE child_id = ?
+              AND story_type = 'morning_show'
+              AND created_at > ?
+              AND json_extract(analysis, '$.source') = 'on_demand'
+            ORDER BY created_at ASC
+            LIMIT 1
+            """,
+            (child_id, since_iso),
+        )
+        return row["created_at"] if row else None
+
     async def get_with_user(self, story_id: str) -> Optional[Dict[str, Any]]:
         """
         Get a story with its author's information (JOIN query).

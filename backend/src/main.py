@@ -6,6 +6,7 @@ Children's Creative Workshop API Service
 
 import os
 from datetime import datetime
+from pathlib import Path
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
@@ -22,8 +23,9 @@ from .services.morning_show_scheduler import daily_drop_scheduler
 from .services.retention_scheduler import retention_scheduler
 
 
-# Load environment variables
-load_dotenv()
+# Load environment variables from backend/.env regardless of cwd
+_backend_dir = Path(__file__).resolve().parent.parent
+load_dotenv(_backend_dir / ".env")
 
 
 # ============================================================================

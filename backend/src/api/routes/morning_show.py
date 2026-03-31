@@ -7,14 +7,14 @@ import json
 import logging
 import os
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, AsyncGenerator, Dict, List
 
 logger = logging.getLogger(__name__)
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
 try:
     from openai import OpenAI
@@ -25,8 +25,10 @@ from ...agents.morning_show_agent import (
     convert_news_to_morning_show,
     stream_morning_show_generation,
 )
-from ...mcp_servers import fetch_article_text
-from ...services.database import db_manager, preference_repo, story_repo
+from ...mcp_servers import fetch_article_text as _raw_fetch_article
+fetch_article_text = getattr(_raw_fetch_article, "handler", _raw_fetch_article)
+from ...services.database import db_manager, preference_repo, story_repo, subscription_repo
+from ...services.news_headline_fetcher import fetch_news_text
 from ...services.provenance_tracker import ProvenanceTracker
 from ...services.models.artifact_models import (
     ArtifactType,
@@ -47,6 +49,8 @@ from ..models import (
     KeyConceptResponse,
     MorningShowEpisode,
     MorningShowGenerationMetadata,
+    MorningShowOnDemandRequest,
+    MorningShowRateLimitResponse,
     MorningShowRequest,
     MorningShowResponse,
     MorningShowTrackRequest,
@@ -131,7 +135,8 @@ async def _safe_illustration_description(description: str, age_group: str) -> st
     if the content fails the safety gate.
     """
     try:
-        from ...mcp_servers import check_content_safety
+        from ...mcp_servers import check_content_safety as _raw_safety
+        check_content_safety = getattr(_raw_safety, "handler", _raw_safety)
         import json as _json
 
         age_map = {"3-5": 4, "6-8": 7, "9-12": 11}
@@ -372,6 +377,7 @@ async def _fetch_text_from_url(url: str) -> str:
 async def _build_episode(
     request: MorningShowRequest,
     user: UserData,
+    source: str = "manual",
 ) -> MorningShowResponse:
     if not request.news_url and not request.news_text:
         raise HTTPException(
@@ -496,6 +502,7 @@ async def _build_episode(
             "characters": [{"name": generated.get("guest_character", "Professor Owl")}],
             "analysis": {
                 "story_type": "morning_show",
+                "source": source,
                 "category": request.category.value,
                 "news_url": request.news_url,
                 "kid_title": episode.kid_title,
@@ -614,6 +621,201 @@ async def generate_morning_show(
     result = await _build_episode(request, user)
     await usage_repo.increment(user.user_id, "morning_show")  # quota tracking (#314)
     return result
+
+
+_ON_DEMAND_MAX_PER_HOUR = 3
+
+
+@router.post(
+    "/generate-now",
+    response_model=MorningShowResponse,
+    summary="Generate a Morning Show episode on demand (auto-fetches headlines)",
+    responses={
+        429: {"model": MorningShowRateLimitResponse, "description": "Rate limit exceeded"},
+    },
+)
+async def generate_morning_show_on_demand(
+    request: MorningShowOnDemandRequest,
+    user: UserData = Depends(check_generation_quota),
+):
+    """On-demand generation: fetches live headlines and builds an episode (#304, #305)."""
+    topic = request.category.value
+
+    # 1. Verify the child has an active subscription for this category
+    has_sub = await subscription_repo.has_active_subscription(
+        user.user_id, request.child_id, topic,
+    )
+    if not has_sub:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="请先订阅该频道 (Subscribe to this topic first)",
+        )
+
+    # 2. Rate limit: max N on-demand generations per child per hour
+    since = (datetime.now() - timedelta(hours=1)).isoformat()
+    recent_count = await story_repo.count_recent_on_demand(request.child_id, since)
+    if recent_count >= _ON_DEMAND_MAX_PER_HOUR:
+        oldest_ts = await story_repo.get_oldest_recent_on_demand_ts(request.child_id, since)
+        retry_after = 3600  # fallback
+        if oldest_ts:
+            try:
+                oldest_dt = datetime.fromisoformat(oldest_ts)
+                retry_after = max(0, int((oldest_dt + timedelta(hours=1) - datetime.now()).total_seconds()))
+            except (ValueError, TypeError):
+                pass
+        return JSONResponse(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            content={
+                "message": f"你今天听了好多！{retry_after // 60} 分钟后再来吧",
+                "retry_after": retry_after,
+            },
+            headers={"Retry-After": str(retry_after)},
+        )
+
+    # 3. Fetch live headlines
+    news_text = await fetch_news_text(topic)
+    if news_text is None:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="现在找不到新鲜新闻，过几分钟再试试！ (Could not fetch headlines)",
+        )
+
+    # 4. Build episode using the shared pipeline
+    build_request = MorningShowRequest(
+        child_id=request.child_id,
+        age_group=request.age_group,
+        category=request.category,
+        news_text=news_text,
+        news_url=None,
+    )
+    result = await _build_episode(build_request, user, source="on_demand")
+    await usage_repo.increment(user.user_id, "morning_show")  # quota tracking (#314)
+    return result
+
+
+@router.post(
+    "/generate-now/stream",
+    summary="Generate a Morning Show episode on demand with SSE progress",
+    responses={
+        429: {"model": MorningShowRateLimitResponse, "description": "Rate limit exceeded"},
+    },
+)
+async def generate_morning_show_on_demand_stream(
+    http_request: Request,
+    request: MorningShowOnDemandRequest,
+    user: UserData = Depends(check_generation_quota),
+):
+    """On-demand SSE streaming generation: fetches live headlines and streams progress (#306)."""
+    topic = request.category.value
+
+    # 1. Verify the child has an active subscription for this category
+    has_sub = await subscription_repo.has_active_subscription(
+        user.user_id, request.child_id, topic,
+    )
+    if not has_sub:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="请先订阅该频道 (Subscribe to this topic first)",
+        )
+
+    # 2. Rate limit: max N on-demand generations per child per hour
+    since = (datetime.now() - timedelta(hours=1)).isoformat()
+    recent_count = await story_repo.count_recent_on_demand(request.child_id, since)
+    if recent_count >= _ON_DEMAND_MAX_PER_HOUR:
+        oldest_ts = await story_repo.get_oldest_recent_on_demand_ts(request.child_id, since)
+        retry_after = 3600  # fallback
+        if oldest_ts:
+            try:
+                oldest_dt = datetime.fromisoformat(oldest_ts)
+                retry_after = max(0, int((oldest_dt + timedelta(hours=1) - datetime.now()).total_seconds()))
+            except (ValueError, TypeError):
+                pass
+        return JSONResponse(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            content={
+                "message": f"你今天听了好多！{retry_after // 60} 分钟后再来吧",
+                "retry_after": retry_after,
+            },
+            headers={"Retry-After": str(retry_after)},
+        )
+
+    # 3. Fetch live headlines BEFORE entering SSE generator
+    news_text = await fetch_news_text(topic)
+    if news_text is None:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="现在找不到新鲜新闻，过几分钟再试试！ (Could not fetch headlines)",
+        )
+
+    # Build the inner MorningShowRequest for _build_episode
+    build_request = MorningShowRequest(
+        child_id=request.child_id,
+        age_group=request.age_group,
+        category=request.category,
+        news_text=news_text,
+        news_url=None,
+    )
+
+    async def event_generator() -> AsyncGenerator[str, None]:
+        # Phase 1: fetching_news (already done, report it)
+        yield f"event: status\ndata: {json.dumps({'phase': 'fetching_news', 'message': '正在获取新闻...'}, ensure_ascii=False)}\n\n"
+
+        if await http_request.is_disconnected():
+            logger.info("Client disconnected during on-demand stream, aborting")
+            return
+
+        # Phase 2: generating_script — stream from agent
+        yield f"event: status\ndata: {json.dumps({'phase': 'generating_script', 'message': '正在生成脚本...'}, ensure_ascii=False)}\n\n"
+
+        async for event in stream_morning_show_generation(
+            news_text=news_text,
+            age_group=build_request.age_group.value,
+            child_id=build_request.child_id,
+            category=build_request.category.value,
+            news_url=None,
+        ):
+            if await http_request.is_disconnected():
+                logger.info("Client disconnected during on-demand script generation, aborting")
+                return
+
+            event_type = event.get("type", "status")
+            yield f"event: {event_type}\ndata: {json.dumps(event.get('data', {}), ensure_ascii=False)}\n\n"
+            if event_type == "result":
+                break
+
+        if await http_request.is_disconnected():
+            logger.info("Client disconnected before on-demand audio/illustration, skipping")
+            return
+
+        # Phase 3: generating_audio
+        yield f"event: status\ndata: {json.dumps({'phase': 'generating_audio', 'message': '正在生成音频...'}, ensure_ascii=False)}\n\n"
+
+        if await http_request.is_disconnected():
+            return
+
+        # Phase 4: generating_illustrations
+        yield f"event: status\ndata: {json.dumps({'phase': 'generating_illustrations', 'message': '正在生成插画...'}, ensure_ascii=False)}\n\n"
+
+        if await http_request.is_disconnected():
+            return
+
+        # Build the full episode (audio + illustrations + persist)
+        response = await _build_episode(build_request, user, source="on_demand")
+        await usage_repo.increment(user.user_id, "morning_show")  # quota tracking (#314)
+
+        # Phase 5: complete
+        yield f"event: result\ndata: {json.dumps(response.model_dump(mode='json'), ensure_ascii=False)}\n\n"
+        yield f"event: complete\ndata: {json.dumps({'phase': 'complete', 'message': 'Morning Show generation complete'}, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.post(

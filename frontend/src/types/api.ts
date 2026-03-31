@@ -275,6 +275,17 @@ export interface MorningShowResponse {
   metadata: MorningShowGenerationMetadata;
 }
 
+export interface MorningShowOnDemandRequest {
+  child_id: string;
+  category: string;    // NewsCategory value
+  age_group: string;   // AgeGroup value
+}
+
+export interface MorningShowRateLimitResponse {
+  message: string;
+  retry_after: number;
+}
+
 export interface PaginatedMorningShowResponse {
   items: MorningShowEpisode[];
   total: number;

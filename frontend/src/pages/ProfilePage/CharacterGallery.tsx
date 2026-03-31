@@ -1,3 +1,4 @@
+import { useRef } from 'react'
 import { motion } from 'framer-motion'
 import Card from '@/components/common/Card'
 import type { MemoryCharacter } from '@/types/api'
@@ -19,15 +20,17 @@ const CARD_COLORS = [
 ]
 
 function CharacterGallery({ characters, isLoading }: CharacterGalleryProps) {
+  const scrollRef = useRef<HTMLDivElement>(null)
+
   if (isLoading) {
     return (
       <Card className="p-6">
         <h2 className="text-lg font-bold text-gray-800 mb-4">My Characters</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <div className="flex gap-3 overflow-hidden">
           {[0, 1, 2].map((i) => (
             <div
               key={i}
-              className="h-32 rounded-xl bg-gray-100 animate-pulse"
+              className="h-32 w-40 flex-shrink-0 rounded-xl bg-gray-100 animate-pulse"
             />
           ))}
         </div>
@@ -36,8 +39,15 @@ function CharacterGallery({ characters, isLoading }: CharacterGalleryProps) {
   }
 
   return (
-    <Card className="p-6">
-      <h2 className="text-lg font-bold text-gray-800 mb-4">My Characters</h2>
+    <Card className="p-6 overflow-hidden">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-lg font-bold text-gray-800">My Characters</h2>
+        {characters.length > 3 && (
+          <span className="text-xs text-gray-400 italic">
+            Swipe to see more →
+          </span>
+        )}
+      </div>
 
       {characters.length === 0 ? (
         <div className="text-center py-8">
@@ -47,11 +57,14 @@ function CharacterGallery({ characters, isLoading }: CharacterGalleryProps) {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <div
+          ref={scrollRef}
+          className="character-carousel"
+        >
           {characters.map((character, index) => (
             <motion.div
               key={character.name}
-              className={`relative rounded-xl border bg-gradient-to-br p-4 ${CARD_COLORS[index % CARD_COLORS.length]}`}
+              className={`character-carousel-card relative rounded-xl border bg-gradient-to-br p-4 ${CARD_COLORS[index % CARD_COLORS.length]}`}
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ delay: index * 0.05 }}
