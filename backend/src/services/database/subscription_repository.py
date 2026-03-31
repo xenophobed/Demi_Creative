@@ -110,6 +110,18 @@ class SubscriptionRepository:
         )
         return [self._row_to_dict(row) for row in rows]
 
+    async def has_active_subscription(self, user_id: str, child_id: str, topic: str) -> bool:
+        """Check if a specific topic subscription is active for a child."""
+        row = await self._db.fetchone(
+            """
+            SELECT 1 FROM topic_subscriptions
+            WHERE user_id = ? AND child_id = ? AND topic = ? AND is_active = 1
+            LIMIT 1
+            """,
+            (user_id, child_id, topic),
+        )
+        return row is not None
+
     async def list_all_active(self) -> List[Dict[str, Any]]:
         rows = await self._db.fetchall(
             """

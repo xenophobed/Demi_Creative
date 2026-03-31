@@ -237,8 +237,19 @@ const TYPE_BADGE: Record<LibraryItemType, { label: string; color: string }> = {
   'art-story': { label: 'Art Story', color: 'bg-primary/10 text-primary' },
   interactive: { label: 'Interactive', color: 'bg-secondary/10 text-secondary' },
   news: { label: 'News', color: 'bg-accent/10 text-accent' },
-  'morning-show': { label: 'Morning Show', color: 'bg-orange-100 text-orange-700' },
+  'morning-show': { label: 'Podcast', color: 'bg-orange-100 text-orange-700' },
   'kids-news': { label: 'Kids News', color: 'bg-accent/10 text-accent' },
+}
+
+const PODCAST_CATEGORY_EMOJI: Record<string, string> = {
+  space: '\ud83d\ude80',
+  animals: '\ud83d\udc3c',
+  technology: '\ud83e\udd16',
+  science: '\ud83d\udd2c',
+  nature: '\ud83c\udf3f',
+  culture: '\ud83c\udfad',
+  sports: '\u26bd',
+  general: '\ud83c\udf1f',
 }
 
 const CARD_STYLES: Record<LibraryItemType, {
@@ -263,7 +274,7 @@ const CARD_STYLES: Record<LibraryItemType, {
   },
   'morning-show': {
     icon: <Podcast size={36} className="text-orange-500/70" strokeWidth={1.5} />,
-    gradient: 'from-orange-200/40 via-rose-100/20 to-amber-200/40',
+    gradient: 'from-orange-200/50 via-yellow-100/30 to-rose-200/40',
     badgeColor: 'bg-orange-100 text-orange-700',
   },
   'kids-news': {
@@ -319,7 +330,7 @@ function LibraryCard({
     : item.type === 'interactive'
       ? 'Continue this adventure to unlock the next branch.'
       : item.type === 'morning-show'
-        ? 'Tap to play today\'s Morning Show episode.'
+        ? 'Tap to listen to this podcast episode!'
         : ''
 
   // Badge label: use category for news / morning-show
@@ -340,6 +351,11 @@ function LibraryCard({
               className="w-full h-full object-cover"
               onError={() => setImgError(true)}
             />
+          ) : item.type === 'morning-show' ? (
+            <div className="flex flex-col items-center gap-1">
+              <span className="text-5xl">{PODCAST_CATEGORY_EMOJI[item.category || ''] || '\ud83c\udf99\ufe0f'}</span>
+              <span className="text-xs font-bold text-orange-600/80">Podcast</span>
+            </div>
           ) : (
             style.icon
           )}
@@ -486,7 +502,7 @@ function ListRow({
     : item.type === 'interactive'
       ? 'Continue this adventure to see what happens next.'
       : item.type === 'morning-show'
-        ? 'Tap to play the latest Morning Show episode.'
+        ? 'Tap to listen to this podcast episode!'
         : ''
   const badgeLabel =
     (item.type === 'news' || item.type === 'morning-show') && item.category
@@ -511,6 +527,8 @@ function ListRow({
                 className="w-full h-full object-cover"
                 onError={() => setImgError(true)}
               />
+            ) : item.type === 'morning-show' ? (
+              <span className="text-3xl">{PODCAST_CATEGORY_EMOJI[item.category || ''] || '\ud83c\udf99\ufe0f'}</span>
             ) : (
               style.icon
             )}
@@ -1020,7 +1038,7 @@ function LibraryPage() {
         itemLabel={
           deleteTarget?.type === 'art-story' ? 'this art story' :
             deleteTarget?.type === 'interactive' ? 'this interactive story' :
-              deleteTarget?.type === 'morning-show' ? 'this Morning Show episode' : 'this news article'
+              deleteTarget?.type === 'morning-show' ? 'this podcast episode' : 'this news article'
         }
         onCancel={() => setDeleteTarget(null)}
         onConfirm={() => {

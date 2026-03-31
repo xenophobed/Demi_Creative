@@ -1144,6 +1144,38 @@
   border: 1px solid rgba(210, 190, 165, 0.2);
 }
 
+/* Character Carousel — horizontal snap scroll */
+.character-carousel {
+  display: flex;
+  gap: 0.75rem;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 0.5rem;
+
+  /* Hide scrollbar but keep functionality */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.character-carousel::-webkit-scrollbar {
+  display: none;
+}
+
+.character-carousel-card {
+  flex-shrink: 0;
+  width: 10rem;
+  min-height: 7rem;
+  scroll-snap-align: start;
+}
+
+@media (min-width: 640px) {
+  .character-carousel-card {
+    width: 11rem;
+  }
+}
+
 /* Action Buttons */
 .action-buttons {
   @apply flex flex-col sm:flex-row gap-3;

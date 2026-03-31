@@ -22,6 +22,7 @@ import type {
   NewsCategory,
   MorningShowTrackRequest,
   MorningShowTrackResponse,
+  MorningShowOnDemandRequest,
 } from '@/types/api'
 import { consumeSSEStream } from '../utils/sseStream'
 
@@ -415,6 +416,21 @@ export const storyService = {
   async getSubscriptions(childId: string): Promise<SubscriptionListResponse> {
     const response = await apiClient.get<SubscriptionListResponse>(
       `/subscriptions/${childId}`
+    )
+    return response.data
+  },
+
+  /**
+   * Generate Morning Show episode on-demand (instant)
+   */
+  async generateMorningShowOnDemand(
+    params: MorningShowOnDemandRequest,
+    signal?: AbortSignal
+  ): Promise<MorningShowResponse> {
+    const response = await apiClient.post<MorningShowResponse>(
+      '/morning-show/generate-now',
+      params,
+      { signal }
     )
     return response.data
   },

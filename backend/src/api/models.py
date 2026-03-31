@@ -465,6 +465,19 @@ class MorningShowRequest(BaseModel):
     category: NewsCategory = Field(default=NewsCategory.GENERAL, description="话题分类")
 
 
+class MorningShowOnDemandRequest(BaseModel):
+    """按需生成 Morning Show 请求 (#304)"""
+    child_id: str = Field(..., min_length=1, max_length=100, description="儿童 ID")
+    category: NewsCategory = Field(default=NewsCategory.GENERAL, description="话题分类")
+    age_group: AgeGroup = Field(..., description="年龄组")
+
+
+class MorningShowRateLimitResponse(BaseModel):
+    """速率限制响应 (#305)"""
+    message: str = Field(..., description="友好提示消息")
+    retry_after: int = Field(..., ge=0, description="距下次允许生成的秒数")
+
+
 class MorningShowGenerationMetadata(BaseModel):
     """Morning Show 生成元数据"""
     generation_id: str = Field(..., description="生成任务 ID")
