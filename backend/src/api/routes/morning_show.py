@@ -800,12 +800,17 @@ async def generate_morning_show_on_demand_stream(
             return
 
         # Build the full episode (audio + illustrations + persist)
-        response = await _build_episode(build_request, user, source="on_demand")
-        await usage_repo.increment(user.user_id, "morning_show")  # quota tracking (#314)
+        try:
+            response = await _build_episode(build_request, user, source="on_demand")
+            await usage_repo.increment(user.user_id, "morning_show")  # quota tracking (#314)
 
-        # Phase 5: complete
-        yield f"event: result\ndata: {json.dumps(response.model_dump(mode='json'), ensure_ascii=False)}\n\n"
-        yield f"event: complete\ndata: {json.dumps({'phase': 'complete', 'message': 'Morning Show generation complete'}, ensure_ascii=False)}\n\n"
+            # Phase 5: complete
+            yield f"event: result\ndata: {json.dumps(response.model_dump(mode='json'), ensure_ascii=False)}\n\n"
+            yield f"event: complete\ndata: {json.dumps({'phase': 'complete', 'message': 'Morning Show generation complete'}, ensure_ascii=False)}\n\n"
+        except Exception as exc:
+            logger.error("On-demand morning show build failed: %s", exc)
+            yield f"event: error\ndata: {json.dumps({'phase': 'error', 'message': '节目生成失败，请稍后重试 / Episode generation failed, please try again later'}, ensure_ascii=False)}\n\n"
+            return
 
     return StreamingResponse(
         event_generator(),
