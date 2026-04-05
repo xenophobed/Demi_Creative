@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { Howl } from 'howler'
 import { motion, AnimatePresence } from 'framer-motion'
 import type { AgeGroup } from '@/types/api'
 import apiClient from '@/api/client'
+import { storyService } from '@/api/services/storyService'
 
 export interface VoiceEntry {
   voice_id: string
@@ -80,8 +82,20 @@ function VoicePicker({ ageGroup, selectedVoice, onVoiceChange, className = '' }:
   const [voices, setVoices] = useState<VoiceEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [previewingId, setPreviewingId] = useState<string | null>(null)
+  const [previewLoading, setPreviewLoading] = useState<string | null>(null)
   const [expanded, setExpanded] = useState(false)
-  const previewAudioRef = useRef<HTMLAudioElement | null>(null)
+  const previewAudioRef = useRef<Howl | null>(null)
+
+  // Cleanup Howl on unmount
+  useEffect(() => {
+    return () => {
+      if (previewAudioRef.current) {
+        previewAudioRef.current.stop()
+        previewAudioRef.current.unload()
+        previewAudioRef.current = null
+      }
+    }
+  }, [])
 
   // Fetch voices from API
   const fetchVoices = useCallback(async () => {
@@ -118,20 +132,46 @@ function VoicePicker({ ageGroup, selectedVoice, onVoiceChange, className = '' }:
     saveLastVoice(voice.voice_id, voice.provider)
   }
 
-  const handlePreview = (voice: VoiceEntry, e: React.MouseEvent) => {
+  const handlePreview = async (voice: VoiceEntry, e: React.MouseEvent) => {
     e.stopPropagation()
+
     // Stop any current preview
     if (previewAudioRef.current) {
-      previewAudioRef.current.pause()
+      previewAudioRef.current.stop()
+      previewAudioRef.current.unload()
       previewAudioRef.current = null
     }
+
+    // Toggle off if same voice
     if (previewingId === voice.voice_id) {
       setPreviewingId(null)
       return
     }
-    setPreviewingId(voice.voice_id)
-    // Preview would call a preview endpoint — for now show visual feedback
-    setTimeout(() => setPreviewingId(null), 3000)
+
+    setPreviewLoading(voice.voice_id)
+    setPreviewingId(null)
+
+    try {
+      const { audio_url } = await storyService.previewVoice(voice.voice_id, voice.provider)
+
+      const howl = new Howl({
+        src: [audio_url],
+        html5: true,
+        onend: () => setPreviewingId(null),
+        onloaderror: () => {
+          setPreviewingId(null)
+          setPreviewLoading(null)
+        },
+      })
+
+      previewAudioRef.current = howl
+      setPreviewLoading(null)
+      setPreviewingId(voice.voice_id)
+      howl.play()
+    } catch {
+      setPreviewLoading(null)
+      setPreviewingId(null)
+    }
   }
 
   // Limit voices for young children, or collapse for other age groups
@@ -178,6 +218,7 @@ function VoicePicker({ ageGroup, selectedVoice, onVoiceChange, className = '' }:
           {displayVoices.map((voice, index) => {
             const isSelected = selectedVoice === voice.voice_id
             const isPreviewing = previewingId === voice.voice_id
+            const isLoadingPreview = previewLoading === voice.voice_id
 
             return (
               <motion.div
@@ -226,14 +267,24 @@ function VoicePicker({ ageGroup, selectedVoice, onVoiceChange, className = '' }:
                     className={`shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs ${
                       isPreviewing
                         ? 'bg-secondary/20 text-secondary'
-                        : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
+                        : isLoadingPreview
+                          ? 'bg-yellow-50 text-yellow-500'
+                          : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
                     }`}
                     onClick={(e) => handlePreview(voice, e)}
+                    disabled={isLoadingPreview}
                     whileHover={{ scale: 1.1 }}
                     whileTap={{ scale: 0.9 }}
                     title="Preview voice"
                   >
-                    {isPreviewing ? (
+                    {isLoadingPreview ? (
+                      <motion.span
+                        animate={{ rotate: 360 }}
+                        transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                      >
+                        ⏳
+                      </motion.span>
+                    ) : isPreviewing ? (
                       <motion.span
                         animate={{ scale: [1, 1.3, 1] }}
                         transition={{ duration: 0.5, repeat: Infinity }}

@@ -1,4 +1,4 @@
-import apiClient from '../client'
+import apiClient from "../client";
 import type {
   ImageToStoryResponse,
   InteractiveStoryStartRequest,
@@ -23,11 +23,11 @@ import type {
   MorningShowTrackRequest,
   MorningShowTrackResponse,
   MorningShowOnDemandRequest,
-} from '@/types/api'
-import { consumeSSEStream } from '../utils/sseStream'
+} from "@/types/api";
+import { consumeSSEStream } from "../utils/sseStream";
 
 // API base URL
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1'
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api/v1";
 
 /**
  * Get auth token from localStorage for raw fetch() calls.
@@ -35,20 +35,20 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1'
  */
 function getAuthToken(): string | null {
   try {
-    const authStorage = localStorage.getItem('auth-storage')
+    const authStorage = localStorage.getItem("auth-storage");
     if (authStorage) {
-      const { state } = JSON.parse(authStorage)
-      return state?.token || null
+      const { state } = JSON.parse(authStorage);
+      return state?.token || null;
     }
   } catch {
     // Ignore parsing errors
   }
-  return null
+  return null;
 }
 
 function getAuthHeaders(): Record<string, string> {
-  const token = getAuthToken()
-  return token ? { Authorization: `Bearer ${token}` } : {}
+  const token = getAuthToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
 /**
@@ -63,44 +63,48 @@ export const storyService = {
   async generateStoryFromImage(
     image: File,
     params: {
-      childId: string
-      ageGroup: AgeGroup
-      interests?: string[]
-      voice?: string
-      enableAudio?: boolean
-      artTheme?: string
-    }
+      childId: string;
+      ageGroup: AgeGroup;
+      interests?: string[];
+      voice?: string;
+      enableAudio?: boolean;
+      artTheme?: string;
+      provider?: string;
+    },
   ): Promise<ImageToStoryResponse> {
-    const formData = new FormData()
-    formData.append('image', image)
-    formData.append('child_id', params.childId)
-    formData.append('age_group', params.ageGroup)
+    const formData = new FormData();
+    formData.append("image", image);
+    formData.append("child_id", params.childId);
+    formData.append("age_group", params.ageGroup);
 
     if (params.interests && params.interests.length > 0) {
-      formData.append('interests', params.interests.join(','))
+      formData.append("interests", params.interests.join(","));
     }
     if (params.voice) {
-      formData.append('voice', params.voice)
+      formData.append("voice", params.voice);
     }
     if (params.enableAudio !== undefined) {
-      formData.append('enable_audio', String(params.enableAudio))
+      formData.append("enable_audio", String(params.enableAudio));
     }
-    if (params.artTheme && params.artTheme !== 'none') {
-      formData.append('art_theme', params.artTheme)
+    if (params.artTheme && params.artTheme !== "none") {
+      formData.append("art_theme", params.artTheme);
+    }
+    if (params.provider) {
+      formData.append("provider", params.provider);
     }
 
     const response = await apiClient.post<ImageToStoryResponse>(
-      '/image-to-story',
+      "/image-to-story",
       formData,
       {
         headers: {
-          'Content-Type': 'multipart/form-data',
+          "Content-Type": "multipart/form-data",
         },
         timeout: 120000, // 2 minutes for image processing + story generation
-      }
-    )
+      },
+    );
 
-    return response.data
+    return response.data;
   },
 
   /**
@@ -110,59 +114,78 @@ export const storyService = {
   async generateStoryFromImageStream(
     image: File,
     params: {
-      childId: string
-      ageGroup: AgeGroup
-      interests?: string[]
-      voice?: string
-      enableAudio?: boolean
-      artTheme?: string
+      childId: string;
+      ageGroup: AgeGroup;
+      interests?: string[];
+      voice?: string;
+      enableAudio?: boolean;
+      artTheme?: string;
+      provider?: string;
     },
     callbacks: StreamCallbacks,
-    signal?: AbortSignal
+    signal?: AbortSignal,
   ): Promise<void> {
-    const formData = new FormData()
-    formData.append('image', image)
-    formData.append('child_id', params.childId)
-    formData.append('age_group', params.ageGroup)
+    const formData = new FormData();
+    formData.append("image", image);
+    formData.append("child_id", params.childId);
+    formData.append("age_group", params.ageGroup);
 
     if (params.interests && params.interests.length > 0) {
-      formData.append('interests', params.interests.join(','))
+      formData.append("interests", params.interests.join(","));
     }
     if (params.voice) {
-      formData.append('voice', params.voice)
+      formData.append("voice", params.voice);
     }
     if (params.enableAudio !== undefined) {
-      formData.append('enable_audio', String(params.enableAudio))
+      formData.append("enable_audio", String(params.enableAudio));
     }
-    if (params.artTheme && params.artTheme !== 'none') {
-      formData.append('art_theme', params.artTheme)
+    if (params.artTheme && params.artTheme !== "none") {
+      formData.append("art_theme", params.artTheme);
+    }
+    if (params.provider) {
+      formData.append("provider", params.provider);
     }
 
     const response = await fetch(`${API_BASE_URL}/image-to-story/stream`, {
-      method: 'POST',
+      method: "POST",
       headers: getAuthHeaders(),
       body: formData,
       signal,
-    })
+    });
 
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`)
+      if (response.status === 429) {
+        const errorData = await response.json().catch(() => ({}));
+        const detail = errorData.detail ?? errorData;
+        const resetsAt = detail.resets_at;
+        let friendlyMsg = "今天的创作次数用完啦！";
+        if (resetsAt) {
+          const resetDate = new Date(resetsAt);
+          const hours = resetDate.getHours().toString().padStart(2, "0");
+          const minutes = resetDate.getMinutes().toString().padStart(2, "0");
+          friendlyMsg += `明天 ${hours}:${minutes} 就可以继续创作了哦 ✨`;
+        } else {
+          friendlyMsg += "明天再来画新故事吧 ✨";
+        }
+        throw new Error(friendlyMsg);
+      }
+      throw new Error(`HTTP error! status: ${response.status}`);
     }
 
-    await consumeSSEStream(response, callbacks)
+    await consumeSSEStream(response, callbacks);
   },
 
   /**
    * Start interactive story
    */
   async startInteractiveStory(
-    params: InteractiveStoryStartRequest
+    params: InteractiveStoryStartRequest,
   ): Promise<InteractiveStoryStartResponse> {
     const response = await apiClient.post<InteractiveStoryStartResponse>(
-      '/story/interactive/start',
-      params
-    )
-    return response.data
+      "/story/interactive/start",
+      params,
+    );
+    return response.data;
   },
 
   /**
@@ -170,13 +193,13 @@ export const storyService = {
    */
   async makeChoice(
     sessionId: string,
-    choice: ChoiceRequest
+    choice: ChoiceRequest,
   ): Promise<ChoiceResponse> {
     const response = await apiClient.post<ChoiceResponse>(
       `/story/interactive/${sessionId}/choose`,
-      choice
-    )
-    return response.data
+      choice,
+    );
+    return response.data;
   },
 
   /**
@@ -184,9 +207,9 @@ export const storyService = {
    */
   async getSessionStatus(sessionId: string): Promise<SessionStatusResponse> {
     const response = await apiClient.get<SessionStatusResponse>(
-      `/story/interactive/${sessionId}/status`
-    )
-    return response.data
+      `/story/interactive/${sessionId}/status`,
+    );
+    return response.data;
   },
 
   /**
@@ -194,9 +217,9 @@ export const storyService = {
    */
   async resumeSession(sessionId: string): Promise<SessionResumeResponse> {
     const response = await apiClient.get<SessionResumeResponse>(
-      `/story/interactive/${sessionId}/resume`
-    )
-    return response.data
+      `/story/interactive/${sessionId}/resume`,
+    );
+    return response.data;
   },
 
   /**
@@ -204,9 +227,9 @@ export const storyService = {
    */
   async getStory(storyId: string): Promise<ImageToStoryResponse> {
     const response = await apiClient.get<ImageToStoryResponse>(
-      `/stories/${storyId}`
-    )
-    return response.data
+      `/stories/${storyId}`,
+    );
+    return response.data;
   },
 
   /**
@@ -214,46 +237,46 @@ export const storyService = {
    */
   async getStoryHistory(childId: string): Promise<ImageToStoryResponse[]> {
     const response = await apiClient.get<ImageToStoryResponse[]>(
-      `/stories/history/${childId}`
-    )
-    return response.data
+      `/stories/history/${childId}`,
+    );
+    return response.data;
   },
 
   /**
    * Save interactive story to My Library
    */
   async saveInteractiveStory(
-    sessionId: string
+    sessionId: string,
   ): Promise<{ story_id: string; session_id: string; message: string }> {
     const response = await apiClient.post(
-      `/story/interactive/${sessionId}/save`
-    )
-    return response.data
+      `/story/interactive/${sessionId}/save`,
+    );
+    return response.data;
   },
 
   /**
    * Delete a story (art story or news conversion)
    */
   async deleteStory(storyId: string): Promise<void> {
-    await apiClient.delete(`/stories/${storyId}`)
+    await apiClient.delete(`/stories/${storyId}`);
   },
 
   /**
    * Delete an interactive story session
    */
   async deleteSession(sessionId: string): Promise<void> {
-    await apiClient.delete(`/story/interactive/${sessionId}`)
+    await apiClient.delete(`/story/interactive/${sessionId}`);
   },
 
   /**
    * Health check
    */
   async healthCheck(): Promise<HealthCheckResponse> {
-    const response = await fetch('/health')
+    const response = await fetch("/health");
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`)
+      throw new Error(`HTTP error! status: ${response.status}`);
     }
-    return response.json() as Promise<HealthCheckResponse>
+    return response.json() as Promise<HealthCheckResponse>;
   },
 
   /**
@@ -262,35 +285,53 @@ export const storyService = {
    */
   async startInteractiveStoryStream(
     params: InteractiveStoryStartRequest,
-    callbacks: StreamCallbacks
+    callbacks: StreamCallbacks,
+    signal?: AbortSignal,
   ): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/story/interactive/start/stream`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...getAuthHeaders(),
+    const response = await fetch(
+      `${API_BASE_URL}/story/interactive/start/stream`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...getAuthHeaders(),
+        },
+        body: JSON.stringify(params),
+        signal,
       },
-      body: JSON.stringify(params),
-    })
+    );
 
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`)
+      if (response.status === 429) {
+        const errorData = await response.json().catch(() => ({}));
+        const detail = errorData.detail ?? errorData;
+        const resetsAt = detail.resets_at;
+        let friendlyMsg = "今天的创作次数用完啦！";
+        if (resetsAt) {
+          const resetDate = new Date(resetsAt);
+          const hours = resetDate.getHours().toString().padStart(2, "0");
+          const minutes = resetDate.getMinutes().toString().padStart(2, "0");
+          friendlyMsg += `明天 ${hours}:${minutes} 就可以继续创作了哦 ✨`;
+        } else {
+          friendlyMsg += "明天再来画新故事吧 ✨";
+        }
+        throw new Error(friendlyMsg);
+      }
+      throw new Error(`HTTP error! status: ${response.status}`);
     }
 
-    await consumeSSEStream(response, callbacks)
+    await consumeSSEStream(response, callbacks);
   },
 
   /**
    * Convert news article to kid-friendly content
    */
-  async convertNews(
-    params: NewsToKidsRequest
-  ): Promise<NewsToKidsResponse> {
+  async convertNews(params: NewsToKidsRequest): Promise<NewsToKidsResponse> {
     const response = await apiClient.post<NewsToKidsResponse>(
-      '/news-to-kids/convert',
-      params
-    )
-    return response.data
+      "/kids-daily/convert",
+      params,
+    );
+    return response.data;
   },
 
   /**
@@ -298,22 +339,22 @@ export const storyService = {
    */
   async convertNewsStream(
     params: NewsToKidsRequest,
-    callbacks: StreamCallbacks
+    callbacks: StreamCallbacks,
   ): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/news-to-kids/convert/stream`, {
-      method: 'POST',
+    const response = await fetch(`${API_BASE_URL}/kids-daily/convert/stream`, {
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
         ...getAuthHeaders(),
       },
       body: JSON.stringify(params),
-    })
+    });
 
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`)
+      throw new Error(`HTTP error! status: ${response.status}`);
     }
 
-    await consumeSSEStream(response, callbacks)
+    await consumeSSEStream(response, callbacks);
   },
 
   /**
@@ -321,23 +362,25 @@ export const storyService = {
    */
   async getNewsHistory(childId: string): Promise<NewsToKidsResponse[]> {
     const response = await apiClient.get<{ items: NewsToKidsResponse[] }>(
-      `/news-to-kids/history/${childId}`
-    )
+      `/kids-daily/history/${childId}`,
+    );
     // Backend returns paginated response { items, total, limit, offset }
-    return response.data.items ?? (response.data as unknown as NewsToKidsResponse[])
+    return (
+      response.data.items ?? (response.data as unknown as NewsToKidsResponse[])
+    );
   },
 
   /**
    * Generate Kids Daily episode
    */
   async generateMorningShow(
-    params: MorningShowRequest
+    params: MorningShowRequest,
   ): Promise<MorningShowResponse> {
     const response = await apiClient.post<MorningShowResponse>(
-      '/morning-show/generate',
-      params
-    )
-    return response.data
+      "/kids-daily/generate",
+      params,
+    );
+    return response.data;
   },
 
   /**
@@ -345,22 +388,22 @@ export const storyService = {
    */
   async generateMorningShowStream(
     params: MorningShowRequest,
-    callbacks: StreamCallbacks
+    callbacks: StreamCallbacks,
   ): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/morning-show/generate/stream`, {
-      method: 'POST',
+    const response = await fetch(`${API_BASE_URL}/kids-daily/generate/stream`, {
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
         ...getAuthHeaders(),
       },
       body: JSON.stringify(params),
-    })
+    });
 
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`)
+      throw new Error(`HTTP error! status: ${response.status}`);
     }
 
-    await consumeSSEStream(response, callbacks)
+    await consumeSSEStream(response, callbacks);
   },
 
   /**
@@ -368,9 +411,9 @@ export const storyService = {
    */
   async getMorningShowEpisode(episodeId: string): Promise<MorningShowEpisode> {
     const response = await apiClient.get<MorningShowEpisode>(
-      `/morning-show/episode/${episodeId}`
-    )
-    return response.data
+      `/kids-daily/episode/${episodeId}`,
+    );
+    return response.data;
   },
 
   /**
@@ -378,36 +421,33 @@ export const storyService = {
    */
   async listMorningShowEpisodes(
     childId: string,
-    params?: { limit?: number; offset?: number }
+    params?: { limit?: number; offset?: number },
   ): Promise<PaginatedMorningShowResponse> {
     const response = await apiClient.get<PaginatedMorningShowResponse>(
-      `/morning-show/episodes/${childId}`,
-      { params }
-    )
-    return response.data
+      `/kids-daily/episodes/${childId}`,
+      { params },
+    );
+    return response.data;
   },
 
   /**
    * Subscribe to topic channel
    */
   async subscribeTopic(
-    request: SubscriptionRequest
+    request: SubscriptionRequest,
   ): Promise<SubscriptionResponse> {
     const response = await apiClient.post<SubscriptionResponse>(
-      '/subscriptions',
-      request
-    )
-    return response.data
+      "/subscriptions",
+      request,
+    );
+    return response.data;
   },
 
   /**
    * Unsubscribe from topic channel
    */
-  async unsubscribeTopic(
-    childId: string,
-    topic: NewsCategory
-  ): Promise<void> {
-    await apiClient.delete(`/subscriptions/${childId}/${topic}`)
+  async unsubscribeTopic(childId: string, topic: NewsCategory): Promise<void> {
+    await apiClient.delete(`/subscriptions/${childId}/${topic}`);
   },
 
   /**
@@ -415,9 +455,9 @@ export const storyService = {
    */
   async getSubscriptions(childId: string): Promise<SubscriptionListResponse> {
     const response = await apiClient.get<SubscriptionListResponse>(
-      `/subscriptions/${childId}`
-    )
-    return response.data
+      `/subscriptions/${childId}`,
+    );
+    return response.data;
   },
 
   /**
@@ -425,14 +465,14 @@ export const storyService = {
    */
   async generateMorningShowOnDemand(
     params: MorningShowOnDemandRequest,
-    signal?: AbortSignal
+    signal?: AbortSignal,
   ): Promise<MorningShowResponse> {
     const response = await apiClient.post<MorningShowResponse>(
-      '/morning-show/generate-now',
+      "/kids-daily/generate-now",
       params,
-      { signal }
-    )
-    return response.data
+      { signal },
+    );
+    return response.data;
   },
 
   /**
@@ -441,48 +481,51 @@ export const storyService = {
   async generateMorningShowOnDemandStream(
     params: MorningShowOnDemandRequest,
     callbacks: StreamCallbacks,
-    signal?: AbortSignal
+    signal?: AbortSignal,
   ): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/morning-show/generate-now/stream`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...getAuthHeaders(),
+    const response = await fetch(
+      `${API_BASE_URL}/kids-daily/generate-now/stream`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...getAuthHeaders(),
+        },
+        body: JSON.stringify(params),
+        signal,
       },
-      body: JSON.stringify(params),
-      signal,
-    })
+    );
 
     if (!response.ok) {
       if (response.status === 429) {
-        const errorData = await response.json()
+        const errorData = await response.json();
         throw new Error(
-          `Rate limited: ${errorData.message || errorData.detail || 'Too many requests'}. Retry after ${errorData.retry_after || 60} seconds.`
-        )
+          `Rate limited: ${errorData.message || errorData.detail || "Too many requests"}. Retry after ${errorData.retry_after || 60} seconds.`,
+        );
       }
       if (response.status === 400) {
-        const errorData = await response.json()
+        const errorData = await response.json();
         throw new Error(
-          errorData.detail || 'Subscription required or invalid request.'
-        )
+          errorData.detail || "Subscription required or invalid request.",
+        );
       }
-      throw new Error(`HTTP error! status: ${response.status}`)
+      throw new Error(`HTTP error! status: ${response.status}`);
     }
 
-    await consumeSSEStream(response, callbacks)
+    await consumeSSEStream(response, callbacks);
   },
 
   /**
    * Track Kids Daily playback event
    */
   async trackMorningShowEvent(
-    request: MorningShowTrackRequest
+    request: MorningShowTrackRequest,
   ): Promise<MorningShowTrackResponse> {
     const response = await apiClient.post<MorningShowTrackResponse>(
-      '/morning-show/track',
-      request
-    )
-    return response.data
+      "/kids-daily/track",
+      request,
+    );
+    return response.data;
   },
 
   /**
@@ -491,25 +534,27 @@ export const storyService = {
   async makeChoiceStream(
     sessionId: string,
     choice: ChoiceRequest,
-    callbacks: StreamCallbacks
+    callbacks: StreamCallbacks,
+    signal?: AbortSignal,
   ): Promise<void> {
     const response = await fetch(
       `${API_BASE_URL}/story/interactive/${sessionId}/choose/stream`,
       {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
           ...getAuthHeaders(),
         },
         body: JSON.stringify(choice),
-      }
-    )
+        signal,
+      },
+    );
 
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`)
+      throw new Error(`HTTP error! status: ${response.status}`);
     }
 
-    await consumeSSEStream(response, callbacks)
+    await consumeSSEStream(response, callbacks);
   },
 
   /**
@@ -519,15 +564,20 @@ export const storyService = {
     sessionId: string,
     segmentId: number,
     voice?: string,
-    speed?: number
-  ): Promise<{ session_id: string; segment_id: number; audio_url: string; duration?: number }> {
-    const response = await apiClient.post('/audio/generate', {
+    speed?: number,
+  ): Promise<{
+    session_id: string;
+    segment_id: number;
+    audio_url: string;
+    duration?: number;
+  }> {
+    const response = await apiClient.post("/audio/generate", {
       session_id: sessionId,
       segment_id: segmentId,
-      voice: voice || 'alloy',
+      voice: voice || "alloy",
       speed: speed || 1.1,
-    })
-    return response.data
+    });
+    return response.data;
   },
 
   /**
@@ -536,20 +586,35 @@ export const storyService = {
   async generateAudioForStory(
     storyId: string,
     voice?: string,
-    speed?: number
+    speed?: number,
   ): Promise<{ story_id: string; audio_url: string; duration?: number }> {
-    const response = await apiClient.post('/audio/generate-for-story', {
+    const response = await apiClient.post("/audio/generate-for-story", {
       story_id: storyId,
-      voice: voice || 'alloy',
+      voice: voice || "alloy",
       speed: speed || 1.1,
-    })
-    return response.data
+    });
+    return response.data;
   },
+  /**
+   * Preview a TTS voice — returns a short audio sample URL (#333)
+   */
+  async previewVoice(
+    voiceId: string,
+    provider: string,
+  ): Promise<{ voice_id: string; provider: string; audio_url: string; cached: boolean }> {
+    const response = await apiClient.get("/audio/preview", {
+      params: { voice_id: voiceId, provider },
+    });
+    return response.data;
+  },
+
   /** Get a saved news conversion by ID (#181) */
   async getNewsConversion(conversionId: string): Promise<NewsToKidsResponse> {
-    const response = await apiClient.get(`/news-to-kids/conversion/${conversionId}`)
-    return response.data
+    const response = await apiClient.get(
+      `/kids-daily/conversion/${conversionId}`,
+    );
+    return response.data;
   },
-}
+};
 
-export default storyService
+export default storyService;
