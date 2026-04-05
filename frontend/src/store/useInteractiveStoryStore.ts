@@ -178,7 +178,7 @@ const useInteractiveStoryStore = create<InteractiveStoryState>()(
     }),
     {
       name: 'interactive-story-session',
-      storage: createJSONStorage(() => sessionStorage),
+      storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
         sessionId: state.sessionId,
         storyTitle: state.storyTitle,

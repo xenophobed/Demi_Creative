@@ -1,52 +1,54 @@
-import { useState, useEffect, useCallback } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
-import { motion } from 'framer-motion'
-import Button from '@/components/common/Button'
-import Card from '@/components/common/Card'
-import AgeAwareContent from '@/components/common/AgeAwareContent'
-import EducationalTags from '@/components/story/EducationalTags'
-import StorySegmentDisplay from '@/components/interactive/StorySegmentDisplay'
-import ChoiceButtons from '@/components/interactive/ChoiceButtons'
-import ProgressIndicator from '@/components/interactive/ProgressIndicator'
-import { StreamingVisualizer } from '@/components/streaming/StreamingVisualizer'
-import { PerspectiveContainer } from '@/components/depth/PerspectiveContainer'
-import { storyService } from '@/api/services/storyService'
-import useInteractiveStory from '@/hooks/useInteractiveStory'
-import useInteractiveStoryStore from '@/store/useInteractiveStoryStore'
-import useStreamVisualization from '@/hooks/useStreamVisualization'
-import useAuthStore from '@/store/useAuthStore'
-import useChildStore, { DEFAULT_INTERESTS } from '@/store/useChildStore'
-import type { AgeGroup } from '@/types/api'
-import type { AnimationPhase } from '@/types/streaming'
-import LoginPrompt from '@/components/common/LoginPrompt'
-import SuggestedThemes from '@/components/common/SuggestedThemes'
+import { useState, useEffect, useCallback } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { motion } from "framer-motion";
+import Button from "@/components/common/Button";
+import Card from "@/components/common/Card";
+import AgeAwareContent from "@/components/common/AgeAwareContent";
+import EducationalTags from "@/components/story/EducationalTags";
+import StorySegmentDisplay from "@/components/interactive/StorySegmentDisplay";
+import ChoiceButtons from "@/components/interactive/ChoiceButtons";
+import ProgressIndicator from "@/components/interactive/ProgressIndicator";
+import { StreamingVisualizer } from "@/components/streaming/StreamingVisualizer";
+import { PerspectiveContainer } from "@/components/depth/PerspectiveContainer";
+import { storyService } from "@/api/services/storyService";
+import useInteractiveStory from "@/hooks/useInteractiveStory";
+import QuotaExceededOverlay, { isQuotaError } from "@/components/common/QuotaExceededOverlay";
+import useInteractiveStoryStore from "@/store/useInteractiveStoryStore";
+import useStreamVisualization from "@/hooks/useStreamVisualization";
+import useAuthStore from "@/store/useAuthStore";
+import useChildStore, { DEFAULT_INTERESTS } from "@/store/useChildStore";
+import type { AgeGroup } from "@/types/api";
+import type { AnimationPhase } from "@/types/streaming";
+import LoginPrompt from "@/components/common/LoginPrompt";
+import SuggestedThemes from "@/components/common/SuggestedThemes";
 
-type PageState = 'setup' | 'playing' | 'completed'
+type PageState = "setup" | "playing" | "completed";
 
 const AGE_GROUPS: { value: AgeGroup; label: string; emoji: string }[] = [
-  { value: '3-5', label: '3-5 yrs', emoji: '🧒' },
-  { value: '6-8', label: '6-8 yrs', emoji: '👦' },
-  { value: '9-12', label: '9-12 yrs', emoji: '🧑' },
-]
+  { value: "3-5", label: "3-5 yrs", emoji: "🧒" },
+  { value: "6-8", label: "6-8 yrs", emoji: "👦" },
+  { value: "9-12", label: "9-12 yrs", emoji: "🧑" },
+];
 
 function InteractiveStoryPage() {
-  const navigate = useNavigate()
-  const [searchParams] = useSearchParams()
-  const { isAuthenticated } = useAuthStore()
-  const { defaultChildId } = useChildStore()
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const { isAuthenticated } = useAuthStore();
+  const { defaultChildId } = useChildStore();
 
   if (!isAuthenticated) {
     return (
       <div className="max-w-lg mx-auto mt-12">
         <LoginPrompt feature="play interactive stories" />
       </div>
-    )
+    );
   }
 
   // Local form state
-  const [selectedAge, setSelectedAge] = useState<AgeGroup | null>(null)
-  const [selectedInterests, setSelectedInterests] = useState<string[]>([])
-  const [theme, setTheme] = useState('')
+  const [selectedAge, setSelectedAge] = useState<AgeGroup | null>(null);
+  const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
+  const [theme, setTheme] = useState("");
+  const [quotaDismissed, setQuotaDismissed] = useState(false);
 
   // Story hook - use streaming versions for better UX
   const {
@@ -54,6 +56,7 @@ function InteractiveStoryPage() {
     storyTitle,
     ageGroup: storeAgeGroup,
     currentSegment,
+    segments,
     choiceHistory,
     progress,
     isLoading,
@@ -65,136 +68,174 @@ function InteractiveStoryPage() {
     makeChoiceStream,
     resumeSession,
     reset,
-  } = useInteractiveStory()
+  } = useInteractiveStory();
 
   // On-demand audio state (for 9-12 age group)
-  const [onDemandAudioUrl, setOnDemandAudioUrl] = useState<string | null>(null)
-  const [isAudioGenerating, setIsAudioGenerating] = useState(false)
+  const [onDemandAudioUrl, setOnDemandAudioUrl] = useState<string | null>(null);
+  const [isAudioGenerating, setIsAudioGenerating] = useState(false);
 
   // Use storeAgeGroup during play, selectedAge during setup
-  const activeAgeGroup = storeAgeGroup || selectedAge
+  const activeAgeGroup = storeAgeGroup || selectedAge;
 
   // Stream visualization hook
-  const { triggerConfetti } = useStreamVisualization()
+  const { triggerConfetti } = useStreamVisualization();
 
   // Map streaming state to animation phase
   const getAnimationPhase = (): AnimationPhase => {
-    if (!streaming.isStreaming) return 'idle'
-    if (streaming.streamStatus === 'started') return 'connecting'
-    if (streaming.thinkingContent) return 'thinking'
-    if (streaming.streamMessage.includes('tool')) return 'tool_executing'
-    return 'thinking'
-  }
+    if (!streaming.isStreaming) return "idle";
+    if (streaming.streamStatus === "started") return "connecting";
+    if (streaming.thinkingContent) return "thinking";
+    if (streaming.streamMessage.includes("tool")) return "tool_executing";
+    return "thinking";
+  };
 
-  const animationPhase = getAnimationPhase()
+  const animationPhase = getAnimationPhase();
 
   // Save state
-  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const [saveStatus, setSaveStatus] = useState<
+    "idle" | "saving" | "saved" | "error"
+  >("idle");
 
   // Resume from URL ?session= param (e.g. from My Library card click)
-  // or validate persisted session on mount
-  const storeStatus = useInteractiveStoryStore((s) => s.status)
-  const [isResuming, setIsResuming] = useState(false)
-  useEffect(() => {
-    const urlSessionId = searchParams.get('session')
+  // or detect persisted session for "Continue Your Story" prompt
+  const storeStatus = useInteractiveStoryStore((s) => s.status);
+  const storeTitle = useInteractiveStoryStore((s) => s.storyTitle);
+  const storeProgress = useInteractiveStoryStore((s) => s.progress);
+  const storeSessionId = useInteractiveStoryStore((s) => s.sessionId);
+  const [isResuming, setIsResuming] = useState(false);
+  const [hasPersistedSession, setHasPersistedSession] = useState(false);
+  const [sessionExpiredMsg, setSessionExpiredMsg] = useState<string | null>(null);
 
-    // Case 1: URL has ?session= — resume from backend
+  useEffect(() => {
+    const urlSessionId = searchParams.get("session");
+
+    // Case 1: URL has ?session= — resume from backend immediately
     if (urlSessionId && urlSessionId !== sessionId) {
-      let cancelled = false
-      setIsResuming(true)
+      let cancelled = false;
+      setIsResuming(true);
       resumeSession(urlSessionId)
         .catch(() => {
-          // Session not found or expired — stay on setup page
+          reset();
         })
         .finally(() => {
-          if (!cancelled) setIsResuming(false)
-        })
-      return () => { cancelled = true }
+          if (!cancelled) setIsResuming(false);
+        });
+      return () => {
+        cancelled = true;
+      };
     }
 
-    // Case 2: No URL session but store has an active session — validate it
-    if (!urlSessionId && sessionId && storeStatus === 'playing') {
-      let cancelled = false
-      setIsResuming(true)
+    // Case 2: No URL session but store has a persisted playing session
+    // Validate it's still active, then show "Continue" prompt
+    if (!urlSessionId && storeSessionId && storeStatus === "playing") {
+      let cancelled = false;
       storyService
-        .getSessionStatus(sessionId)
+        .getSessionStatus(storeSessionId)
         .then((res) => {
-          if (cancelled) return
-          if (res.status !== 'active') reset()
+          if (cancelled) return;
+          if (res.status === "active") {
+            setHasPersistedSession(true);
+          } else {
+            reset();
+            setSessionExpiredMsg("上次的故事已经结束了，来开始一个新冒险吧！");
+          }
         })
         .catch(() => {
-          if (!cancelled) reset()
-        })
-        .finally(() => {
-          if (!cancelled) setIsResuming(false)
-        })
-      return () => { cancelled = true }
+          if (!cancelled) {
+            reset();
+            setSessionExpiredMsg("上次的故事已经结束了，来开始一个新冒险吧！");
+          }
+        });
+      return () => {
+        cancelled = true;
+      };
     }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Handle "Continue" button click
+  const handleContinueStory = async () => {
+    if (!storeSessionId) return;
+    setIsResuming(true);
+    setHasPersistedSession(false);
+    try {
+      await resumeSession(storeSessionId);
+    } catch {
+      reset();
+      setSessionExpiredMsg("上次的故事已经结束了，来开始一个新冒险吧！");
+    } finally {
+      setIsResuming(false);
+    }
+  };
+
+  // Handle "Start New" — discard persisted session
+  const handleStartNew = () => {
+    setHasPersistedSession(false);
+    reset();
+  };
 
   // Track segment changes for reveal animation
-  const [isRevealing, setIsRevealing] = useState(false)
+  const [isRevealing, setIsRevealing] = useState(false);
 
   useEffect(() => {
     if (currentSegment && !streaming.isStreaming) {
-      setIsRevealing(true)
-      const timer = setTimeout(() => setIsRevealing(false), 2000)
-      return () => clearTimeout(timer)
+      setIsRevealing(true);
+      const timer = setTimeout(() => setIsRevealing(false), 2000);
+      return () => clearTimeout(timer);
     }
-  }, [currentSegment?.segment_id, streaming.isStreaming])
+  }, [currentSegment?.segment_id, streaming.isStreaming]);
 
   // Reset on-demand audio when segment changes
   useEffect(() => {
-    setOnDemandAudioUrl(null)
-    setIsAudioGenerating(false)
-  }, [currentSegment?.segment_id])
+    setOnDemandAudioUrl(null);
+    setIsAudioGenerating(false);
+  }, [currentSegment?.segment_id]);
 
   // On-demand audio handler for 9-12 age group
   const handleRequestAudio = useCallback(async () => {
-    if (!sessionId || !currentSegment || isAudioGenerating) return
-    setIsAudioGenerating(true)
+    if (!sessionId || !currentSegment || isAudioGenerating) return;
+    setIsAudioGenerating(true);
     try {
       const result = await storyService.generateAudioOnDemand(
         sessionId,
-        currentSegment.segment_id
-      )
-      setOnDemandAudioUrl(result.audio_url)
+        currentSegment.segment_id,
+      );
+      setOnDemandAudioUrl(result.audio_url);
     } catch {
       // Silently fail - button will remain clickable
     } finally {
-      setIsAudioGenerating(false)
+      setIsAudioGenerating(false);
     }
-  }, [sessionId, currentSegment, isAudioGenerating])
+  }, [sessionId, currentSegment, isAudioGenerating]);
 
   // Trigger confetti on completion
   useEffect(() => {
     if (isCompleted) {
-      triggerConfetti()
+      triggerConfetti();
     }
-  }, [isCompleted, triggerConfetti])
+  }, [isCompleted, triggerConfetti]);
 
   // Determine page state — show setup while resuming/validating
   const getPageState = (): PageState => {
-    if (isResuming) return 'setup'
-    if (isCompleted) return 'completed'
-    if (currentSegment) return 'playing'
-    return 'setup'
-  }
+    if (isResuming) return "setup";
+    if (isCompleted) return "completed";
+    if (currentSegment) return "playing";
+    return "setup";
+  };
 
-  const pageState = getPageState()
+  const pageState = getPageState();
 
   // Toggle interest selection
   const toggleInterest = (interest: string) => {
     if (selectedInterests.includes(interest)) {
-      setSelectedInterests(selectedInterests.filter((i) => i !== interest))
+      setSelectedInterests(selectedInterests.filter((i) => i !== interest));
     } else if (selectedInterests.length < 5) {
-      setSelectedInterests([...selectedInterests, interest])
+      setSelectedInterests([...selectedInterests, interest]);
     }
-  }
+  };
 
   // Start story handler - uses streaming for real-time progress
   const handleStartStory = async () => {
-    if (!selectedAge || selectedInterests.length === 0) return
+    if (!selectedAge || selectedInterests.length === 0) return;
 
     try {
       await startStoryStream({
@@ -202,43 +243,93 @@ function InteractiveStoryPage() {
         age_group: selectedAge,
         interests: selectedInterests,
         theme: theme || undefined,
-      })
+      });
     } catch {
       // Error is handled by the hook
     }
-  }
+  };
 
   // Choice handler - uses streaming for real-time progress
   const handleChoice = async (choiceId: string) => {
     try {
-      await makeChoiceStream(choiceId)
+      await makeChoiceStream(choiceId);
     } catch {
       // Error is handled by the hook
     }
-  }
+  };
 
   // Reset handler
   const handleReset = () => {
-    reset()
-    setSelectedAge(null)
-    setSelectedInterests([])
-    setTheme('')
-  }
+    reset();
+    setSelectedAge(null);
+    setSelectedInterests([]);
+    setTheme("");
+    setHasPersistedSession(false);
+    setSessionExpiredMsg(null);
+  };
 
   // Save interactive story to My Library
   const handleSaveStory = useCallback(async () => {
-    if (!sessionId || saveStatus === 'saving' || saveStatus === 'saved') return
-    setSaveStatus('saving')
+    if (!sessionId || saveStatus === "saving" || saveStatus === "saved") return;
+    setSaveStatus("saving");
     try {
-      await storyService.saveInteractiveStory(sessionId)
-      setSaveStatus('saved')
+      await storyService.saveInteractiveStory(sessionId);
+      setSaveStatus("saved");
     } catch {
-      setSaveStatus('error')
+      setSaveStatus("error");
     }
-  }, [sessionId, saveStatus])
+  }, [sessionId, saveStatus]);
 
   // Calculate total segments (estimate based on progress)
-  const totalSegments = progress > 0 ? Math.round((choiceHistory.length + 1) / progress) : 5
+  const totalSegments =
+    progress > 0 ? Math.round((choiceHistory.length + 1) / progress) : 5;
+
+  const renderStoryTimeline = () => (
+    <div className="space-y-4">
+      {segments.map((segment, index) => {
+        const selectedChoiceId = choiceHistory[index];
+        const segmentChoices = Array.isArray(segment.choices)
+          ? segment.choices
+          : [];
+        const matchedChoice = selectedChoiceId
+          ? segmentChoices.find(
+              (choice) => choice.choice_id === selectedChoiceId,
+            )
+          : null;
+        const selectedChoiceText = matchedChoice?.text || selectedChoiceId;
+        const selectedChoiceEmoji = matchedChoice?.emoji || "✅";
+
+        return (
+          <div key={`${segment.segment_id}-${index}`} className="space-y-3">
+            <PerspectiveContainer enableTilt={false}>
+              <StorySegmentDisplay
+                segment={segment}
+                title={storyTitle}
+                segmentIndex={index}
+                isRevealing={isRevealing && index === segments.length - 1}
+              />
+            </PerspectiveContainer>
+
+            {selectedChoiceId && (
+              <motion.div
+                className="mx-auto max-w-md rounded-xl border border-primary/25 bg-primary/5 px-4 py-3 text-center"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+              >
+                <p className="text-xs font-semibold uppercase tracking-wide text-primary mb-1">
+                  You Chose
+                </p>
+                <p className="text-sm text-gray-700">
+                  <span className="mr-1">{selectedChoiceEmoji}</span>
+                  {selectedChoiceText}
+                </p>
+              </motion.div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
@@ -258,11 +349,20 @@ function InteractiveStoryPage() {
         <h1 className="text-2xl md:text-3xl font-bold text-gray-800 mt-2">
           Interactive Story
         </h1>
-        <p className="text-gray-600 mt-1">Choose your adventure, create unique story endings</p>
+        <p className="text-gray-600 mt-1">
+          Choose your adventure, create unique story endings
+        </p>
       </motion.div>
 
-      {/* Error display */}
-      {error && (
+      {/* Quota exceeded overlay */}
+      <QuotaExceededOverlay
+        show={isQuotaError(error) && !quotaDismissed}
+        message={error ?? ''}
+        onDismiss={() => setQuotaDismissed(true)}
+      />
+
+      {/* Error display (non-quota errors) */}
+      {error && !isQuotaError(error) && (
         <motion.div
           className="bg-red-50 border border-red-200 rounded-card p-4 text-red-700"
           initial={{ opacity: 0, scale: 0.95 }}
@@ -276,12 +376,67 @@ function InteractiveStoryPage() {
       )}
 
       {/* Setup View */}
-      {pageState === 'setup' && (
+      {pageState === "setup" && (
         <motion.div
           className="space-y-6"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
         >
+          {/* Session expired message */}
+          {sessionExpiredMsg && (
+            <motion.div
+              className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-amber-700 text-sm text-center"
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+            >
+              <span className="text-lg mr-1">🌅</span> {sessionExpiredMsg}
+            </motion.div>
+          )}
+
+          {/* Continue Your Story prompt */}
+          {hasPersistedSession && storeTitle && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+            >
+              <Card variant="colorful" colorScheme="primary">
+                <div className="text-center space-y-3">
+                  <span className="text-3xl block">📖</span>
+                  <h3 className="text-lg font-bold text-gray-800">
+                    继续上次的故事？
+                  </h3>
+                  <p className="text-sm text-gray-600">
+                    <span className="font-medium">{storeTitle}</span>
+                    {storeProgress > 0 && (
+                      <span className="ml-2 text-primary">
+                        — 已完成 {Math.round(storeProgress * 100)}%
+                      </span>
+                    )}
+                  </p>
+                  <div className="flex gap-3 justify-center pt-1">
+                    <Button
+                      variant="primary"
+                      size="md"
+                      onClick={handleContinueStory}
+                      isLoading={isResuming}
+                      leftIcon={<span>▶️</span>}
+                    >
+                      Continue
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="md"
+                      onClick={handleStartNew}
+                      leftIcon={<span>✨</span>}
+                    >
+                      Start New
+                    </Button>
+                  </div>
+                </div>
+              </Card>
+            </motion.div>
+          )}
+
           {/* Age Group Selection */}
           <Card>
             <h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
@@ -297,8 +452,8 @@ function InteractiveStoryPage() {
                     p-4 rounded-xl border-2 text-center transition-colors
                     ${
                       selectedAge === age.value
-                        ? 'border-primary bg-primary/10'
-                        : 'border-gray-200 hover:border-primary/50'
+                        ? "border-primary bg-primary/10"
+                        : "border-gray-200 hover:border-primary/50"
                     }
                   `}
                   onClick={() => setSelectedAge(age.value)}
@@ -317,9 +472,7 @@ function InteractiveStoryPage() {
             <h2 className="text-lg font-bold text-gray-800 mb-2 flex items-center gap-2">
               <span>💫</span>
               Select Interests
-              <span className="text-sm font-normal text-gray-500">
-                (1-5)
-              </span>
+              <span className="text-sm font-normal text-gray-500">(1-5)</span>
             </h2>
             <p className="text-sm text-gray-500 mb-4">
               Selected {selectedInterests.length}/5
@@ -332,14 +485,14 @@ function InteractiveStoryPage() {
                     px-4 py-2 rounded-full text-sm font-medium transition-colors
                     ${
                       selectedInterests.includes(interest)
-                        ? 'bg-secondary text-white'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        ? "bg-secondary text-white"
+                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                     }
                     ${
                       selectedInterests.length >= 5 &&
                       !selectedInterests.includes(interest)
-                        ? 'opacity-50 cursor-not-allowed'
-                        : ''
+                        ? "opacity-50 cursor-not-allowed"
+                        : ""
                     }
                   `}
                   onClick={() => toggleInterest(interest)}
@@ -361,7 +514,9 @@ function InteractiveStoryPage() {
             <h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
               <span>🎨</span>
               Story Theme
-              <span className="text-sm font-normal text-gray-500">(Optional)</span>
+              <span className="text-sm font-normal text-gray-500">
+                (Optional)
+              </span>
             </h2>
             <input
               type="text"
@@ -380,7 +535,7 @@ function InteractiveStoryPage() {
           {streaming.isStreaming && (
             <StreamingVisualizer
               phase={animationPhase}
-              message={streaming.streamMessage || 'Creating story...'}
+              message={streaming.streamMessage || "Creating story..."}
               thinkingContent={streaming.thinkingContent}
               layout="card"
               showParticles={false}
@@ -394,16 +549,20 @@ function InteractiveStoryPage() {
             className="w-full"
             onClick={handleStartStory}
             isLoading={isLoading}
-            disabled={!selectedAge || selectedInterests.length === 0 || streaming.isStreaming}
+            disabled={
+              !selectedAge ||
+              selectedInterests.length === 0 ||
+              streaming.isStreaming
+            }
             leftIcon={<span>🚀</span>}
           >
-            {streaming.isStreaming ? 'Creating...' : 'Start Story'}
+            {streaming.isStreaming ? "Creating..." : "Start Story"}
           </Button>
         </motion.div>
       )}
 
       {/* Playing View */}
-      {pageState === 'playing' && currentSegment && (
+      {pageState === "playing" && currentSegment && (
         <motion.div
           className="space-y-6"
           initial={{ opacity: 0 }}
@@ -422,39 +581,31 @@ function InteractiveStoryPage() {
             audioUrl={currentSegment.audio_url || onDemandAudioUrl}
             onRequestAudio={handleRequestAudio}
             isAudioLoading={isAudioGenerating}
-            autoPlayAudio={activeAgeGroup === '3-5'}
-            textContent={
-              <PerspectiveContainer enableTilt={false}>
-                <StorySegmentDisplay
-                  segment={currentSegment}
-                  title={storyTitle}
-                  segmentIndex={choiceHistory.length}
-                  isRevealing={isRevealing}
-                />
-              </PerspectiveContainer>
-            }
+            autoPlayAudio={activeAgeGroup === "3-5"}
+            textContent={renderStoryTimeline()}
           />
 
           {/* Choices */}
-          {!currentSegment.is_ending && currentSegment.choices.length > 0 && (
-            <div className="space-y-3">
-              <h3 className="text-center text-gray-600 font-medium">
-                What happens next?
-              </h3>
-              <ChoiceButtons
-                choices={currentSegment.choices}
-                onChoose={handleChoice}
-                isLoading={isLoading}
-                disabled={isLoading}
-              />
-            </div>
-          )}
+          {!currentSegment.is_ending &&
+            (currentSegment.choices?.length ?? 0) > 0 && (
+              <div className="space-y-3">
+                <h3 className="text-center text-gray-600 font-medium">
+                  What happens next?
+                </h3>
+                <ChoiceButtons
+                  choices={currentSegment.choices || []}
+                  onChoose={handleChoice}
+                  isLoading={isLoading}
+                  disabled={isLoading}
+                />
+              </div>
+            )}
 
           {/* Loading overlay with streaming visualizer */}
           {isLoading && (
             <StreamingVisualizer
               phase={animationPhase}
-              message={streaming.streamMessage || 'Story is unfolding...'}
+              message={streaming.streamMessage || "Story is unfolding..."}
               thinkingContent={streaming.thinkingContent}
               layout="card"
               showSparkles
@@ -464,29 +615,21 @@ function InteractiveStoryPage() {
       )}
 
       {/* Completed View */}
-      {pageState === 'completed' && (
+      {pageState === "completed" && (
         <motion.div
           className="space-y-6"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
         >
-          {/* Final segment display with celebration */}
+          {/* Full story journey with selected choices interleaved */}
           {currentSegment && (
             <AgeAwareContent
               ageGroup={activeAgeGroup}
               audioUrl={currentSegment.audio_url || onDemandAudioUrl}
               onRequestAudio={handleRequestAudio}
               isAudioLoading={isAudioGenerating}
-              autoPlayAudio={activeAgeGroup === '3-5'}
-              textContent={
-                <PerspectiveContainer enableTilt={false}>
-                  <StorySegmentDisplay
-                    segment={currentSegment}
-                    title={storyTitle}
-                    segmentIndex={choiceHistory.length}
-                  />
-                </PerspectiveContainer>
-              }
+              autoPlayAudio={activeAgeGroup === "3-5"}
+              textContent={renderStoryTimeline()}
             />
           )}
 
@@ -521,15 +664,15 @@ function InteractiveStoryPage() {
               size="lg"
               className="flex-1"
               onClick={handleSaveStory}
-              disabled={saveStatus === 'saving' || saveStatus === 'saved'}
-              isLoading={saveStatus === 'saving'}
-              leftIcon={<span>{saveStatus === 'saved' ? '✅' : '💾'}</span>}
+              disabled={saveStatus === "saving" || saveStatus === "saved"}
+              isLoading={saveStatus === "saving"}
+              leftIcon={<span>{saveStatus === "saved" ? "✅" : "💾"}</span>}
             >
-              {saveStatus === 'saved'
-                ? 'Saved!'
-                : saveStatus === 'error'
-                  ? 'Retry Save'
-                  : 'Save to My Library'}
+              {saveStatus === "saved"
+                ? "Saved!"
+                : saveStatus === "error"
+                  ? "Retry Save"
+                  : "Save to My Library"}
             </Button>
             <Button
               variant="primary"
@@ -544,7 +687,7 @@ function InteractiveStoryPage() {
               variant="outline"
               size="lg"
               className="flex-1"
-              onClick={() => navigate('/')}
+              onClick={() => navigate("/")}
               leftIcon={<span>🏠</span>}
             >
               Back to Home
@@ -553,7 +696,7 @@ function InteractiveStoryPage() {
         </motion.div>
       )}
     </div>
-  )
+  );
 }
 
-export default InteractiveStoryPage
+export default InteractiveStoryPage;
