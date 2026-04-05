@@ -64,6 +64,7 @@ async def _fake_stream_disconnects_before_result(**kwargs):
 class TestStreamDisconnect:
     """Verify that story_repo.create is skipped when client disconnects."""
 
+    @patch("backend.src.api.routes.image_to_story.usage_repo")
     @patch("backend.src.api.routes.image_to_story.story_repo")
     @patch("backend.src.api.routes.image_to_story.preference_repo")
     @patch("backend.src.api.routes.image_to_story.stream_image_to_story")
@@ -78,12 +79,14 @@ class TestStreamDisconnect:
         mock_stream,
         mock_pref_repo,
         mock_story_repo,
+        mock_usage_repo,
     ):
         """When the client disconnects mid-stream, story_repo.create must not be called."""
         from pathlib import Path
 
         mock_save_upload.return_value = Path("/tmp/fake_image.png")
         mock_story_repo.create = AsyncMock()
+        mock_usage_repo.increment = AsyncMock()
 
         # Track disconnect state
         disconnected = False
@@ -136,6 +139,7 @@ class TestStreamDisconnect:
 
         # Call the streaming endpoint
         from backend.src.api.routes.image_to_story import create_story_from_image_stream
+        from backend.src.api.models import ArtTheme
 
         response = await create_story_from_image_stream(
             request=mock_request,
@@ -145,6 +149,7 @@ class TestStreamDisconnect:
             interests=None,
             voice="nova",
             enable_audio=True,
+            art_theme=ArtTheme.NONE,
             user=mock_user,
         )
 
@@ -156,6 +161,7 @@ class TestStreamDisconnect:
         # story_repo.create should NOT have been called
         mock_story_repo.create.assert_not_called()
 
+    @patch("backend.src.api.routes.image_to_story.usage_repo")
     @patch("backend.src.api.routes.image_to_story.story_repo")
     @patch("backend.src.api.routes.image_to_story.preference_repo")
     @patch("backend.src.api.routes.image_to_story.stream_image_to_story")
@@ -170,6 +176,7 @@ class TestStreamDisconnect:
         mock_stream,
         mock_pref_repo,
         mock_story_repo,
+        mock_usage_repo,
     ):
         """When the client stays connected, story_repo.create IS called."""
         from pathlib import Path
@@ -177,6 +184,7 @@ class TestStreamDisconnect:
         mock_save_upload.return_value = Path("/tmp/fake_image.png")
         mock_story_repo.create = AsyncMock()
         mock_pref_repo.update_from_story_result = AsyncMock()
+        mock_usage_repo.increment = AsyncMock()
 
         async def is_disconnected():
             return False
@@ -197,6 +205,7 @@ class TestStreamDisconnect:
         mock_image.content_type = "image/png"
 
         from backend.src.api.routes.image_to_story import create_story_from_image_stream
+        from backend.src.api.models import ArtTheme
 
         response = await create_story_from_image_stream(
             request=mock_request,
@@ -206,6 +215,7 @@ class TestStreamDisconnect:
             interests=None,
             voice="nova",
             enable_audio=True,
+            art_theme=ArtTheme.NONE,
             user=mock_user,
         )
 

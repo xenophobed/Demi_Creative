@@ -29,13 +29,14 @@ class TestMCPImportLogging:
         # At minimum, the status dict should exist and have entries
         assert hasattr(pkg, "MCP_SERVER_STATUS")
         assert isinstance(pkg.MCP_SERVER_STATUS, dict)
-        # All six servers must be tracked
+        # All servers must be tracked
         expected_servers = {
             "vision_analysis_server",
             "vector_search_server",
             "safety_check_server",
             "tts_generator_server",
             "video_generator_server",
+            "image_style_server",
             "web_search_server",
         }
         assert expected_servers == set(pkg.MCP_SERVER_STATUS.keys())
