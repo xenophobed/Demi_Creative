@@ -32,7 +32,7 @@ export const storyGenerationManager = {
       return
     }
 
-    const { selectedImage, selectedVoice, enableAudio, selectedArtTheme } = store
+    const { selectedImage, selectedVoice, selectedProvider, enableAudio, selectedArtTheme } = store
     if (!selectedImage) {
       store.setUploadError('Please select an image first')
       return
@@ -101,6 +101,7 @@ export const storyGenerationManager = {
           voice: selectedVoice,
           enableAudio,
           artTheme: selectedArtTheme,
+          provider: selectedProvider || undefined,
         },
         callbacks,
         abortController.signal

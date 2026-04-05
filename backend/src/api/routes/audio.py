@@ -3,13 +3,18 @@ Audio API Routes
 
 Audio generation API endpoints
 Supports on-demand audio generation (for the 10-12 age group)
+and voice preview with disk caching (#333).
 """
 
+import logging
+import time
+from collections import defaultdict
 from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
+from starlette.requests import Request
 
 from ..deps import get_current_user, get_session_for_owner, get_story_for_owner
 from ..models import AgeGroup, EmotionType, TTSProviderEnum
@@ -21,6 +26,8 @@ from ...mcp_servers.tts_generator_server import (
     MINIMAX_VOICES,
     ELEVENLABS_VOICES,
 )
+
+logger = logging.getLogger(__name__)
 
 
 router = APIRouter(
@@ -100,6 +107,121 @@ async def list_voices(
             voices.append(entry)
 
     return VoiceCatalogResponse(voices=voices, total=len(voices))
+
+
+# ---------------------------------------------------------------------------
+# Voice preview (#333) — rate limiter + endpoint
+# ---------------------------------------------------------------------------
+
+PREVIEW_TEXT = (
+    "Once upon a time, in a magical land far away, "
+    "a curious little adventurer set off on a journey."
+)
+
+# Simple in-memory rate limiter: IP -> list of request timestamps
+_preview_rate: dict[str, list[float]] = defaultdict(list)
+_PREVIEW_RATE_LIMIT = 10  # requests per minute
+_PREVIEW_RATE_WINDOW = 60.0  # seconds
+
+
+def _check_preview_rate(client_ip: str) -> None:
+    """Raise 429 if *client_ip* exceeds the preview rate limit."""
+    now = time.monotonic()
+    timestamps = _preview_rate[client_ip]
+    # Prune old entries
+    _preview_rate[client_ip] = [t for t in timestamps if now - t < _PREVIEW_RATE_WINDOW]
+    if len(_preview_rate[client_ip]) >= _PREVIEW_RATE_LIMIT:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many preview requests. Please wait a moment.",
+        )
+    _preview_rate[client_ip].append(now)
+
+
+class VoicePreviewResponse(BaseModel):
+    """Voice preview response."""
+    voice_id: str = Field(..., description="Voice identifier")
+    provider: str = Field(..., description="TTS provider")
+    audio_url: str = Field(..., description="URL to the preview audio file")
+    cached: bool = Field(..., description="Whether the result was served from cache")
+
+
+_VALID_PROVIDERS = {"openai", "replicate", "elevenlabs"}
+
+
+@router.get(
+    "/preview",
+    response_model=VoicePreviewResponse,
+    summary="Preview a TTS voice",
+    description="Generate a short audio sample for a voice. Cached to disk after first generation.",
+)
+async def preview_voice(
+    request: Request,
+    voice_id: str,
+    provider: str = "openai",
+):
+    """
+    Generate or return a cached 2-4 second voice preview (public — no auth). (#333)
+    """
+    # Validate provider
+    if provider not in _VALID_PROVIDERS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid provider '{provider}'. Must be one of: {', '.join(sorted(_VALID_PROVIDERS))}",
+        )
+
+    # Rate limit
+    client_ip = request.client.host if request.client else "unknown"
+    _check_preview_rate(client_ip)
+
+    # Check cache
+    preview_dir = Path("./data/audio/previews")
+    preview_dir.mkdir(parents=True, exist_ok=True)
+    cache_filename = f"{provider}_{voice_id}.mp3"
+    cache_path = preview_dir / cache_filename
+
+    if cache_path.exists() and cache_path.stat().st_size > 0:
+        return VoicePreviewResponse(
+            voice_id=voice_id,
+            provider=provider,
+            audio_url=f"/data/audio/previews/{cache_filename}",
+            cached=True,
+        )
+
+    # Generate preview audio
+    try:
+        result = await generate_story_audio_file(
+            text=PREVIEW_TEXT,
+            voice=voice_id,
+            speed=1.0,
+            provider=provider,
+        )
+
+        if not result.get("success"):
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Preview generation failed: {result.get('error', 'unknown error')}",
+            )
+
+        # Move generated file to cache location
+        generated_path = Path(result["audio_path"])
+        generated_path.rename(cache_path)
+
+        return VoicePreviewResponse(
+            voice_id=voice_id,
+            provider=provider,
+            audio_url=f"/data/audio/previews/{cache_filename}",
+            cached=False,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Voice preview generation failed: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Preview generation failed. Please try again later.",
+        )
 
 
 class AudioGenerateRequest(BaseModel):
