@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import Button from '@/components/common/Button'
 import Card from '@/components/common/Card'
@@ -35,6 +35,8 @@ function friendlyAuthError(raw: string, mode: AuthMode): string {
 
 function LoginPage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const referralCode = searchParams.get('ref') || undefined
   const { setAuth } = useAuthStore()
 
   // Form mode
@@ -94,6 +96,7 @@ function LoginPage() {
           email: email.trim().toLowerCase(),
           password,
           display_name: displayName.trim() || undefined,
+          referral_code: referralCode,
         })
       }
 

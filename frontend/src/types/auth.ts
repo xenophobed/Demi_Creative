@@ -14,6 +14,7 @@ export interface RegisterRequest {
   email: string
   password: string
   display_name?: string
+  referral_code?: string
 }
 
 // User profile returned from API
@@ -28,6 +29,18 @@ export interface User {
   role: 'child' | 'parent'
   created_at: string
   last_login_at: string | null
+  membership_tier: 'free' | 'plus'
+  referral_code: string
+}
+
+// Referral status returned from API
+export interface ReferralStatus {
+  referral_code: string
+  share_url: string
+  qualified_count: number
+  total_count: number
+  upgrade_threshold: number
+  membership_tier: string
 }
 
 // Token response from API
