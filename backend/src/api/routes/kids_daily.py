@@ -436,7 +436,7 @@ async def _build_episode(
                 "total_duration": 8.0,
                 "guest_character": "Professor Owl",
             },
-            "safety_score": 0.9,
+            "safety_score": 0.0,
             "used_mock": True,
             "degraded_reason": "agent_fallback",
             "guest_character": "Professor Owl",

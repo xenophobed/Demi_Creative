@@ -64,14 +64,14 @@ class TestIllustrationSafetyFailClosed:
     @pytest.mark.asyncio
     async def test_mcp_unavailable_returns_safe_fallback(self):
         """When MCP tool is unavailable, must return a safe generic description."""
-        from src.api.routes.morning_show import _safe_illustration_description
+        from src.api.routes.kids_daily import _safe_illustration_description
 
         # Patch to simulate MCP failure
         mock_tool = AsyncMock(side_effect=RuntimeError("MCP unavailable"))
 
         with patch("src.mcp_servers.check_content_safety", mock_tool):
             import importlib
-            import src.api.routes.morning_show as mod
+            import src.api.routes.kids_daily as mod
             importlib.reload(mod)
             result = await mod._safe_illustration_description(
                 "potentially unsafe description", "6-8"

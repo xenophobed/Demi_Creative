@@ -414,18 +414,18 @@ class TestKidsDailyAgentContract:
         assert script.total_duration == 0.0
         assert script.lines == []
 
-    def test_generate_with_sdk_returns_safety_score(self):
-        """Contract: _generate_with_sdk returns (DialogueScript, safety_score) tuple.
+    def test_generate_dialogue_with_sdk_returns_safety_score(self):
+        """Contract: _generate_dialogue_with_sdk returns (DialogueScript, safety_score) tuple.
 
         The safety_score must come from result_data, not be hardcoded.
         Fixes #135.
         """
-        from backend.src.agents.kids_daily_agent import _generate_with_sdk
+        from backend.src.agents.kids_daily_agent import _generate_dialogue_with_sdk
         import inspect
 
-        sig = inspect.signature(_generate_with_sdk)
+        sig = inspect.signature(_generate_dialogue_with_sdk)
         # Verify the function exists and is async
-        assert inspect.iscoroutinefunction(_generate_with_sdk)
+        assert inspect.iscoroutinefunction(_generate_dialogue_with_sdk)
         # The return type annotation should indicate a tuple
         # (we check the actual behavior in the integration test below)
 
@@ -623,10 +623,10 @@ class TestStreamEventContract:
 # SDK Response Parsing & Normalization (#137)
 # ---------------------------------------------------------------------------
 class TestSDKResponseParsing:
-    """Contract: _generate_with_sdk normalization logic for SDK JSON responses."""
+    """Contract: _generate_dialogue_with_sdk normalization logic for SDK JSON responses."""
 
     def _normalize_lines(self, raw_lines, line_duration=9.0, guest_name="Professor Owl"):
-        """Re-implement the normalization logic from _generate_with_sdk for contract testing.
+        """Re-implement the normalization logic from _generate_dialogue_with_sdk for contract testing.
 
         This mirrors the exact normalization logic in kids_daily_agent.py lines 319-377
         so we can test edge cases without needing the full SDK client.
@@ -878,7 +878,7 @@ class TestForceMockEnvFlag:
 
 
 class TestSafetyScoreExtraction:
-    """Contract: _generate_with_sdk must extract and propagate safety_score from SDK result."""
+    """Contract: _generate_dialogue_with_sdk must extract and propagate safety_score from SDK result."""
 
     @pytest.mark.asyncio
     async def test_sdk_safety_score_propagated_to_agent_output(self):
@@ -917,7 +917,7 @@ class TestSafetyScoreExtraction:
         with patch(
             "backend.src.agents.kids_daily_agent._should_use_mock", return_value=False
         ), patch(
-            "backend.src.agents.kids_daily_agent._generate_with_sdk",
+            "backend.src.agents.kids_daily_agent._generate_dialogue_with_sdk",
             new_callable=AsyncMock,
             return_value=(mock_script, 0.91),
         ):
@@ -956,7 +956,7 @@ class TestSafetyScoreExtraction:
         with patch(
             "backend.src.agents.kids_daily_agent._should_use_mock", return_value=False
         ), patch(
-            "backend.src.agents.kids_daily_agent._generate_with_sdk",
+            "backend.src.agents.kids_daily_agent._generate_dialogue_with_sdk",
             new_callable=AsyncMock,
             return_value=(mock_script, 0.70),
         ):

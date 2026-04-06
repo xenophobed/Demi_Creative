@@ -12,7 +12,7 @@ import pytest
 from unittest.mock import AsyncMock, patch
 
 from backend.src.api.models import AgeGroup
-from backend.src.services.morning_show_scheduler import DailyDropScheduler
+from backend.src.services.kids_daily_scheduler import DailyDropScheduler
 
 
 @pytest.fixture
@@ -34,7 +34,7 @@ class TestResolveChildAgeGroupScope:
             wraps=scheduler._resolve_child_age_group,
         ):
             with patch(
-                "backend.src.services.morning_show_scheduler.db_manager"
+                "backend.src.services.kids_daily_scheduler.db_manager"
             ) as mock_db:
                 mock_db.fetchone = AsyncMock(return_value=mock_row)
 
@@ -56,7 +56,7 @@ class TestResolveChildAgeGroupScope:
         """Contract: query scoped by user_id returns None when no stories exist for that user,
         even if stories exist for the same child_id under a different user."""
         with patch(
-            "backend.src.services.morning_show_scheduler.db_manager"
+            "backend.src.services.kids_daily_scheduler.db_manager"
         ) as mock_db:
             # Simulate: no rows found for this user_id + child_id combination
             mock_db.fetchone = AsyncMock(return_value=None)
@@ -77,7 +77,7 @@ class TestResolveChildAgeGroupScope:
     async def test_no_stories_returns_default_age_group(self, scheduler: DailyDropScheduler):
         """Contract: when no stories exist for the child+user, return AGE_6_8 default."""
         with patch(
-            "backend.src.services.morning_show_scheduler.db_manager"
+            "backend.src.services.kids_daily_scheduler.db_manager"
         ) as mock_db:
             mock_db.fetchone = AsyncMock(return_value=None)
 
@@ -91,7 +91,7 @@ class TestResolveChildAgeGroupScope:
         mock_row = {"age_group": "invalid_age"}
 
         with patch(
-            "backend.src.services.morning_show_scheduler.db_manager"
+            "backend.src.services.kids_daily_scheduler.db_manager"
         ) as mock_db:
             mock_db.fetchone = AsyncMock(return_value=mock_row)
 

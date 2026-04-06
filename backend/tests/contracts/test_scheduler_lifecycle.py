@@ -14,7 +14,7 @@ import os
 import pytest
 from unittest.mock import AsyncMock, patch
 
-from backend.src.services.morning_show_scheduler import DailyDropScheduler
+from backend.src.services.kids_daily_scheduler import DailyDropScheduler
 
 
 # ---------------------------------------------------------------------------
@@ -126,7 +126,7 @@ class TestAlreadyGeneratedToday:
     @pytest.mark.asyncio
     async def test_returns_true_when_row_exists(self, scheduler: DailyDropScheduler):
         with patch(
-            "backend.src.services.morning_show_scheduler.db_manager"
+            "backend.src.services.kids_daily_scheduler.db_manager"
         ) as mock_db:
             mock_db.fetchone = AsyncMock(return_value={"story_id": "s1"})
 
@@ -137,7 +137,7 @@ class TestAlreadyGeneratedToday:
     @pytest.mark.asyncio
     async def test_returns_false_when_no_row(self, scheduler: DailyDropScheduler):
         with patch(
-            "backend.src.services.morning_show_scheduler.db_manager"
+            "backend.src.services.kids_daily_scheduler.db_manager"
         ) as mock_db:
             mock_db.fetchone = AsyncMock(return_value=None)
 
@@ -153,7 +153,7 @@ class TestAlreadyGeneratedToday:
         today = _dt.now().date().isoformat()
 
         with patch(
-            "backend.src.services.morning_show_scheduler.db_manager"
+            "backend.src.services.kids_daily_scheduler.db_manager"
         ) as mock_db:
             mock_db.fetchone = AsyncMock(return_value=None)
 

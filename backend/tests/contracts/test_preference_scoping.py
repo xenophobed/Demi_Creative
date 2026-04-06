@@ -83,10 +83,10 @@ class TestPreferenceScoping:
     @pytest.mark.asyncio
     async def test_morning_show_scoped_by_user(self, repo):
         """Morning show topic scores are isolated per user."""
-        score_a = await repo.update_from_morning_show(
+        score_a = await repo.update_from_kids_daily(
             "child_1", "science", "complete", 1.0, user_id="user_A",
         )
-        score_b = await repo.update_from_morning_show(
+        score_b = await repo.update_from_kids_daily(
             "child_1", "science", "start", 0.0, user_id="user_B",
         )
 
@@ -98,8 +98,8 @@ class TestPreferenceScoping:
         profile_a = await repo.get_profile("child_1", user_id="user_A")
         profile_b = await repo.get_profile("child_1", user_id="user_B")
 
-        assert profile_a["morning_show"]["topic_scores"]["science"] == pytest.approx(1.0)
-        assert profile_b["morning_show"]["topic_scores"]["science"] == pytest.approx(0.2)
+        assert profile_a["kids_daily"]["topic_scores"]["science"] == pytest.approx(1.0)
+        assert profile_b["kids_daily"]["topic_scores"]["science"] == pytest.approx(0.2)
 
     @pytest.mark.asyncio
     async def test_delete_scoped_by_user(self, repo):
@@ -145,7 +145,7 @@ class TestTrackingPayloadValidation:
         # Client sends child_id=fake_child, topic=sports
         # The repo should store under the user-scoped key for real_child
 
-        await repo.update_from_morning_show(
+        await repo.update_from_kids_daily(
             child_id="real_child",  # from episode
             topic="science",       # from episode
             event_type="complete",
@@ -155,11 +155,11 @@ class TestTrackingPayloadValidation:
 
         # Check that real_child profile was updated
         profile = await repo.get_profile("real_child", user_id="user_1")
-        assert profile["morning_show"]["topic_scores"]["science"] == pytest.approx(1.0)
+        assert profile["kids_daily"]["topic_scores"]["science"] == pytest.approx(1.0)
 
         # Verify fake_child has no data
         fake_profile = await repo.get_profile("fake_child", user_id="user_1")
-        assert fake_profile["morning_show"]["topic_scores"] == {}
+        assert fake_profile["kids_daily"]["topic_scores"] == {}
 
     @pytest.mark.asyncio
     async def test_update_from_choices_scoped(self, repo):
