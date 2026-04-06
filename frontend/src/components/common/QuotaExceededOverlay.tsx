@@ -1,16 +1,22 @@
+import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 
 interface QuotaExceededOverlayProps {
   show: boolean
   message: string
   onDismiss: () => void
+  referralCode?: string
+  membershipTier?: string
 }
 
 /**
  * Full-screen overlay shown when a user exceeds their daily generation quota.
  * Blurs the background and displays a friendly, child-appropriate message.
  */
-export default function QuotaExceededOverlay({ show, message, onDismiss }: QuotaExceededOverlayProps) {
+export default function QuotaExceededOverlay({ show, message, onDismiss, referralCode, membershipTier }: QuotaExceededOverlayProps) {
+  const [copied, setCopied] = useState(false)
+  const shareUrl = referralCode ? `${window.location.origin}/login?ref=${referralCode}` : ''
+
   return (
     <AnimatePresence>
       {show && (
@@ -38,9 +44,46 @@ export default function QuotaExceededOverlay({ show, message, onDismiss }: Quota
             <h2 className="text-xl font-bold text-amber-800 mb-2">
               今天的创作次数用完啦！
             </h2>
-            <p className="text-amber-700 mb-6 leading-relaxed">
+            <p className="text-amber-700 mb-4 leading-relaxed">
               {message}
             </p>
+
+            {/* Referral CTA */}
+            {referralCode && membershipTier === 'plus' ? (
+              <div className="mb-4 px-4 py-3 rounded-2xl bg-gradient-to-r from-amber-100 to-yellow-100 border border-amber-200">
+                <p className="text-sm font-semibold text-amber-800">
+                  {"\u4f60\u5df2\u662f Plus \u4f1a\u5458\uff01"}
+                </p>
+              </div>
+            ) : referralCode ? (
+              <div className="mb-4 px-4 py-3 rounded-2xl bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-200 space-y-2">
+                <p className="text-sm font-semibold text-purple-800">
+                  {"\u60f3\u8981\u66f4\u591a\uff1f\u5206\u4eab\u7ed9\u670b\u53cb\uff01"}
+                </p>
+                <p className="text-xs text-purple-600">
+                  {"\u6bcf\u9080\u8bf710\u4f4d\u670b\u53cb\u6ce8\u518c\uff0c\u83b7\u5f973\u500d\u6bcf\u65e5\u6b21\u6570"}
+                </p>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    readOnly
+                    value={shareUrl}
+                    className="flex-1 px-2 py-1.5 text-xs border border-purple-200 rounded-lg bg-white text-purple-700 truncate"
+                  />
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(shareUrl)
+                      setCopied(true)
+                      setTimeout(() => setCopied(false), 2000)
+                    }}
+                    className="px-3 py-1.5 text-xs font-medium rounded-lg bg-purple-500 text-white hover:bg-purple-600 transition-colors whitespace-nowrap"
+                  >
+                    {copied ? "\u5df2\u590d\u5236" : "\u590d\u5236"}
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
             <button
               onClick={onDismiss}
               className="px-6 py-2.5 rounded-full bg-amber-400 hover:bg-amber-500 text-white font-semibold shadow-md transition-colors"

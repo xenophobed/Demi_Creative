@@ -8,7 +8,7 @@ import TiltCard from "@/components/depth/TiltCard";
 import useAuthStore from "@/store/useAuthStore";
 import useChildStore from "@/store/useChildStore";
 import { authService } from "@/api/services/authService";
-import type { UpdateProfileRequest } from "@/types/auth";
+import type { UpdateProfileRequest, ReferralStatus } from "@/types/auth";
 import AvatarDisplay from "@/components/common/AvatarDisplay";
 import CharacterGallery from "./CharacterGallery";
 import PreferenceSummary from "./PreferenceSummary";
@@ -59,6 +59,9 @@ function ProfilePage() {
   const [deletingPreferenceKey, setDeletingPreferenceKey] = useState<
     string | null
   >(null);
+  const [referral, setReferral] = useState<ReferralStatus | null>(null);
+  const [referralLoading, setReferralLoading] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
 
   const {
     characters,
@@ -76,6 +79,16 @@ function ProfilePage() {
       navigate("/login");
     }
   }, [isAuthenticated, navigate]);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    setReferralLoading(true);
+    authService
+      .fetchReferralStatus()
+      .then(setReferral)
+      .catch((err) => console.error("Failed to load referral status:", err))
+      .finally(() => setReferralLoading(false));
+  }, [isAuthenticated]);
 
   // Fetch user stats
   const { data: stats, isLoading: statsLoading } = useQuery({
@@ -310,6 +323,82 @@ function ProfilePage() {
           </div>
         </TiltCard>
       </motion.div>
+
+      {/* Referral Section */}
+      <motion.section
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.12 }}
+      >
+        <Card className="p-5">
+          <div className="flex items-center gap-2 mb-3">
+            <h2 className="text-base font-bold text-gray-800">
+              {referral?.membership_tier === "plus" && (
+                <span className="inline-block mr-1.5 px-2 py-0.5 text-xs font-semibold rounded-full bg-gradient-to-r from-amber-400 to-yellow-300 text-amber-900">
+                  Plus
+                </span>
+              )}
+              {"\u5206\u4eab\u4e50\u8da3\u7ed9\u670b\u53cb\uff01"}
+            </h2>
+          </div>
+
+          {referralLoading ? (
+            <p className="text-sm text-gray-400">Loading...</p>
+          ) : referral ? (
+            <div className="space-y-4">
+              {/* Share link */}
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  readOnly
+                  value={referral.share_url}
+                  className="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50 text-gray-600 truncate"
+                />
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(referral.share_url);
+                    setLinkCopied(true);
+                    setTimeout(() => setLinkCopied(false), 2000);
+                  }}
+                  className="px-3 py-2 text-sm font-medium rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors whitespace-nowrap"
+                >
+                  {linkCopied ? "\u5df2\u590d\u5236" : "\u590d\u5236\u94fe\u63a5"}
+                </button>
+              </div>
+
+              {/* Star progress meter */}
+              <div>
+                <div className="flex items-center gap-1 mb-1">
+                  {Array.from({ length: referral.upgrade_threshold }).map(
+                    (_, i) => (
+                      <span
+                        key={i}
+                        className={`text-lg ${
+                          i < referral.qualified_count
+                            ? "opacity-100"
+                            : "opacity-25"
+                        }`}
+                      >
+                        {"\u2b50"}
+                      </span>
+                    ),
+                  )}
+                </div>
+                <p className="text-xs text-gray-500">
+                  {referral.qualified_count} / {referral.upgrade_threshold}{" "}
+                  {"\u4f4d\u670b\u53cb\u5df2\u6ce8\u518c"}
+                  {referral.membership_tier !== "plus" &&
+                    ` \u2014 \u96c6\u9f50 ${referral.upgrade_threshold} \u4f4d\u5373\u53ef\u5347\u7ea7 Plus`}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-gray-400">
+              {"\u65e0\u6cd5\u52a0\u8f7d\u63a8\u8350\u4fe1\u606f"}
+            </p>
+          )}
+        </Card>
+      </motion.section>
 
       {/* Kids Daily settings shortcut */}
       <motion.section

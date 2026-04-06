@@ -20,6 +20,7 @@ from .subscription_repository import (
     MaxSubscriptionsExceededError,
 )
 from .usage_repository import UsageRepository, usage_repo
+from .referral_repository import ReferralRepository, referral_repo
 
 __all__ = [
     "CursorResult",
@@ -48,4 +49,6 @@ __all__ = [
     "MaxSubscriptionsExceededError",
     "UsageRepository",
     "usage_repo",
+    "ReferralRepository",
+    "referral_repo",
 ]

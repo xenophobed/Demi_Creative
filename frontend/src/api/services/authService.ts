@@ -23,6 +23,7 @@ import type {
   ChangePasswordRequest,
   PaginatedStories,
   PaginatedSessions,
+  ReferralStatus,
 } from '@/types/auth'
 
 const AUTH_BASE = '/users'
@@ -174,6 +175,14 @@ export const authService = {
    */
   async getMyStories(params?: { limit?: number; offset?: number }): Promise<PaginatedStories> {
     const response = await apiClient.get<PaginatedStories>(`${AUTH_BASE}/me/stories`, { params })
+    return response.data
+  },
+
+  /**
+   * Get referral status for current user.
+   */
+  async fetchReferralStatus(): Promise<ReferralStatus> {
+    const response = await apiClient.get<ReferralStatus>(`${AUTH_BASE}/me/referrals`)
     return response.data
   },
 
