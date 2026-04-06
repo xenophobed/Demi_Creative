@@ -1086,7 +1086,7 @@ Every authenticated user has a daily generation quota (default: **3 AI generatio
 Quota covers: image-to-story, interactive story opening, morning show episode generation.
 
 **Acceptance Criteria:**
-- [ ] `usage_repository` tracks (user_id, date, feature, count) in SQLite
+- [ ] `usage_repository` tracks (user_id, date, feature, count) in database (SQLite dev / PostgreSQL prod)
 - [ ] Quota middleware returns HTTP 429 with `{"quota_remaining": 0, "resets_at": "..."}` when exceeded
 - [ ] Frontend shows "X / 3 generations used today" on UploadPage and InteractiveStory start screen
 - [ ] Quota is configurable via env var `DAILY_GENERATION_QUOTA` (default 3)
@@ -1104,17 +1104,32 @@ Prevents throwaway accounts that drain quota.
 
 ### 3.9.3 Production Hosting
 
-| Layer | Service | Notes |
-|-------|---------|-------|
-| Frontend | Vercel (free) | Auto-deploys from `main` |
-| Backend | Railway ($5–7/month) | FastAPI + SQLite + ChromaDB on same instance |
-| Domain | Optional Cloudflare domain | ~$10/year |
+| Layer | Service | Dev (local) | Prod (deployed) |
+|-------|---------|-------------|-----------------|
+| Frontend | Vercel (free) | Vite dev server | Auto-deploys from `main` |
+| Backend | Railway ($5–7/month) | `uvicorn` local | FastAPI on Railway |
+| Database | Supabase (free tier) | SQLite (aiosqlite) | PostgreSQL (asyncpg) |
+| Vector Search | Supabase pgvector | ChromaDB (local) | pgvector extension in Supabase PostgreSQL |
+| File Storage | Supabase Storage | Local disk (`data/`) | Supabase Storage buckets (CDN URLs) |
+| Domain | Optional Cloudflare | localhost | ~$10/year |
+
+**Architecture:**
+- Database adapter abstraction with factory pattern: reads `DATABASE_URL` env var to select driver (aiosqlite vs asyncpg)
+- pgvector replaces ChromaDB in production using same embedding model (all-MiniLM-L6-v2, 384 dimensions) for search parity
+- Supabase Storage replaces local `StaticFiles` mounts for uploads, audio, videos, and styled images
+- All SQL translated for dual compatibility: SQLite (dev) and PostgreSQL (prod)
 
 **Acceptance Criteria:**
+- [ ] Database adapter supports both SQLite and PostgreSQL via `DATABASE_URL` env var
+- [ ] All 16 tables created correctly in Supabase PostgreSQL
+- [ ] All repository queries work identically on both drivers
+- [ ] pgvector stores drawing + story embeddings with similarity search parity to ChromaDB
+- [ ] File uploads stored in Supabase Storage in prod, local disk in dev
 - [ ] Backend live at a stable public URL with all env vars set
 - [ ] Frontend live on Vercel pointing to backend URL via `VITE_API_BASE_URL`
 - [ ] CORS configured for production frontend origin
 - [ ] Health check endpoint returns 200
+- [ ] Migration script moves existing SQLite + ChromaDB data to Supabase (idempotent)
 
 ### 3.9.4 "Buy Me a Coffee" Donation Widget
 
