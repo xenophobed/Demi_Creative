@@ -245,6 +245,33 @@ class UserService:
             token=token
         )
 
+    async def qualify_and_maybe_upgrade(self, referred_user_id: str) -> bool:
+        """Qualify a referral and auto-upgrade the referrer if threshold reached.
+
+        Called when a referred user verifies their email.
+
+        Returns:
+            True if the referrer was upgraded to Plus tier.
+        """
+        qualified = await referral_repo.qualify_referral(referred_user_id)
+        if not qualified:
+            return False
+
+        ref = await referral_repo.get_referral_by_referred_user(referred_user_id)
+        if not ref:
+            return False
+
+        referrer_id = ref["referrer_user_id"]
+        referrer = await self._repo.get_by_id(referrer_id)
+        if not referrer or referrer.membership_tier == "plus":
+            return False
+
+        if await referral_repo.check_upgrade_eligible(referrer_id):
+            await self._repo.update_membership_tier(referrer_id, "plus")
+            return True
+
+        return False
+
     async def login(
         self,
         username_or_email: str,

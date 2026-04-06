@@ -177,6 +177,16 @@ class UserRepository:
         )
         return self._row_to_user(row) if row else None
 
+    async def update_membership_tier(self, user_id: str, tier: str) -> bool:
+        """Update a user's membership tier."""
+        now = datetime.now().isoformat()
+        cursor = await self._db.execute(
+            "UPDATE users SET membership_tier = ?, updated_at = ? WHERE user_id = ?",
+            (tier, now, user_id)
+        )
+        await self._db.commit()
+        return cursor.rowcount > 0
+
     async def update_user(
         self,
         user_id: str,

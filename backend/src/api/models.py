@@ -738,6 +738,16 @@ class UserResponse(BaseModel):
     last_login_at: Optional[datetime] = Field(None, description="最后登录时间")
 
 
+class ReferralStatusResponse(BaseModel):
+    """Referral progress and membership tier status (PRD §3.9.4)"""
+    referral_code: str = Field(..., description="User's unique referral code")
+    share_url: str = Field(..., description="Shareable referral link")
+    qualified_count: int = Field(0, description="Verified referrals count")
+    total_count: int = Field(0, description="Total referrals count")
+    upgrade_threshold: int = Field(10, description="Qualified referrals needed for Plus")
+    membership_tier: str = Field("free", description="Current membership tier")
+
+
 class UserWithStatsResponse(UserResponse):
     """User info with content statistics"""
     story_count: int = Field(0, description="Total stories created")

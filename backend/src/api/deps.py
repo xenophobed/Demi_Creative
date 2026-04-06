@@ -22,6 +22,7 @@ from ..services.supabase_auth import decode_supabase_token
 from ..services.user_service import UserData, user_service
 
 _DEFAULT_DAILY_QUOTA = 6
+_TIER_QUOTA = {"free": 3, "plus": 9}
 
 
 def _is_development_env() -> bool:
@@ -29,12 +30,19 @@ def _is_development_env() -> bool:
     return env in {"development", "dev", "local"}
 
 
-def _get_daily_quota() -> int:
-    try:
-        quota = int(os.getenv("DAILY_GENERATION_QUOTA", _DEFAULT_DAILY_QUOTA))
-        return quota if quota > 0 else _DEFAULT_DAILY_QUOTA
-    except (ValueError, TypeError):
-        return _DEFAULT_DAILY_QUOTA
+def _get_daily_quota(membership_tier: str = "free") -> int:
+    """Return daily quota based on membership tier.
+
+    Priority: env var override > tier-based default > global default.
+    """
+    env_quota = os.getenv("DAILY_GENERATION_QUOTA")
+    if env_quota:
+        try:
+            quota = int(env_quota)
+            return quota if quota > 0 else _DEFAULT_DAILY_QUOTA
+        except (ValueError, TypeError):
+            pass
+    return _TIER_QUOTA.get(membership_tier, _DEFAULT_DAILY_QUOTA)
 
 
 def _is_pytest_runtime() -> bool:
@@ -213,7 +221,8 @@ async def check_generation_quota(
     if _allow_test_auth_bypass() or _is_development_env():
         return user
 
-    quota = _get_daily_quota()
+    tier = getattr(user, 'membership_tier', 'free') or 'free'
+    quota = _get_daily_quota(tier)
     used = await usage_repo.get_usage_today(user.user_id)
     if used >= quota:
         resets_at = (await usage_repo.get_quota_status(user.user_id, quota))[
