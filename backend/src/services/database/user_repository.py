@@ -4,6 +4,8 @@ User Repository
 CRUD operations for user data with story relationship support.
 """
 
+import secrets
+import string
 import uuid
 from datetime import datetime
 from typing import Optional, List, Dict, Any
@@ -24,6 +26,9 @@ class UserData:
     is_active: bool = True
     is_verified: bool = False
     role: str = "child"
+    membership_tier: str = "free"
+    referral_code: str = ""
+    referred_by: Optional[str] = None
     created_at: str = ""
     updated_at: str = ""
     last_login_at: Optional[str] = None
@@ -52,6 +57,7 @@ class UserRepository:
         password_hash: str,
         display_name: Optional[str] = None,
         role: str = "child",
+        referred_by: Optional[str] = None,
     ) -> UserData:
         """
         Create a new user.
@@ -61,19 +67,24 @@ class UserRepository:
             email: Email address
             password_hash: Hashed password
             display_name: Display name (defaults to username)
+            role: User role
+            referred_by: Referral code used during registration
 
         Returns:
             UserData: Created user data
         """
         user_id = str(uuid.uuid4())
         now = datetime.now().isoformat()
+        referral_code = await self._generate_referral_code()
 
         await self._db.execute(
             """
             INSERT INTO users (
                 user_id, username, email, password_hash, display_name,
-                is_active, is_verified, role, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                is_active, is_verified, role,
+                membership_tier, referral_code, referred_by,
+                created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 user_id,
@@ -84,6 +95,9 @@ class UserRepository:
                 1,
                 0,
                 role,
+                "free",
+                referral_code,
+                referred_by,
                 now,
                 now
             )
@@ -99,6 +113,9 @@ class UserRepository:
             is_active=True,
             is_verified=False,
             role=role,
+            membership_tier="free",
+            referral_code=referral_code,
+            referred_by=referred_by,
             created_at=now,
             updated_at=now,
             last_login_at=None
@@ -449,6 +466,18 @@ class UserRepository:
             "offset": offset
         }
 
+    async def _generate_referral_code(self) -> str:
+        """Generate a unique 8-character alphanumeric referral code."""
+        alphabet = string.ascii_lowercase + string.digits
+        for _ in range(10):
+            code = ''.join(secrets.choice(alphabet) for _ in range(8))
+            existing = await self._db.fetchone(
+                "SELECT 1 FROM users WHERE referral_code = ?", (code,)
+            )
+            if not existing:
+                return code
+        raise RuntimeError("Failed to generate unique referral code after 10 attempts")
+
     def _row_to_user(self, row: dict) -> UserData:
         """Convert database row to UserData."""
         return UserData(
@@ -461,6 +490,9 @@ class UserRepository:
             is_active=bool(row.get('is_active', 1)),
             is_verified=bool(row.get('is_verified', 0)),
             role=row.get('role', 'child'),
+            membership_tier=row.get('membership_tier', 'free'),
+            referral_code=row.get('referral_code', ''),
+            referred_by=row.get('referred_by'),
             created_at=row['created_at'],
             updated_at=row['updated_at'],
             last_login_at=row.get('last_login_at')

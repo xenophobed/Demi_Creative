@@ -996,7 +996,7 @@ Month 3: 儿童创作了 20+ 个故事，形成自己的"故事宇宙"
 - 🔲 每用户每日生成配额 + 用量追踪（§3.9.1）
 - 🔲 邮箱注册 + 邮件验证（§3.9.2）
 - 🔲 Railway 后端部署 + Vercel 前端部署（§3.9.3）
-- 🔲 "Buy Me a Coffee" 捐赠入口（§3.9.4）
+- 🔲 裂变升级会员 — Referral-Based Membership（§3.9.4）
 
 **应该有**:
 - ✅ 互动故事生成（多分支）— 核心流程已完成，增强功能见 §3.2
@@ -1131,15 +1131,50 @@ Prevents throwaway accounts that drain quota.
 - [ ] Health check endpoint returns 200
 - [ ] Migration script moves existing SQLite + ChromaDB data to Supabase (idempotent)
 
-### 3.9.4 "Buy Me a Coffee" Donation Widget
+### 3.9.4 Referral-Based Membership (裂变升级会员)
 
-A voluntary tip widget on the home or profile page. Non-commercial — users choose to donate.
-Lets the creator receive appreciation without gating any features.
+Replace the unusable "Buy Me a Coffee" widget with a referral-based growth and membership tier system. Since we cannot accept payments, growth is driven by user referrals — users share the platform with friends and earn upgraded quotas.
 
-**Acceptance Criteria:**
-- [ ] BMC widget/button visible on HomePage or ProfilePage
-- [ ] Clicking opens buymeacoffee.com/[creator] in a new tab
-- [ ] Does not obstruct any child-facing UI
+#### Membership Tiers
+
+| Tier | How to Get | Daily Quota | Badge |
+|------|-----------|-------------|-------|
+| Free | Default on registration | 3 generations/day | — |
+| Plus | Refer 10 verified users | 9 generations/day (3×) | ⭐ Plus |
+
+#### Referral Mechanics
+
+- Every user gets a unique 8-character referral code on registration (e.g. `ABC12345`)
+- Share link format: `https://<app-domain>/login?ref=<code>`
+- A referral counts as "qualified" only when the referred user verifies their email
+- When a referrer reaches 10 qualified referrals, their account auto-upgrades to Plus tier
+- Upgrade is permanent (does not expire or downgrade)
+
+#### Data Model
+
+- `users` table: add `membership_tier` (free/plus), `referral_code` (unique), `referred_by` (nullable)
+- New `referrals` table: tracks referrer → referred mapping, qualification status, timestamps
+
+#### Acceptance Criteria
+
+- [ ] `users` table has `membership_tier`, `referral_code`, `referred_by` columns
+- [ ] `referrals` table tracks referrer/referred pairs with qualification status
+- [ ] `referral_code` auto-generated on user creation (unique, 8-char alphanumeric)
+- [ ] Registration accepts optional `referral_code` query param; creates referral record
+- [ ] Referral qualifies when referred user\'s email is verified
+- [ ] Auto-upgrade to Plus when qualified referral count >= 10
+- [ ] `GET /api/v1/users/me/referrals` returns referral status
+- [ ] Quota middleware reads `membership_tier` to determine per-user daily limit
+- [ ] Frontend captures `?ref=` param on login/register page
+- [ ] Profile page shows referral link, progress, and tier badge
+- [ ] QuotaExceededOverlay includes "share to get more" CTA
+- [ ] No child personal information exposed in share links
+
+#### Out of Scope
+
+- Paid tiers or payment integration
+- Multi-level / recursive referral rewards
+- Admin dashboard for referral analytics (Phase 3)
 
 ---
 

@@ -256,6 +256,29 @@ DAILY_USAGE_INDEXES = """
 CREATE INDEX IF NOT EXISTS idx_daily_usage_user_date ON daily_usage(user_id, usage_date);
 """
 
+# ============================================================================
+# Referrals Table (#347)
+# ============================================================================
+
+REFERRALS_TABLE = """
+CREATE TABLE IF NOT EXISTS referrals (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    referrer_user_id TEXT NOT NULL,
+    referred_user_id TEXT NOT NULL UNIQUE,
+    referral_code TEXT NOT NULL,
+    is_qualified INTEGER DEFAULT 0,
+    created_at TEXT NOT NULL,
+    qualified_at TEXT,
+    FOREIGN KEY (referrer_user_id) REFERENCES users(user_id) ON DELETE CASCADE,
+    FOREIGN KEY (referred_user_id) REFERENCES users(user_id) ON DELETE CASCADE
+);
+"""
+
+REFERRALS_INDEXES = """
+CREATE INDEX IF NOT EXISTS idx_referrals_referrer ON referrals(referrer_user_id);
+CREATE INDEX IF NOT EXISTS idx_referrals_code ON referrals(referral_code);
+"""
+
 
 # ============================================================================
 # Schema Initialization
@@ -344,6 +367,15 @@ async def init_schema(db: "DatabaseManager") -> None:
             except Exception:
                 pass
 
+    # Create referrals table (#347)
+    await db.execute(REFERRALS_TABLE)
+    for stmt in REFERRALS_INDEXES.strip().split(";"):
+        if stmt.strip():
+            try:
+                await db.execute(stmt)
+            except Exception:
+                pass
+
     await db.commit()
 
     # Run migrations FIRST to add user_id columns if they don't exist
@@ -353,6 +385,7 @@ async def init_schema(db: "DatabaseManager") -> None:
     await _migrate_backfill_word_counts(db)
     await _migrate_characters_user_id(db)
     await _migrate_add_styled_image_url(db)
+    await _migrate_add_referral_columns(db)
 
     # Now create all indexes (including user_id indexes) after migration
     for stmt in STORIES_INDEXES.strip().split(";"):
@@ -554,6 +587,44 @@ async def _migrate_add_styled_image_url(db: "DatabaseManager") -> None:
                 pass
         await db.commit()
         print(f"Stories styled_image_url migration completed (backfilled {backfilled} rows)")
+
+
+async def _migrate_add_referral_columns(db: "DatabaseManager") -> None:
+    """Migration: Add membership_tier, referral_code, referred_by to users (#347)."""
+    import secrets
+    import string
+
+    users_info = await db.fetchall("PRAGMA table_info(users)")
+    users_columns = [col['name'] for col in users_info]
+
+    if 'membership_tier' not in users_columns:
+        print("Migrating users table: adding referral columns (#347)...")
+        await db.execute(
+            "ALTER TABLE users ADD COLUMN membership_tier TEXT DEFAULT 'free'"
+        )
+        await db.execute(
+            "ALTER TABLE users ADD COLUMN referral_code TEXT DEFAULT ''"
+        )
+        await db.execute(
+            "ALTER TABLE users ADD COLUMN referred_by TEXT"
+        )
+
+        alphabet = string.ascii_lowercase + string.digits
+        rows = await db.fetchall(
+            "SELECT user_id FROM users WHERE referral_code IS NULL OR referral_code = ''"
+        )
+        for row in rows:
+            code = ''.join(secrets.choice(alphabet) for _ in range(8))
+            await db.execute(
+                "UPDATE users SET referral_code = ?, membership_tier = 'free' WHERE user_id = ?",
+                (code, row['user_id'])
+            )
+
+        await db.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_referral_code ON users(referral_code)"
+        )
+        await db.commit()
+        print(f"Users referral migration completed (backfilled {len(rows)} users)")
 
 
 # ============================================================================
