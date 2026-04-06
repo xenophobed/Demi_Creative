@@ -1,26 +1,35 @@
-import { useRef } from 'react'
-import { motion } from 'framer-motion'
-import Card from '@/components/common/Card'
-import type { MemoryCharacter } from '@/types/api'
+import { useRef } from "react";
+import { motion } from "framer-motion";
+import Card from "@/components/common/Card";
+import type { MemoryCharacter } from "@/types/api";
 
 interface CharacterGalleryProps {
-  characters: MemoryCharacter[]
-  isLoading: boolean
+  characters: MemoryCharacter[];
+  isLoading: boolean;
+  isEditMode?: boolean;
+  onDeleteCharacter?: (name: string) => Promise<void> | void;
+  deletingCharacterName?: string | null;
 }
 
 const CARD_COLORS = [
-  'from-purple-100 to-purple-50 border-purple-200',
-  'from-blue-100 to-blue-50 border-blue-200',
-  'from-green-100 to-green-50 border-green-200',
-  'from-yellow-100 to-yellow-50 border-yellow-200',
-  'from-pink-100 to-pink-50 border-pink-200',
-  'from-indigo-100 to-indigo-50 border-indigo-200',
-  'from-teal-100 to-teal-50 border-teal-200',
-  'from-orange-100 to-orange-50 border-orange-200',
-]
+  "from-purple-100 to-purple-50 border-purple-200",
+  "from-blue-100 to-blue-50 border-blue-200",
+  "from-green-100 to-green-50 border-green-200",
+  "from-yellow-100 to-yellow-50 border-yellow-200",
+  "from-pink-100 to-pink-50 border-pink-200",
+  "from-indigo-100 to-indigo-50 border-indigo-200",
+  "from-teal-100 to-teal-50 border-teal-200",
+  "from-orange-100 to-orange-50 border-orange-200",
+];
 
-function CharacterGallery({ characters, isLoading }: CharacterGalleryProps) {
-  const scrollRef = useRef<HTMLDivElement>(null)
+function CharacterGallery({
+  characters,
+  isLoading,
+  isEditMode = false,
+  onDeleteCharacter,
+  deletingCharacterName = null,
+}: CharacterGalleryProps) {
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   if (isLoading) {
     return (
@@ -35,7 +44,7 @@ function CharacterGallery({ characters, isLoading }: CharacterGalleryProps) {
           ))}
         </div>
       </Card>
-    )
+    );
   }
 
   return (
@@ -57,10 +66,7 @@ function CharacterGallery({ characters, isLoading }: CharacterGalleryProps) {
           </p>
         </div>
       ) : (
-        <div
-          ref={scrollRef}
-          className="character-carousel"
-        >
+        <div ref={scrollRef} className="character-carousel">
           {characters.map((character, index) => (
             <motion.div
               key={character.name}
@@ -70,12 +76,29 @@ function CharacterGallery({ characters, isLoading }: CharacterGalleryProps) {
               transition={{ delay: index * 0.05 }}
               whileHover={{ scale: 1.03, y: -2 }}
             >
+              {isEditMode && (
+                <button
+                  type="button"
+                  className="absolute top-2 left-2 h-6 w-6 rounded-full bg-white/90 text-gray-500 hover:text-red-500 border border-white/90 shadow-sm"
+                  aria-label={`Delete ${character.name}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDeleteCharacter?.(character.name);
+                  }}
+                  disabled={deletingCharacterName === character.name}
+                >
+                  ×
+                </button>
+              )}
+
               {/* Appearance count badge */}
               <span className="absolute top-2 right-2 bg-white/80 text-xs font-bold text-gray-600 rounded-full px-2 py-0.5 shadow-sm">
                 x{character.appearance_count}
               </span>
 
-              <h3 className="font-bold text-gray-800 text-sm truncate pr-8">
+              <h3
+                className={`font-bold text-gray-800 text-sm truncate ${isEditMode ? "pl-8 pr-8" : "pr-8"}`}
+              >
                 {character.name}
               </h3>
 
@@ -102,7 +125,7 @@ function CharacterGallery({ characters, isLoading }: CharacterGalleryProps) {
         </div>
       )}
     </Card>
-  )
+  );
 }
 
-export default CharacterGallery
+export default CharacterGallery;

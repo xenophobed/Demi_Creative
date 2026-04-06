@@ -2,30 +2,126 @@
 Vision Analysis MCP Server
 
 Provides tools for analyzing children's drawings using Claude Vision API.
+Includes automatic image resizing to prevent base64 payload overflow.
 """
 
-import os
-import json
 import base64
-from typing import Any, Dict
+import io
+import json
+import logging
+import os
 from pathlib import Path
+from typing import Any, Dict, Tuple
+
+from ..utils.model_config import get_vision_model
+
+try:
+    from PIL import Image as PILImage
+except Exception:  # pragma: no cover
+    PILImage = None
+
+logger = logging.getLogger(__name__)
 
 import anyio
+
 try:
     from anthropic import AsyncAnthropic
 except Exception:  # pragma: no cover - import fallback for test env
     AsyncAnthropic = None
 
 try:
-    from claude_agent_sdk import tool, create_sdk_mcp_server
+    from claude_agent_sdk import create_sdk_mcp_server, tool
 except Exception:  # pragma: no cover - import fallback for test env
+
     def tool(*_args, **_kwargs):
         def decorator(func):
             return func
+
         return decorator
 
     def create_sdk_mcp_server(**kwargs):
         return kwargs
+
+
+# ============================================================================
+# Image size safety: auto-resize before base64 encoding
+# ============================================================================
+
+# Claude Vision API accepts at most ~5 MB of base64 image data.
+# base64 inflates raw bytes by ~33%, so we cap raw bytes at 3.5 MB.
+_MAX_RAW_BYTES = 3_500_000
+
+# Progressive quality steps for JPEG re-encoding
+_QUALITY_STEPS = [85, 75, 65, 55]
+# Progressive scale factors when quality alone isn't enough
+_SCALE_STEPS = [0.90, 0.80, 0.70, 0.60, 0.50]
+
+
+def _ensure_image_fits(
+    raw_bytes: bytes,
+    media_type: str,
+) -> Tuple[bytes, str, bool]:
+    """Ensure *raw_bytes* will fit under the Claude Vision base64 limit.
+
+    Returns (possibly_resized_bytes, media_type, was_resized).
+    The returned media_type may change to image/jpeg after re-encoding.
+    """
+    if len(raw_bytes) <= _MAX_RAW_BYTES:
+        return raw_bytes, media_type, False
+
+    if PILImage is None:
+        logger.warning(
+            "Image is %.2f MB but Pillow is not installed; "
+            "sending as-is (may exceed API limit)",
+            len(raw_bytes) / 1_000_000,
+        )
+        return raw_bytes, media_type, False
+
+    logger.info(
+        "Image is %.2f MB (> %.2f MB limit), auto-resizing…",
+        len(raw_bytes) / 1_000_000,
+        _MAX_RAW_BYTES / 1_000_000,
+    )
+
+    img = PILImage.open(io.BytesIO(raw_bytes))
+    if img.mode in ("RGBA", "P"):
+        img = img.convert("RGB")
+
+    # Phase 1: reduce JPEG quality at original dimensions
+    for quality in _QUALITY_STEPS:
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=quality, optimize=True)
+        if buf.tell() <= _MAX_RAW_BYTES:
+            logger.info(
+                "Resized to %.2f MB at quality=%d (original dims)",
+                buf.tell() / 1_000_000,
+                quality,
+            )
+            return buf.getvalue(), "image/jpeg", True
+
+    # Phase 2: progressively scale down dimensions
+    orig_w, orig_h = img.size
+    for scale in _SCALE_STEPS:
+        new_w, new_h = int(orig_w * scale), int(orig_h * scale)
+        resized = img.resize((new_w, new_h), PILImage.LANCZOS)
+        buf = io.BytesIO()
+        resized.save(buf, format="JPEG", quality=75, optimize=True)
+        if buf.tell() <= _MAX_RAW_BYTES:
+            logger.info(
+                "Resized to %.2f MB at %dx%d (scale=%.0f%%)",
+                buf.tell() / 1_000_000,
+                new_w,
+                new_h,
+                scale * 100,
+            )
+            return buf.getvalue(), "image/jpeg", True
+
+    # Last resort: return the smallest version we produced
+    logger.warning(
+        "Could not reduce image below %.2f MB; sending smallest attempt",
+        buf.tell() / 1_000_000,
+    )
+    return buf.getvalue(), "image/jpeg", True
 
 
 @tool(
@@ -40,7 +136,7 @@ except Exception:  # pragma: no cover - import fallback for test env
     5. 检测是否有重复出现的角色
 
     返回结构化的分析结果。""",
-    {"image_path": str, "child_age": int}
+    {"image_path": str, "child_age": int},
 )
 async def analyze_children_drawing(args: Dict[str, Any]) -> Dict[str, Any]:
     """
@@ -58,40 +154,54 @@ async def analyze_children_drawing(args: Dict[str, Any]) -> Dict[str, Any]:
     # 读取图片文件
     if not Path(image_path).exists():
         return {
-            "content": [{
-                "type": "text",
-                "text": json.dumps({
-                    "error": f"图片文件不存在: {image_path}"
-                }, ensure_ascii=False)
-            }]
+            "content": [
+                {
+                    "type": "text",
+                    "text": json.dumps(
+                        {"error": f"图片文件不存在: {image_path}"}, ensure_ascii=False
+                    ),
+                }
+            ]
         }
 
     # 读取图片并转换为 base64（非阻塞）
     raw_bytes = await anyio.Path(image_path).read_bytes()
-    image_data = base64.standard_b64encode(raw_bytes).decode("utf-8")
 
     # 确定图片格式
     file_extension = Path(image_path).suffix.lower()
     media_type_map = {
         ".png": "image/png",
         ".jpg": "image/jpeg",
-        ".jpeg": "image/jpeg"
+        ".jpeg": "image/jpeg",
+        ".webp": "image/webp",
     }
     media_type = media_type_map.get(file_extension, "image/jpeg")
+
+    # Auto-resize if the image would exceed Claude Vision API limits
+    raw_bytes, media_type, was_resized = _ensure_image_fits(raw_bytes, media_type)
+    if was_resized:
+        logger.info("Image auto-resized for Vision API: %s", image_path)
+
+    image_data = base64.standard_b64encode(raw_bytes).decode("utf-8")
 
     # 调用 Claude Vision API
     if AsyncAnthropic is None:
         return {
-            "content": [{
-                "type": "text",
-                "text": json.dumps({
-                    "error": "Anthropic SDK is unavailable in current environment",
-                    "objects": [],
-                    "scene": "未知",
-                    "mood": "未知",
-                    "confidence_score": 0.0,
-                }, ensure_ascii=False),
-            }]
+            "content": [
+                {
+                    "type": "text",
+                    "text": json.dumps(
+                        {
+                            "error": "Anthropic SDK is unavailable in current environment",
+                            "objects": [],
+                            "scene": "未知",
+                            "mood": "未知",
+                            "confidence_score": 0.0,
+                        },
+                        ensure_ascii=False,
+                    ),
+                }
+            ]
         }
 
     client = AsyncAnthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
@@ -103,7 +213,9 @@ async def analyze_children_drawing(args: Dict[str, Any]) -> Dict[str, Any]:
     elif child_age <= 8:
         age_context = "这是一个6-8岁小学低年级儿童的画作，会有更多细节和故事性。"
     else:
-        age_context = "这是一个9-12岁小学高年级儿童的画作，可能包含复杂的情节和抽象概念。"
+        age_context = (
+            "这是一个9-12岁小学高年级儿童的画作，可能包含复杂的情节和抽象概念。"
+        )
 
     prompt = f"""请仔细分析这幅儿童画作。{age_context}
 
@@ -133,25 +245,24 @@ async def analyze_children_drawing(args: Dict[str, Any]) -> Dict[str, Any]:
 
     try:
         response = await client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model=get_vision_model(),
             max_tokens=1024,
-            messages=[{
-                "role": "user",
-                "content": [
-                    {
-                        "type": "image",
-                        "source": {
-                            "type": "base64",
-                            "media_type": media_type,
-                            "data": image_data
-                        }
-                    },
-                    {
-                        "type": "text",
-                        "text": prompt
-                    }
-                ]
-            }]
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": media_type,
+                                "data": image_data,
+                            },
+                        },
+                        {"type": "text", "text": prompt},
+                    ],
+                }
+            ],
         )
 
         # 提取响应文本
@@ -175,55 +286,71 @@ async def analyze_children_drawing(args: Dict[str, Any]) -> Dict[str, Any]:
             required_fields = ["objects", "scene", "mood", "confidence_score"]
             for field in required_fields:
                 if field not in result:
-                    result[field] = [] if field == "objects" else "未知" if field != "confidence_score" else 0.5
+                    result[field] = (
+                        []
+                        if field == "objects"
+                        else "未知"
+                        if field != "confidence_score"
+                        else 0.5
+                    )
 
             # 确保 recurring_characters 存在
             if "recurring_characters" not in result:
                 result["recurring_characters"] = []
 
             return {
-                "content": [{
-                    "type": "text",
-                    "text": json.dumps(result, ensure_ascii=False, indent=2)
-                }]
+                "content": [
+                    {
+                        "type": "text",
+                        "text": json.dumps(result, ensure_ascii=False, indent=2),
+                    }
+                ]
             }
 
         except json.JSONDecodeError:
             # 如果无法解析为 JSON，返回原始文本并标记错误
             return {
-                "content": [{
-                    "type": "text",
-                    "text": json.dumps({
-                        "error": "无法解析 Vision API 响应",
-                        "raw_response": response_text,
-                        "objects": [],
-                        "scene": "未知",
-                        "mood": "未知",
-                        "confidence_score": 0.0
-                    }, ensure_ascii=False)
-                }]
+                "content": [
+                    {
+                        "type": "text",
+                        "text": json.dumps(
+                            {
+                                "error": "无法解析 Vision API 响应",
+                                "raw_response": response_text,
+                                "objects": [],
+                                "scene": "未知",
+                                "mood": "未知",
+                                "confidence_score": 0.0,
+                            },
+                            ensure_ascii=False,
+                        ),
+                    }
+                ]
             }
 
     except Exception as e:
         return {
-            "content": [{
-                "type": "text",
-                "text": json.dumps({
-                    "error": f"Vision API 调用失败: {str(e)}",
-                    "objects": [],
-                    "scene": "未知",
-                    "mood": "未知",
-                    "confidence_score": 0.0
-                }, ensure_ascii=False)
-            }]
+            "content": [
+                {
+                    "type": "text",
+                    "text": json.dumps(
+                        {
+                            "error": f"Vision API 调用失败: {str(e)}",
+                            "objects": [],
+                            "scene": "未知",
+                            "mood": "未知",
+                            "confidence_score": 0.0,
+                        },
+                        ensure_ascii=False,
+                    ),
+                }
+            ]
         }
 
 
 # 创建 MCP Server
 vision_server = create_sdk_mcp_server(
-    name="vision-analysis",
-    version="1.0.0",
-    tools=[analyze_children_drawing]
+    name="vision-analysis", version="1.0.0", tools=[analyze_children_drawing]
 )
 
 
@@ -233,10 +360,13 @@ if __name__ == "__main__":
 
     async def test():
         # 测试示例
-        result = await analyze_children_drawing({
-            "image_path": "test_image.jpg",
-            "child_age": 7
-        })
-        print(json.dumps(json.loads(result["content"][0]["text"]), indent=2, ensure_ascii=False))
+        result = await analyze_children_drawing(
+            {"image_path": "test_image.jpg", "child_age": 7}
+        )
+        print(
+            json.dumps(
+                json.loads(result["content"][0]["text"]), indent=2, ensure_ascii=False
+            )
+        )
 
     asyncio.run(test())

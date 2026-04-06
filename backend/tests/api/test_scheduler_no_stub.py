@@ -6,7 +6,7 @@ import json
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
 
-from src.services.morning_show_scheduler import DailyDropScheduler
+from src.services.kids_daily_scheduler import DailyDropScheduler
 from src.services.news_headline_fetcher import fetch_news_text, _MAX_HEADLINE_RETRIES
 
 
@@ -124,8 +124,8 @@ class TestRunDailyDropSkipsOnNone:
         with (
             caplog.at_level(logging.WARNING),
             patch.object(scheduler, "_already_generated_today", new_callable=AsyncMock, return_value=False),
-            patch("src.services.morning_show_scheduler.fetch_news_text", new_callable=AsyncMock, return_value=None),
-            patch("src.services.morning_show_scheduler.subscription_repo") as mock_repo,
+            patch("src.services.kids_daily_scheduler.fetch_news_text", new_callable=AsyncMock, return_value=None),
+            patch("src.services.kids_daily_scheduler.subscription_repo") as mock_repo,
         ):
             mock_repo.list_all_active = AsyncMock(return_value=[fake_sub])
             await scheduler.run_daily_drop()
@@ -136,6 +136,6 @@ class TestRunDailyDropSkipsOnNone:
     async def test_processes_topic_when_fetch_succeeds(self, scheduler):
         """When fetch_news_text returns text, verify it returns the expected value."""
         mock_fetch = AsyncMock(return_value="Today's science news:\n- Discovery")
-        with patch("src.services.morning_show_scheduler.fetch_news_text", mock_fetch):
+        with patch("src.services.kids_daily_scheduler.fetch_news_text", mock_fetch):
             result = await mock_fetch("science")
         assert result == "Today's science news:\n- Discovery"

@@ -1,4 +1,4 @@
-"""API tests for Morning Show progress tracking events (#198).
+"""API tests for Kids Daily progress tracking events (#198).
 
 Verifies that the /track endpoint correctly handles 'progress' event_type
 and that repeated progress events for the same threshold yield consistent
@@ -11,13 +11,13 @@ import pytest
 
 
 @pytest.mark.asyncio
-class TestMorningShowProgressTracking:
+class TestKidsDailyProgressTracking:
     """Progress events at 25/50/75% thresholds should be accepted and scored."""
 
     async def _create_episode(self, client, child_id: str) -> str:
         """Helper: generate an episode and return its episode_id."""
         resp = await client.post(
-            "/api/v1/morning-show/generate",
+            "/api/v1/kids-daily/generate",
             json={
                 "child_id": child_id,
                 "age_group": "6-8",
@@ -37,7 +37,7 @@ class TestMorningShowProgressTracking:
 
             for threshold in [0.25, 0.50, 0.75]:
                 resp = await client.post(
-                    "/api/v1/morning-show/track",
+                    "/api/v1/kids-daily/track",
                     json={
                         "child_id": child_id,
                         "episode_id": episode_id,
@@ -65,7 +65,7 @@ class TestMorningShowProgressTracking:
 
             for _ in range(2):
                 resp = await client.post(
-                    "/api/v1/morning-show/track",
+                    "/api/v1/kids-daily/track",
                     json={
                         "child_id": child_id,
                         "episode_id": episode_id,
@@ -86,7 +86,7 @@ class TestMorningShowProgressTracking:
 
             # Send start first
             start_resp = await client.post(
-                "/api/v1/morning-show/track",
+                "/api/v1/kids-daily/track",
                 json={
                     "child_id": child_id,
                     "episode_id": episode_id,
@@ -100,7 +100,7 @@ class TestMorningShowProgressTracking:
 
             # Send progress at 50%
             prog_resp = await client.post(
-                "/api/v1/morning-show/track",
+                "/api/v1/kids-daily/track",
                 json={
                     "child_id": child_id,
                     "episode_id": episode_id,

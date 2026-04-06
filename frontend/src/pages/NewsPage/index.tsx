@@ -1,34 +1,166 @@
-import { useState, useCallback, useRef, useEffect } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { motion, AnimatePresence } from 'framer-motion'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import Button from '@/components/common/Button'
-import Card from '@/components/common/Card'
-import { storyService } from '@/api/services/storyService'
-import useAuthStore from '@/store/useAuthStore'
-import useChildStore from '@/store/useChildStore'
-import type { NewsCategory } from '@/types/api'
-import LoginPrompt from '@/components/common/LoginPrompt'
+import { useState, useCallback, useRef, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { motion, AnimatePresence } from "framer-motion";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import Card from "@/components/common/Card";
+import { storyService } from "@/api/services/storyService";
+import useAuthStore from "@/store/useAuthStore";
+import useChildStore from "@/store/useChildStore";
+import type { NewsCategory } from "@/types/api";
+import LoginPrompt from "@/components/common/LoginPrompt";
+import QuotaExceededOverlay, {
+  isQuotaError,
+} from "@/components/common/QuotaExceededOverlay";
 
-const ALL_TOPICS: Array<{ topic: NewsCategory; label: string; icon: string; tagline: string }> = [
-  { topic: 'space', label: 'Space', icon: '\ud83d\ude80', tagline: 'Rockets, planets & stars' },
-  { topic: 'animals', label: 'Animals', icon: '\ud83d\udc3c', tagline: 'Cute, wild & amazing' },
-  { topic: 'technology', label: 'Robots', icon: '\ud83e\udd16', tagline: 'Inventions & gadgets' },
-  { topic: 'science', label: 'Science', icon: '\ud83d\udd2c', tagline: 'Experiments & discoveries' },
-  { topic: 'nature', label: 'Nature', icon: '\ud83c\udf3f', tagline: 'Oceans, forests & weather' },
-  { topic: 'culture', label: 'Culture', icon: '\ud83c\udfad', tagline: 'Art, music & stories' },
-  { topic: 'sports', label: 'Sports', icon: '\u26bd', tagline: 'Goals, records & teamwork' },
-  { topic: 'general', label: 'General', icon: '\ud83d\udcf0', tagline: 'A bit of everything' },
-]
+const ALL_TOPICS: Array<{
+  topic: NewsCategory;
+  label: string;
+  icon: string;
+  tagline: string;
+}> = [
+  {
+    topic: "space",
+    label: "Space",
+    icon: "\ud83d\ude80",
+    tagline: "Rockets, planets & stars",
+  },
+  {
+    topic: "animals",
+    label: "Animals",
+    icon: "\ud83d\udc3c",
+    tagline: "Cute, wild & amazing",
+  },
+  {
+    topic: "technology",
+    label: "Robots",
+    icon: "\ud83e\udd16",
+    tagline: "Inventions & gadgets",
+  },
+  {
+    topic: "science",
+    label: "Science",
+    icon: "\ud83d\udd2c",
+    tagline: "Experiments & discoveries",
+  },
+  {
+    topic: "nature",
+    label: "Nature",
+    icon: "\ud83c\udf3f",
+    tagline: "Oceans, forests & weather",
+  },
+  {
+    topic: "culture",
+    label: "Culture",
+    icon: "\ud83c\udfad",
+    tagline: "Art, music & stories",
+  },
+  {
+    topic: "sports",
+    label: "Sports",
+    icon: "\u26bd",
+    tagline: "Goals, records & teamwork",
+  },
+  {
+    topic: "general",
+    label: "General",
+    icon: "\ud83d\udcf0",
+    tagline: "A bit of everything",
+  },
+];
 
 const LOADING_MESSAGES = [
-  'Finding cool news...',
-  'Reading the headlines...',
-  'Writing the script...',
-  'Mimi and Duo are rehearsing...',
-  'Recording voices...',
-  'Almost ready...',
-]
+  "Finding cool news...",
+  "Reading the headlines...",
+  "Writing the script...",
+  "Mimi and Duo are rehearsing...",
+  "Recording voices...",
+  "Almost ready...",
+];
+
+const TOPIC_THEME: Record<
+  NewsCategory,
+  {
+    card: string;
+    iconBubble: string;
+    accentPill: string;
+    listenBtn: string;
+    listenBtnHover: string;
+    followBtn: string;
+  }
+> = {
+  space: {
+    card: "from-sky-50 via-blue-50 to-indigo-50 border-sky-200",
+    iconBubble: "from-sky-200 to-indigo-200",
+    accentPill: "bg-sky-100 text-sky-700",
+    listenBtn: "bg-sky-500",
+    listenBtnHover: "hover:bg-sky-600 active:bg-sky-700",
+    followBtn:
+      "border-sky-300 text-sky-700 hover:bg-sky-100 hover:border-sky-500",
+  },
+  animals: {
+    card: "from-emerald-50 via-lime-50 to-green-50 border-emerald-200",
+    iconBubble: "from-emerald-200 to-lime-200",
+    accentPill: "bg-emerald-100 text-emerald-700",
+    listenBtn: "bg-emerald-500",
+    listenBtnHover: "hover:bg-emerald-600 active:bg-emerald-700",
+    followBtn:
+      "border-emerald-300 text-emerald-700 hover:bg-emerald-100 hover:border-emerald-500",
+  },
+  technology: {
+    card: "from-cyan-50 via-blue-50 to-cyan-100 border-cyan-200",
+    iconBubble: "from-cyan-200 to-blue-200",
+    accentPill: "bg-cyan-100 text-cyan-700",
+    listenBtn: "bg-cyan-500",
+    listenBtnHover: "hover:bg-cyan-600 active:bg-cyan-700",
+    followBtn:
+      "border-cyan-300 text-cyan-700 hover:bg-cyan-100 hover:border-cyan-500",
+  },
+  science: {
+    card: "from-violet-50 via-indigo-50 to-violet-100 border-violet-200",
+    iconBubble: "from-violet-200 to-indigo-200",
+    accentPill: "bg-violet-100 text-violet-700",
+    listenBtn: "bg-violet-500",
+    listenBtnHover: "hover:bg-violet-600 active:bg-violet-700",
+    followBtn:
+      "border-violet-300 text-violet-700 hover:bg-violet-100 hover:border-violet-500",
+  },
+  nature: {
+    card: "from-teal-50 via-emerald-50 to-teal-100 border-teal-200",
+    iconBubble: "from-teal-200 to-emerald-200",
+    accentPill: "bg-teal-100 text-teal-700",
+    listenBtn: "bg-teal-500",
+    listenBtnHover: "hover:bg-teal-600 active:bg-teal-700",
+    followBtn:
+      "border-teal-300 text-teal-700 hover:bg-teal-100 hover:border-teal-500",
+  },
+  culture: {
+    card: "from-rose-50 via-pink-50 to-rose-100 border-rose-200",
+    iconBubble: "from-rose-200 to-pink-200",
+    accentPill: "bg-rose-100 text-rose-700",
+    listenBtn: "bg-rose-500",
+    listenBtnHover: "hover:bg-rose-600 active:bg-rose-700",
+    followBtn:
+      "border-rose-300 text-rose-700 hover:bg-rose-100 hover:border-rose-500",
+  },
+  sports: {
+    card: "from-amber-50 via-orange-50 to-yellow-100 border-amber-200",
+    iconBubble: "from-amber-200 to-orange-200",
+    accentPill: "bg-amber-100 text-amber-700",
+    listenBtn: "bg-amber-500",
+    listenBtnHover: "hover:bg-amber-600 active:bg-amber-700",
+    followBtn:
+      "border-amber-300 text-amber-700 hover:bg-amber-100 hover:border-amber-500",
+  },
+  general: {
+    card: "from-slate-50 via-gray-50 to-zinc-100 border-slate-200",
+    iconBubble: "from-slate-200 to-zinc-200",
+    accentPill: "bg-slate-100 text-slate-700",
+    listenBtn: "bg-slate-500",
+    listenBtnHover: "hover:bg-slate-600 active:bg-slate-700",
+    followBtn:
+      "border-slate-300 text-slate-700 hover:bg-slate-100 hover:border-slate-500",
+  },
+};
 
 /** Bouncing dots animation for loading states */
 function BouncingDots() {
@@ -43,23 +175,31 @@ function BouncingDots() {
         />
       ))}
     </span>
-  )
+  );
 }
 
 /** Full-card overlay shown while generating a podcast */
-function GeneratingOverlay({ icon, topic, onCancel }: { icon: string; topic: string; onCancel: () => void }) {
-  const [msgIndex, setMsgIndex] = useState(0)
+function GeneratingOverlay({
+  icon,
+  topic,
+  onCancel,
+}: {
+  icon: string;
+  topic: string;
+  onCancel: () => void;
+}) {
+  const [msgIndex, setMsgIndex] = useState(0);
 
   useEffect(() => {
     const timer = setInterval(() => {
-      setMsgIndex((prev) => (prev + 1) % LOADING_MESSAGES.length)
-    }, 3000)
-    return () => clearInterval(timer)
-  }, [])
+      setMsgIndex((prev) => (prev + 1) % LOADING_MESSAGES.length);
+    }, 3000);
+    return () => clearInterval(timer);
+  }, []);
 
   return (
     <motion.div
-      className="absolute inset-0 z-10 flex flex-col items-center justify-center rounded-2xl bg-gradient-to-br from-primary/90 to-violet-500/90 backdrop-blur-sm text-white p-4"
+      className="absolute inset-0 z-10 flex flex-col items-center justify-center rounded-3xl bg-gradient-to-br from-sky-500/90 to-emerald-500/90 backdrop-blur-sm text-white p-4"
       initial={{ opacity: 0, scale: 0.9 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 1.1 }}
@@ -68,7 +208,7 @@ function GeneratingOverlay({ icon, topic, onCancel }: { icon: string; topic: str
       <motion.div
         className="text-5xl mb-3"
         animate={{ rotate: 360 }}
-        transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
+        transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
       >
         {icon}
       </motion.div>
@@ -101,7 +241,10 @@ function GeneratingOverlay({ icon, topic, onCancel }: { icon: string; topic: str
       {/* Cancel button */}
       <motion.button
         className="mt-3 px-4 py-1.5 rounded-full text-sm font-medium bg-white/20 hover:bg-white/30 active:bg-white/40 text-white border border-white/30 transition-colors"
-        onClick={(e) => { e.stopPropagation(); onCancel() }}
+        onClick={(e) => {
+          e.stopPropagation();
+          onCancel();
+        }}
         whileTap={{ scale: 0.9 }}
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -110,7 +253,7 @@ function GeneratingOverlay({ icon, topic, onCancel }: { icon: string; topic: str
         Stop
       </motion.button>
     </motion.div>
-  )
+  );
 }
 
 /** Sparkle burst when subscribing succeeds */
@@ -134,137 +277,171 @@ function SubscribeSuccessBurst() {
           }}
           transition={{ duration: 0.6 }}
         >
-          {['✨', '⭐', '🌟', '💫', '✨', '⭐'][i]}
+          {["✨", "⭐", "🌟", "💫", "✨", "⭐"][i]}
         </motion.span>
       ))}
     </motion.div>
-  )
+  );
 }
 
 function NewsPage() {
-  const { isAuthenticated } = useAuthStore()
-  const { currentChild, defaultChildId } = useChildStore()
-  const navigate = useNavigate()
-  const queryClient = useQueryClient()
+  const { isAuthenticated } = useAuthStore();
+  const { currentChild, defaultChildId } = useChildStore();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
-  const childId = currentChild?.child_id || defaultChildId
-  const ageGroup = currentChild?.age_group || '6-8'
+  const childId = currentChild?.child_id || defaultChildId;
+  const ageGroup = currentChild?.age_group || "6-8";
 
-  const [generatingTopic, setGeneratingTopic] = useState<NewsCategory | null>(null)
-  const [pendingSubscribe, setPendingSubscribe] = useState<NewsCategory | null>(null)
-  const [justSubscribed, setJustSubscribed] = useState<NewsCategory | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [rateLimitRetry, setRateLimitRetry] = useState<{ topic: NewsCategory; seconds: number } | null>(null)
-  const retryTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const abortRef = useRef<AbortController | null>(null)
+  const [generatingTopic, setGeneratingTopic] = useState<NewsCategory | null>(
+    null,
+  );
+  const [pendingSubscribe, setPendingSubscribe] = useState<NewsCategory | null>(
+    null,
+  );
+  const [justSubscribed, setJustSubscribed] = useState<NewsCategory | null>(
+    null,
+  );
+  const [error, setError] = useState<string | null>(null);
+  const [rateLimitRetry, setRateLimitRetry] = useState<{
+    topic: NewsCategory;
+    seconds: number;
+  } | null>(null);
+  const retryTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   const { data: subsData } = useQuery({
-    queryKey: ['morning-show-subscriptions', childId],
+    queryKey: ["morning-show-subscriptions", childId],
     queryFn: () => storyService.getSubscriptions(childId),
     enabled: !!childId && isAuthenticated,
-  })
+  });
 
   const activeTopics = new Set(
     (subsData?.items ?? []).filter((s) => s.is_active).map((s) => s.topic),
-  )
+  );
+  const subscribedCount = activeTopics.size;
 
-  const handleSubscribe = useCallback(async (topic: NewsCategory) => {
-    if (!childId || pendingSubscribe) return
-    setError(null)
-    setPendingSubscribe(topic)
-    try {
-      await storyService.subscribeTopic({ child_id: childId, topic })
-      setJustSubscribed(topic)
-      setTimeout(() => setJustSubscribed(null), 1000)
-      await queryClient.invalidateQueries({ queryKey: ['morning-show-subscriptions', childId] })
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Oops, something went wrong!')
-    } finally {
-      setPendingSubscribe(null)
-    }
-  }, [childId, pendingSubscribe, queryClient])
-
-  const handleUnsubscribe = useCallback(async (topic: NewsCategory) => {
-    if (!childId || pendingSubscribe) return
-    setError(null)
-    setPendingSubscribe(topic)
-    try {
-      await storyService.unsubscribeTopic(childId, topic)
-      await queryClient.invalidateQueries({ queryKey: ['morning-show-subscriptions', childId] })
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Oops, something went wrong!')
-    } finally {
-      setPendingSubscribe(null)
-    }
-  }, [childId, pendingSubscribe, queryClient])
-
-  const handleListenNow = useCallback(async (topic: NewsCategory) => {
-    if (!childId || generatingTopic) return
-    setError(null)
-    setGeneratingTopic(topic)
-
-    const controller = new AbortController()
-    abortRef.current = controller
-
-    try {
-      const result = await storyService.generateMorningShowOnDemand(
-        { child_id: childId, category: topic, age_group: ageGroup },
-        controller.signal,
-      )
-      navigate(`/morning-show/${result.episode.episode_id}`)
-    } catch (err: unknown) {
-      if (controller.signal.aborted) return // user cancelled — do nothing
-
-      const status = (err as { response?: { status?: number } })?.response?.status
-      const data = (err as { response?: { data?: { message?: string; retry_after?: number } } })?.response?.data
-
-      if (status === 429 && data?.retry_after) {
-        // Per-topic rate limit (3/hour)
-        const retryAfter = data.retry_after
-        setRateLimitRetry({ topic, seconds: retryAfter })
-        if (retryTimerRef.current) clearInterval(retryTimerRef.current)
-        retryTimerRef.current = setInterval(() => {
-          setRateLimitRetry((prev) => {
-            if (!prev || prev.seconds <= 1) {
-              if (retryTimerRef.current) clearInterval(retryTimerRef.current)
-              return null
-            }
-            return { ...prev, seconds: prev.seconds - 1 }
-          })
-        }, 1000)
-      } else if (status === 429) {
-        // Daily quota exceeded
-        setError("You've used all your listens for today - come back tomorrow!")
-      } else if (status === 502) {
-        setError('No fresh news right now - try again in a minute!')
-      } else {
-        setError('Something went wrong - try again!')
+  const handleSubscribe = useCallback(
+    async (topic: NewsCategory) => {
+      if (!childId || pendingSubscribe) return;
+      setError(null);
+      setPendingSubscribe(topic);
+      try {
+        await storyService.subscribeTopic({ child_id: childId, topic });
+        setJustSubscribed(topic);
+        setTimeout(() => setJustSubscribed(null), 1000);
+        await queryClient.invalidateQueries({
+          queryKey: ["morning-show-subscriptions", childId],
+        });
+      } catch (err) {
+        setError(
+          err instanceof Error ? err.message : "Oops, something went wrong!",
+        );
+      } finally {
+        setPendingSubscribe(null);
       }
-    } finally {
-      abortRef.current = null
-      setGeneratingTopic(null)
-    }
-  }, [childId, ageGroup, generatingTopic, navigate])
+    },
+    [childId, pendingSubscribe, queryClient],
+  );
+
+  const handleUnsubscribe = useCallback(
+    async (topic: NewsCategory) => {
+      if (!childId || pendingSubscribe) return;
+      setError(null);
+      setPendingSubscribe(topic);
+      try {
+        await storyService.unsubscribeTopic(childId, topic);
+        await queryClient.invalidateQueries({
+          queryKey: ["morning-show-subscriptions", childId],
+        });
+      } catch (err) {
+        setError(
+          err instanceof Error ? err.message : "Oops, something went wrong!",
+        );
+      } finally {
+        setPendingSubscribe(null);
+      }
+    },
+    [childId, pendingSubscribe, queryClient],
+  );
+
+  const handleListenNow = useCallback(
+    async (topic: NewsCategory) => {
+      if (!childId || generatingTopic) return;
+      setError(null);
+      setGeneratingTopic(topic);
+
+      const controller = new AbortController();
+      abortRef.current = controller;
+
+      try {
+        const result = await storyService.generateMorningShowOnDemand(
+          { child_id: childId, category: topic, age_group: ageGroup },
+          controller.signal,
+        );
+        navigate(`/morning-show/${result.episode.episode_id}`);
+      } catch (err: unknown) {
+        if (controller.signal.aborted) return; // user cancelled — do nothing
+
+        const status = (err as { response?: { status?: number } })?.response
+          ?.status;
+        const data = (
+          err as {
+            response?: { data?: { message?: string; retry_after?: number } };
+          }
+        )?.response?.data;
+
+        if (status === 429 && data?.retry_after) {
+          // Per-topic rate limit (3/hour)
+          const retryAfter = data.retry_after;
+          setRateLimitRetry({ topic, seconds: retryAfter });
+          if (retryTimerRef.current) clearInterval(retryTimerRef.current);
+          retryTimerRef.current = setInterval(() => {
+            setRateLimitRetry((prev) => {
+              if (!prev || prev.seconds <= 1) {
+                if (retryTimerRef.current) clearInterval(retryTimerRef.current);
+                return null;
+              }
+              return { ...prev, seconds: prev.seconds - 1 };
+            });
+          }, 1000);
+        } else if (status === 429) {
+          // Daily quota exceeded
+          setError(
+            "You've used all your listens for today - come back tomorrow!",
+          );
+        } else if (status === 502) {
+          setError("No fresh news right now - try again in a minute!");
+        } else {
+          setError("Something went wrong - try again!");
+        }
+      } finally {
+        abortRef.current = null;
+        setGeneratingTopic(null);
+      }
+    },
+    [childId, ageGroup, generatingTopic, navigate],
+  );
 
   const handleCancelGeneration = useCallback(() => {
-    abortRef.current?.abort()
-    abortRef.current = null
-    setGeneratingTopic(null)
-  }, [])
+    abortRef.current?.abort();
+    abortRef.current = null;
+    setGeneratingTopic(null);
+  }, []);
 
   if (!isAuthenticated) {
     return (
       <div className="max-w-lg mx-auto mt-12">
         <LoginPrompt feature="listen to kids news" />
       </div>
-    )
+    );
   }
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
+    <div className="max-w-7xl mx-auto space-y-6">
       {/* Header */}
       <motion.div
-        className="text-center"
+        className="text-center space-y-3 px-3"
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
       >
@@ -276,16 +453,29 @@ function NewsPage() {
           🌍
         </motion.span>
         <h1 className="text-2xl md:text-3xl font-bold text-gray-800 mt-2">
-          News of all topics!
+          Pick Your News Club
         </h1>
         <p className="text-gray-600 mt-1">
-          Pick what you love, then listen anytime
+          Choose a topic card, keep your favorites, and listen anytime
         </p>
+        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/80 border border-primary/20 shadow-sm">
+          <span className="text-sm">🌈</span>
+          <span className="text-sm font-semibold text-gray-700">
+            Following {subscribedCount}/{ALL_TOPICS.length} channels
+          </span>
+        </div>
       </motion.div>
 
-      {/* Error display */}
+      {/* Quota exceeded overlay */}
+      <QuotaExceededOverlay
+        show={isQuotaError(error)}
+        message={error ?? ""}
+        onDismiss={() => setError(null)}
+      />
+
+      {/* Error display (non-quota errors) */}
       <AnimatePresence>
-        {error && (
+        {error && !isQuotaError(error) && (
           <motion.div
             initial={{ opacity: 0, y: -10, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -299,154 +489,197 @@ function NewsPage() {
       </AnimatePresence>
 
       {/* All topic cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-        {ALL_TOPICS.map((item, index) => {
-          const subscribed = activeTopics.has(item.topic)
-          const isGenerating = generatingTopic === item.topic
-          const isSubscribing = pendingSubscribe === item.topic
-          const isRateLimited = rateLimitRetry?.topic === item.topic
-          const showBurst = justSubscribed === item.topic
+      <div className="rounded-[30px] border border-sky-100 bg-gradient-to-br from-sky-50 via-white to-emerald-50 p-5 sm:p-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {ALL_TOPICS.map((item, index) => {
+            const theme = TOPIC_THEME[item.topic];
+            const subscribed = activeTopics.has(item.topic);
+            const isGenerating = generatingTopic === item.topic;
+            const isSubscribing = pendingSubscribe === item.topic;
+            const isRateLimited = rateLimitRetry?.topic === item.topic;
+            const showBurst = justSubscribed === item.topic;
 
-          return (
-            <motion.div
-              key={item.topic}
-              className="relative"
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: Math.min(index * 0.05, 0.3) }}
-              whileHover={!isGenerating ? { scale: 1.03 } : {}}
-              whileTap={!isGenerating ? { scale: 0.97 } : {}}
-            >
-              <Card
-                className={`h-full text-center transition-all relative overflow-hidden ${
-                  subscribed
-                    ? 'border-2 border-primary bg-primary/5 shadow-md'
-                    : 'border border-gray-200 hover:border-primary/40'
-                }`}
+            return (
+              <motion.div
+                key={item.topic}
+                className="relative"
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: Math.min(index * 0.05, 0.3) }}
+                whileHover={!isGenerating ? { y: -4 } : {}}
+                whileTap={!isGenerating ? { scale: 0.98 } : {}}
               >
-                <div className="space-y-2">
-                  {/* Icon + label */}
-                  <motion.div
-                    className="text-4xl"
-                    animate={subscribed ? { scale: [1, 1.1, 1] } : {}}
-                    transition={{ duration: 0.4 }}
-                  >
-                    {item.icon}
-                  </motion.div>
-                  <div className="font-bold text-gray-800">{item.label}</div>
-                  <p className="text-xs text-gray-500 leading-snug">{item.tagline}</p>
-
-                  {/* Buttons */}
-                  {subscribed ? (
-                    <div className="space-y-1.5 pt-1">
-                      {/* Listen Now */}
-                      <motion.button
-                        className={`w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-sm font-semibold text-white transition-colors ${
-                          isGenerating
-                            ? 'bg-primary/70 cursor-wait'
-                            : isRateLimited
-                              ? 'bg-amber-400 cursor-not-allowed'
-                              : 'bg-primary hover:bg-primary/90 active:bg-primary/80'
+                <Card
+                  hover={false}
+                  padding="none"
+                  className={`h-full relative overflow-hidden rounded-3xl border-2 bg-gradient-to-br transition-all ${
+                    theme.card
+                  } ${subscribed ? "shadow-kid-md" : "shadow-kid-sm"}`}
+                >
+                  <div className="h-full min-h-[352px] p-5 flex flex-col gap-3.5">
+                    {/* Row 1: Icon + Follow state (fixed height) */}
+                    <div className="h-[66px] flex items-start justify-between">
+                      <div
+                        className={`w-14 h-14 rounded-3xl bg-gradient-to-br ${theme.iconBubble} flex items-center justify-center shadow-sm border border-white/60`}
+                      >
+                        <motion.div
+                          className="text-4xl"
+                          animate={subscribed ? { scale: [1, 1.08, 1] } : {}}
+                          transition={{ duration: 0.4 }}
+                        >
+                          {item.icon}
+                        </motion.div>
+                      </div>
+                      <div
+                        className={`h-8 px-3 rounded-full text-xs font-bold flex items-center ${
+                          subscribed
+                            ? theme.accentPill
+                            : "bg-white/80 text-gray-500 border border-gray-200"
                         }`}
-                        disabled={generatingTopic !== null || isRateLimited}
-                        onClick={() => handleListenNow(item.topic)}
-                        whileTap={!isGenerating && !isRateLimited ? { scale: 0.95 } : {}}
                       >
-                        {isRateLimited ? (
-                          <>
-                            <motion.span
-                              animate={{ rotate: [0, 180] }}
-                              transition={{ duration: 1, repeat: Infinity }}
-                            >
-                              ⏳
-                            </motion.span>
-                            {rateLimitRetry!.seconds}s
-                          </>
-                        ) : (
-                          <>
-                            <span>&#9654;</span>
-                            Listen Now
-                          </>
-                        )}
-                      </motion.button>
-
-                      {/* Kids Daily */}
-                      <Link
-                        to={`/morning-show/episodes?topic=${item.topic}`}
-                        className="block"
-                      >
-                        <Button size="sm" variant="outline" className="w-full text-xs">
-                          Kids Daily
-                        </Button>
-                      </Link>
-
-                      {/* Unsubscribe */}
-                      <button
-                        className="text-xs text-gray-400 hover:text-red-400 transition-colors w-full"
-                        disabled={isSubscribing}
-                        onClick={() => handleUnsubscribe(item.topic)}
-                      >
-                        {isSubscribing ? '...' : 'Unsubscribe'}
-                      </button>
+                        {subscribed ? "Following" : "Not Following"}
+                      </div>
                     </div>
-                  ) : (
-                    <div className="pt-1">
-                      <motion.button
-                        className={`w-full flex items-center justify-center gap-1 px-3 py-2 rounded-xl text-sm font-medium border-2 transition-colors ${
-                          isSubscribing
-                            ? 'border-primary/50 bg-primary/10 text-primary'
-                            : 'border-gray-200 text-gray-700 hover:border-primary hover:text-primary hover:bg-primary/5'
-                        }`}
-                        disabled={isSubscribing}
-                        onClick={() => handleSubscribe(item.topic)}
-                        whileTap={{ scale: 0.93 }}
-                      >
-                        {isSubscribing ? (
-                          <>
-                            <motion.span
-                              animate={{ rotate: 360 }}
-                              transition={{ duration: 0.8, repeat: Infinity, ease: 'linear' }}
-                            >
-                              ✨
-                            </motion.span>
-                            Following
-                            <BouncingDots />
-                          </>
-                        ) : (
-                          '+ Follow'
-                        )}
-                      </motion.button>
-                    </div>
-                  )}
-                </div>
 
-                {/* Generating overlay */}
+                    {/* Row 2: Title + Tagline (fixed height) */}
+                    <div className="h-[88px] text-left">
+                      <h3 className="text-lg font-extrabold text-gray-800">
+                        {item.label}
+                      </h3>
+                      <p className="text-sm text-gray-600 leading-snug mt-1">
+                        {item.tagline}
+                      </p>
+                    </div>
+
+                    {/* Row 3: Status hint (fixed height) */}
+                    <div className="h-9 flex items-center">
+                      {isRateLimited ? (
+                        <span className="text-xs font-semibold text-amber-700 bg-amber-100 px-3 py-1 rounded-full">
+                          Retry in {rateLimitRetry!.seconds}s
+                        </span>
+                      ) : subscribed ? (
+                        <span className="text-xs text-gray-600 bg-white/70 px-3 py-1 rounded-full border border-white/80">
+                          Ready to listen
+                        </span>
+                      ) : (
+                        <span className="text-xs text-gray-500 bg-white/70 px-3 py-1 rounded-full border border-white/80">
+                          Follow to unlock listen
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Row 4: Actions (fixed button heights) */}
+                    <div className="mt-auto space-y-3">
+                      {subscribed ? (
+                        <>
+                          <motion.button
+                            className={`h-12 w-full flex items-center justify-center gap-2 rounded-2xl text-base font-bold border transition-colors ${
+                              isGenerating
+                                ? "bg-white/70 text-gray-500 border-white cursor-wait"
+                                : isRateLimited
+                                  ? "bg-amber-300 text-amber-900 border-amber-200 cursor-not-allowed"
+                                  : `${theme.listenBtn} ${theme.listenBtnHover} text-white border-transparent`
+                            }`}
+                            disabled={generatingTopic !== null || isRateLimited}
+                            onClick={() => handleListenNow(item.topic)}
+                            whileTap={
+                              !isGenerating && !isRateLimited
+                                ? { scale: 0.95 }
+                                : {}
+                            }
+                          >
+                            {isRateLimited ? (
+                              <>
+                                <motion.span
+                                  animate={{ rotate: [0, 180] }}
+                                  transition={{ duration: 1, repeat: Infinity }}
+                                >
+                                  ⏳
+                                </motion.span>
+                                Wait {rateLimitRetry!.seconds}s
+                              </>
+                            ) : (
+                              <>
+                                <span>▶</span>
+                                Listen Now
+                              </>
+                            )}
+                          </motion.button>
+
+                          <button
+                            className="h-10 w-full rounded-xl text-sm font-semibold text-gray-500 bg-white/70 border border-white/90 hover:text-red-500 hover:bg-red-50 transition-colors"
+                            disabled={isSubscribing}
+                            onClick={() => handleUnsubscribe(item.topic)}
+                          >
+                            {isSubscribing ? "Removing..." : "Unfollow"}
+                          </button>
+                        </>
+                      ) : (
+                        <motion.button
+                          className={`h-12 w-full flex items-center justify-center gap-1 rounded-2xl text-base font-bold border-2 bg-white/80 transition-colors ${
+                            isSubscribing
+                              ? "border-primary/50 bg-primary/10 text-primary"
+                              : theme.followBtn
+                          }`}
+                          disabled={isSubscribing}
+                          onClick={() => handleSubscribe(item.topic)}
+                          whileTap={{ scale: 0.93 }}
+                        >
+                          {isSubscribing ? (
+                            <>
+                              <motion.span
+                                animate={{ rotate: 360 }}
+                                transition={{
+                                  duration: 0.8,
+                                  repeat: Infinity,
+                                  ease: "linear",
+                                }}
+                              >
+                                ✨
+                              </motion.span>
+                              Following
+                              <BouncingDots />
+                            </>
+                          ) : (
+                            "+ Follow"
+                          )}
+                        </motion.button>
+                      )}
+                      {!subscribed && (
+                        <div className="h-10 w-full rounded-xl text-xs font-medium text-gray-400 bg-white/60 border border-white/90 flex items-center justify-center">
+                          Follow first, then listen
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Generating overlay */}
+                  <AnimatePresence>
+                    {isGenerating && (
+                      <GeneratingOverlay
+                        icon={item.icon}
+                        topic={item.label}
+                        onCancel={handleCancelGeneration}
+                      />
+                    )}
+                  </AnimatePresence>
+                </Card>
+
+                {/* Subscribe sparkle burst */}
                 <AnimatePresence>
-                  {isGenerating && (
-                    <GeneratingOverlay icon={item.icon} topic={item.label} onCancel={handleCancelGeneration} />
-                  )}
+                  {showBurst && <SubscribeSuccessBurst />}
                 </AnimatePresence>
-              </Card>
-
-              {/* Subscribe sparkle burst */}
-              <AnimatePresence>
-                {showBurst && <SubscribeSuccessBurst />}
-              </AnimatePresence>
-            </motion.div>
-          )
-        })}
+              </motion.div>
+            );
+          })}
+        </div>
       </div>
 
-      {/* Footer link */}
-      <div className="text-center pb-4">
-        <Link to="/morning-show/subscriptions">
-          <Button variant="outline" size="sm">
-            Manage my channels
-          </Button>
-        </Link>
+      <div className="text-center pb-4 text-xs text-gray-500">
+        Tap any card to follow, then press Listen.
       </div>
     </div>
-  )
+  );
 }
 
-export default NewsPage
+export default NewsPage;

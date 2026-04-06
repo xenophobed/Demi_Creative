@@ -44,7 +44,7 @@ class TestLibraryNewsKidTitle:
             "educational_value": {"themes": ["science"]},
             "characters": [],
             "safety_score": 0.95,
-            "story_type": "news_to_kids",
+            "story_type": "kids_daily",
             "analysis": {"kid_title": "Cool New Butterfly Found!", "category": "science"},
             "created_at": now,
         })
@@ -59,7 +59,7 @@ class TestLibraryNewsKidTitle:
             "educational_value": {"themes": ["general"]},
             "characters": [],
             "safety_score": 0.95,
-            "story_type": "news_to_kids",
+            "story_type": "kids_daily",
             "analysis": {"category": "general"},
             "created_at": now,
         })
@@ -74,7 +74,7 @@ class TestLibraryNewsKidTitle:
             "educational_value": {"themes": ["daily"]},
             "characters": [],
             "safety_score": 0.95,
-            "story_type": "morning_show",
+            "story_type": "kids_daily",
             "analysis": {"kid_title": "Morning Fun Time!", "category": "daily"},
             "created_at": now,
         })
@@ -123,10 +123,10 @@ class TestLibraryNewsKidTitle:
             assert title and len(title) > 0
             assert title != "Cool New Butterfly Found!"
 
-    async def test_morning_show_still_uses_kid_title(self, test_client):
-        """Regression: morning show cards must still use kid_title."""
+    async def test_kids_daily_still_uses_kid_title(self, test_client):
+        """Regression: Kids Daily cards must still use kid_title."""
         async with test_client as client:
-            resp = await client.get("/api/v1/library", params={"type": "morning-show", "limit": 100})
+            resp = await client.get("/api/v1/library", params={"type": "kids-daily", "limit": 100})
             assert resp.status_code == 200
             items_by_id = {item["id"]: item for item in resp.json()["items"]}
 

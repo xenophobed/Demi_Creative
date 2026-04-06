@@ -312,12 +312,12 @@ class TestRunAndAgentSteps:
         Workflow types:
         - image_to_story: child's drawing → story
         - interactive_story: branching narrative flow
-        - news_to_kids: news article → child-friendly summary
+        - kids_daily: news article → child-friendly summary
         """
         valid_workflow_types = [
             "image_to_story",
             "interactive_story",
-            "news_to_kids"
+            "kids_daily"
         ]
 
         for workflow_type in valid_workflow_types:

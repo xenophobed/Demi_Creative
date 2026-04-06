@@ -1,7 +1,7 @@
 """
 API Routes Package
 
-所有 API 路由定义
+Contains route modules for each feature domain.
 """
 
 from . import (
@@ -11,13 +11,13 @@ from . import (
     video,
     voice,
     users,
-    news_to_kids,
-    morning_show,
+    kids_daily,
     subscriptions,
     artifacts,
     admin_artifacts,
     library,
     memory,
+    usage,
 )
 
 __all__ = [
@@ -27,11 +27,11 @@ __all__ = [
     "video",
     "voice",
     "users",
-    "news_to_kids",
-    "morning_show",
+    "kids_daily",
     "subscriptions",
     "artifacts",
     "admin_artifacts",
     "library",
     "memory",
+    "usage",
 ]

@@ -9,15 +9,15 @@ Issue: #160, #288
 """
 
 import json
-import pytest
 from datetime import datetime
 
-from backend.src.services.database.connection import DatabaseManager
+import pytest
+
 from backend.src.services.database.character_repository import (
     CharacterRepository,
     character_repo,
 )
-
+from backend.src.services.database.connection import DatabaseManager
 
 # ============================================================================
 # Fixtures
@@ -107,6 +107,28 @@ class TestUpsertCharacter:
         assert result["description"] == "A fast golden retriever with lightning bolts"
 
     @pytest.mark.asyncio
+    async def test_upsert_normalizes_name_and_merges_whitespace_case_variants(
+        self, repo
+    ):
+        await repo.upsert_character(
+            user_id="user-1",
+            child_id="child-1",
+            name="Lightning Dog",
+            description="First version",
+        )
+        result = await repo.upsert_character(
+            user_id="user-1",
+            child_id="child-1",
+            name="  lightning   dog  ",
+            description="Second version",
+        )
+
+        chars = await repo.get_characters("user-1", "child-1")
+        assert len(chars) == 1
+        assert chars[0]["appearance_count"] == 2
+        assert result["appearance_count"] == 2
+
+    @pytest.mark.asyncio
     async def test_upsert_updates_last_seen(self, repo):
         first = await repo.upsert_character(
             user_id="user-1",
@@ -188,9 +210,7 @@ class TestUserIdScoping:
         await repo.upsert_character(
             user_id="user-alice", child_id="child-1", name="Dog"
         )
-        await repo.upsert_character(
-            user_id="user-bob", child_id="child-1", name="Dog"
-        )
+        await repo.upsert_character(user_id="user-bob", child_id="child-1", name="Dog")
 
         result = await repo.increment_appearance("user-alice", "child-1", "Dog")
         assert result is True
@@ -243,13 +263,64 @@ class TestGetCharacters:
     @pytest.mark.asyncio
     async def test_ordered_by_appearance_count_desc(self, repo):
         await repo.upsert_character(user_id="user-1", child_id="child-1", name="Rare")
-        await repo.upsert_character(user_id="user-1", child_id="child-1", name="Popular")
-        await repo.upsert_character(user_id="user-1", child_id="child-1", name="Popular")
-        await repo.upsert_character(user_id="user-1", child_id="child-1", name="Popular")
+        await repo.upsert_character(
+            user_id="user-1", child_id="child-1", name="Popular"
+        )
+        await repo.upsert_character(
+            user_id="user-1", child_id="child-1", name="Popular"
+        )
+        await repo.upsert_character(
+            user_id="user-1", child_id="child-1", name="Popular"
+        )
 
         chars = await repo.get_characters("user-1", "child-1")
         assert chars[0]["name"] == "Popular"
         assert chars[0]["appearance_count"] == 3
+
+    @pytest.mark.asyncio
+    async def test_merges_legacy_duplicate_rows_by_normalized_name(self, repo):
+        now = datetime.now().isoformat()
+        await repo._db.execute(
+            """
+            INSERT INTO characters (user_id, child_id, name, description, visual_features, traits, appearance_count, first_seen_at, last_seen_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "user-1",
+                "child-1",
+                "Star Cat",
+                "first",
+                json.dumps({"fur": "silver"}),
+                json.dumps(["curious"]),
+                2,
+                now,
+                now,
+            ),
+        )
+        await repo._db.execute(
+            """
+            INSERT INTO characters (user_id, child_id, name, description, visual_features, traits, appearance_count, first_seen_at, last_seen_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "user-1",
+                "child-1",
+                " star   cat ",
+                "second",
+                json.dumps({"eyes": "blue"}),
+                json.dumps(["gentle"]),
+                3,
+                now,
+                now,
+            ),
+        )
+        await repo._db.commit()
+
+        chars = await repo.get_characters("user-1", "child-1")
+        assert len(chars) == 1
+        assert chars[0]["name"] == "Star Cat"
+        assert chars[0]["appearance_count"] == 5
+        assert set(chars[0]["traits"]) == {"curious", "gentle"}
 
 
 # ============================================================================
@@ -302,6 +373,60 @@ class TestIncrementAppearance:
     async def test_returns_false_for_unknown_character(self, repo):
         result = await repo.increment_appearance("user-1", "child-1", "Ghost")
         assert result is False
+
+
+# ============================================================================
+# decrement_appearance
+# ============================================================================
+
+
+class TestDecrementAppearance:
+    """Contract: decrement_appearance reduces count and removes row at zero."""
+
+    @pytest.mark.asyncio
+    async def test_decrements_count_by_one(self, repo):
+        await repo.upsert_character(user_id="user-1", child_id="child-1", name="Dog")
+        await repo.upsert_character(user_id="user-1", child_id="child-1", name="Dog")
+
+        changed = await repo.decrement_appearance("user-1", "child-1", "Dog")
+        assert changed == 1
+        char = await repo.get_character("user-1", "child-1", "Dog")
+        assert char is not None
+        assert char["appearance_count"] == 1
+
+    @pytest.mark.asyncio
+    async def test_removes_row_when_count_hits_zero(self, repo):
+        await repo.upsert_character(user_id="user-1", child_id="child-1", name="Dog")
+
+        changed = await repo.decrement_appearance("user-1", "child-1", "Dog")
+        assert changed == 1
+        char = await repo.get_character("user-1", "child-1", "Dog")
+        assert char is None
+
+    @pytest.mark.asyncio
+    async def test_decrements_across_normalized_variants(self, repo):
+        now = datetime.now().isoformat()
+        await repo._db.execute(
+            """
+            INSERT INTO characters (user_id, child_id, name, description, visual_features, traits, appearance_count, first_seen_at, last_seen_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            ("user-1", "child-1", "Star Cat", "first", None, None, 1, now, now),
+        )
+        await repo._db.execute(
+            """
+            INSERT INTO characters (user_id, child_id, name, description, visual_features, traits, appearance_count, first_seen_at, last_seen_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            ("user-1", "child-1", "star-cat", "second", None, None, 2, now, now),
+        )
+        await repo._db.commit()
+
+        changed = await repo.decrement_appearance("user-1", "child-1", "STAR CAT")
+        assert changed == 1
+        chars = await repo.get_characters("user-1", "child-1")
+        assert len(chars) == 1
+        assert chars[0]["appearance_count"] == 2
 
 
 # ============================================================================

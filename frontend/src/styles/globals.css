@@ -607,8 +607,10 @@
 }
 
 .page-title {
-  @apply text-lg font-bold text-gray-700;
+  @apply text-2xl font-bold text-gray-700 text-center;
   font-family: 'Georgia', 'Noto Serif SC', serif;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 .audio-button {

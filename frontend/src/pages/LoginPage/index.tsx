@@ -9,6 +9,30 @@ import useAuthStore from '@/store/useAuthStore'
 
 type AuthMode = 'login' | 'register'
 
+/** Map raw auth errors to child/parent-friendly messages. */
+function friendlyAuthError(raw: string, mode: AuthMode): string {
+  const lower = raw.toLowerCase()
+  // Wrong credentials (Supabase + legacy backend)
+  if (lower.includes('invalid login credentials') || lower.includes('invalid credentials')
+      || lower.includes('incorrect password') || lower.includes('user not found'))
+    return '邮箱或密码不对哦，请检查后再试一次 🔑'
+  if (lower.includes('account has been disabled'))
+    return '这个账号已被停用，请联系管理员 🔒'
+  if (lower.includes('email not confirmed'))
+    return '请先去邮箱里点确认链接，然后再回来登录 📬'
+  if (lower.includes('user already registered') || lower.includes('already exists'))
+    return '这个邮箱已经注册过了，试试直接登录？'
+  if (lower.includes('too many requests') || lower.includes('rate limit'))
+    return '尝试次数太多了，请稍等一会儿再试 ⏳'
+  if (lower.includes('network') || lower.includes('fetch') || lower.includes('timeout'))
+    return '网络好像有点问题，请检查网络连接后再试 📡'
+  if (lower.includes('request failed with status code'))
+    return mode === 'login' ? '登录失败，请检查邮箱和密码是否正确 🔑' : '注册失败，请稍后再试'
+  if (mode === 'login')
+    return `登录遇到了问题：${raw}`
+  return `注册遇到了问题：${raw}`
+}
+
 function LoginPage() {
   const navigate = useNavigate()
   const { setAuth } = useAuthStore()
@@ -79,8 +103,8 @@ function LoginPage() {
       // Navigate to home
       navigate('/')
     } catch (err) {
-      const message = getErrorMessage(err)
-      setError(message)
+      const raw = getErrorMessage(err)
+      setError(friendlyAuthError(raw, mode))
     } finally {
       setIsLoading(false)
     }
@@ -172,13 +196,13 @@ function LoginPage() {
               <AnimatePresence>
                 {error && (
                   <motion.div
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    className="bg-red-50 border border-red-200 rounded-xl p-3 text-red-600 text-sm flex items-center gap-2"
+                    initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                    className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-amber-700 text-sm text-center space-y-1"
                   >
-                    <span>❌</span>
-                    <span>{error}</span>
+                    <div className="text-2xl">🔑</div>
+                    <p className="font-medium">{error}</p>
                   </motion.div>
                 )}
               </AnimatePresence>

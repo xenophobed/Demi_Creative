@@ -4,9 +4,11 @@ Safety Check MCP Server
 Provides tools for checking content safety and ensuring age-appropriateness.
 """
 
-import os
 import json
+import os
 from typing import Any, Dict, List
+
+from ..utils.model_config import get_safety_model
 
 try:
     from anthropic import Anthropic
@@ -14,11 +16,13 @@ except Exception:  # pragma: no cover - import fallback for test env
     Anthropic = None
 
 try:
-    from claude_agent_sdk import tool, create_sdk_mcp_server
+    from claude_agent_sdk import create_sdk_mcp_server, tool
 except Exception:  # pragma: no cover - import fallback for test env
+
     def tool(*_args, **_kwargs):
         def decorator(func):
             return func
+
         return decorator
 
     def create_sdk_mcp_server(**kwargs):
@@ -62,7 +66,7 @@ SAFETY_RULES = """
     5. 提供修改建议（如有问题）
 
     所有生成的内容在呈现给儿童前必须通过此检查。""",
-    {"content_text": str, "content_type": str, "target_age": int}
+    {"content_text": str, "content_type": str, "target_age": int},
 )
 async def check_content_safety(args: Dict[str, Any]) -> Dict[str, Any]:
     """
@@ -85,7 +89,9 @@ async def check_content_safety(args: Dict[str, Any]) -> Dict[str, Any]:
     elif target_age <= 8:
         age_context = "6-8岁小学低年级：可以有轻微冲突，但必须正面解决，不能有暴力。"
     else:
-        age_context = "9-12岁小学高年级：可以有复杂情节，但仍需避免暴力、恐怖等不当内容。"
+        age_context = (
+            "9-12岁小学高年级：可以有复杂情节，但仍需避免暴力、恐怖等不当内容。"
+        )
 
     prompt = f"""请作为一个儿童内容安全审查专家，仔细检查以下内容。
 
@@ -145,12 +151,9 @@ async def check_content_safety(args: Dict[str, Any]) -> Dict[str, Any]:
         client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
         response = client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model=get_safety_model(),
             max_tokens=2048,
-            messages=[{
-                "role": "user",
-                "content": prompt
-            }]
+            messages=[{"role": "user", "content": prompt}],
         )
 
         # 提取响应文本
@@ -187,40 +190,64 @@ async def check_content_safety(args: Dict[str, Any]) -> Dict[str, Any]:
             result["passed"] = result["safety_score"] >= 0.85  # 优秀标准
 
             return {
-                "content": [{
-                    "type": "text",
-                    "text": json.dumps(result, ensure_ascii=False, indent=2)
-                }]
+                "content": [
+                    {
+                        "type": "text",
+                        "text": json.dumps(result, ensure_ascii=False, indent=2),
+                    }
+                ]
             }
 
         except json.JSONDecodeError:
             # 如果无法解析，返回默认安全结果
             return {
-                "content": [{
-                    "type": "text",
-                    "text": json.dumps({
-                        "error": "无法解析安全检查响应",
-                        "raw_response": response_text,
-                        "safety_score": 0.5,
-                        "is_safe": False,
-                        "issues": [{"type": "系统错误", "severity": "高", "description": "无法完成安全检查"}],
-                        "passed": False
-                    }, ensure_ascii=False)
-                }]
+                "content": [
+                    {
+                        "type": "text",
+                        "text": json.dumps(
+                            {
+                                "error": "无法解析安全检查响应",
+                                "raw_response": response_text,
+                                "safety_score": 0.5,
+                                "is_safe": False,
+                                "issues": [
+                                    {
+                                        "type": "系统错误",
+                                        "severity": "高",
+                                        "description": "无法完成安全检查",
+                                    }
+                                ],
+                                "passed": False,
+                            },
+                            ensure_ascii=False,
+                        ),
+                    }
+                ]
             }
 
     except Exception as e:
         return {
-            "content": [{
-                "type": "text",
-                "text": json.dumps({
-                    "error": f"安全检查失败: {str(e)}",
-                    "safety_score": 0.0,
-                    "is_safe": False,
-                    "issues": [{"type": "系统错误", "severity": "高", "description": str(e)}],
-                    "passed": False
-                }, ensure_ascii=False)
-            }]
+            "content": [
+                {
+                    "type": "text",
+                    "text": json.dumps(
+                        {
+                            "error": f"安全检查失败: {str(e)}",
+                            "safety_score": 0.0,
+                            "is_safe": False,
+                            "issues": [
+                                {
+                                    "type": "系统错误",
+                                    "severity": "高",
+                                    "description": str(e),
+                                }
+                            ],
+                            "passed": False,
+                        },
+                        ensure_ascii=False,
+                    ),
+                }
+            ]
         }
 
 
@@ -235,7 +262,7 @@ async def check_content_safety(args: Dict[str, Any]) -> Dict[str, Any]:
     4. 返回改进后的内容
 
     仅在安全检查未通过时使用。""",
-    {"original_content": str, "safety_check_result": dict, "target_age": int}
+    {"original_content": str, "safety_check_result": dict, "target_age": int},
 )
 async def suggest_content_improvements(args: Dict[str, Any]) -> Dict[str, Any]:
     """
@@ -257,14 +284,19 @@ async def suggest_content_improvements(args: Dict[str, Any]) -> Dict[str, Any]:
 
     if not issues and not suggestions:
         return {
-            "content": [{
-                "type": "text",
-                "text": json.dumps({
-                    "improved_content": original_content,
-                    "changes_made": [],
-                    "message": "内容无需改进，已符合安全标准"
-                }, ensure_ascii=False)
-            }]
+            "content": [
+                {
+                    "type": "text",
+                    "text": json.dumps(
+                        {
+                            "improved_content": original_content,
+                            "changes_made": [],
+                            "message": "内容无需改进，已符合安全标准",
+                        },
+                        ensure_ascii=False,
+                    ),
+                }
+            ]
         }
 
     prompt = f"""请作为一个儿童内容编辑专家，改进以下内容。
@@ -304,12 +336,9 @@ async def suggest_content_improvements(args: Dict[str, Any]) -> Dict[str, Any]:
         client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
         response = client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model=get_safety_model(),
             max_tokens=2048,
-            messages=[{
-                "role": "user",
-                "content": prompt
-            }]
+            messages=[{"role": "user", "content": prompt}],
         )
 
         response_text = response.content[0].text
@@ -328,34 +357,46 @@ async def suggest_content_improvements(args: Dict[str, Any]) -> Dict[str, Any]:
             result = json.loads(response_text)
 
             return {
-                "content": [{
-                    "type": "text",
-                    "text": json.dumps(result, ensure_ascii=False, indent=2)
-                }]
+                "content": [
+                    {
+                        "type": "text",
+                        "text": json.dumps(result, ensure_ascii=False, indent=2),
+                    }
+                ]
             }
 
         except json.JSONDecodeError:
             return {
-                "content": [{
-                    "type": "text",
-                    "text": json.dumps({
-                        "error": "无法解析改进建议",
-                        "improved_content": original_content,
-                        "changes_made": []
-                    }, ensure_ascii=False)
-                }]
+                "content": [
+                    {
+                        "type": "text",
+                        "text": json.dumps(
+                            {
+                                "error": "无法解析改进建议",
+                                "improved_content": original_content,
+                                "changes_made": [],
+                            },
+                            ensure_ascii=False,
+                        ),
+                    }
+                ]
             }
 
     except Exception as e:
         return {
-            "content": [{
-                "type": "text",
-                "text": json.dumps({
-                    "error": f"内容改进失败: {str(e)}",
-                    "improved_content": original_content,
-                    "changes_made": []
-                }, ensure_ascii=False)
-            }]
+            "content": [
+                {
+                    "type": "text",
+                    "text": json.dumps(
+                        {
+                            "error": f"内容改进失败: {str(e)}",
+                            "improved_content": original_content,
+                            "changes_made": [],
+                        },
+                        ensure_ascii=False,
+                    ),
+                }
+            ]
         }
 
 
@@ -363,7 +404,7 @@ async def suggest_content_improvements(args: Dict[str, Any]) -> Dict[str, Any]:
 safety_server = create_sdk_mcp_server(
     name="safety-check",
     version="1.0.0",
-    tools=[check_content_safety, suggest_content_improvements]
+    tools=[check_content_safety, suggest_content_improvements],
 )
 
 
@@ -376,11 +417,13 @@ if __name__ == "__main__":
 
         # 测试安全内容
         print("1. 测试安全内容...")
-        safe_result = await check_content_safety({
-            "content_text": "小兔子在森林里找到了一个胡萝卜，它高兴地和朋友们分享。大家一起度过了快乐的一天。",
-            "target_age": 5,
-            "content_type": "story"
-        })
+        safe_result = await check_content_safety(
+            {
+                "content_text": "小兔子在森林里找到了一个胡萝卜，它高兴地和朋友们分享。大家一起度过了快乐的一天。",
+                "target_age": 5,
+                "content_type": "story",
+            }
+        )
         print("安全检查结果:")
         result = json.loads(safe_result["content"][0]["text"])
         print(f"评分: {result.get('safety_score')}")
@@ -389,11 +432,13 @@ if __name__ == "__main__":
 
         # 测试问题内容
         print("2. 测试问题内容...")
-        unsafe_result = await check_content_safety({
-            "content_text": "小明和小红打架了，小明用拳头打了小红。",
-            "target_age": 6,
-            "content_type": "story"
-        })
+        unsafe_result = await check_content_safety(
+            {
+                "content_text": "小明和小红打架了，小明用拳头打了小红。",
+                "target_age": 6,
+                "content_type": "story",
+            }
+        )
         print("安全检查结果:")
         result = json.loads(unsafe_result["content"][0]["text"])
         print(f"评分: {result.get('safety_score')}")
@@ -401,13 +446,15 @@ if __name__ == "__main__":
         print()
 
         # 测试内容改进
-        if not result.get('passed'):
+        if not result.get("passed"):
             print("3. 测试内容改进...")
-            improved = await suggest_content_improvements({
-                "original_content": "小明和小红打架了，小明用拳头打了小红。",
-                "safety_check_result": result,
-                "target_age": 6
-            })
+            improved = await suggest_content_improvements(
+                {
+                    "original_content": "小明和小红打架了，小明用拳头打了小红。",
+                    "safety_check_result": result,
+                    "target_age": 6,
+                }
+            )
             print("改进结果:")
             print(json.loads(improved["content"][0]["text"]))
 

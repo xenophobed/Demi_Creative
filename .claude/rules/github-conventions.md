@@ -60,6 +60,7 @@ Every issue MUST be assigned to a milestone.
 | #44 | Kids Morning Show — AI News Podcast with Visuals & Subscriptions | domain:news-to-kids | 2 |
 | #45 | TTS & Audio Pipeline Upgrade     | domain:tts-audio      | 2     |
 | #49 | My Library — Unified Content Library | domain:library     | mvp   |
+| #313 | Production Launch — Supabase + Railway + Vercel | layer:infra | 2 |
 
 Every story/bug body MUST include `**Parent Epic**: #<number>`.
 

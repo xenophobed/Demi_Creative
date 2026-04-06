@@ -2,7 +2,7 @@
 
 Tracks how many AI generations each user has consumed on a given date.
 All features share a single daily pool (image_to_story, interactive_story,
-morning_show all count against the same limit).
+morning_show/kids_daily all count against the same limit).
 
 Issue: #314 | Parent Epic: #313
 """

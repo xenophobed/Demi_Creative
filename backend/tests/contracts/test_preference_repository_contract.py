@@ -62,7 +62,7 @@ class TestProfileNormalization:
         assert "concepts" in profile and isinstance(profile["concepts"], dict)
         assert "interests" in profile and isinstance(profile["interests"], dict)
         assert "recent_choices" in profile and isinstance(profile["recent_choices"], list)
-        assert "morning_show" in profile and isinstance(profile["morning_show"], dict)
+        assert "kids_daily" in profile and isinstance(profile["kids_daily"], dict)
 
     @pytest.mark.asyncio
     async def test_normalize_repairs_corrupted_profile(self, repo):
@@ -72,9 +72,9 @@ class TestProfileNormalization:
         assert isinstance(profile["recent_choices"], list)
 
     @pytest.mark.asyncio
-    async def test_morning_show_subkeys_present(self, repo):
+    async def test_kids_daily_subkeys_present(self, repo):
         profile = await repo.get_profile("child-1")
-        morning = profile["morning_show"]
+        morning = profile["kids_daily"]
         assert "topic_scores" in morning and isinstance(morning["topic_scores"], dict)
         assert "topic_stats" in morning and isinstance(morning["topic_stats"], dict)
         assert "last_event_at" in morning
@@ -159,7 +159,7 @@ class TestUpdateFromChoices:
 
 
 # ============================================================================
-# update_from_morning_show
+# update_from_kids_daily
 # ============================================================================
 
 
@@ -168,41 +168,41 @@ class TestUpdateFromMorningShow:
 
     @pytest.mark.asyncio
     async def test_start_event_adds_0_2(self, repo):
-        score = await repo.update_from_morning_show("child-1", "space", "start", 0.0)
+        score = await repo.update_from_kids_daily("child-1", "space", "start", 0.0)
         assert score == pytest.approx(0.2)
 
     @pytest.mark.asyncio
     async def test_complete_event_adds_1_0(self, repo):
-        score = await repo.update_from_morning_show("child-1", "space", "complete", 1.0)
+        score = await repo.update_from_kids_daily("child-1", "space", "complete", 1.0)
         assert score == pytest.approx(1.0)
 
     @pytest.mark.asyncio
     async def test_abandon_event_subtracts_0_6(self, repo):
-        score = await repo.update_from_morning_show("child-1", "space", "abandon", 0.3)
+        score = await repo.update_from_kids_daily("child-1", "space", "abandon", 0.3)
         assert score == pytest.approx(-0.6)
 
     @pytest.mark.asyncio
     async def test_score_bounded_below_at_negative_5(self, repo):
         # Drive score well below -5
         for _ in range(15):
-            score = await repo.update_from_morning_show("child-1", "boring", "abandon", 0.3)
+            score = await repo.update_from_kids_daily("child-1", "boring", "abandon", 0.3)
         assert score >= -5.0
 
     @pytest.mark.asyncio
     async def test_score_bounded_above_at_20(self, repo):
         # Drive score well above 20
         for _ in range(25):
-            score = await repo.update_from_morning_show("child-1", "awesome", "complete", 1.0)
+            score = await repo.update_from_kids_daily("child-1", "awesome", "complete", 1.0)
         assert score <= 20.0
 
     @pytest.mark.asyncio
     async def test_stats_tracked_correctly(self, repo):
-        await repo.update_from_morning_show("child-1", "space", "start", 0.0)
-        await repo.update_from_morning_show("child-1", "space", "complete", 1.0)
-        await repo.update_from_morning_show("child-1", "space", "abandon", 0.2)
+        await repo.update_from_kids_daily("child-1", "space", "start", 0.0)
+        await repo.update_from_kids_daily("child-1", "space", "complete", 1.0)
+        await repo.update_from_kids_daily("child-1", "space", "abandon", 0.2)
 
         profile = await repo.get_profile("child-1")
-        stats = profile["morning_show"]["topic_stats"]["space"]
+        stats = profile["kids_daily"]["topic_stats"]["space"]
         assert stats["started"] == 1
         assert stats["completed"] == 1
         assert stats["abandoned"] == 1

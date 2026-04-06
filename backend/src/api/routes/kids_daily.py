@@ -1,4 +1,4 @@
-"""Kids Daily API routes (#93)."""
+"""Kids Daily API routes — kid-friendly news content under /api/v1/kids-daily."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ import logging
 import os
 import uuid
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Any, AsyncGenerator, Dict, List
 
 logger = logging.getLogger(__name__)
@@ -21,9 +22,11 @@ try:
 except Exception:  # pragma: no cover - import fallback for test env
     OpenAI = None
 
-from ...agents.morning_show_agent import (
-    convert_news_to_morning_show,
-    stream_morning_show_generation,
+from ...agents.kids_daily_agent import (
+    generate_kids_daily_episode,
+    generate_kids_daily_text,
+    stream_kids_daily_generation,
+    stream_kids_daily_text,
 )
 from ...mcp_servers import fetch_article_text as _raw_fetch_article
 fetch_article_text = getattr(_raw_fetch_article, "handler", _raw_fetch_article)
@@ -47,23 +50,30 @@ from ..models import (
     EpisodeIllustration,
     InteractiveQuestionResponse,
     KeyConceptResponse,
-    MorningShowEpisode,
-    MorningShowGenerationMetadata,
-    MorningShowOnDemandRequest,
-    MorningShowRateLimitResponse,
-    MorningShowRequest,
-    MorningShowResponse,
-    MorningShowTrackRequest,
-    MorningShowTrackResponse,
-    PaginatedMorningShowResponse,
+    KidsDailyEpisode,
+    KidsDailyGenerationMetadata,
+    KidsDailyOnDemandRequest,
+    KidsDailyRateLimitResponse,
+    KidsDailyRequest,
+    KidsDailyResponse,
+    KidsDailyTextRequest,
+    KidsDailyTextResponse,
+    KidsDailyTrackRequest,
+    KidsDailyTrackResponse,
+    PaginatedKidsDailyResponse,
+    PaginatedNewsResponse,
 )
 
 
 router = APIRouter(
-    prefix="/api/v1/morning-show",
+    prefix="/api/v1/kids-daily",
     tags=["Kids Daily"],
 )
 
+
+# ===========================================================================
+# Illustration helpers
+# ===========================================================================
 
 def _illustration_count(age_group: str) -> int:
     """One illustration per episode to control API costs when live generation is on."""
@@ -91,11 +101,12 @@ def _make_placeholder_svg(title: str, subtitle: str, width: int = 1280, height: 
 def _is_live_illustration_enabled() -> bool:
     """Live image generation is OFF by default to avoid per-request API costs.
 
-    Set ``MORNING_SHOW_LIVE_ILLUSTRATIONS=1`` to opt in.
+    Set ``KIDS_DAILY_LIVE_ILLUSTRATIONS=1`` (or legacy ``MORNING_SHOW_LIVE_ILLUSTRATIONS=1``) to opt in.
     """
     if os.getenv("PYTEST_CURRENT_TEST") is not None:
         return False
-    opt_in = os.getenv("MORNING_SHOW_LIVE_ILLUSTRATIONS", "").strip().lower()
+    opt_in = os.getenv("KIDS_DAILY_LIVE_ILLUSTRATIONS",
+                       os.getenv("MORNING_SHOW_LIVE_ILLUSTRATIONS", "")).strip().lower()
     if opt_in not in {"1", "true", "yes"}:
         return False
     api_key = (os.getenv("OPENAI_API_KEY") or "").strip()
@@ -110,7 +121,7 @@ def _save_placeholder_illustration(
     kid_title: str,
     subtitle: str,
 ) -> str:
-    filename = f"morning_show_{episode_id}_{idx}.svg"
+    filename = f"kids_daily_{episode_id}_{idx}.svg"
     path = UPLOAD_DIR / filename
     path.write_text(_make_placeholder_svg(kid_title, subtitle), encoding="utf-8")
     return f"/data/uploads/{filename}"
@@ -118,7 +129,7 @@ def _save_placeholder_illustration(
 
 def _scene_prompt(kid_title: str, topic: str, age_group: str, idx: int) -> str:
     return (
-        f"Create a bright 2D children's editorial illustration for a morning show episode.\n"
+        f"Create a bright 2D children's editorial illustration for a Kids Daily episode.\n"
         f"Episode title: {kid_title}\n"
         f"Scene: {topic} scene {idx + 1}\n"
         f"Audience age group: {age_group}\n"
@@ -128,12 +139,7 @@ def _scene_prompt(kid_title: str, topic: str, age_group: str, idx: int) -> str:
 
 
 async def _safe_illustration_description(description: str, age_group: str) -> str:
-    """Run check_content_safety on an illustration description.
-
-    Returns the original description if it passes (score >= 0.85) or if
-    the MCP tool is unavailable.  Replaces with a generic safe description
-    if the content fails the safety gate.
-    """
+    """Run check_content_safety on an illustration description."""
     try:
         from ...mcp_servers import check_content_safety as _raw_safety
         check_content_safety = getattr(_raw_safety, "handler", _raw_safety)
@@ -177,7 +183,8 @@ async def _generate_illustrations(
     openai_client = None
     if live_enabled and OpenAI is not None:
         openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-    image_model = os.getenv("MORNING_SHOW_IMAGE_MODEL", "gpt-image-1-mini")
+    image_model = os.getenv("KIDS_DAILY_IMAGE_MODEL",
+                            os.getenv("MORNING_SHOW_IMAGE_MODEL", "gpt-image-1-mini"))
     api_key = (os.getenv("OPENAI_API_KEY") or "").strip()
 
     illustrations: List[EpisodeIllustration] = []
@@ -222,7 +229,7 @@ async def _generate_illustrations(
 
                 if item_b64:
                     image_bytes = base64.b64decode(item_b64)
-                    filename = f"morning_show_{episode_id}_{idx}.png"
+                    filename = f"kids_daily_{episode_id}_{idx}.png"
                     path = UPLOAD_DIR / filename
                     path.write_bytes(image_bytes)
                     generated_url = f"/data/uploads/{filename}"
@@ -235,8 +242,6 @@ async def _generate_illustrations(
         else:
             generated_url = _save_placeholder_illustration(episode_id, idx, kid_title, subtitle)
 
-        # Safety gate on description before storing (CLAUDE.md: all AI-generated
-        # content must pass check_content_safety, threshold >= 0.85).
         safe_description = await _safe_illustration_description(description, age_group)
 
         illustrations.append(
@@ -250,6 +255,10 @@ async def _generate_illustrations(
 
     return illustrations
 
+
+# ===========================================================================
+# Shared helpers
+# ===========================================================================
 
 def _as_key_concepts(raw_items: List[Dict[str, Any]]) -> List[KeyConceptResponse]:
     out: List[KeyConceptResponse] = []
@@ -296,12 +305,10 @@ def _sanitize_audio_urls(raw_urls: Any) -> Dict[str, str]:
         if not url:
             continue
 
-        # Keep remote URLs as-is.
         if url.startswith("http://") or url.startswith("https://"):
             sanitized[str(key)] = url
             continue
 
-        # Validate local audio files to prevent `/data/audio/*.mp3` 404s.
         if url.startswith("/data/audio/"):
             filename = url[len("/data/audio/"):]
             file_path = AUDIO_DIR / filename
@@ -314,7 +321,7 @@ def _sanitize_audio_urls(raw_urls: Any) -> Dict[str, str]:
     return sanitized
 
 
-def _story_analysis_to_episode(story: Dict[str, Any]) -> MorningShowEpisode:
+def _story_analysis_to_episode(story: Dict[str, Any]) -> KidsDailyEpisode:
     analysis = story.get("analysis", {})
     key_concepts = _as_key_concepts(analysis.get("key_concepts", []))
     questions = _as_questions(analysis.get("interactive_questions", []))
@@ -324,7 +331,7 @@ def _story_analysis_to_episode(story: Dict[str, Any]) -> MorningShowEpisode:
 
     category = analysis.get("category", "general")
 
-    return MorningShowEpisode(
+    return KidsDailyEpisode(
         episode_id=story["story_id"],
         child_id=story.get("child_id", ""),
         age_group=story.get("age_group", "6-8"),
@@ -349,8 +356,7 @@ def _story_analysis_to_episode(story: Dict[str, Any]) -> MorningShowEpisode:
 async def _fetch_text_from_url(url: str) -> str:
     """Fetch article text from a URL via the web-search MCP tool.
 
-    Raises ``HTTPException`` (422) when the article cannot be retrieved so that
-    callers never fall through to placeholder text.
+    Raises ``HTTPException`` (422) when the article cannot be retrieved.
     """
     try:
         result = await fetch_article_text({"url": url})
@@ -374,11 +380,15 @@ async def _fetch_text_from_url(url: str) -> str:
         )
 
 
+# ===========================================================================
+# Episode builder (core pipeline)
+# ===========================================================================
+
 async def _build_episode(
-    request: MorningShowRequest,
+    request: KidsDailyRequest,
     user: UserData,
     source: str = "manual",
-) -> MorningShowResponse:
+) -> KidsDailyResponse:
     if not request.news_url and not request.news_text:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -391,7 +401,7 @@ async def _build_episode(
         source_text = await _fetch_text_from_url(request.news_url)
 
     try:
-        generated = await convert_news_to_morning_show(
+        generated = await generate_kids_daily_episode(
             news_text=source_text,
             age_group=request.age_group.value,
             child_id=child_id,
@@ -426,7 +436,7 @@ async def _build_episode(
                 "total_duration": 8.0,
                 "guest_character": "Professor Owl",
             },
-            "safety_score": 0.9,
+            "safety_score": 0.0,
             "used_mock": True,
             "degraded_reason": "agent_fallback",
             "guest_character": "Professor Owl",
@@ -450,7 +460,7 @@ async def _build_episode(
     degraded_reason = generated.get("degraded_reason")
     is_degraded = used_mock
 
-    episode = MorningShowEpisode(
+    episode = KidsDailyEpisode(
         episode_id=episode_id,
         child_id=child_id,
         age_group=request.age_group,
@@ -471,7 +481,7 @@ async def _build_episode(
         created_at=datetime.now(),
     )
 
-    metadata = MorningShowGenerationMetadata(
+    metadata = KidsDailyGenerationMetadata(
         generation_id=str(uuid.uuid4()),
         safety_score=safety_score,
         used_mock=used_mock,
@@ -501,7 +511,7 @@ async def _build_episode(
             },
             "characters": [{"name": generated.get("guest_character", "Professor Owl")}],
             "analysis": {
-                "story_type": "morning_show",
+                "story_type": "kids_daily",
                 "source": source,
                 "category": request.category.value,
                 "news_url": request.news_url,
@@ -523,7 +533,7 @@ async def _build_episode(
             "safety_score": safety_score,
             "image_url": cover_image_url,
             "audio_url": first_audio_url,
-            "story_type": "morning_show",
+            "story_type": "kids_daily",
             "created_at": episode.created_at.isoformat(),
         }
     )
@@ -531,7 +541,7 @@ async def _build_episode(
     # --- Provenance tracking (#141) — never blocks content delivery ---
     try:
         tracker = ProvenanceTracker(db_manager)
-        run_id = await tracker.start_run(episode_id, WorkflowType.MORNING_SHOW)
+        run_id = await tracker.start_run(episode_id, WorkflowType.KIDS_DAILY)
 
         # Step 1: news conversion
         step1_id = await tracker.start_step(run_id, "news_conversion", 1,
@@ -539,9 +549,9 @@ async def _build_episode(
         text_art_id = await tracker.record_artifact(
             step1_id, ArtifactType.TEXT, run_id=run_id,
             artifact_payload=episode.kid_content[:500],
-            description="Morning show converted news text",
+            description="Kids Daily converted news text",
             safety_score=safety_score,
-            agent_name="morning_show",
+            agent_name="kids_daily",
             metadata=ArtifactMetadata(
                 word_count=count_words(episode.kid_content),
                 custom={
@@ -560,7 +570,7 @@ async def _build_episode(
             aid = await tracker.record_artifact(
                 step2_id, ArtifactType.AUDIO, run_id=run_id,
                 artifact_url=url,
-                description=f"Morning show TTS audio segment {idx_str}",
+                description=f"Kids Daily TTS audio segment {idx_str}",
                 mime_type="audio/mpeg",
                 agent_name="tts_generation",
                 input_artifact_ids=[text_art_id],
@@ -604,22 +614,26 @@ async def _build_episode(
             "episode_id": episode_id,
         })
     except Exception:
-        logger.warning("Provenance tracking failed for morning show episode %s", episode_id, exc_info=True)
+        logger.warning("Provenance tracking failed for kids daily episode %s", episode_id, exc_info=True)
 
-    return MorningShowResponse(episode=episode, metadata=metadata)
+    return KidsDailyResponse(episode=episode, metadata=metadata)
 
+
+# ===========================================================================
+# Episode endpoints
+# ===========================================================================
 
 @router.post(
     "/generate",
-    response_model=MorningShowResponse,
+    response_model=KidsDailyResponse,
     summary="Generate a Kids Daily episode",
 )
-async def generate_morning_show(
-    request: MorningShowRequest,
+async def generate_kids_daily(
+    request: KidsDailyRequest,
     user: UserData = Depends(check_generation_quota),
 ):
     result = await _build_episode(request, user)
-    await usage_repo.increment(user.user_id, "morning_show")  # quota tracking (#314)
+    await usage_repo.increment(user.user_id, "kids_daily")
     return result
 
 
@@ -628,17 +642,17 @@ _ON_DEMAND_MAX_PER_HOUR = 3
 
 @router.post(
     "/generate-now",
-    response_model=MorningShowResponse,
+    response_model=KidsDailyResponse,
     summary="Generate a Kids Daily episode on demand (auto-fetches headlines)",
     responses={
-        429: {"model": MorningShowRateLimitResponse, "description": "Rate limit exceeded"},
+        429: {"model": KidsDailyRateLimitResponse, "description": "Rate limit exceeded"},
     },
 )
-async def generate_morning_show_on_demand(
-    request: MorningShowOnDemandRequest,
+async def generate_kids_daily_on_demand(
+    request: KidsDailyOnDemandRequest,
     user: UserData = Depends(check_generation_quota),
 ):
-    """On-demand generation: fetches live headlines and builds an episode (#304, #305)."""
+    """On-demand generation: fetches live headlines and builds an episode."""
     topic = request.category.value
 
     # 1. Verify the child has an active subscription for this category
@@ -681,7 +695,7 @@ async def generate_morning_show_on_demand(
         )
 
     # 4. Build episode using the shared pipeline
-    build_request = MorningShowRequest(
+    build_request = KidsDailyRequest(
         child_id=request.child_id,
         age_group=request.age_group,
         category=request.category,
@@ -689,7 +703,7 @@ async def generate_morning_show_on_demand(
         news_url=None,
     )
     result = await _build_episode(build_request, user, source="on_demand")
-    await usage_repo.increment(user.user_id, "morning_show")  # quota tracking (#314)
+    await usage_repo.increment(user.user_id, "kids_daily")
     return result
 
 
@@ -697,18 +711,18 @@ async def generate_morning_show_on_demand(
     "/generate-now/stream",
     summary="Generate a Kids Daily episode on demand with SSE progress",
     responses={
-        429: {"model": MorningShowRateLimitResponse, "description": "Rate limit exceeded"},
+        429: {"model": KidsDailyRateLimitResponse, "description": "Rate limit exceeded"},
     },
 )
-async def generate_morning_show_on_demand_stream(
+async def generate_kids_daily_on_demand_stream(
     http_request: Request,
-    request: MorningShowOnDemandRequest,
+    request: KidsDailyOnDemandRequest,
     user: UserData = Depends(check_generation_quota),
 ):
-    """On-demand SSE streaming generation: fetches live headlines and streams progress (#306)."""
+    """On-demand SSE streaming generation: fetches live headlines and streams progress."""
     topic = request.category.value
 
-    # 1. Verify the child has an active subscription for this category
+    # 1. Verify subscription
     has_sub = await subscription_repo.has_active_subscription(
         user.user_id, request.child_id, topic,
     )
@@ -718,12 +732,12 @@ async def generate_morning_show_on_demand_stream(
             detail="请先订阅该频道 (Subscribe to this topic first)",
         )
 
-    # 2. Rate limit: max N on-demand generations per child per hour
+    # 2. Rate limit
     since = (datetime.now() - timedelta(hours=1)).isoformat()
     recent_count = await story_repo.count_recent_on_demand(request.child_id, since)
     if recent_count >= _ON_DEMAND_MAX_PER_HOUR:
         oldest_ts = await story_repo.get_oldest_recent_on_demand_ts(request.child_id, since)
-        retry_after = 3600  # fallback
+        retry_after = 3600
         if oldest_ts:
             try:
                 oldest_dt = datetime.fromisoformat(oldest_ts)
@@ -747,8 +761,7 @@ async def generate_morning_show_on_demand_stream(
             detail="现在找不到新鲜新闻，过几分钟再试试！ (Could not fetch headlines)",
         )
 
-    # Build the inner MorningShowRequest for _build_episode
-    build_request = MorningShowRequest(
+    build_request = KidsDailyRequest(
         child_id=request.child_id,
         age_group=request.age_group,
         category=request.category,
@@ -757,17 +770,15 @@ async def generate_morning_show_on_demand_stream(
     )
 
     async def event_generator() -> AsyncGenerator[str, None]:
-        # Phase 1: fetching_news (already done, report it)
         yield f"event: status\ndata: {json.dumps({'phase': 'fetching_news', 'message': '正在获取新闻...'}, ensure_ascii=False)}\n\n"
 
         if await http_request.is_disconnected():
             logger.info("Client disconnected during on-demand stream, aborting")
             return
 
-        # Phase 2: generating_script — stream from agent
         yield f"event: status\ndata: {json.dumps({'phase': 'generating_script', 'message': '正在生成脚本...'}, ensure_ascii=False)}\n\n"
 
-        async for event in stream_morning_show_generation(
+        async for event in stream_kids_daily_generation(
             news_text=news_text,
             age_group=build_request.age_group.value,
             child_id=build_request.child_id,
@@ -787,28 +798,24 @@ async def generate_morning_show_on_demand_stream(
             logger.info("Client disconnected before on-demand audio/illustration, skipping")
             return
 
-        # Phase 3: generating_audio
         yield f"event: status\ndata: {json.dumps({'phase': 'generating_audio', 'message': '正在生成音频...'}, ensure_ascii=False)}\n\n"
 
         if await http_request.is_disconnected():
             return
 
-        # Phase 4: generating_illustrations
         yield f"event: status\ndata: {json.dumps({'phase': 'generating_illustrations', 'message': '正在生成插画...'}, ensure_ascii=False)}\n\n"
 
         if await http_request.is_disconnected():
             return
 
-        # Build the full episode (audio + illustrations + persist)
         try:
             response = await _build_episode(build_request, user, source="on_demand")
-            await usage_repo.increment(user.user_id, "morning_show")  # quota tracking (#314)
+            await usage_repo.increment(user.user_id, "kids_daily")
 
-            # Phase 5: complete
             yield f"event: result\ndata: {json.dumps(response.model_dump(mode='json'), ensure_ascii=False)}\n\n"
             yield f"event: complete\ndata: {json.dumps({'phase': 'complete', 'message': 'Kids Daily generation complete'}, ensure_ascii=False)}\n\n"
         except Exception as exc:
-            logger.error("On-demand morning show build failed: %s", exc)
+            logger.error("On-demand kids daily build failed: %s", exc)
             yield f"event: error\ndata: {json.dumps({'phase': 'error', 'message': '节目生成失败，请稍后重试 / Episode generation failed, please try again later'}, ensure_ascii=False)}\n\n"
             return
 
@@ -827,9 +834,9 @@ async def generate_morning_show_on_demand_stream(
     "/generate/stream",
     summary="Generate a Kids Daily episode with SSE progress",
 )
-async def generate_morning_show_stream(
+async def generate_kids_daily_stream(
     http_request: Request,
-    request: MorningShowRequest,
+    request: KidsDailyRequest,
     user: UserData = Depends(check_generation_quota),
 ):
     if not request.news_url and not request.news_text:
@@ -838,24 +845,20 @@ async def generate_morning_show_stream(
             detail="Either news_url or news_text must be provided",
         )
 
-    # Fetch article text before entering the generator so failures return
-    # a proper HTTP error instead of an SSE error event with placeholder text.
     source_text = request.news_text or ""
     if request.news_url and not source_text:
         source_text = await _fetch_text_from_url(request.news_url)
 
     async def event_generator() -> AsyncGenerator[str, None]:
-        # Optional upstream progress from the agent
-        async for event in stream_morning_show_generation(
+        async for event in stream_kids_daily_generation(
             news_text=source_text,
             age_group=request.age_group.value,
             child_id=request.child_id,
             category=request.category.value,
             news_url=request.news_url,
         ):
-            # Check if client has disconnected
             if await http_request.is_disconnected():
-                logger.info("Client disconnected during morning show generation, aborting")
+                logger.info("Client disconnected during kids daily generation, aborting")
                 return
 
             event_type = event.get("type", "status")
@@ -863,13 +866,12 @@ async def generate_morning_show_stream(
             if event_type == "result":
                 break
 
-        # Final disconnect check before building and persisting the episode
         if await http_request.is_disconnected():
-            logger.info("Client disconnected before morning show save, skipping persist")
+            logger.info("Client disconnected before kids daily save, skipping persist")
             return
 
         response = await _build_episode(request, user)
-        await usage_repo.increment(user.user_id, "morning_show")  # quota tracking (#314)
+        await usage_repo.increment(user.user_id, "kids_daily")
 
         yield f"event: result\ndata: {json.dumps(response.model_dump(mode='json'), ensure_ascii=False)}\n\n"
         yield f"event: complete\ndata: {json.dumps({'message': 'Kids Daily generation complete'}, ensure_ascii=False)}\n\n"
@@ -885,17 +887,333 @@ async def generate_morning_show_stream(
     )
 
 
+# ===========================================================================
+# Text-only conversion endpoints (legacy news-to-kids)
+# ===========================================================================
+
+@router.post(
+    "/convert",
+    response_model=KidsDailyTextResponse,
+    summary="Convert news to kid-friendly text content",
+    description="Convert a news article into age-appropriate text for children (without dialogue)",
+)
+async def convert_news(
+    request: KidsDailyTextRequest,
+    user: UserData = Depends(get_current_user),
+):
+    """Convert news article to kid-friendly text content. Requires authentication."""
+    if not request.news_url and not request.news_text:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Either news_url or news_text must be provided",
+        )
+
+    news_text = request.news_text or ""
+    if request.news_url and not news_text:
+        news_text = await _fetch_text_from_url(request.news_url)
+
+    try:
+        result = await generate_kids_daily_text(
+            news_text=news_text,
+            age_group=request.age_group.value,
+            child_id=request.child_id,
+            category=request.category.value,
+            news_url=request.news_url,
+            enable_audio=request.enable_audio,
+            voice=request.voice.value if request.voice else None,
+        )
+
+        conversion_id = str(uuid.uuid4())
+        used_mock = bool(result.get("used_mock", False))
+        degraded_reason = result.get("degraded_reason")
+        is_degraded = used_mock
+
+        audio_url = None
+        if result.get("audio_path"):
+            audio_filename = Path(result["audio_path"]).name
+            audio_url = f"/data/audio/{audio_filename}"
+
+        story_data = {
+            "story_id": conversion_id,
+            "user_id": user.user_id,
+            "child_id": request.child_id,
+            "age_group": request.age_group.value,
+            "story": {
+                "text": result.get("kid_content", ""),
+                "word_count": count_words(result.get("kid_content", "")),
+                "age_adapted": True,
+            },
+            "educational_value": {
+                "themes": [request.category.value],
+                "concepts": [c.get("term", "") for c in result.get("key_concepts", [])],
+                "moral": result.get("why_care"),
+            },
+            "characters": [],
+            "analysis": {
+                "story_type": "kids_daily",
+                "category": request.category.value,
+                "original_url": request.news_url,
+                "kid_title": result.get("kid_title", ""),
+                "why_care": result.get("why_care", ""),
+                "key_concepts": result.get("key_concepts", []),
+                "interactive_questions": result.get("interactive_questions", []),
+                "used_mock": used_mock,
+                "is_degraded": is_degraded,
+                "degraded_reason": degraded_reason,
+            },
+            "story_type": "kids_daily",
+            "safety_score": result.get("safety_score", 0.0),
+            "audio_url": audio_url,
+        }
+        await story_repo.create(story_data)
+
+        try:
+            await preference_repo.update_from_news(
+                child_id=request.child_id,
+                category=request.category.value,
+                key_concepts=result.get("key_concepts", []),
+                user_id=user.user_id,
+            )
+        except Exception:
+            pass  # Non-critical
+
+        key_concepts = [
+            KeyConceptResponse(
+                term=c.get("term", ""),
+                explanation=c.get("explanation", ""),
+                emoji=c.get("emoji", "💡"),
+            )
+            for c in result.get("key_concepts", [])
+        ]
+
+        interactive_questions = [
+            InteractiveQuestionResponse(
+                question=q.get("question", ""),
+                hint=q.get("hint"),
+                emoji=q.get("emoji", "🤔"),
+            )
+            for q in result.get("interactive_questions", [])
+        ]
+
+        # --- Provenance tracking ---
+        try:
+            tracker = ProvenanceTracker(db_manager)
+            run_id = await tracker.start_run(conversion_id, WorkflowType.KIDS_DAILY)
+
+            step1_id = await tracker.start_step(run_id, "news_conversion", 1,
+                input_data={"category": request.category.value, "age_group": request.age_group.value})
+            text_art_id = await tracker.record_artifact(
+                step1_id, ArtifactType.TEXT, run_id=run_id,
+                artifact_payload=result.get("kid_content", "")[:500],
+                description="Converted news text for kids",
+                safety_score=result.get("safety_score"),
+                agent_name="kids_daily",
+                metadata=ArtifactMetadata(
+                    word_count=count_words(result.get("kid_content", "")),
+                    custom={
+                        "is_degraded": is_degraded,
+                        "degraded_reason": degraded_reason,
+                    },
+                ),
+            )
+            await tracker.complete_step(step1_id, output_data={"text_artifact_id": text_art_id})
+
+            if audio_url:
+                step2_id = await tracker.start_step(run_id, "tts_generation", 2,
+                    input_data={"voice": request.voice.value if request.voice else "default"})
+                audio_art_id = await tracker.record_artifact(
+                    step2_id, ArtifactType.AUDIO, run_id=run_id,
+                    artifact_url=audio_url,
+                    description="News narration audio",
+                    mime_type="audio/mpeg",
+                    agent_name="tts_generation",
+                    input_artifact_ids=[text_art_id],
+                )
+                await tracker.complete_step(step2_id, output_data={"audio_artifact_id": audio_art_id})
+
+                art_repo = tracker._artifact_repo
+                await art_repo.update_lifecycle_state(audio_art_id, "candidate")
+                await art_repo.update_lifecycle_state(audio_art_id, "published")
+                await tracker.link_to_story(conversion_id, audio_art_id, StoryArtifactRole.FINAL_AUDIO)
+
+            art_repo = tracker._artifact_repo
+            await art_repo.update_lifecycle_state(text_art_id, "candidate")
+            await art_repo.update_lifecycle_state(text_art_id, "published")
+            await tracker.link_to_story(conversion_id, text_art_id, StoryArtifactRole.STORY_TEXT)
+
+            await tracker.complete_run(run_id, result_summary={
+                "artifacts_created": 2 if audio_url else 1,
+                "conversion_id": conversion_id,
+            })
+        except Exception:
+            logger.warning("Provenance tracking failed for news conversion %s", conversion_id, exc_info=True)
+
+        return KidsDailyTextResponse(
+            conversion_id=conversion_id,
+            kid_title=result.get("kid_title", "News for Kids"),
+            kid_content=result.get("kid_content", ""),
+            why_care=result.get("why_care", ""),
+            key_concepts=key_concepts,
+            interactive_questions=interactive_questions,
+            category=request.category,
+            age_group=request.age_group,
+            audio_url=audio_url,
+            original_url=request.news_url,
+            is_degraded=is_degraded,
+            degraded_reason=degraded_reason,
+            created_at=datetime.now(),
+        )
+
+    except Exception as e:
+        print(f"Error converting news: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to convert news article",
+        )
+
+
+@router.post(
+    "/convert/stream",
+    summary="Convert news to kid-friendly text content (streaming)",
+    description="Convert news with SSE streaming progress updates",
+)
+async def convert_news_stream(
+    http_request: Request,
+    request: KidsDailyTextRequest,
+    user: UserData = Depends(get_current_user),
+):
+    """Stream text conversion with Server-Sent Events. Requires authentication."""
+    if not request.news_url and not request.news_text:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Either news_url or news_text must be provided",
+        )
+
+    news_text = request.news_text or ""
+    if request.news_url and not news_text:
+        news_text = await _fetch_text_from_url(request.news_url)
+
+    async def event_generator() -> AsyncGenerator[str, None]:
+        client_disconnected = False
+        try:
+            async for event in stream_kids_daily_text(
+                news_text=news_text,
+                age_group=request.age_group.value,
+                child_id=request.child_id,
+                category=request.category.value,
+                news_url=request.news_url,
+                enable_audio=request.enable_audio,
+                voice=request.voice.value if request.voice else None,
+            ):
+                if await http_request.is_disconnected():
+                    logger.info("Client disconnected during news conversion, aborting")
+                    client_disconnected = True
+                    break
+
+                event_type = event.get("type", "message")
+                event_data = event.get("data", {})
+
+                if event_type == "result":
+                    if await http_request.is_disconnected():
+                        logger.info("Client disconnected before news save, skipping persist")
+                        client_disconnected = True
+                        break
+
+                    conversion_id = str(uuid.uuid4())
+                    audio_url = None
+                    if event_data.get("audio_path"):
+                        audio_filename = Path(event_data["audio_path"]).name
+                        audio_url = f"/data/audio/{audio_filename}"
+
+                    used_mock = bool(event_data.get("used_mock", False))
+                    degraded_reason = event_data.get("degraded_reason")
+                    is_degraded = used_mock
+
+                    story_data = {
+                        "story_id": conversion_id,
+                        "user_id": user.user_id,
+                        "child_id": request.child_id,
+                        "age_group": request.age_group.value,
+                        "story": {
+                            "text": event_data.get("kid_content", ""),
+                            "word_count": count_words(event_data.get("kid_content", "")),
+                            "age_adapted": True,
+                        },
+                        "educational_value": {
+                            "themes": [request.category.value],
+                            "concepts": [c.get("term", "") for c in event_data.get("key_concepts", [])],
+                            "moral": event_data.get("why_care"),
+                        },
+                        "characters": [],
+                        "analysis": {
+                            "story_type": "kids_daily",
+                            "category": request.category.value,
+                            "original_url": request.news_url,
+                            "kid_title": event_data.get("kid_title", ""),
+                            "why_care": event_data.get("why_care", ""),
+                            "key_concepts": event_data.get("key_concepts", []),
+                            "interactive_questions": event_data.get("interactive_questions", []),
+                            "used_mock": used_mock,
+                            "is_degraded": is_degraded,
+                            "degraded_reason": degraded_reason,
+                        },
+                        "story_type": "kids_daily",
+                        "safety_score": event_data.get("safety_score", 0.0),
+                        "audio_url": audio_url,
+                    }
+                    await story_repo.create(story_data)
+
+                    try:
+                        await preference_repo.update_from_news(
+                            child_id=request.child_id,
+                            category=request.category.value,
+                            key_concepts=event_data.get("key_concepts", []),
+                            user_id=user.user_id,
+                        )
+                    except Exception:
+                        pass  # Non-critical
+
+                    event_data["conversion_id"] = conversion_id
+                    event_data["audio_url"] = audio_url
+                    event_data["category"] = request.category.value
+                    event_data["age_group"] = request.age_group.value
+                    event_data["original_url"] = request.news_url
+
+                yield f"event: {event_type}\ndata: {json.dumps(event_data, ensure_ascii=False)}\n\n"
+
+        except Exception as e:
+            error_data = {"error": str(e), "message": "News conversion failed"}
+            yield f"event: error\ndata: {json.dumps(error_data, ensure_ascii=False)}\n\n"
+
+        if client_disconnected:
+            logger.info("News streaming aborted due to client disconnect; content was not saved")
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+# ===========================================================================
+# Read endpoints
+# ===========================================================================
+
 @router.get(
     "/episode/{episode_id}",
-    response_model=MorningShowEpisode,
+    response_model=KidsDailyEpisode,
     summary="Get a Kids Daily episode by ID",
 )
-async def get_morning_show_episode(
+async def get_kids_daily_episode(
     episode_id: str,
     user: UserData = Depends(get_current_user),
 ):
     story = await story_repo.get_by_id(episode_id)
-    if not story or story.get("story_type") != "morning_show":
+    if not story or story.get("story_type") not in ("kids_daily", "morning_show", "news_to_kids"):  # legacy DB compat
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Episode not found")
 
     if story.get("user_id") != user.user_id:
@@ -905,11 +1223,84 @@ async def get_morning_show_episode(
 
 
 @router.get(
+    "/conversion/{conversion_id}",
+    response_model=KidsDailyTextResponse,
+    summary="Get a saved news conversion by ID",
+)
+async def get_news_conversion(
+    conversion_id: str,
+    user: UserData = Depends(get_current_user),
+):
+    """Retrieve a saved text conversion by its ID. Requires authentication."""
+    story = await story_repo.get_by_id(conversion_id)
+    if not story or story.get("story_type") not in ("kids_daily", "news_to_kids", "morning_show"):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversion not found")
+
+    if story.get("user_id") != user.user_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversion not found")
+
+    analysis = story.get("analysis", {})
+    if isinstance(analysis, str):
+        try:
+            analysis = json.loads(analysis)
+        except (json.JSONDecodeError, ValueError):
+            analysis = {}
+
+    educational_value = story.get("educational_value", {})
+    if isinstance(educational_value, str):
+        try:
+            educational_value = json.loads(educational_value)
+        except (json.JSONDecodeError, ValueError):
+            educational_value = {}
+
+    raw_concepts = analysis.get("key_concepts", [])
+    key_concepts = [
+        KeyConceptResponse(
+            term=c.get("term", ""),
+            explanation=c.get("explanation", ""),
+            emoji=c.get("emoji", "💡"),
+        )
+        for c in raw_concepts
+        if isinstance(c, dict)
+    ]
+    if not key_concepts:
+        for term in educational_value.get("concepts", []):
+            if isinstance(term, str) and term.strip():
+                key_concepts.append(KeyConceptResponse(term=term, explanation="", emoji="💡"))
+
+    interactive_questions = [
+        InteractiveQuestionResponse(
+            question=q.get("question", ""),
+            hint=q.get("hint"),
+            emoji=q.get("emoji", "🤔"),
+        )
+        for q in analysis.get("interactive_questions", [])
+        if isinstance(q, dict)
+    ]
+
+    return KidsDailyTextResponse(
+        conversion_id=story["story_id"],
+        kid_title=analysis.get("kid_title", "News for Kids"),
+        kid_content=story.get("story", {}).get("text", ""),
+        why_care=analysis.get("why_care") or educational_value.get("moral", ""),
+        key_concepts=key_concepts,
+        interactive_questions=interactive_questions,
+        category=analysis.get("category", "general"),
+        age_group=story.get("age_group", "6-8"),
+        audio_url=story.get("audio_url"),
+        original_url=analysis.get("original_url"),
+        is_degraded=bool(analysis.get("is_degraded", False)),
+        degraded_reason=analysis.get("degraded_reason"),
+        created_at=story.get("created_at", datetime.now().isoformat()),
+    )
+
+
+@router.get(
     "/episodes/{child_id}",
-    response_model=PaginatedMorningShowResponse,
+    response_model=PaginatedKidsDailyResponse,
     summary="List Kids Daily episodes for a child",
 )
-async def list_morning_show_episodes(
+async def list_kids_daily_episodes(
     child_id: str,
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
@@ -918,18 +1309,18 @@ async def list_morning_show_episodes(
     total = await story_repo.count_by_user_and_child(
         user.user_id,
         child_id,
-        story_type="morning_show",
+        story_type="kids_daily",
     )
     stories = await story_repo.list_by_user_and_child(
         user.user_id,
         child_id,
         limit=limit,
         offset=offset,
-        story_type="morning_show",
+        story_type="kids_daily",
     )
 
     episodes = [_story_analysis_to_episode(story) for story in stories]
-    return PaginatedMorningShowResponse(
+    return PaginatedKidsDailyResponse(
         items=episodes,
         total=total,
         limit=limit,
@@ -937,24 +1328,53 @@ async def list_morning_show_episodes(
     )
 
 
+@router.get(
+    "/history/{child_id}",
+    response_model=PaginatedNewsResponse,
+    summary="Get text conversion history for a child",
+    description="Get past text conversions for a child (paginated)",
+)
+async def get_news_history(
+    child_id: str,
+    limit: int = Query(20, ge=1, le=100, description="Items per page"),
+    offset: int = Query(0, ge=0, description="Pagination offset"),
+    user: UserData = Depends(get_current_user),
+):
+    """Get paginated text conversion history for a child. Requires authentication."""
+    total = await story_repo.count_by_user_and_child(
+        user.user_id, child_id, story_type="kids_daily"
+    )
+    news_stories = await story_repo.list_by_user_and_child(
+        user.user_id, child_id, limit=limit, offset=offset, story_type="kids_daily"
+    )
+    return PaginatedNewsResponse(
+        items=news_stories,
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
+
+
+# ===========================================================================
+# Engagement tracking
+# ===========================================================================
+
 @router.post(
     "/track",
-    response_model=MorningShowTrackResponse,
+    response_model=KidsDailyTrackResponse,
     summary="Track Kids Daily playback engagement",
 )
-async def track_morning_show_engagement(
-    request: MorningShowTrackRequest,
+async def track_kids_daily_engagement(
+    request: KidsDailyTrackRequest,
     user: UserData = Depends(get_current_user),
 ):
     story = await story_repo.get_by_id(request.episode_id)
-    if not story or story.get("story_type") != "morning_show":
+    if not story or story.get("story_type") not in ("kids_daily", "morning_show"):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Episode not found")
 
     if story.get("user_id") != user.user_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
 
-    # Derive child_id and topic from the stored episode — never trust
-    # client-supplied values for these fields (#178).
     trusted_child_id = story.get("child_id", request.child_id)
     analysis = story.get("analysis", {})
     if isinstance(analysis, str):
@@ -964,7 +1384,7 @@ async def track_morning_show_engagement(
             analysis = {}
     trusted_topic = analysis.get("category", request.topic.value)
 
-    topic_score = await preference_repo.update_from_morning_show(
+    topic_score = await preference_repo.update_from_kids_daily(
         child_id=trusted_child_id,
         topic=trusted_topic,
         event_type=request.event_type.value,
@@ -980,7 +1400,7 @@ async def track_morning_show_engagement(
 
     await story_repo.update_analysis_fields(request.episode_id, updates)
 
-    return MorningShowTrackResponse(
+    return KidsDailyTrackResponse(
         status="tracked",
         topic_score=topic_score,
         profile_updated_at=datetime.now(),

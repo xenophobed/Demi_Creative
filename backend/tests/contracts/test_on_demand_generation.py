@@ -1,10 +1,10 @@
 """
-On-Demand Morning Show Generation Contract Tests (#311)
+On-Demand Kids Daily Generation Contract Tests (#311)
 
 Validates Pydantic model constraints and output shapes for:
-- MorningShowOnDemandRequest required fields
-- MorningShowGenerationMetadata provenance tracking (safety_score, generation_id, is_degraded)
-- MorningShowResponse structure consistency between Daily Drop and on-demand
+- KidsDailyOnDemandRequest required fields
+- KidsDailyGenerationMetadata provenance tracking (safety_score, generation_id, is_degraded)
+- KidsDailyResponse structure consistency between Daily Drop and on-demand
 """
 
 import pytest
@@ -12,10 +12,10 @@ from pydantic import ValidationError
 
 from backend.src.api.models import (
     AgeGroup,
-    MorningShowGenerationMetadata,
-    MorningShowOnDemandRequest,
-    MorningShowResponse,
-    MorningShowEpisode,
+    KidsDailyGenerationMetadata,
+    KidsDailyOnDemandRequest,
+    KidsDailyResponse,
+    KidsDailyEpisode,
     DialogueScript,
     DialogueLine,
     NewsCategory,
@@ -26,8 +26,8 @@ from backend.src.api.models import (
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _make_episode(**overrides) -> MorningShowEpisode:
-    """Build a minimal valid MorningShowEpisode for contract assertions."""
+def _make_episode(**overrides) -> KidsDailyEpisode:
+    """Build a minimal valid KidsDailyEpisode for contract assertions."""
     defaults = dict(
         episode_id="ep-001",
         child_id="child-1",
@@ -55,11 +55,11 @@ def _make_episode(**overrides) -> MorningShowEpisode:
         ),
     )
     defaults.update(overrides)
-    return MorningShowEpisode(**defaults)
+    return KidsDailyEpisode(**defaults)
 
 
-def _make_metadata(**overrides) -> MorningShowGenerationMetadata:
-    """Build a minimal valid MorningShowGenerationMetadata."""
+def _make_metadata(**overrides) -> KidsDailyGenerationMetadata:
+    """Build a minimal valid KidsDailyGenerationMetadata."""
     defaults = dict(
         generation_id="gen-001",
         safety_score=0.92,
@@ -67,18 +67,18 @@ def _make_metadata(**overrides) -> MorningShowGenerationMetadata:
         is_degraded=False,
     )
     defaults.update(overrides)
-    return MorningShowGenerationMetadata(**defaults)
+    return KidsDailyGenerationMetadata(**defaults)
 
 
 # ---------------------------------------------------------------------------
-# MorningShowOnDemandRequest — required fields
+# KidsDailyOnDemandRequest — required fields
 # ---------------------------------------------------------------------------
 class TestOnDemandRequestContract:
-    """Contract: MorningShowOnDemandRequest must enforce required fields."""
+    """Contract: KidsDailyOnDemandRequest must enforce required fields."""
 
     def test_valid_request(self):
         """Contract: a request with child_id, category, and age_group must pass."""
-        req = MorningShowOnDemandRequest(
+        req = KidsDailyOnDemandRequest(
             child_id="child-abc",
             category=NewsCategory.SCIENCE,
             age_group=AgeGroup.AGE_6_8,
@@ -90,7 +90,7 @@ class TestOnDemandRequestContract:
     def test_missing_child_id_rejected(self):
         """Contract: child_id is required."""
         with pytest.raises(ValidationError):
-            MorningShowOnDemandRequest(
+            KidsDailyOnDemandRequest(
                 category=NewsCategory.SCIENCE,
                 age_group=AgeGroup.AGE_6_8,
             )
@@ -98,7 +98,7 @@ class TestOnDemandRequestContract:
     def test_empty_child_id_rejected(self):
         """Contract: child_id must have min_length=1."""
         with pytest.raises(ValidationError):
-            MorningShowOnDemandRequest(
+            KidsDailyOnDemandRequest(
                 child_id="",
                 category=NewsCategory.SCIENCE,
                 age_group=AgeGroup.AGE_6_8,
@@ -107,7 +107,7 @@ class TestOnDemandRequestContract:
     def test_missing_age_group_rejected(self):
         """Contract: age_group is required."""
         with pytest.raises(ValidationError):
-            MorningShowOnDemandRequest(
+            KidsDailyOnDemandRequest(
                 child_id="child-1",
                 category=NewsCategory.SCIENCE,
             )
@@ -115,7 +115,7 @@ class TestOnDemandRequestContract:
     def test_invalid_age_group_rejected(self):
         """Contract: age_group must be a valid AgeGroup enum value."""
         with pytest.raises(ValidationError):
-            MorningShowOnDemandRequest(
+            KidsDailyOnDemandRequest(
                 child_id="child-1",
                 category=NewsCategory.SCIENCE,
                 age_group="13-15",
@@ -123,7 +123,7 @@ class TestOnDemandRequestContract:
 
     def test_category_defaults_to_general(self):
         """Contract: category defaults to GENERAL when omitted."""
-        req = MorningShowOnDemandRequest(
+        req = KidsDailyOnDemandRequest(
             child_id="child-1",
             age_group=AgeGroup.AGE_3_5,
         )
@@ -132,7 +132,7 @@ class TestOnDemandRequestContract:
     def test_invalid_category_rejected(self):
         """Contract: an unknown category must fail validation."""
         with pytest.raises(ValidationError):
-            MorningShowOnDemandRequest(
+            KidsDailyOnDemandRequest(
                 child_id="child-1",
                 category="cooking",
                 age_group=AgeGroup.AGE_6_8,
@@ -141,7 +141,7 @@ class TestOnDemandRequestContract:
     def test_child_id_max_length(self):
         """Contract: child_id must be at most 100 characters."""
         with pytest.raises(ValidationError):
-            MorningShowOnDemandRequest(
+            KidsDailyOnDemandRequest(
                 child_id="x" * 101,
                 category=NewsCategory.SCIENCE,
                 age_group=AgeGroup.AGE_6_8,
@@ -149,7 +149,7 @@ class TestOnDemandRequestContract:
 
 
 # ---------------------------------------------------------------------------
-# MorningShowGenerationMetadata — provenance tracking
+# KidsDailyGenerationMetadata — provenance tracking
 # ---------------------------------------------------------------------------
 class TestOnDemandMetadataContract:
     """Contract: on-demand output includes provenance fields matching Daily Drop."""
@@ -183,7 +183,7 @@ class TestOnDemandMetadataContract:
 
     def test_metadata_used_mock_defaults_false(self):
         """Contract: used_mock defaults to False."""
-        meta = MorningShowGenerationMetadata(
+        meta = KidsDailyGenerationMetadata(
             generation_id="gen-x",
             safety_score=0.9,
         )
@@ -191,7 +191,7 @@ class TestOnDemandMetadataContract:
 
     def test_metadata_is_degraded_defaults_false(self):
         """Contract: is_degraded defaults to False."""
-        meta = MorningShowGenerationMetadata(
+        meta = KidsDailyGenerationMetadata(
             generation_id="gen-x",
             safety_score=0.9,
         )
@@ -199,14 +199,14 @@ class TestOnDemandMetadataContract:
 
 
 # ---------------------------------------------------------------------------
-# MorningShowResponse — same shape for Daily Drop and on-demand
+# KidsDailyResponse — same shape for Daily Drop and on-demand
 # ---------------------------------------------------------------------------
 class TestOnDemandResponseContract:
-    """Contract: MorningShowResponse carries episode + metadata consistently."""
+    """Contract: KidsDailyResponse carries episode + metadata consistently."""
 
     def test_response_contains_episode_and_metadata(self):
         """Contract: response must have both episode and metadata fields."""
-        resp = MorningShowResponse(
+        resp = KidsDailyResponse(
             episode=_make_episode(),
             metadata=_make_metadata(),
         )
@@ -215,7 +215,7 @@ class TestOnDemandResponseContract:
 
     def test_response_safety_score_in_metadata(self):
         """Contract: safety_score lives in metadata, not directly on the response."""
-        resp = MorningShowResponse(
+        resp = KidsDailyResponse(
             episode=_make_episode(),
             metadata=_make_metadata(safety_score=0.88),
         )
@@ -223,7 +223,7 @@ class TestOnDemandResponseContract:
 
     def test_response_provenance_fields_present(self):
         """Contract: generation_id and is_degraded exist in metadata for tracing."""
-        resp = MorningShowResponse(
+        resp = KidsDailyResponse(
             episode=_make_episode(is_degraded=True, degraded_reason="timeout"),
             metadata=_make_metadata(is_degraded=True, degraded_reason="timeout"),
         )
@@ -231,7 +231,7 @@ class TestOnDemandResponseContract:
         assert resp.metadata.is_degraded is True
         assert resp.episode.is_degraded is True
 
-    def test_episode_story_type_is_morning_show(self):
-        """Contract: episode.story_type must always be 'morning_show'."""
+    def test_episode_story_type_is_kids_daily(self):
+        """Contract: episode.story_type must always be 'kids_daily'."""
         ep = _make_episode()
-        assert ep.story_type == "morning_show"
+        assert ep.story_type == "kids_daily"

@@ -403,7 +403,7 @@ class TestRunRepository:
 
         Required fields:
         - story_id
-        - workflow_type (image_to_story|interactive_story|news_to_kids)
+        - workflow_type (image_to_story|interactive_story|kids_daily)
 
         Optional fields:
         - session_id (for interactive stories)

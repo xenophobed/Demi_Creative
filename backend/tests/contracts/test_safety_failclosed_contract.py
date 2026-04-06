@@ -64,14 +64,14 @@ class TestIllustrationSafetyFailClosed:
     @pytest.mark.asyncio
     async def test_mcp_unavailable_returns_safe_fallback(self):
         """When MCP tool is unavailable, must return a safe generic description."""
-        from src.api.routes.morning_show import _safe_illustration_description
+        from src.api.routes.kids_daily import _safe_illustration_description
 
         # Patch to simulate MCP failure
         mock_tool = AsyncMock(side_effect=RuntimeError("MCP unavailable"))
 
         with patch("src.mcp_servers.check_content_safety", mock_tool):
             import importlib
-            import src.api.routes.morning_show as mod
+            import src.api.routes.kids_daily as mod
             importlib.reload(mod)
             result = await mod._safe_illustration_description(
                 "potentially unsafe description", "6-8"
@@ -105,12 +105,12 @@ class TestSafetyScoreDefaultsContract:
                 f"Use None or a value < 0.85."
             )
 
-    def test_no_passing_default_in_news_routes(self):
-        """news_to_kids routes must not hardcode safety_score >= 0.85."""
+    def test_no_passing_default_in_kids_daily_routes(self):
+        """kids_daily routes must not hardcode safety_score >= 0.85."""
         import inspect
-        from src.api.routes import news_to_kids
+        from src.api.routes import kids_daily
 
-        source = inspect.getsource(news_to_kids)
+        source = inspect.getsource(kids_daily)
         import re
         # Find hardcoded safety_score assignments like "safety_score": 0.9
         defaults = re.findall(
@@ -118,22 +118,22 @@ class TestSafetyScoreDefaultsContract:
         )
         for default_val in defaults:
             assert float(default_val) < 0.85, (
-                f"news_to_kids has hardcoded safety_score of {default_val} "
+                f"kids_daily has hardcoded safety_score of {default_val} "
                 f"which silently passes content. Use None or a value < 0.85."
             )
 
-    def test_no_safety_score_clamping_in_morning_show(self):
-        """morning_show must not clamp safety_score to minimum >= 0.85."""
+    def test_no_safety_score_clamping_in_kids_daily(self):
+        """kids_daily must not clamp safety_score to minimum >= 0.85."""
         import inspect
-        from src.api.routes import morning_show
+        from src.api.routes import kids_daily
 
-        source = inspect.getsource(morning_show)
+        source = inspect.getsource(kids_daily)
         import re
         # Check for max(..., 0.85) pattern that forces content to always pass
         clamp_patterns = re.findall(
             r'max\(.+?,\s*(0\.8[5-9]|0\.9\d*|1\.0)\)', source
         )
         assert len(clamp_patterns) == 0, (
-            f"morning_show clamps safety_score to minimum {clamp_patterns}, "
+            f"kids_daily clamps safety_score to minimum {clamp_patterns}, "
             f"which means all content always passes safety check"
         )

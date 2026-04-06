@@ -112,13 +112,13 @@ API_ENDPOINTS = {
         response_schema="TaskResponse",
         error_codes=["VALIDATION_ERROR", "IMAGE_PROCESSING_ERROR", "SAFETY_VIOLATION", "RATE_LIMIT_EXCEEDED"]
     ),
-    "convert_news_to_kids": APIEndpointContract(
-        path="/api/v1/convert/news-to-kids",
+    "generate_kids_daily_text": APIEndpointContract(
+        path="/api/v1/kids-daily/convert",
         method=HTTPMethod.POST,
         auth_required=True,
         rate_limit=100,
         max_response_time_ms=8000,
-        request_schema="NewsToKidsRequest",
+        request_schema="KidsDailyTextRequest",
         response_schema="TaskResponse",
         error_codes=["VALIDATION_ERROR", "NEWS_FETCH_ERROR", "SAFETY_VIOLATION"]
     ),
@@ -426,7 +426,7 @@ class TestAPIEndpointContracts:
         """测试所有端点都有契约定义"""
         required_endpoints = [
             "auth_register", "auth_login", "user_get_me",
-            "convert_image_to_story", "convert_news_to_kids",
+            "convert_image_to_story", "generate_kids_daily_text",
             "story_generate", "story_interactive_start", "story_interactive_choose",
             "task_get", "medal_list"
         ]
@@ -443,7 +443,7 @@ class TestAPIEndpointContracts:
     def test_auth_required_for_protected_endpoints(self):
         """测试受保护端点需要认证"""
         protected_endpoints = [
-            "user_get_me", "convert_image_to_story", "convert_news_to_kids",
+            "user_get_me", "convert_image_to_story", "generate_kids_daily_text",
             "story_generate", "task_get", "medal_list"
         ]
         for endpoint in protected_endpoints:
@@ -673,7 +673,7 @@ class TestEndToEndFlowContracts:
             "5. 返回儿童版资讯"
         ]
 
-        assert "convert_news_to_kids" in API_ENDPOINTS
+        assert "generate_kids_daily_text" in API_ENDPOINTS
         assert "NewsConverterAgent" in AGENT_CONTRACTS
         assert "SafetyAgent" in AGENT_CONTRACTS
 

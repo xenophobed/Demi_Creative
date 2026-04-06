@@ -266,7 +266,7 @@ class StoryRepository:
         return row['count'] if row else 0
 
     async def count_recent_on_demand(self, child_id: str, since_iso: str) -> int:
-        """Count on-demand morning_show episodes for a child created after *since_iso*.
+        """Count on-demand kids_daily episodes for a child created after *since_iso*.
 
         Uses JSON analysis field to identify source = 'on_demand'.
         """
@@ -274,7 +274,7 @@ class StoryRepository:
             """
             SELECT COUNT(*) as count FROM stories
             WHERE child_id = ?
-              AND story_type = 'morning_show'
+              AND story_type IN ('kids_daily', 'morning_show')
               AND created_at > ?
               AND json_extract(analysis, '$.source') = 'on_demand'
             """,
@@ -291,7 +291,7 @@ class StoryRepository:
             """
             SELECT created_at FROM stories
             WHERE child_id = ?
-              AND story_type = 'morning_show'
+              AND story_type IN ('kids_daily', 'morning_show')
               AND created_at > ?
               AND json_extract(analysis, '$.source') = 'on_demand'
             ORDER BY created_at ASC

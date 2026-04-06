@@ -1,78 +1,114 @@
-import { useEffect, useState, useCallback } from 'react'
-import { useParams, useNavigate, Link } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
-import { motion } from 'framer-motion'
-import Button from '@/components/common/Button'
-import Loading from '@/components/common/Loading'
-import AgeAwareContent from '@/components/common/AgeAwareContent'
-import BookContainer from '@/components/story/BookContainer'
-import StoryDisplay from '@/components/story/StoryDisplay'
-import TabbedMetadata from '@/components/story/TabbedMetadata'
-import useStoryStore from '@/store/useStoryStore'
-import useChildStore from '@/store/useChildStore'
-import storyService from '@/api/services/storyService'
-import { resolveMediaUrl } from '@/utils/mediaUrl'
+import { useEffect, useState, useCallback } from "react";
+import { useParams, useNavigate, Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { motion } from "framer-motion";
+import Button from "@/components/common/Button";
+import Loading from "@/components/common/Loading";
+import AgeAwareContent from "@/components/common/AgeAwareContent";
+import BookContainer from "@/components/story/BookContainer";
+import StoryDisplay from "@/components/story/StoryDisplay";
+import TabbedMetadata from "@/components/story/TabbedMetadata";
+import useStoryStore from "@/store/useStoryStore";
+import useChildStore from "@/store/useChildStore";
+import storyService from "@/api/services/storyService";
+import { resolveMediaUrl } from "@/utils/mediaUrl";
+
+function deriveStoryTitleFromText(storyText: string | undefined): string {
+  if (!storyText) return "Your Story";
+
+  const firstLine =
+    storyText
+      .split("\n")
+      .map((line) => line.trim())
+      .find(Boolean) || "";
+
+  const cleaned = firstLine.replace(/^[《「『【〈\s]+|[》」』】〉\s]+$/g, "");
+  const firstClause =
+    cleaned
+      .split(/[。！？.!?；;:：]/)
+      .map((s) => s.trim())
+      .find(Boolean) || cleaned;
+
+  const normalized =
+    firstClause.replace(/^once upon a time[,\s]*/i, "").trim() || firstClause;
+  const hasCjk = /[\u4e00-\u9fff]/.test(normalized);
+  const maxLen = hasCjk ? 12 : 22;
+
+  if (normalized.length <= maxLen) return normalized;
+  return `${normalized.slice(0, maxLen)}...`;
+}
 
 function StoryPage() {
-  const { storyId } = useParams<{ storyId: string }>()
-  const navigate = useNavigate()
+  const { storyId } = useParams<{ storyId: string }>();
+  const navigate = useNavigate();
 
-  const { currentStory, setCurrentStory, reset, justGenerated, setJustGenerated } = useStoryStore()
-  const { currentChild } = useChildStore()
+  const {
+    currentStory,
+    setCurrentStory,
+    reset,
+    justGenerated,
+    setJustGenerated,
+  } = useStoryStore();
+  const { currentChild } = useChildStore();
 
   // Show banner only when navigating directly from the upload/generation flow
-  const [showBanner, setShowBanner] = useState(false)
+  const [showBanner, setShowBanner] = useState(false);
 
   useEffect(() => {
     if (justGenerated) {
-      setShowBanner(true)
-      setJustGenerated(false) // clear from store immediately so re-mounts don't re-show
+      setShowBanner(true);
+      setJustGenerated(false); // clear from store immediately so re-mounts don't re-show
     }
-  }, [justGenerated, setJustGenerated])
+  }, [justGenerated, setJustGenerated]);
 
   // On-demand audio state (for 9-12 age group)
-  const [onDemandAudioUrl, setOnDemandAudioUrl] = useState<string | null>(null)
-  const [isAudioGenerating, setIsAudioGenerating] = useState(false)
+  const [onDemandAudioUrl, setOnDemandAudioUrl] = useState<string | null>(null);
+  const [isAudioGenerating, setIsAudioGenerating] = useState(false);
 
   // Only use currentStory if it matches the URL's storyId
-  const matchingStory = currentStory?.story_id === storyId ? currentStory : null
+  const matchingStory =
+    currentStory?.story_id === storyId ? currentStory : null;
 
   // If store doesn't have the matching story, fetch from API
-  const { data: fetchedStory, isLoading, error } = useQuery({
-    queryKey: ['story', storyId],
+  const {
+    data: fetchedStory,
+    isLoading,
+    error,
+  } = useQuery({
+    queryKey: ["story", storyId],
     queryFn: () => storyService.getStory(storyId!),
     enabled: !matchingStory && !!storyId,
     retry: 1,
-  })
+  });
 
   // Use matching store story or fetched story
-  const story = matchingStory || fetchedStory
+  const story = matchingStory || fetchedStory;
 
   // If API returned a story, save to store
   useEffect(() => {
     if (fetchedStory && !matchingStory) {
-      setCurrentStory(fetchedStory)
+      setCurrentStory(fetchedStory);
     }
-  }, [fetchedStory, matchingStory, setCurrentStory])
+  }, [fetchedStory, matchingStory, setCurrentStory]);
 
   // On-demand audio handler for 9-12 age group
   const handleRequestAudio = useCallback(async () => {
-    if (!story || isAudioGenerating) return
-    setIsAudioGenerating(true)
+    if (!story || isAudioGenerating) return;
+    setIsAudioGenerating(true);
     try {
-      const result = await storyService.generateAudioForStory(story.story_id)
-      setOnDemandAudioUrl(result.audio_url)
+      const result = await storyService.generateAudioForStory(story.story_id);
+      setOnDemandAudioUrl(result.audio_url);
     } catch {
       // Silently fail - button will remain clickable
     } finally {
-      setIsAudioGenerating(false)
+      setIsAudioGenerating(false);
     }
-  }, [story, isAudioGenerating])
+  }, [story, isAudioGenerating]);
 
   const handleNewStory = () => {
-    reset()
-    navigate('/upload')
-  }
+    reset();
+    navigate("/upload");
+  };
 
   // Loading state
   if (isLoading) {
@@ -80,7 +116,7 @@ function StoryPage() {
       <div className="flex items-center justify-center min-h-[60vh]">
         <Loading size="lg" message="Loading your story..." />
       </div>
-    )
+    );
   }
 
   // Error state
@@ -104,14 +140,17 @@ function StoryPage() {
           <Button>Create New Story</Button>
         </Link>
       </div>
-    )
+    );
   }
 
-  const originalImageUrl = resolveMediaUrl(story.image_url)
-  const styledImageUrl = resolveMediaUrl(story.styled_image_url || story.cover_image_url)
-  const imageUrl = styledImageUrl || originalImageUrl
+  const originalImageUrl = resolveMediaUrl(story.image_url);
+  const styledImageUrl = resolveMediaUrl(
+    story.styled_image_url || story.cover_image_url,
+  );
+  const imageUrl = styledImageUrl || originalImageUrl;
+  const storyTitle = deriveStoryTitleFromText(story.story.text);
   // Use the story's age_group (content was generated for it), fall back to child store
-  const ageGroup = story.age_group || currentChild?.age_group || null
+  const ageGroup = story.age_group || currentChild?.age_group || null;
 
   return (
     <motion.div
@@ -134,9 +173,7 @@ function StoryPage() {
           <span>Back</span>
         </button>
 
-        <h1 className="page-title">
-          {story.story.text.split('\n')[0]?.replace(/^[《「『【〈]|[》」』】〉]$/g, '').slice(0, 30) || 'Your Story'}
-        </h1>
+        <h1 className="page-title flex-1 min-w-0">{storyTitle}</h1>
 
         {/* Empty spacer to maintain layout */}
         <div className="w-10" />
@@ -158,7 +195,9 @@ function StoryPage() {
             🎉
           </motion.span>
           <div>
-            <p className="font-bold text-gray-800">Story created successfully!</p>
+            <p className="font-bold text-gray-800">
+              Story created successfully!
+            </p>
             <p className="text-sm text-gray-600">
               AI crafted this unique story from your artwork
             </p>
@@ -169,15 +208,19 @@ function StoryPage() {
       {/* Book container with story - age-aware display */}
       <AgeAwareContent
         ageGroup={ageGroup}
-        audioUrl={story.audio_url ? resolveMediaUrl(story.audio_url) : resolveMediaUrl(onDemandAudioUrl)}
+        audioUrl={
+          story.audio_url
+            ? resolveMediaUrl(story.audio_url)
+            : resolveMediaUrl(onDemandAudioUrl)
+        }
         onRequestAudio={handleRequestAudio}
         isAudioLoading={isAudioGenerating}
-        autoPlayAudio={ageGroup === '3-5'}
+        autoPlayAudio={ageGroup === "3-5"}
         textContent={
           <BookContainer>
             <StoryDisplay
               story={story.story}
-              title={story.story.text.split('\n')[0]?.slice(0, 50) || `Story #${story.story_id.slice(0, 6)}`}
+              title={storyTitle || `Story #${story.story_id.slice(0, 6)}`}
               imageUrl={imageUrl}
               originalImageUrl={originalImageUrl}
               styledImageUrl={styledImageUrl}
@@ -214,7 +257,7 @@ function StoryPage() {
           variant="outline"
           size="lg"
           className="flex-1"
-          onClick={() => navigate('/library')}
+          onClick={() => navigate("/library")}
           leftIcon={<span>📚</span>}
         >
           My Library
@@ -231,7 +274,7 @@ function StoryPage() {
         Love this story? Share it with your family!
       </motion.p>
     </motion.div>
-  )
+  );
 }
 
-export default StoryPage
+export default StoryPage;

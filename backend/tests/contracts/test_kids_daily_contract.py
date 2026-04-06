@@ -1,12 +1,12 @@
 """
-Morning Show Contract Tests (#88)
+Kids Daily Contract Tests (#88)
 
 Validates Pydantic model constraints, enum boundaries, cross-field validation,
 safety thresholds, and agent output shapes for:
 - DialogueLine / DialogueScript / EpisodeIllustration
-- MorningShowEpisode / MorningShowRequest / MorningShowResponse
+- KidsDailyEpisode / KidsDailyRequest / KidsDailyResponse
 - TopicSubscription / SubscriptionRequest / SubscriptionResponse
-- Morning Show agent mock fallback shape
+- Kids Daily agent mock fallback shape
 """
 
 from datetime import datetime
@@ -21,13 +21,13 @@ from backend.src.api.models import (
     DialogueLine,
     DialogueScript,
     EpisodeIllustration,
-    MorningShowEpisode,
-    MorningShowGenerationMetadata,
-    MorningShowRequest,
-    MorningShowResponse,
-    MorningShowTrackEvent,
-    MorningShowTrackRequest,
-    MorningShowTrackResponse,
+    KidsDailyEpisode,
+    KidsDailyGenerationMetadata,
+    KidsDailyRequest,
+    KidsDailyResponse,
+    KidsDailyTrackEvent,
+    KidsDailyTrackRequest,
+    KidsDailyTrackResponse,
     NewsCategory,
     SubscriptionListResponse,
     SubscriptionRequest,
@@ -234,9 +234,9 @@ class TestEpisodeIllustrationContract:
 
 
 # ---------------------------------------------------------------------------
-# MorningShowEpisode
+# KidsDailyEpisode
 # ---------------------------------------------------------------------------
-class TestMorningShowEpisodeContract:
+class TestKidsDailyEpisodeContract:
     """Contract: full episode data shape."""
 
     def _make_episode(self, **overrides):
@@ -258,25 +258,25 @@ class TestMorningShowEpisodeContract:
             ),
         }
         defaults.update(overrides)
-        return MorningShowEpisode(**defaults)
+        return KidsDailyEpisode(**defaults)
 
     def test_valid_episode(self):
         """Contract: episode with required fields must pass."""
         ep = self._make_episode()
-        assert ep.story_type == "morning_show"
+        assert ep.story_type == "kids_daily"
         assert ep.is_new is True
         assert ep.is_played is False
 
-    def test_story_type_is_literal_morning_show(self):
-        """Contract: story_type is always 'morning_show'."""
+    def test_story_type_is_literal_kids_daily(self):
+        """Contract: story_type is always 'kids_daily'."""
         ep = self._make_episode()
-        assert ep.story_type == "morning_show"
+        assert ep.story_type == "kids_daily"
 
     def test_episode_serialization_roundtrip(self):
         """Contract: episode serializes and deserializes without data loss."""
         ep = self._make_episode()
         data = ep.model_dump()
-        restored = MorningShowEpisode(**data)
+        restored = KidsDailyEpisode(**data)
         assert restored.episode_id == ep.episode_id
         assert restored.kid_title == ep.kid_title
         assert len(restored.dialogue_script.lines) == 2
@@ -298,14 +298,14 @@ class TestMorningShowEpisodeContract:
 
 
 # ---------------------------------------------------------------------------
-# MorningShowRequest / Response
+# KidsDailyRequest / Response
 # ---------------------------------------------------------------------------
-class TestMorningShowRequestContract:
+class TestKidsDailyRequestContract:
     """Contract: generate request validation."""
 
     def test_valid_request(self):
         """Contract: request with news_text and age_group must pass."""
-        req = MorningShowRequest(
+        req = KidsDailyRequest(
             news_text="Scientists found a new coral reef.",
             age_group="6-8",
         )
@@ -313,7 +313,7 @@ class TestMorningShowRequestContract:
 
     def test_request_with_url(self):
         """Contract: request with news_url (no news_text) is valid at model level."""
-        req = MorningShowRequest(
+        req = KidsDailyRequest(
             news_url="https://example.com/news",
             age_group="3-5",
             category="space",
@@ -323,11 +323,11 @@ class TestMorningShowRequestContract:
 
     def test_category_defaults_to_general(self):
         """Contract: category defaults to 'general' when not provided."""
-        req = MorningShowRequest(news_text="test", age_group="6-8")
+        req = KidsDailyRequest(news_text="test", age_group="6-8")
         assert req.category == NewsCategory.GENERAL
 
 
-class TestMorningShowResponseContract:
+class TestKidsDailyResponseContract:
     """Contract: generate response shape."""
 
     def test_response_contains_episode_and_metadata(self):
@@ -336,7 +336,7 @@ class TestMorningShowResponseContract:
             lines=[DialogueLine(role="curious_kid", text="Q?", timestamp_start=0.0, timestamp_end=3.0)],
             total_duration=3.0,
         )
-        episode = MorningShowEpisode(
+        episode = KidsDailyEpisode(
             episode_id="ep_001",
             child_id="child_001",
             age_group="6-8",
@@ -346,24 +346,24 @@ class TestMorningShowResponseContract:
             why_care="Why",
             dialogue_script=script,
         )
-        metadata = MorningShowGenerationMetadata(
+        metadata = KidsDailyGenerationMetadata(
             generation_id="gen_001",
             safety_score=0.92,
             used_mock=True,
         )
-        resp = MorningShowResponse(episode=episode, metadata=metadata)
+        resp = KidsDailyResponse(episode=episode, metadata=metadata)
         assert resp.episode.episode_id == "ep_001"
         assert resp.metadata.safety_score >= 0.85
 
     def test_metadata_safety_score_bounds(self):
         """Contract: safety_score must be between 0.0 and 1.0."""
         with pytest.raises(ValidationError):
-            MorningShowGenerationMetadata(
+            KidsDailyGenerationMetadata(
                 generation_id="gen_002",
                 safety_score=1.5,
             )
         with pytest.raises(ValidationError):
-            MorningShowGenerationMetadata(
+            KidsDailyGenerationMetadata(
                 generation_id="gen_003",
                 safety_score=-0.1,
             )
@@ -372,7 +372,7 @@ class TestMorningShowResponseContract:
 # ---------------------------------------------------------------------------
 # Agent Output Shape
 # ---------------------------------------------------------------------------
-class TestMorningShowAgentContract:
+class TestKidsDailyAgentContract:
     """Contract: dialogue agent output and safety threshold."""
 
     def test_agent_output_has_required_keys(self):
@@ -393,7 +393,7 @@ class TestMorningShowAgentContract:
         assert set(agent_output.keys()) == {"dialogue_script", "safety_score", "used_mock", "guest_character"}
 
     def test_safety_threshold_is_0_85(self):
-        """Contract: Morning Show content must have safety_score >= 0.85 per CLAUDE.md."""
+        """Contract: Kids Daily content must have safety_score >= 0.85 per CLAUDE.md."""
         SAFETY_THRESHOLD = 0.85
         passing_scores = [0.85, 0.9, 0.95, 1.0]
         for score in passing_scores:
@@ -414,18 +414,18 @@ class TestMorningShowAgentContract:
         assert script.total_duration == 0.0
         assert script.lines == []
 
-    def test_generate_with_sdk_returns_safety_score(self):
-        """Contract: _generate_with_sdk returns (DialogueScript, safety_score) tuple.
+    def test_generate_dialogue_with_sdk_returns_safety_score(self):
+        """Contract: _generate_dialogue_with_sdk returns (DialogueScript, safety_score) tuple.
 
         The safety_score must come from result_data, not be hardcoded.
         Fixes #135.
         """
-        from backend.src.agents.morning_show_agent import _generate_with_sdk
+        from backend.src.agents.kids_daily_agent import _generate_dialogue_with_sdk
         import inspect
 
-        sig = inspect.signature(_generate_with_sdk)
+        sig = inspect.signature(_generate_dialogue_with_sdk)
         # Verify the function exists and is async
-        assert inspect.iscoroutinefunction(_generate_with_sdk)
+        assert inspect.iscoroutinefunction(_generate_dialogue_with_sdk)
         # The return type annotation should indicate a tuple
         # (we check the actual behavior in the integration test below)
 
@@ -540,18 +540,18 @@ class TestSubscriptionContract:
 # ---------------------------------------------------------------------------
 # Tracking Events
 # ---------------------------------------------------------------------------
-class TestMorningShowTrackContract:
+class TestKidsDailyTrackContract:
     """Contract: playback tracking event models."""
 
     def test_track_event_types(self):
-        """Contract: MorningShowTrackEvent must contain start/progress/complete/abandon."""
+        """Contract: KidsDailyTrackEvent must contain start/progress/complete/abandon."""
         expected = {"start", "progress", "complete", "abandon"}
-        actual = {e.value for e in MorningShowTrackEvent}
+        actual = {e.value for e in KidsDailyTrackEvent}
         assert actual == expected
 
     def test_valid_track_request(self):
         """Contract: tracking request with valid fields must pass."""
-        req = MorningShowTrackRequest(
+        req = KidsDailyTrackRequest(
             child_id="child_001",
             episode_id="ep_001",
             topic="science",
@@ -559,12 +559,12 @@ class TestMorningShowTrackContract:
             progress=0.95,
             played_seconds=120.0,
         )
-        assert req.event_type == MorningShowTrackEvent.COMPLETE
+        assert req.event_type == KidsDailyTrackEvent.COMPLETE
         assert req.progress == 0.95
 
     def test_progress_default_zero(self):
         """Contract: progress defaults to 0.0 when omitted."""
-        req = MorningShowTrackRequest(
+        req = KidsDailyTrackRequest(
             child_id="child_001",
             episode_id="ep_001",
             topic="science",
@@ -575,7 +575,7 @@ class TestMorningShowTrackContract:
     def test_progress_bounds(self):
         """Contract: progress must be between 0.0 and 1.0."""
         with pytest.raises(ValidationError):
-            MorningShowTrackRequest(
+            KidsDailyTrackRequest(
                 child_id="child_001",
                 episode_id="ep_001",
                 topic="science",
@@ -585,7 +585,7 @@ class TestMorningShowTrackContract:
 
     def test_track_response_shape(self):
         """Contract: tracking response has status and topic_score."""
-        resp = MorningShowTrackResponse(
+        resp = KidsDailyTrackResponse(
             status="tracked",
             topic_score=3.5,
         )
@@ -597,12 +597,12 @@ class TestMorningShowTrackContract:
 # SSE Stream Event Shape
 # ---------------------------------------------------------------------------
 class TestStreamEventContract:
-    """Contract: SSE stream event types for Morning Show generation."""
+    """Contract: SSE stream event types for Kids Daily generation."""
 
     def test_stream_event_types(self):
         """Contract: stream must emit status, progress, result, complete events."""
         required_event_types = {"status", "progress", "result", "complete"}
-        # This validates the protocol — actual SSE tests are in test_morning_show.py
+        # This validates the protocol — actual SSE tests are in test_kids_daily.py
         assert "status" in required_event_types
         assert "progress" in required_event_types
         assert "result" in required_event_types
@@ -623,12 +623,12 @@ class TestStreamEventContract:
 # SDK Response Parsing & Normalization (#137)
 # ---------------------------------------------------------------------------
 class TestSDKResponseParsing:
-    """Contract: _generate_with_sdk normalization logic for SDK JSON responses."""
+    """Contract: _generate_dialogue_with_sdk normalization logic for SDK JSON responses."""
 
     def _normalize_lines(self, raw_lines, line_duration=9.0, guest_name="Professor Owl"):
-        """Re-implement the normalization logic from _generate_with_sdk for contract testing.
+        """Re-implement the normalization logic from _generate_dialogue_with_sdk for contract testing.
 
-        This mirrors the exact normalization logic in morning_show_agent.py lines 319-377
+        This mirrors the exact normalization logic in kids_daily_agent.py lines 319-377
         so we can test edge cases without needing the full SDK client.
         """
         from backend.src.api.models import DialogueLine, DialogueScript
@@ -824,43 +824,43 @@ class TestSDKResponseParsing:
 
 
 # ---------------------------------------------------------------------------
-# MORNING_SHOW_FORCE_MOCK env flag (#137)
+# KIDS_DAILY_FORCE_MOCK env flag (#137)
 # ---------------------------------------------------------------------------
 class TestForceMockEnvFlag:
-    """Contract: MORNING_SHOW_FORCE_MOCK env flag forces mock mode."""
+    """Contract: KIDS_DAILY_FORCE_MOCK env flag forces mock mode."""
 
     def test_force_mock_flag_true(self):
-        """Contract: MORNING_SHOW_FORCE_MOCK=1 forces _should_use_mock() to return True."""
+        """Contract: KIDS_DAILY_FORCE_MOCK=1 forces _should_use_mock() to return True."""
         import os
         from unittest.mock import patch
 
-        from backend.src.agents.morning_show_agent import _should_use_mock
+        from backend.src.agents.kids_daily_agent import _should_use_mock
 
-        with patch.dict(os.environ, {"MORNING_SHOW_FORCE_MOCK": "1"}, clear=False):
+        with patch.dict(os.environ, {"KIDS_DAILY_FORCE_MOCK": "1"}, clear=False):
             assert _should_use_mock() is True
 
     def test_force_mock_flag_true_string(self):
-        """Contract: MORNING_SHOW_FORCE_MOCK=true also works."""
+        """Contract: KIDS_DAILY_FORCE_MOCK=true also works."""
         import os
         from unittest.mock import patch
 
-        from backend.src.agents.morning_show_agent import _should_use_mock
+        from backend.src.agents.kids_daily_agent import _should_use_mock
 
-        with patch.dict(os.environ, {"MORNING_SHOW_FORCE_MOCK": "true"}, clear=False):
+        with patch.dict(os.environ, {"KIDS_DAILY_FORCE_MOCK": "true"}, clear=False):
             assert _should_use_mock() is True
 
     def test_force_mock_flag_yes(self):
-        """Contract: MORNING_SHOW_FORCE_MOCK=yes also works."""
+        """Contract: KIDS_DAILY_FORCE_MOCK=yes also works."""
         import os
         from unittest.mock import patch
 
-        from backend.src.agents.morning_show_agent import _should_use_mock
+        from backend.src.agents.kids_daily_agent import _should_use_mock
 
-        with patch.dict(os.environ, {"MORNING_SHOW_FORCE_MOCK": "yes"}, clear=False):
+        with patch.dict(os.environ, {"KIDS_DAILY_FORCE_MOCK": "yes"}, clear=False):
             assert _should_use_mock() is True
 
     def test_force_mock_flag_empty_does_not_force(self):
-        """Contract: empty MORNING_SHOW_FORCE_MOCK does not force mock mode on its own.
+        """Contract: empty KIDS_DAILY_FORCE_MOCK does not force mock mode on its own.
 
         Note: _should_use_mock() may still return True due to PYTEST_CURRENT_TEST being set.
         This test verifies the flag itself doesn't add mock forcing when empty.
@@ -868,17 +868,17 @@ class TestForceMockEnvFlag:
         import os
         from unittest.mock import patch
 
-        from backend.src.agents.morning_show_agent import _should_use_mock
+        from backend.src.agents.kids_daily_agent import _should_use_mock
 
         # We can't fully test "returns False" in pytest because PYTEST_CURRENT_TEST is set.
         # Instead, verify the flag logic: empty string is not in {"1", "true", "yes"}.
-        force_mock = os.getenv("MORNING_SHOW_FORCE_MOCK", "").strip().lower()
+        force_mock = os.getenv("KIDS_DAILY_FORCE_MOCK", "").strip().lower()
         # If unset, force_mock is "" which is not in the truthy set
-        assert force_mock not in {"1", "true", "yes"} or os.getenv("MORNING_SHOW_FORCE_MOCK") is not None
+        assert force_mock not in {"1", "true", "yes"} or os.getenv("KIDS_DAILY_FORCE_MOCK") is not None
 
 
 class TestSafetyScoreExtraction:
-    """Contract: _generate_with_sdk must extract and propagate safety_score from SDK result."""
+    """Contract: _generate_dialogue_with_sdk must extract and propagate safety_score from SDK result."""
 
     @pytest.mark.asyncio
     async def test_sdk_safety_score_propagated_to_agent_output(self):
@@ -888,7 +888,7 @@ class TestSafetyScoreExtraction:
         """
         from unittest.mock import AsyncMock, MagicMock, patch
 
-        from backend.src.agents.morning_show_agent import generate_morning_show_dialogue
+        from backend.src.agents.kids_daily_agent import generate_kids_daily_dialogue
 
         # Build a mock SDK result with safety_score=0.91
         mock_script_data = {
@@ -902,7 +902,7 @@ class TestSafetyScoreExtraction:
             "safety_score": 0.91,
         }
 
-        from backend.src.agents.morning_show_agent import DialogueScript, DialogueLine
+        from backend.src.agents.kids_daily_agent import DialogueScript, DialogueLine
 
         mock_script = DialogueScript(
             lines=[
@@ -915,13 +915,13 @@ class TestSafetyScoreExtraction:
         )
 
         with patch(
-            "backend.src.agents.morning_show_agent._should_use_mock", return_value=False
+            "backend.src.agents.kids_daily_agent._should_use_mock", return_value=False
         ), patch(
-            "backend.src.agents.morning_show_agent._generate_with_sdk",
+            "backend.src.agents.kids_daily_agent._generate_dialogue_with_sdk",
             new_callable=AsyncMock,
             return_value=(mock_script, 0.91),
         ):
-            result = await generate_morning_show_dialogue(
+            result = await generate_kids_daily_dialogue(
                 news_text="Scientists discovered a new planet.",
                 age_group="6-8",
             )
@@ -939,9 +939,9 @@ class TestSafetyScoreExtraction:
         """
         from unittest.mock import AsyncMock, patch
 
-        from backend.src.agents.morning_show_agent import generate_morning_show_dialogue
+        from backend.src.agents.kids_daily_agent import generate_kids_daily_dialogue
 
-        from backend.src.agents.morning_show_agent import DialogueScript, DialogueLine
+        from backend.src.agents.kids_daily_agent import DialogueScript, DialogueLine
 
         mock_script = DialogueScript(
             lines=[
@@ -954,13 +954,13 @@ class TestSafetyScoreExtraction:
         )
 
         with patch(
-            "backend.src.agents.morning_show_agent._should_use_mock", return_value=False
+            "backend.src.agents.kids_daily_agent._should_use_mock", return_value=False
         ), patch(
-            "backend.src.agents.morning_show_agent._generate_with_sdk",
+            "backend.src.agents.kids_daily_agent._generate_dialogue_with_sdk",
             new_callable=AsyncMock,
             return_value=(mock_script, 0.70),
         ):
-            result = await generate_morning_show_dialogue(
+            result = await generate_kids_daily_dialogue(
                 news_text="Some news content.",
                 age_group="6-8",
             )
@@ -993,7 +993,7 @@ class TestCharacterDisplayNames:
 
     def test_role_display_names_mapping(self):
         """Contract: ROLE_DISPLAY_NAMES maps roles to character names."""
-        from backend.src.agents.morning_show_agent import ROLE_DISPLAY_NAMES
+        from backend.src.agents.kids_daily_agent import ROLE_DISPLAY_NAMES
 
         assert ROLE_DISPLAY_NAMES == {
             "curious_kid": "Mimi",
@@ -1002,7 +1002,7 @@ class TestCharacterDisplayNames:
         }
 
     def test_agent_output_includes_role_display_names(self):
-        """Contract: generate_morning_show_dialogue output includes role_display_names."""
+        """Contract: generate_kids_daily_dialogue output includes role_display_names."""
         agent_output = {
             "dialogue_script": {"lines": [], "total_duration": 0.0},
             "safety_score": 0.95,
@@ -1024,7 +1024,7 @@ class TestDegradedMetadata:
 
     def test_episode_is_degraded_defaults_false(self):
         """Contract: is_degraded defaults to False."""
-        ep = MorningShowEpisode(
+        ep = KidsDailyEpisode(
             episode_id="ep_d1", child_id="c1", age_group="6-8",
             category="science", kid_title="T", kid_content="C", why_care="W",
             dialogue_script=DialogueScript(lines=[], total_duration=0.0),
@@ -1033,8 +1033,8 @@ class TestDegradedMetadata:
         assert ep.degraded_reason is None
 
     def test_metadata_is_degraded_defaults_false(self):
-        """Contract: MorningShowGenerationMetadata.is_degraded defaults to False."""
-        meta = MorningShowGenerationMetadata(
+        """Contract: KidsDailyGenerationMetadata.is_degraded defaults to False."""
+        meta = KidsDailyGenerationMetadata(
             generation_id="g1", safety_score=0.95,
         )
         assert meta.is_degraded is False
@@ -1042,11 +1042,11 @@ class TestDegradedMetadata:
 
     def test_degraded_metadata_round_trip(self):
         """Contract: degraded fields survive serialization."""
-        meta = MorningShowGenerationMetadata(
+        meta = KidsDailyGenerationMetadata(
             generation_id="g2", safety_score=0.95, used_mock=True,
             is_degraded=True, degraded_reason="mock_environment",
         )
         data = meta.model_dump()
-        restored = MorningShowGenerationMetadata(**data)
+        restored = KidsDailyGenerationMetadata(**data)
         assert restored.is_degraded is True
         assert restored.degraded_reason == "mock_environment"

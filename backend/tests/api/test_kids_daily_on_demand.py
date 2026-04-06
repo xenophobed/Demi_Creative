@@ -1,4 +1,4 @@
-"""API tests for Morning Show on-demand generation endpoints (#311).
+"""API tests for Kids Daily on-demand generation endpoints (#311).
 
 Tests cover:
 - POST /generate-now — success, unsubscribed category (400), rate limit (429)
@@ -53,7 +53,7 @@ _MOCK_NEWS_TEXT = "Today's news about science:\n- Coral reef found: A new reef p
 
 
 def _mock_stream_events():
-    """Async generator yielding mock SSE events from stream_morning_show_generation."""
+    """Async generator yielding mock SSE events from stream_kids_daily_generation."""
     events = [
         {"type": "status", "data": {"phase": "generating_script", "message": "Generating..."}},
         {"type": "result", "data": _MOCK_GENERATED},
@@ -69,9 +69,9 @@ def _mock_stream_events():
 # ---------------------------------------------------------------------------
 # Patch targets (routes module imports these at top level)
 # ---------------------------------------------------------------------------
-_ROUTE = "backend.src.api.routes.morning_show"
-_CONVERT = f"{_ROUTE}.convert_news_to_morning_show"
-_STREAM = f"{_ROUTE}.stream_morning_show_generation"
+_ROUTE = "backend.src.api.routes.kids_daily"
+_CONVERT = f"{_ROUTE}.generate_kids_daily_episode"
+_STREAM = f"{_ROUTE}.stream_kids_daily_generation"
 _FETCH = f"{_ROUTE}.fetch_news_text"
 _AUDIO = f"{_ROUTE}.generate_multi_speaker_audio"
 _SUB_REPO = f"{_ROUTE}.subscription_repo"
@@ -82,10 +82,10 @@ _GEN_ILLUSTRATIONS = f"{_ROUTE}._generate_illustrations"
 
 @pytest.mark.asyncio
 class TestGenerateNowEndpoint:
-    """POST /api/v1/morning-show/generate-now"""
+    """POST /api/v1/kids-daily/generate-now"""
 
     async def test_returns_valid_episode(self, test_client):
-        """On-demand generation with mocked agent returns a valid MorningShowResponse."""
+        """On-demand generation with mocked agent returns a valid KidsDailyResponse."""
         child_id = f"child-od-{uuid.uuid4().hex[:8]}"
 
         with (
@@ -104,7 +104,7 @@ class TestGenerateNowEndpoint:
 
             async with test_client as client:
                 response = await client.post(
-                    "/api/v1/morning-show/generate-now",
+                    "/api/v1/kids-daily/generate-now",
                     json={
                         "child_id": child_id,
                         "category": "science",
@@ -116,7 +116,7 @@ class TestGenerateNowEndpoint:
             data = response.json()
             assert "episode" in data
             assert "metadata" in data
-            assert data["episode"]["story_type"] == "morning_show"
+            assert data["episode"]["story_type"] == "kids_daily"
             assert data["metadata"]["safety_score"] >= 0.85
             assert "generation_id" in data["metadata"]
             assert len(data["episode"]["dialogue_script"]["lines"]) > 0
@@ -132,7 +132,7 @@ class TestGenerateNowEndpoint:
 
             async with test_client as client:
                 response = await client.post(
-                    "/api/v1/morning-show/generate-now",
+                    "/api/v1/kids-daily/generate-now",
                     json={
                         "child_id": child_id,
                         "category": "science",
@@ -157,7 +157,7 @@ class TestGenerateNowEndpoint:
 
             async with test_client as client:
                 response = await client.post(
-                    "/api/v1/morning-show/generate-now",
+                    "/api/v1/kids-daily/generate-now",
                     json={
                         "child_id": child_id,
                         "category": "science",
@@ -174,7 +174,7 @@ class TestGenerateNowEndpoint:
 
 @pytest.mark.asyncio
 class TestGenerateNowStreamEndpoint:
-    """POST /api/v1/morning-show/generate-now/stream"""
+    """POST /api/v1/kids-daily/generate-now/stream"""
 
     async def test_stream_returns_sse_events_in_order(self, test_client):
         """SSE stream must emit status events for each phase, then result, then complete."""
@@ -197,7 +197,7 @@ class TestGenerateNowStreamEndpoint:
 
             async with test_client as client:
                 response = await client.post(
-                    "/api/v1/morning-show/generate-now/stream",
+                    "/api/v1/kids-daily/generate-now/stream",
                     json={
                         "child_id": child_id,
                         "category": "science",
@@ -236,7 +236,7 @@ class TestGenerateNowStreamEndpoint:
 
             async with test_client as client:
                 response = await client.post(
-                    "/api/v1/morning-show/generate-now/stream",
+                    "/api/v1/kids-daily/generate-now/stream",
                     json={
                         "child_id": child_id,
                         "category": "science",
@@ -260,7 +260,7 @@ class TestGenerateNowStreamEndpoint:
 
             async with test_client as client:
                 response = await client.post(
-                    "/api/v1/morning-show/generate-now/stream",
+                    "/api/v1/kids-daily/generate-now/stream",
                     json={
                         "child_id": child_id,
                         "category": "science",

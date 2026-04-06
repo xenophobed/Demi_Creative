@@ -315,7 +315,7 @@ class UserRepository:
                 (SELECT COUNT(*) FROM sessions WHERE user_id = u.user_id) as session_count,
                 (SELECT COUNT(*) FROM stories WHERE user_id = u.user_id AND story_type = 'image_to_story') as art_story_count,
                 (SELECT COUNT(*) FROM sessions WHERE user_id = u.user_id) as interactive_count,
-                (SELECT COUNT(*) FROM stories WHERE user_id = u.user_id AND story_type IN ('news_to_kids', 'morning_show')) as news_count
+                (SELECT COUNT(*) FROM stories WHERE user_id = u.user_id AND story_type IN ('kids_daily', 'news_to_kids', 'morning_show')) as news_count
             FROM users u
             WHERE u.user_id = ?
             """,

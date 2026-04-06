@@ -4,23 +4,35 @@ Shared Auth Dependencies
 Consolidated authentication and ownership verification for all protected routes.
 """
 
-from typing import Optional
 import hmac
 import os
+from typing import Optional
 
-from fastapi import Header, HTTPException, status, Depends
+from fastapi import Depends, Header, HTTPException, status
 
-from ..services.user_service import user_service, UserData
-from ..services.database import story_repo, session_repo, db_manager, usage_repo, user_repo
+from ..services.database import (
+    db_manager,
+    session_repo,
+    story_repo,
+    usage_repo,
+    user_repo,
+)
 from ..services.database.session_repository import SessionData
 from ..services.supabase_auth import decode_supabase_token
+from ..services.user_service import UserData, user_service
 
-_DEFAULT_DAILY_QUOTA = 3
+_DEFAULT_DAILY_QUOTA = 6
+
+
+def _is_development_env() -> bool:
+    env = os.getenv("ENVIRONMENT", "").strip().lower()
+    return env in {"development", "dev", "local"}
 
 
 def _get_daily_quota() -> int:
     try:
-        return int(os.getenv("DAILY_GENERATION_QUOTA", _DEFAULT_DAILY_QUOTA))
+        quota = int(os.getenv("DAILY_GENERATION_QUOTA", _DEFAULT_DAILY_QUOTA))
+        return quota if quota > 0 else _DEFAULT_DAILY_QUOTA
     except (ValueError, TypeError):
         return _DEFAULT_DAILY_QUOTA
 
@@ -140,9 +152,16 @@ async def _get_or_create_supabase_user(claims) -> Optional[UserData]:
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
-            claims.sub, username, claims.email, "supabase_managed",
-            username, 1, 1 if claims.email_confirmed else 0,
-            "child", now, now,
+            claims.sub,
+            username,
+            claims.email,
+            "supabase_managed",
+            username,
+            1,
+            1 if claims.email_confirmed else 0,
+            "child",
+            now,
+            now,
         ),
     )
     await db_manager.commit()
@@ -191,15 +210,15 @@ async def check_generation_quota(
     The caller receives the same UserData as get_current_user so no extra
     dep is needed.
     """
-    if _allow_test_auth_bypass():
+    if _allow_test_auth_bypass() or _is_development_env():
         return user
 
     quota = _get_daily_quota()
     used = await usage_repo.get_usage_today(user.user_id)
     if used >= quota:
-        resets_at = (
-            await usage_repo.get_quota_status(user.user_id, quota)
-        )["resets_at"]
+        resets_at = (await usage_repo.get_quota_status(user.user_id, quota))[
+            "resets_at"
+        ]
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail={

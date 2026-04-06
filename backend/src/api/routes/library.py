@@ -8,51 +8,47 @@ Implements: #58, #59, #60, #81, #83, #84
 """
 
 import json
-from typing import Optional, List
-
-from ...utils.text import count_words
-from ...paths import AUDIO_DIR
+import re
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
+from ...paths import AUDIO_DIR
+from ...services.database import favorite_repo, session_repo, story_repo
+from ...services.database.artifact_repository import StoryArtifactLinkRepository
+from ...services.database.connection import db_manager
+from ...services.user_service import UserData
+from ...utils.text import count_words
+from ..deps import get_current_user
 from ..models import (
-    LibraryItemType,
-    LibrarySortOrder,
+    ErrorResponse,
+    FavoriteRequest,
+    FavoriteResponse,
     LibraryItem,
+    LibraryItemType,
     LibraryResponse,
+    LibrarySortOrder,
     LibraryStatsGroupBy,
     LibraryStatsPeriod,
     LibraryStatsResponse,
-    FavoriteRequest,
-    FavoriteResponse,
-    ErrorResponse,
 )
-from ..deps import get_current_user
-from ...services.user_service import UserData
-from ...services.database import story_repo, session_repo, favorite_repo
-from ...services.database.artifact_repository import StoryArtifactLinkRepository
-from ...services.database.connection import db_manager
 
 # Content safety threshold — items below this score are hidden (#81)
 SAFETY_THRESHOLD = 0.85
 
-router = APIRouter(
-    prefix="/api/v1/library",
-    tags=["Library"]
-)
+router = APIRouter(prefix="/api/v1/library", tags=["Library"])
 
 
 # ============================================================================
 # Helpers
 # ============================================================================
 
+
 def _resolve_story_type(story: dict) -> LibraryItemType:
     """Map the story_type DB field to a LibraryItemType."""
     story_type = story.get("story_type", "image_to_story")
-    if story_type == "news_to_kids":
-        return LibraryItemType.NEWS
-    if story_type == "morning_show":
-        return LibraryItemType.MORNING_SHOW
+    if story_type in ("kids_daily", "morning_show", "news_to_kids"):
+        return LibraryItemType.KIDS_DAILY
     if story_type == "interactive":
         return LibraryItemType.INTERACTIVE
     return LibraryItemType.ART_STORY
@@ -74,14 +70,24 @@ def _story_to_library_item(
 
     # Extract news category from analysis metadata (#84)
     analysis = story.get("analysis", {})
-    category = analysis.get("category") if item_type in (LibraryItemType.NEWS, LibraryItemType.MORNING_SHOW) else None
-    duration_seconds = analysis.get("duration_seconds") if item_type == LibraryItemType.MORNING_SHOW else None
-    is_new = analysis.get("is_new") if item_type == LibraryItemType.MORNING_SHOW else None
-    title = analysis.get("kid_title") if item_type in (LibraryItemType.NEWS, LibraryItemType.MORNING_SHOW) else _extract_title(text)
+    category = (
+        analysis.get("category") if item_type in (LibraryItemType.KIDS_DAILY,) else None
+    )
+    duration_seconds = (
+        analysis.get("duration_seconds")
+        if item_type == LibraryItemType.KIDS_DAILY
+        else None
+    )
+    is_new = analysis.get("is_new") if item_type == LibraryItemType.KIDS_DAILY else None
+    title = (
+        analysis.get("kid_title")
+        if item_type in (LibraryItemType.KIDS_DAILY,)
+        else _extract_title(text)
+    )
 
     audio_url = story.get("audio_url")
     if isinstance(audio_url, str) and audio_url.startswith("/data/audio/"):
-        filename = audio_url[len("/data/audio/"):]
+        filename = audio_url[len("/data/audio/") :]
         file_path = AUDIO_DIR / filename
         if not file_path.exists() or not file_path.is_file():
             audio_url = None
@@ -146,16 +152,43 @@ def _session_to_library_item(session, is_favorited: bool = False) -> LibraryItem
     )
 
 
-def _extract_title(text: str, max_len: int = 35) -> str:
-    """Extract a display title from story text (first sentence or truncated)."""
+def _extract_title(text: str, max_len: int = 24) -> str:
+    """Extract a concise display title from story text."""
     if not text:
         return "Untitled Story"
-    # Take first sentence
-    for sep in ["\u3002", ".", "\uff01", "!", "\n"]:
-        idx = text.find(sep)
-        if 0 < idx < max_len:
-            return text[:idx]
-    return text[:max_len] + ("..." if len(text) > max_len else "")
+
+    first_line = next((line.strip() for line in text.splitlines() if line.strip()), "")
+    if not first_line:
+        first_line = text.strip()
+
+    candidate = re.sub(r"^[《「『【〈\s]+|[》」』】〉\s]+$", "", first_line).strip()
+    if not candidate:
+        candidate = first_line
+
+    for sep in [
+        "\u3002",
+        "\uff01",
+        "\uff1f",
+        ".",
+        "!",
+        "?",
+        "\uff1b",
+        ";",
+        "\uff1a",
+        ":",
+        "\uff0c",
+        ",",
+    ]:
+        idx = candidate.find(sep)
+        if 0 < idx:
+            candidate = candidate[:idx].strip()
+            break
+
+    if not candidate:
+        return "Untitled Story"
+    if len(candidate) <= max_len:
+        return candidate
+    return candidate[:max_len].rstrip() + "..."
 
 
 async def _resolve_thumbnail(story_id: str) -> Optional[str]:
@@ -188,6 +221,7 @@ def _sort_items(items: List[LibraryItem], sort: LibrarySortOrder) -> None:
 # GET /api/v1/library — Unified library endpoint (#58)
 # ============================================================================
 
+
 @router.get(
     "",
     response_model=LibraryResponse,
@@ -205,34 +239,55 @@ async def get_library(
     """Unified library endpoint. Aggregates stories, sessions, and news."""
     all_items: List[LibraryItem] = []
 
-    # Fetch stories (includes both art-story and news types)
-    if type is None or type in (LibraryItemType.ART_STORY, LibraryItemType.NEWS, LibraryItemType.MORNING_SHOW, LibraryItemType.KIDS_NEWS):
+    # Legacy type aliases all map to KIDS_DAILY
+    _KIDS_DAILY_ALIASES = {
+        LibraryItemType.NEWS,
+        LibraryItemType.MORNING_SHOW,
+        LibraryItemType.KIDS_NEWS,
+        LibraryItemType.KIDS_DAILY,
+    }
+    effective_type = LibraryItemType.KIDS_DAILY if type in _KIDS_DAILY_ALIASES else type
+
+    # Fetch stories (includes both art-story and kids-daily types)
+    if effective_type is None or effective_type in (
+        LibraryItemType.ART_STORY,
+        LibraryItemType.KIDS_DAILY,
+    ):
         stories = await story_repo.list_by_user(user.user_id, limit=10000, offset=0)
 
         # Separate favorites lookups by resolved type
-        art_ids = [s["story_id"] for s in stories if _resolve_story_type(s) == LibraryItemType.ART_STORY]
-        news_ids = [s["story_id"] for s in stories if _resolve_story_type(s) == LibraryItemType.NEWS]
-        morning_ids = [s["story_id"] for s in stories if _resolve_story_type(s) == LibraryItemType.MORNING_SHOW]
-        fav_art_ids = await favorite_repo.get_favorited_ids(
-            user.user_id, "art-story", art_ids
-        ) if art_ids else set()
-        fav_news_ids = await favorite_repo.get_favorited_ids(
-            user.user_id, "news", news_ids
-        ) if news_ids else set()
-        fav_morning_ids = await favorite_repo.get_favorited_ids(
-            user.user_id, "morning-show", morning_ids
-        ) if morning_ids else set()
-        fav_story_ids = fav_art_ids | fav_news_ids | fav_morning_ids
+        art_ids = [
+            s["story_id"]
+            for s in stories
+            if _resolve_story_type(s) == LibraryItemType.ART_STORY
+        ]
+        kids_daily_ids = [
+            s["story_id"]
+            for s in stories
+            if _resolve_story_type(s) == LibraryItemType.KIDS_DAILY
+        ]
+        fav_art_ids = (
+            await favorite_repo.get_favorited_ids(user.user_id, "art-story", art_ids)
+            if art_ids
+            else set()
+        )
+        fav_kids_daily_ids = (
+            await favorite_repo.get_favorited_ids(
+                user.user_id, "kids-daily", kids_daily_ids
+            )
+            if kids_daily_ids
+            else set()
+        )
+        fav_story_ids = fav_art_ids | fav_kids_daily_ids
 
         for s in stories:
             thumb = await _resolve_thumbnail(s["story_id"])
             item = _story_to_library_item(
                 s, is_favorited=s["story_id"] in fav_story_ids, thumbnail_url=thumb
             )
-            # Apply type filter — KIDS_NEWS is a union alias for NEWS + MORNING_SHOW
-            if type is not None and item.type != type:
-                if type != LibraryItemType.KIDS_NEWS or item.type not in (LibraryItemType.NEWS, LibraryItemType.MORNING_SHOW):
-                    continue
+            # Apply type filter
+            if effective_type is not None and item.type != effective_type:
+                continue
             # Apply safety filter (#81)
             if not _is_safe(item):
                 continue
@@ -242,20 +297,26 @@ async def get_library(
     if type is None or type == LibraryItemType.INTERACTIVE:
         sessions = await session_repo.list_by_user(user.user_id, limit=10000, offset=0)
         session_ids = [s.session_id for s in sessions]
-        fav_session_ids = await favorite_repo.get_favorited_ids(
-            user.user_id, "interactive", session_ids
-        ) if session_ids else set()
+        fav_session_ids = (
+            await favorite_repo.get_favorited_ids(
+                user.user_id, "interactive", session_ids
+            )
+            if session_ids
+            else set()
+        )
 
         for s in sessions:
             all_items.append(
-                _session_to_library_item(s, is_favorited=s.session_id in fav_session_ids)
+                _session_to_library_item(
+                    s, is_favorited=s.session_id in fav_session_ids
+                )
             )
 
     # Sort (#83)
     _sort_items(all_items, sort)
 
     total = len(all_items)
-    paginated = all_items[offset:offset + limit]
+    paginated = all_items[offset : offset + limit]
 
     return LibraryResponse(
         items=paginated,
@@ -268,6 +329,7 @@ async def get_library(
 # ============================================================================
 # GET /api/v1/library/stats — Creation stats endpoint (#133)
 # ============================================================================
+
 
 @router.get(
     "/stats",
@@ -325,6 +387,7 @@ async def get_library_stats(
 # GET /api/v1/library/search — Search endpoint (#59)
 # ============================================================================
 
+
 @router.get(
     "/search",
     response_model=LibraryResponse,
@@ -347,33 +410,54 @@ async def search_library(
     all_items: List[LibraryItem] = []
     query_lower = q.lower()
 
-    # Search stories (includes both art-story and news types)
-    if type is None or type in (LibraryItemType.ART_STORY, LibraryItemType.NEWS, LibraryItemType.MORNING_SHOW, LibraryItemType.KIDS_NEWS):
+    # Legacy type aliases all map to KIDS_DAILY
+    _KIDS_DAILY_ALIASES = {
+        LibraryItemType.NEWS,
+        LibraryItemType.MORNING_SHOW,
+        LibraryItemType.KIDS_NEWS,
+        LibraryItemType.KIDS_DAILY,
+    }
+    effective_type = LibraryItemType.KIDS_DAILY if type in _KIDS_DAILY_ALIASES else type
+
+    # Search stories (includes both art-story and kids-daily types)
+    if effective_type is None or effective_type in (
+        LibraryItemType.ART_STORY,
+        LibraryItemType.KIDS_DAILY,
+    ):
         stories = await story_repo.list_by_user(user.user_id, limit=10000, offset=0)
 
-        art_ids = [s["story_id"] for s in stories if _resolve_story_type(s) == LibraryItemType.ART_STORY]
-        news_ids = [s["story_id"] for s in stories if _resolve_story_type(s) == LibraryItemType.NEWS]
-        morning_ids = [s["story_id"] for s in stories if _resolve_story_type(s) == LibraryItemType.MORNING_SHOW]
-        fav_art = await favorite_repo.get_favorited_ids(
-            user.user_id, "art-story", art_ids
-        ) if art_ids else set()
-        fav_news = await favorite_repo.get_favorited_ids(
-            user.user_id, "news", news_ids
-        ) if news_ids else set()
-        fav_morning = await favorite_repo.get_favorited_ids(
-            user.user_id, "morning-show", morning_ids
-        ) if morning_ids else set()
-        fav_ids = fav_art | fav_news | fav_morning
+        art_ids = [
+            s["story_id"]
+            for s in stories
+            if _resolve_story_type(s) == LibraryItemType.ART_STORY
+        ]
+        kids_daily_ids = [
+            s["story_id"]
+            for s in stories
+            if _resolve_story_type(s) == LibraryItemType.KIDS_DAILY
+        ]
+        fav_art = (
+            await favorite_repo.get_favorited_ids(user.user_id, "art-story", art_ids)
+            if art_ids
+            else set()
+        )
+        fav_kids_daily = (
+            await favorite_repo.get_favorited_ids(
+                user.user_id, "kids-daily", kids_daily_ids
+            )
+            if kids_daily_ids
+            else set()
+        )
+        fav_ids = fav_art | fav_kids_daily
 
         for s in stories:
             thumb = await _resolve_thumbnail(s["story_id"])
             item = _story_to_library_item(
                 s, is_favorited=s["story_id"] in fav_ids, thumbnail_url=thumb
             )
-            # Apply type filter — KIDS_NEWS is a union alias for NEWS + MORNING_SHOW
-            if type is not None and item.type != type:
-                if type != LibraryItemType.KIDS_NEWS or item.type not in (LibraryItemType.NEWS, LibraryItemType.MORNING_SHOW):
-                    continue
+            # Apply type filter
+            if effective_type is not None and item.type != effective_type:
+                continue
             # Apply safety filter (#81)
             if not _is_safe(item):
                 continue
@@ -391,9 +475,13 @@ async def search_library(
     if type is None or type == LibraryItemType.INTERACTIVE:
         sessions = await session_repo.list_by_user(user.user_id, limit=10000, offset=0)
         session_ids = [s.session_id for s in sessions]
-        fav_ids = await favorite_repo.get_favorited_ids(
-            user.user_id, "interactive", session_ids
-        ) if session_ids else set()
+        fav_ids = (
+            await favorite_repo.get_favorited_ids(
+                user.user_id, "interactive", session_ids
+            )
+            if session_ids
+            else set()
+        )
 
         for s in sessions:
             searchable = f"{s.story_title} {s.theme or ''}".lower()
@@ -406,7 +494,7 @@ async def search_library(
     _sort_items(all_items, sort)
 
     total = len(all_items)
-    paginated = all_items[offset:offset + limit]
+    paginated = all_items[offset : offset + limit]
 
     return LibraryResponse(
         items=paginated,
@@ -419,6 +507,7 @@ async def search_library(
 # ============================================================================
 # POST /api/v1/library/favorites — Add favorite (#60)
 # ============================================================================
+
 
 @router.post(
     "/favorites",
@@ -444,6 +533,7 @@ async def add_favorite(
 # ============================================================================
 # DELETE /api/v1/library/favorites — Remove favorite (#60)
 # ============================================================================
+
 
 @router.delete(
     "/favorites",

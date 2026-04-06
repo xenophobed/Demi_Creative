@@ -1,97 +1,156 @@
-import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { motion } from 'framer-motion'
-import { useQuery } from '@tanstack/react-query'
-import Button from '@/components/common/Button'
-import Card from '@/components/common/Card'
-import TiltCard from '@/components/depth/TiltCard'
-import useAuthStore from '@/store/useAuthStore'
-import useChildStore from '@/store/useChildStore'
-import { authService } from '@/api/services/authService'
-import type { UpdateProfileRequest } from '@/types/auth'
-import AvatarDisplay from '@/components/common/AvatarDisplay'
-import CharacterGallery from './CharacterGallery'
-import PreferenceSummary from './PreferenceSummary'
-import { useMemoryApi } from '@/hooks/useMemoryApi'
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { motion } from "framer-motion";
+import { useQuery } from "@tanstack/react-query";
+import Button from "@/components/common/Button";
+import Card from "@/components/common/Card";
+import TiltCard from "@/components/depth/TiltCard";
+import useAuthStore from "@/store/useAuthStore";
+import useChildStore from "@/store/useChildStore";
+import { authService } from "@/api/services/authService";
+import type { UpdateProfileRequest } from "@/types/auth";
+import AvatarDisplay from "@/components/common/AvatarDisplay";
+import CharacterGallery from "./CharacterGallery";
+import PreferenceSummary from "./PreferenceSummary";
+import { useMemoryApi } from "@/hooks/useMemoryApi";
+import type { MemoryPreferenceCategory } from "@/types/api";
 
 const ANIMAL_EMOJIS = [
-  '🐶', '🐱', '🐼', '🐨', '🦊', '🐰', '🐸', '🦁',
-  '🐯', '🐮', '🐷', '🐵', '🐔', '🐧', '🦄', '🐲',
-  '🐢', '🦋', '🐬', '🐙',
-]
+  "🐶",
+  "🐱",
+  "🐼",
+  "🐨",
+  "🦊",
+  "🐰",
+  "🐸",
+  "🦁",
+  "🐯",
+  "🐮",
+  "🐷",
+  "🐵",
+  "🐔",
+  "🐧",
+  "🦄",
+  "🐲",
+  "🐢",
+  "🦋",
+  "🐬",
+  "🐙",
+];
 
 function ProfilePage() {
-  const navigate = useNavigate()
-  const { isAuthenticated, user, setUser } = useAuthStore()
-  const { currentChild } = useChildStore()
-  const childId = currentChild?.child_id || null
-  const [isEditing, setIsEditing] = useState(false)
+  const navigate = useNavigate();
+  const { isAuthenticated, user, setUser } = useAuthStore();
+  const { currentChild, defaultChildId } = useChildStore();
+  const childId = currentChild?.child_id || defaultChildId || null;
+  const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState<UpdateProfileRequest>({
-    display_name: user?.display_name || '',
-    avatar_url: user?.avatar_url || '',
-  })
-  const [saving, setSaving] = useState(false)
-  const [showClearConfirm, setShowClearConfirm] = useState(false)
-  const [clearSuccess, setClearSuccess] = useState(false)
-  const [clearError, setClearError] = useState<string | null>(null)
+    display_name: user?.display_name || "",
+    avatar_url: user?.avatar_url || "",
+  });
+  const [saving, setSaving] = useState(false);
+  const [isMemoryEditMode, setIsMemoryEditMode] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [clearSuccess, setClearSuccess] = useState(false);
+  const [clearError, setClearError] = useState<string | null>(null);
+  const [deletingCharacterName, setDeletingCharacterName] = useState<
+    string | null
+  >(null);
+  const [deletingPreferenceKey, setDeletingPreferenceKey] = useState<
+    string | null
+  >(null);
 
   const {
     characters,
     preferences,
     isLoading: memoryLoading,
+    error: memoryError,
     deletePreferences,
+    deleteCharacter,
+    deletePreferenceItem,
     isDeleting,
-  } = useMemoryApi(isAuthenticated ? childId : null)
+  } = useMemoryApi(isAuthenticated ? childId : null);
 
   useEffect(() => {
     if (!isAuthenticated) {
-      navigate('/login')
+      navigate("/login");
     }
-  }, [isAuthenticated, navigate])
+  }, [isAuthenticated, navigate]);
 
   // Fetch user stats
   const { data: stats, isLoading: statsLoading } = useQuery({
-    queryKey: ['user-stats'],
+    queryKey: ["user-stats"],
     queryFn: () => authService.getUserStats(),
     enabled: isAuthenticated,
-  })
+  });
 
   const handleSaveProfile = async () => {
-    setSaving(true)
+    setSaving(true);
     try {
-      const updated = await authService.updateProfile(editForm)
-      setUser(updated)
-      setIsEditing(false)
+      const updated = await authService.updateProfile(editForm);
+      setUser(updated);
+      setIsEditing(false);
     } catch (err) {
-      console.error('Failed to update profile:', err)
+      console.error("Failed to update profile:", err);
     } finally {
-      setSaving(false)
+      setSaving(false);
     }
-  }
+  };
 
   const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    })
-  }
+    return new Date(dateStr).toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
+  };
 
   const handleClearMemory = async () => {
-    setClearError(null)
+    setClearError(null);
     try {
-      await deletePreferences()
-      setShowClearConfirm(false)
-      setClearSuccess(true)
-      setTimeout(() => setClearSuccess(false), 3000)
+      await deletePreferences();
+      setShowClearConfirm(false);
+      setIsMemoryEditMode(false);
+      setClearSuccess(true);
+      setTimeout(() => setClearSuccess(false), 3000);
     } catch (err) {
-      console.error('Failed to clear memory:', err)
-      setClearError('Failed to clear memory. Please try again.')
+      console.error("Failed to clear memory:", err);
+      setClearError("Failed to clear memory. Please try again.");
     }
-  }
+  };
+
+  const handleDeleteCharacter = async (name: string) => {
+    setClearError(null);
+    setDeletingCharacterName(name);
+    try {
+      await deleteCharacter(name);
+    } catch (err) {
+      console.error("Failed to delete character:", err);
+      setClearError("Failed to delete character. Please try again.");
+    } finally {
+      setDeletingCharacterName(null);
+    }
+  };
+
+  const handleDeletePreferenceItem = async (
+    category: MemoryPreferenceCategory,
+    label: string,
+  ) => {
+    setClearError(null);
+    const key = `${category}:${label}`;
+    setDeletingPreferenceKey(key);
+    try {
+      await deletePreferenceItem({ category, label });
+    } catch (err) {
+      console.error("Failed to delete preference item:", err);
+      setClearError("Failed to delete this item. Please try again.");
+    } finally {
+      setDeletingPreferenceKey(null);
+    }
+  };
 
   if (!isAuthenticated) {
-    return null
+    return null;
   }
 
   return (
@@ -122,13 +181,13 @@ function ProfilePage() {
               className="w-full sm:w-auto"
               onClick={() => {
                 setEditForm({
-                  display_name: user?.display_name || '',
-                  avatar_url: user?.avatar_url || '',
-                })
-                setIsEditing(!isEditing)
+                  display_name: user?.display_name || "",
+                  avatar_url: user?.avatar_url || "",
+                });
+                setIsEditing(!isEditing);
               }}
             >
-              {isEditing ? 'Cancel' : 'Edit Profile'}
+              {isEditing ? "Cancel" : "Edit Profile"}
             </Button>
           </div>
 
@@ -137,7 +196,7 @@ function ProfilePage() {
             <motion.div
               className="mt-4 pt-4 border-t border-gray-100 space-y-3"
               initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
+              animate={{ opacity: 1, height: "auto" }}
             >
               <div>
                 <label className="block text-sm font-medium text-gray-600 mb-1">
@@ -145,7 +204,7 @@ function ProfilePage() {
                 </label>
                 <input
                   type="text"
-                  value={editForm.display_name || ''}
+                  value={editForm.display_name || ""}
                   onChange={(e) =>
                     setEditForm({ ...editForm, display_name: e.target.value })
                   }
@@ -158,25 +217,28 @@ function ProfilePage() {
                   Choose Your Avatar
                 </label>
                 <div className="flex items-center gap-3 mb-3">
-                  <AvatarDisplay avatarUrl={editForm.avatar_url || undefined} size="md" />
+                  <AvatarDisplay
+                    avatarUrl={editForm.avatar_url || undefined}
+                    size="md"
+                  />
                   <span className="text-sm text-gray-500">
-                    {editForm.avatar_url?.startsWith('emoji:')
-                      ? 'Tap an animal to change'
-                      : 'Pick your favorite animal!'}
+                    {editForm.avatar_url?.startsWith("emoji:")
+                      ? "Tap an animal to change"
+                      : "Pick your favorite animal!"}
                   </span>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {ANIMAL_EMOJIS.map((emoji) => {
-                    const emojiValue = `emoji:${emoji}`
-                    const isSelected = editForm.avatar_url === emojiValue
+                    const emojiValue = `emoji:${emoji}`;
+                    const isSelected = editForm.avatar_url === emojiValue;
                     return (
                       <motion.button
                         key={emoji}
                         type="button"
                         className={`w-10 h-10 rounded-lg text-xl flex items-center justify-center transition-all ${
                           isSelected
-                            ? 'border-2 border-primary bg-primary/10 shadow-md'
-                            : 'border border-gray-200 hover:border-gray-300 hover:shadow-sm'
+                            ? "border-2 border-primary bg-primary/10 shadow-md"
+                            : "border border-gray-200 hover:border-gray-300 hover:shadow-sm"
                         }`}
                         onClick={() =>
                           setEditForm({ ...editForm, avatar_url: emojiValue })
@@ -186,15 +248,11 @@ function ProfilePage() {
                       >
                         {emoji}
                       </motion.button>
-                    )
+                    );
                   })}
                 </div>
               </div>
-              <Button
-                size="sm"
-                onClick={handleSaveProfile}
-                isLoading={saving}
-              >
+              <Button size="sm" onClick={handleSaveProfile} isLoading={saving}>
                 Save Changes
               </Button>
             </motion.div>
@@ -209,29 +267,44 @@ function ProfilePage() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1 }}
       >
-        <TiltCard maxTilt={10} glare className="cursor-pointer" onClick={() => navigate('/library?tab=art-stories')}>
+        <TiltCard
+          maxTilt={10}
+          glare
+          className="cursor-pointer"
+          onClick={() => navigate("/library?tab=art-stories")}
+        >
           <div className="bg-gradient-to-br from-primary/10 to-primary/5 rounded-card p-5 text-center">
             <div className="text-4xl mb-2">🎨</div>
             <div className="text-3xl font-bold text-gray-800">
-              {statsLoading ? '...' : stats?.art_story_count ?? 0}
+              {statsLoading ? "..." : (stats?.art_story_count ?? 0)}
             </div>
             <div className="text-sm text-gray-500 mt-1">Art Stories</div>
           </div>
         </TiltCard>
-        <TiltCard maxTilt={10} glare className="cursor-pointer" onClick={() => navigate('/library?tab=interactive')}>
+        <TiltCard
+          maxTilt={10}
+          glare
+          className="cursor-pointer"
+          onClick={() => navigate("/library?tab=interactive")}
+        >
           <div className="bg-gradient-to-br from-accent/20 to-accent/10 rounded-card p-5 text-center">
             <div className="text-4xl mb-2">🎭</div>
             <div className="text-3xl font-bold text-gray-800">
-              {statsLoading ? '...' : stats?.interactive_count ?? 0}
+              {statsLoading ? "..." : (stats?.interactive_count ?? 0)}
             </div>
             <div className="text-sm text-gray-500 mt-1">Interactive Tales</div>
           </div>
         </TiltCard>
-        <TiltCard maxTilt={10} glare className="cursor-pointer" onClick={() => navigate('/library?tab=kids-news')}>
+        <TiltCard
+          maxTilt={10}
+          glare
+          className="cursor-pointer"
+          onClick={() => navigate("/library?tab=kids-news")}
+        >
           <div className="bg-gradient-to-br from-secondary/20 to-secondary/10 rounded-card p-5 text-center">
             <div className="text-4xl mb-2">📰</div>
             <div className="text-3xl font-bold text-gray-800">
-              {statsLoading ? '...' : stats?.news_count ?? 0}
+              {statsLoading ? "..." : (stats?.news_count ?? 0)}
             </div>
             <div className="text-sm text-gray-500 mt-1">Kids News</div>
           </div>
@@ -246,18 +319,34 @@ function ProfilePage() {
       >
         <Card className="p-4 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="text-base font-bold text-gray-800">Kids Daily Preferences</h2>
-            <p className="text-sm text-gray-500">Manage topic channels for Kids Daily episodes.</p>
+            <h2 className="text-base font-bold text-gray-800">
+              Kids Daily Preferences
+            </h2>
+            <p className="text-sm text-gray-500">
+              Manage topic channels for Kids Daily episodes.
+            </p>
           </div>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => navigate('/morning-show/subscriptions')}
-          >
+          <Button size="sm" variant="outline" onClick={() => navigate("/news")}>
             Manage Channels
           </Button>
         </Card>
       </motion.section>
+
+      {/* Memory load error */}
+      {memoryError && (
+        <motion.section
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.18 }}
+        >
+          <Card className="p-4 border border-amber-200 bg-amber-50">
+            <p className="text-sm text-amber-800">
+              We couldn't load memory data right now. Please refresh this page
+              and try again.
+            </p>
+          </Card>
+        </motion.section>
+      )}
 
       {/* Character Gallery */}
       <motion.section
@@ -265,7 +354,13 @@ function ProfilePage() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.2 }}
       >
-        <CharacterGallery characters={characters} isLoading={memoryLoading} />
+        <CharacterGallery
+          characters={characters}
+          isLoading={memoryLoading}
+          isEditMode={isMemoryEditMode}
+          onDeleteCharacter={handleDeleteCharacter}
+          deletingCharacterName={deletingCharacterName}
+        />
       </motion.section>
 
       {/* Preference Summary */}
@@ -274,7 +369,13 @@ function ProfilePage() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.25 }}
       >
-        <PreferenceSummary preferences={preferences} isLoading={memoryLoading} />
+        <PreferenceSummary
+          preferences={preferences}
+          isLoading={memoryLoading}
+          isEditMode={isMemoryEditMode}
+          onDeletePreferenceItem={handleDeletePreferenceItem}
+          deletingItemKey={deletingPreferenceKey}
+        />
       </motion.section>
 
       {/* Privacy / Clear Memory */}
@@ -286,7 +387,7 @@ function ProfilePage() {
         <Card className="p-4">
           <h2 className="text-base font-bold text-gray-800 mb-1">Privacy</h2>
           <p className="text-sm text-gray-500 mb-3">
-            Clear all saved characters, themes, and preference data.
+            Let kids choose what to remove, or clear everything at once.
           </p>
 
           {clearSuccess && (
@@ -295,44 +396,80 @@ function ProfilePage() {
             </div>
           )}
 
-          {!showClearConfirm ? (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setShowClearConfirm(true)}
-            >
-              Clear Memory
-            </Button>
-          ) : (
+          {!isMemoryEditMode ? (
             <div className="flex flex-wrap items-center gap-2">
-              <p className="text-sm text-red-600 font-medium">
-                Are you sure? This cannot be undone.
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  setIsMemoryEditMode(true);
+                  setShowClearConfirm(false);
+                  setClearError(null);
+                }}
+              >
+                Clear Memory
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-sm text-gray-600">
+                Tap the × on characters and tags above to remove only selected
+                items.
               </p>
               {clearError && (
-                <p className="text-sm text-red-500 w-full">{clearError}</p>
+                <p className="text-sm text-red-500">{clearError}</p>
               )}
-              <Button
-                size="sm"
-                variant="primary"
-                className="bg-red-500 hover:bg-red-600"
-                onClick={handleClearMemory}
-                isLoading={isDeleting}
-              >
-                Yes, Clear
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => { setShowClearConfirm(false); setClearError(null) }}
-              >
-                Cancel
-              </Button>
+              {!showClearConfirm ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="border-red-200 text-red-600 hover:bg-red-50"
+                    onClick={() => setShowClearConfirm(true)}
+                  >
+                    Clear All Memory
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      setIsMemoryEditMode(false);
+                      setShowClearConfirm(false);
+                      setClearError(null);
+                    }}
+                  >
+                    Done
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-sm text-red-600 font-medium">
+                    Are you sure? This cannot be undone.
+                  </p>
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    className="bg-red-500 hover:bg-red-600"
+                    onClick={handleClearMemory}
+                    isLoading={isDeleting}
+                  >
+                    Yes, Clear All
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setShowClearConfirm(false)}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              )}
             </div>
           )}
         </Card>
       </motion.section>
     </div>
-  )
+  );
 }
 
-export default ProfilePage
+export default ProfilePage;

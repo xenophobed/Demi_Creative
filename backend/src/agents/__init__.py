@@ -14,11 +14,13 @@ from .interactive_story_agent import (
     StoryOpeningOutput,
     NextSegmentOutput
 )
-from .news_to_kids_agent import convert_news_to_kids, stream_news_to_kids
-from .morning_show_agent import (
-    convert_news_to_morning_show,
-    generate_morning_show_dialogue,
-    stream_morning_show_generation,
+from .kids_daily_agent import (
+    generate_kids_daily_text,
+    stream_kids_daily_text,
+    generate_kids_daily_dialogue,
+    generate_kids_daily_episode,
+    stream_kids_daily_generation,
+    pick_age_voice,
 )
 
 __all__ = [
@@ -34,11 +36,11 @@ __all__ = [
     "AGE_CONFIG",
     "StoryOpeningOutput",
     "NextSegmentOutput",
-    # News to Kids Agent
-    "convert_news_to_kids",
-    "stream_news_to_kids",
-    # Morning Show Agent
-    "convert_news_to_morning_show",
-    "generate_morning_show_dialogue",
-    "stream_morning_show_generation",
+    # Kids Daily Agent
+    "generate_kids_daily_text",
+    "stream_kids_daily_text",
+    "generate_kids_daily_dialogue",
+    "generate_kids_daily_episode",
+    "stream_kids_daily_generation",
+    "pick_age_voice",
 ]

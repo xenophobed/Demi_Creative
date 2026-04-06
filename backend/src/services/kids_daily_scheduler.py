@@ -1,4 +1,4 @@
-"""Daily Drop scheduler for Morning Show generation (#97)."""
+"""Daily Drop scheduler for Kids Daily generation (#97)."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ import os
 from datetime import datetime, time, timedelta
 from typing import Optional
 
-from ..api.models import AgeGroup, MorningShowRequest, NewsCategory
+from ..api.models import AgeGroup, KidsDailyRequest, NewsCategory
 from ..services.database import db_manager, subscription_repo
 from ..services.news_headline_fetcher import fetch_news_text
 from ..services.user_service import UserData
@@ -84,7 +84,7 @@ class DailyDropScheduler:
             SELECT story_id FROM stories
             WHERE user_id = ?
               AND child_id = ?
-              AND story_type = 'morning_show'
+              AND story_type IN ('kids_daily', 'morning_show')
               AND created_at LIKE ?
               AND analysis LIKE ?
             LIMIT 1
@@ -127,7 +127,7 @@ class DailyDropScheduler:
         logger.info("Daily Drop: processing %d active subscriptions", len(subscriptions))
 
         # Local import avoids startup circular dependencies.
-        from ..api.routes.morning_show import _build_episode
+        from ..api.routes.kids_daily import _build_episode
 
         for sub in subscriptions:
             user_id = sub["user_id"]
@@ -160,7 +160,7 @@ class DailyDropScheduler:
                 category = NewsCategory(topic) if topic in NewsCategory._value2member_map_ else NewsCategory.GENERAL
                 age_group = await self._resolve_child_age_group(child_id, user_id)
 
-                request = MorningShowRequest(
+                request = KidsDailyRequest(
                     child_id=child_id,
                     age_group=age_group,
                     category=category,
@@ -179,4 +179,3 @@ class DailyDropScheduler:
 
 
 daily_drop_scheduler = DailyDropScheduler()
-
