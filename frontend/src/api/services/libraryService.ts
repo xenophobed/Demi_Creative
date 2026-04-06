@@ -56,6 +56,20 @@ export interface LibraryStatsResponse {
   periods: LibraryStatsPeriod[]
 }
 
+export interface RichStatsPeriod {
+  period: string
+  creation_count: number
+  total_words: number
+  unique_themes: number
+  completion_rate: number
+  story_type_breakdown: Record<string, number>
+}
+
+export interface RichStatsResponse {
+  periods: RichStatsPeriod[]
+  streak_days: number
+}
+
 // ---- API ----
 
 const LIBRARY_BASE = '/library'
@@ -104,6 +118,16 @@ export const libraryService = {
    */
   async getStats(groupBy: StatsGroupBy = 'week'): Promise<LibraryStatsResponse> {
     const response = await apiClient.get<LibraryStatsResponse>(`${LIBRARY_BASE}/stats`, {
+      params: { group_by: groupBy },
+    })
+    return response.data
+  },
+
+  /**
+   * GET /api/v1/library/stats-rich — Rich growth dashboard metrics (#356)
+   */
+  async getRichStats(groupBy: StatsGroupBy = 'week'): Promise<RichStatsResponse> {
+    const response = await apiClient.get<RichStatsResponse>(`${LIBRARY_BASE}/stats-rich`, {
       params: { group_by: groupBy },
     })
     return response.data

@@ -31,6 +31,8 @@ from ..models import (
     LibraryStatsGroupBy,
     LibraryStatsPeriod,
     LibraryStatsResponse,
+    RichStatsPeriod,
+    RichStatsResponse,
 )
 
 # Content safety threshold — items below this score are hidden (#81)
@@ -381,6 +383,161 @@ async def get_library_stats(
     ]
 
     return LibraryStatsResponse(periods=periods)
+
+
+# ============================================================================
+# GET /api/v1/library/stats-rich — Rich growth dashboard (#356)
+# ============================================================================
+
+
+@router.get(
+    "/stats-rich",
+    response_model=RichStatsResponse,
+    responses={401: {"model": ErrorResponse}},
+    summary="Get rich growth dashboard stats",
+    description="Returns multi-dimensional growth metrics per period: word count, theme diversity, completion rate, content mix, and streak",
+)
+async def get_rich_stats(
+    group_by: LibraryStatsGroupBy = Query(
+        LibraryStatsGroupBy.WEEK, description="Group by week or month"
+    ),
+    user: UserData = Depends(get_current_user),
+):
+    """Rich growth metrics aggregated per time period (#356).
+
+    Uses existing DB data — no schema changes needed.
+    """
+    fmt = "%Y-%m" if group_by == LibraryStatsGroupBy.MONTH else "%Y-W%W"
+
+    # 1) Stories: count, word_count sum, themes, story_type per period
+    stories_query = f"""
+        SELECT
+            strftime('{fmt}', created_at) AS period,
+            COUNT(*) AS cnt,
+            COALESCE(SUM(word_count), 0) AS total_words,
+            GROUP_CONCAT(themes, '||') AS all_themes,
+            GROUP_CONCAT(story_type, '||') AS all_types
+        FROM stories
+        WHERE user_id = ?
+        GROUP BY period
+        ORDER BY period
+    """
+    story_rows = await db_manager.fetchall(stories_query, (user.user_id,))
+
+    # 2) Sessions: count, completed count per period
+    sessions_query = f"""
+        SELECT
+            strftime('{fmt}', created_at) AS period,
+            COUNT(*) AS total_sessions,
+            SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS completed_sessions
+        FROM sessions
+        WHERE user_id = ?
+        GROUP BY period
+        ORDER BY period
+    """
+    session_rows = await db_manager.fetchall(sessions_query, (user.user_id,))
+
+    # Build lookup from sessions
+    session_map: dict = {}
+    for row in session_rows:
+        if row["period"]:
+            session_map[row["period"]] = row
+
+    # Collect all periods
+    all_periods: dict[str, RichStatsPeriod] = {}
+
+    for row in story_rows:
+        p = row["period"]
+        if not p:
+            continue
+
+        # Parse unique themes from concatenated JSON arrays
+        unique_themes: set[str] = set()
+        if row["all_themes"]:
+            for chunk in row["all_themes"].split("||"):
+                chunk = chunk.strip()
+                if not chunk:
+                    continue
+                try:
+                    parsed = json.loads(chunk)
+                    if isinstance(parsed, list):
+                        unique_themes.update(str(t) for t in parsed)
+                except (json.JSONDecodeError, ValueError):
+                    pass
+
+        # Parse story type breakdown
+        type_breakdown: dict[str, int] = {}
+        if row["all_types"]:
+            for t in row["all_types"].split("||"):
+                t = t.strip()
+                if t:
+                    type_breakdown[t] = type_breakdown.get(t, 0) + 1
+
+        # Merge with session data
+        sess = session_map.pop(p, None)
+        total_sess = sess["total_sessions"] if sess else 0
+        completed_sess = sess["completed_sessions"] if sess else 0
+        creation_count = row["cnt"] + total_sess
+        completion_rate = (
+            round(completed_sess / total_sess, 2)
+            if total_sess > 0
+            else 0.0
+        )
+        if total_sess > 0:
+            type_breakdown["interactive"] = type_breakdown.get("interactive", 0) + total_sess
+
+        all_periods[p] = RichStatsPeriod(
+            period=p,
+            creation_count=creation_count,
+            total_words=row["total_words"],
+            unique_themes=len(unique_themes),
+            completion_rate=completion_rate,
+            story_type_breakdown=type_breakdown,
+        )
+
+    # Add session-only periods (no stories that period)
+    for p, sess in session_map.items():
+        all_periods[p] = RichStatsPeriod(
+            period=p,
+            creation_count=sess["total_sessions"],
+            total_words=0,
+            unique_themes=0,
+            completion_rate=(
+                round(sess["completed_sessions"] / sess["total_sessions"], 2)
+                if sess["total_sessions"] > 0
+                else 0.0
+            ),
+            story_type_breakdown={"interactive": sess["total_sessions"]},
+        )
+
+    # 3) Streak: consecutive days with any creation (from daily_usage)
+    streak_query = """
+        SELECT DISTINCT usage_date
+        FROM daily_usage
+        WHERE user_id = ? AND count > 0
+        ORDER BY usage_date DESC
+    """
+    usage_rows = await db_manager.fetchall(streak_query, (user.user_id,))
+
+    streak = 0
+    if usage_rows:
+        from datetime import date, timedelta
+
+        today = date.today()
+        expected = today
+        for row in usage_rows:
+            try:
+                d = date.fromisoformat(row["usage_date"])
+            except (ValueError, TypeError):
+                break
+            if d == expected:
+                streak += 1
+                expected = d - timedelta(days=1)
+            elif d < expected:
+                break
+
+    sorted_periods = sorted(all_periods.values(), key=lambda x: x.period)
+    return RichStatsResponse(periods=sorted_periods, streak_days=streak)
 
 
 # ============================================================================

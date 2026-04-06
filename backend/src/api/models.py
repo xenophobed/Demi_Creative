@@ -884,6 +884,22 @@ class LibraryStatsResponse(BaseModel):
     periods: List[LibraryStatsPeriod] = Field(..., description="Creation counts by period")
 
 
+class RichStatsPeriod(BaseModel):
+    """A single period with multi-dimensional growth metrics (#356)."""
+    period: str = Field(..., description="Period label (YYYY-Www or YYYY-MM)")
+    creation_count: int = Field(0, description="Total creations")
+    total_words: int = Field(0, description="Sum of word counts from stories")
+    unique_themes: int = Field(0, description="Distinct themes explored")
+    completion_rate: float = Field(0.0, description="Interactive session completion rate (0-1)")
+    story_type_breakdown: Dict[str, int] = Field(default_factory=dict, description="Count per story type")
+
+
+class RichStatsResponse(BaseModel):
+    """Rich growth dashboard stats (#356)."""
+    periods: List[RichStatsPeriod] = Field(..., description="Per-period growth metrics")
+    streak_days: int = Field(0, description="Current consecutive creation days")
+
+
 class PaginatedNewsResponse(BaseModel):
     """Paginated news history response (#69)."""
     items: List[Dict[str, Any]] = Field(..., description="News story items")
