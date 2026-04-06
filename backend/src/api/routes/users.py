@@ -14,6 +14,7 @@ from ..models import (
     UserResponse,
     PublicUserResponse,
     UserWithStatsResponse,
+    ReferralStatusResponse,
     TokenResponse,
     AuthResponse,
     ChangePasswordRequest,
@@ -22,6 +23,7 @@ from ..models import (
 )
 from ..deps import get_current_user
 from ...services.user_service import user_service, UserData
+from ...services.database import referral_repo
 
 
 router = APIRouter(
@@ -143,6 +145,28 @@ async def login(request: UserLoginRequest):
             token_type=result.token.token_type,
             expires_in=result.token.expires_in
         )
+    )
+
+
+@router.get(
+    "/me/referrals",
+    response_model=ReferralStatusResponse,
+    summary="Get referral status",
+    description="Returns referral progress, share link, and membership tier"
+)
+async def get_referral_status(user: UserData = Depends(get_current_user)):
+    """Get the current user's referral status and membership tier."""
+    import os
+    base_url = os.getenv("FRONTEND_URL", "https://app.example.com")
+    qualified = await referral_repo.get_referral_count(user.user_id, qualified_only=True)
+    total = await referral_repo.get_referral_count(user.user_id)
+    return ReferralStatusResponse(
+        referral_code=user.referral_code,
+        share_url=f"{base_url}/login?ref={user.referral_code}",
+        qualified_count=qualified,
+        total_count=total,
+        upgrade_threshold=10,
+        membership_tier=user.membership_tier,
     )
 
 
