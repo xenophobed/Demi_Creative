@@ -84,43 +84,90 @@ function WordTrendChart({ periods }: { periods: RichStatsPeriod[] }) {
 
 // ---- Content Mix Bar ----
 
+const MIX_META: Record<string, { icon: string; label: string; color: string; ring: string }> = {
+  image_to_story: { icon: '🎨', label: 'Art Story', color: '#8b5cf6', ring: 'ring-violet-300' },
+  kids_daily:     { icon: '🎙️', label: 'Podcast',   color: '#0ea5e9', ring: 'ring-sky-300' },
+  interactive:    { icon: '🎭', label: 'Interactive', color: '#10b981', ring: 'ring-emerald-300' },
+  news_to_kids:   { icon: '📰', label: 'News',       color: '#f59e0b', ring: 'ring-amber-300' },
+  morning_show:   { icon: '🎙️', label: 'Podcast',   color: '#0ea5e9', ring: 'ring-sky-300' },
+}
+
 function ContentMixBar({ breakdown }: { breakdown: Record<string, number> }) {
   const total = Object.values(breakdown).reduce((s, v) => s + v, 0)
   if (total === 0) return null
 
-  const colors: Record<string, string> = {
-    image_to_story: 'bg-violet-400',
-    kids_daily: 'bg-sky-400',
-    interactive: 'bg-emerald-400',
-    news_to_kids: 'bg-amber-400',
-    morning_show: 'bg-sky-400',
-  }
+  // Sort by count descending
+  const entries = Object.entries(breakdown).sort((a, b) => b[1] - a[1])
 
-  const labels: Record<string, string> = {
-    image_to_story: '🎨 Art',
-    kids_daily: '🎙️ Podcast',
-    interactive: '🎭 Interactive',
-    news_to_kids: '📰 News',
-    morning_show: '🎙️ Podcast',
-  }
+  // Build donut ring segments
+  const RADIUS = 40
+  const CIRCUMFERENCE = 2 * Math.PI * RADIUS
+  let offset = 0
 
   return (
-    <div className="space-y-1.5">
-      <div className="flex h-3 rounded-full overflow-hidden">
-        {Object.entries(breakdown).map(([type, count]) => (
-          <div
-            key={type}
-            className={`${colors[type] || 'bg-gray-300'} transition-all`}
-            style={{ width: `${(count / total) * 100}%` }}
-          />
-        ))}
+    <div className="flex items-center gap-5">
+      {/* Donut chart */}
+      <div className="relative flex-shrink-0">
+        <svg width={100} height={100} viewBox="0 0 100 100">
+          {entries.map(([type, count]) => {
+            const meta = MIX_META[type] || { color: '#9ca3af' }
+            const pct = count / total
+            const dashLen = pct * CIRCUMFERENCE
+            const dashGap = CIRCUMFERENCE - dashLen
+            const currentOffset = offset
+            offset += dashLen
+
+            return (
+              <motion.circle
+                key={type}
+                cx={50}
+                cy={50}
+                r={RADIUS}
+                fill="none"
+                stroke={meta.color}
+                strokeWidth={12}
+                strokeLinecap="round"
+                strokeDasharray={`${dashLen} ${dashGap}`}
+                strokeDashoffset={-currentOffset}
+                initial={{ strokeDasharray: `0 ${CIRCUMFERENCE}` }}
+                animate={{ strokeDasharray: `${dashLen} ${dashGap}` }}
+                transition={{ duration: 0.8, delay: 0.1 }}
+                style={{ transform: 'rotate(-90deg)', transformOrigin: '50% 50%' }}
+              />
+            )
+          })}
+        </svg>
+        <div className="absolute inset-0 flex items-center justify-center">
+          <span className="text-xl font-bold text-gray-700">{total}</span>
+        </div>
       </div>
-      <div className="flex flex-wrap gap-x-3 gap-y-0.5">
-        {Object.entries(breakdown).map(([type, count]) => (
-          <span key={type} className="text-[10px] text-gray-400">
-            {labels[type] || type} {count}
-          </span>
-        ))}
+
+      {/* Legend pills */}
+      <div className="flex flex-col gap-2 min-w-0">
+        {entries.map(([type, count]) => {
+          const meta = MIX_META[type] || { icon: '📄', label: type, color: '#9ca3af', ring: 'ring-gray-300' }
+          const pct = Math.round((count / total) * 100)
+
+          return (
+            <motion.div
+              key={type}
+              className="flex items-center gap-2"
+              initial={{ opacity: 0, x: -8 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.3 }}
+            >
+              <span
+                className="w-3 h-3 rounded-full flex-shrink-0"
+                style={{ backgroundColor: meta.color }}
+              />
+              <span className="text-sm text-gray-600 truncate">
+                {meta.icon} {meta.label}
+              </span>
+              <span className="text-sm font-semibold text-gray-800 ml-auto">{count}</span>
+              <span className="text-xs text-gray-400 w-9 text-right">{pct}%</span>
+            </motion.div>
+          )
+        })}
       </div>
     </div>
   )
