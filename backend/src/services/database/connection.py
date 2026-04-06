@@ -1,102 +1,87 @@
 """
 Database Connection Manager
 
-异步SQLite数据库连接管理
+Backward-compatible facade over the adapter pattern.
+Selects SQLite (dev) or PostgreSQL (prod) based on DATABASE_URL env var.
 """
 
-import aiosqlite
-from pathlib import Path
-from typing import Optional
 from contextlib import asynccontextmanager
+from typing import Any, Dict, List, Optional
 
-from ...paths import DB_PATH
+from .adapter import CursorResult, DatabaseAdapter, create_adapter
 
 
 class DatabaseManager:
-    """数据库连接管理器"""
+    """
+    Backward-compatible database manager.
 
-    def __init__(self, db_path: str = None):
+    Wraps a DatabaseAdapter (SQLite or PostgreSQL) selected by create_adapter().
+    All existing code that imports DatabaseManager or db_manager keeps working.
+    """
+
+    def __init__(self, db_path: str = None, database_url: str = None):
         """
-        初始化数据库管理器
+        Initialize with optional explicit config.
 
         Args:
-            db_path: 数据库文件路径
+            db_path: SQLite file path (legacy — forces SQLite adapter)
+            database_url: PostgreSQL connection string (forces Postgres adapter)
         """
-        self.db_path = Path(db_path) if db_path else DB_PATH
-        self._connection: Optional[aiosqlite.Connection] = None
+        if db_path:
+            from .sqlite_adapter import SQLiteAdapter
+
+            self._adapter: DatabaseAdapter = SQLiteAdapter(db_path)
+        else:
+            self._adapter = create_adapter(database_url)
 
     async def connect(self) -> None:
-        """建立数据库连接"""
-        # 确保数据目录存在
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
-
-        self._connection = await aiosqlite.connect(str(self.db_path))
-
-        # 启用WAL模式以提高并发性能
-        await self._connection.execute("PRAGMA journal_mode=WAL")
-
-        # 启用外键约束
-        await self._connection.execute("PRAGMA foreign_keys=ON")
-
-        # 设置行工厂为返回字典
-        self._connection.row_factory = aiosqlite.Row
-
-        await self._connection.commit()
+        await self._adapter.connect()
 
     async def disconnect(self) -> None:
-        """关闭数据库连接"""
-        if self._connection:
-            await self._connection.close()
-            self._connection = None
-
-    @property
-    def connection(self) -> aiosqlite.Connection:
-        """获取数据库连接"""
-        if not self._connection:
-            raise RuntimeError("Database not connected. Call connect() first.")
-        return self._connection
+        await self._adapter.disconnect()
 
     @property
     def is_connected(self) -> bool:
-        """检查是否已连接"""
-        return self._connection is not None
+        return self._adapter.is_connected
+
+    @property
+    def dialect(self) -> str:
+        return self._adapter.dialect
+
+    async def execute(self, sql: str, parameters: tuple = ()) -> CursorResult:
+        return await self._adapter.execute(sql, parameters)
+
+    async def executemany(self, sql: str, parameters: list) -> CursorResult:
+        return await self._adapter.executemany(sql, parameters)
+
+    async def fetchone(
+        self, sql: str, parameters: tuple = ()
+    ) -> Optional[Dict[str, Any]]:
+        return await self._adapter.fetchone(sql, parameters)
+
+    async def fetchall(
+        self, sql: str, parameters: tuple = ()
+    ) -> List[Dict[str, Any]]:
+        return await self._adapter.fetchall(sql, parameters)
+
+    async def commit(self) -> None:
+        await self._adapter.commit()
 
     @asynccontextmanager
     async def transaction(self):
-        """事务上下文管理器"""
-        try:
-            yield self.connection
-            await self.connection.commit()
-        except Exception:
-            await self.connection.rollback()
-            raise
+        async with self._adapter.transaction() as ctx:
+            yield ctx
 
-    async def execute(self, sql: str, parameters: tuple = ()) -> aiosqlite.Cursor:
-        """执行SQL语句"""
-        return await self.connection.execute(sql, parameters)
-
-    async def executemany(self, sql: str, parameters: list) -> aiosqlite.Cursor:
-        """批量执行SQL语句"""
-        return await self.connection.executemany(sql, parameters)
-
-    async def fetchone(self, sql: str, parameters: tuple = ()) -> Optional[dict]:
-        """执行查询并返回单行结果"""
-        cursor = await self.connection.execute(sql, parameters)
-        row = await cursor.fetchone()
-        if row:
-            return dict(row)
-        return None
-
-    async def fetchall(self, sql: str, parameters: tuple = ()) -> list:
-        """执行查询并返回所有结果"""
-        cursor = await self.connection.execute(sql, parameters)
-        rows = await cursor.fetchall()
-        return [dict(row) for row in rows]
-
-    async def commit(self) -> None:
-        """提交事务"""
-        await self.connection.commit()
+    @property
+    def connection(self):
+        """Direct access to aiosqlite connection — SQLite only."""
+        if hasattr(self._adapter, "connection"):
+            return self._adapter.connection
+        raise AttributeError(
+            "Direct connection access is not available on PostgreSQL. "
+            "Use the adapter methods (execute, fetchone, fetchall) instead."
+        )
 
 
-# 全局数据库管理器实例
+# Global database manager instance
 db_manager = DatabaseManager()

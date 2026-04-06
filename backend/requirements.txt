@@ -27,6 +27,7 @@ tavily-python==0.5.0
 
 # Database
 aiosqlite>=0.19.0
+asyncpg>=0.29.0
 
 # Auth (Supabase JWT validation)
 PyJWT[crypto]>=2.8.0
