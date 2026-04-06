@@ -81,7 +81,8 @@ async def register(request: UserRegisterRequest):
         username=request.username,
         email=request.email,
         password=request.password,
-        display_name=request.display_name
+        display_name=request.display_name,
+        referral_code=request.referral_code
     )
 
     if not result.success:
