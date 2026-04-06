@@ -14,10 +14,12 @@ import type { StatsGroupBy, LibraryStatsPeriod } from '@/api/services/librarySer
 
 // ---- SVG Bar Chart ----
 
-const CHART_HEIGHT = 200
-const BAR_GAP = 4
-const LABEL_HEIGHT = 28
-const Y_AXIS_WIDTH = 32
+const CHART_HEIGHT = 180
+const BAR_GAP = 6
+const LABEL_HEIGHT = 32
+const Y_AXIS_WIDTH = 36
+const BAR_WIDTH = 24
+const CELL_WIDTH = BAR_WIDTH + BAR_GAP * 2
 
 function formatPeriodLabel(period: string, groupBy: StatsGroupBy): string {
   if (groupBy === 'month') {
@@ -39,34 +41,40 @@ function BarChart({
   groupBy: StatsGroupBy
 }) {
   const maxCount = Math.max(...periods.map((p) => p.count), 1)
-  // Round up to nice tick value
-  const tickMax = Math.ceil(maxCount / 5) * 5 || 5
-  const barAreaWidth = periods.length * 40
-  const svgWidth = Math.max(barAreaWidth + Y_AXIS_WIDTH + 8, 280)
-  const svgHeight = CHART_HEIGHT + LABEL_HEIGHT + 8
+  // Round up to a nice tick ceiling (multiples of 2 for small, 5 for larger)
+  const tickStep = maxCount <= 6 ? 2 : 5
+  const tickMax = Math.ceil(maxCount / tickStep) * tickStep || tickStep
 
-  const ticks = [0, Math.round(tickMax / 2), tickMax]
+  const barAreaWidth = periods.length * CELL_WIDTH
+  const svgWidth = barAreaWidth + Y_AXIS_WIDTH + 16
+  const svgHeight = CHART_HEIGHT + LABEL_HEIGHT + 12
+
+  // Generate evenly spaced ticks
+  const tickCount = Math.min(tickMax / tickStep, 5)
+  const ticks = Array.from({ length: tickCount + 1 }, (_, i) =>
+    Math.round((i * tickMax) / tickCount)
+  )
 
   return (
-    <div className="overflow-x-auto">
+    <div className="overflow-x-auto -mx-2 px-2">
       <svg
-        viewBox={`0 0 ${svgWidth} ${svgHeight}`}
-        className="w-full min-w-[280px]"
-        style={{ maxHeight: 260 }}
+        width={svgWidth}
+        height={svgHeight}
+        className="block"
         role="img"
         aria-label="Creation frequency chart"
       >
-        {/* Y-axis ticks */}
+        {/* Y-axis ticks + grid lines */}
         {ticks.map((tick) => {
-          const y = CHART_HEIGHT - (tick / tickMax) * CHART_HEIGHT + 4
+          const y = CHART_HEIGHT - (tick / tickMax) * CHART_HEIGHT + 6
           return (
             <g key={tick}>
               <text
-                x={Y_AXIS_WIDTH - 4}
+                x={Y_AXIS_WIDTH - 6}
                 y={y}
                 textAnchor="end"
                 className="fill-gray-400"
-                fontSize={10}
+                fontSize={11}
                 dominantBaseline="middle"
               >
                 {tick}
@@ -74,11 +82,11 @@ function BarChart({
               <line
                 x1={Y_AXIS_WIDTH}
                 y1={y}
-                x2={svgWidth}
+                x2={svgWidth - 8}
                 y2={y}
                 stroke="#e5e7eb"
                 strokeWidth={1}
-                strokeDasharray={tick === 0 ? undefined : '4 2'}
+                strokeDasharray={tick === 0 ? undefined : '4 3'}
               />
             </g>
           )
@@ -86,32 +94,31 @@ function BarChart({
 
         {/* Bars */}
         {periods.map((p, i) => {
-          const barWidth = 28
-          const x = Y_AXIS_WIDTH + 8 + i * (barWidth + BAR_GAP * 2)
-          const barH = (p.count / tickMax) * CHART_HEIGHT
-          const y = CHART_HEIGHT - barH + 4
+          const x = Y_AXIS_WIDTH + 8 + i * CELL_WIDTH + BAR_GAP
+          const barH = Math.max((p.count / tickMax) * CHART_HEIGHT, p.count > 0 ? 4 : 0)
+          const y = CHART_HEIGHT - barH + 6
 
           return (
             <g key={p.period}>
               <motion.rect
                 x={x}
                 y={y}
-                width={barWidth}
+                width={BAR_WIDTH}
                 height={barH}
                 rx={4}
                 className="fill-primary/70 hover:fill-primary transition-colors"
-                initial={{ height: 0, y: CHART_HEIGHT + 4 }}
+                initial={{ height: 0, y: CHART_HEIGHT + 6 }}
                 animate={{ height: barH, y }}
                 transition={{ duration: 0.5, delay: i * 0.05 }}
               />
               {/* Count label on top of bar */}
               {p.count > 0 && (
                 <text
-                  x={x + barWidth / 2}
-                  y={y - 4}
+                  x={x + BAR_WIDTH / 2}
+                  y={y - 6}
                   textAnchor="middle"
                   className="fill-gray-600"
-                  fontSize={10}
+                  fontSize={11}
                   fontWeight={600}
                 >
                   {p.count}
@@ -119,11 +126,11 @@ function BarChart({
               )}
               {/* X-axis label */}
               <text
-                x={x + barWidth / 2}
-                y={CHART_HEIGHT + 20}
+                x={x + BAR_WIDTH / 2}
+                y={CHART_HEIGHT + 22}
                 textAnchor="middle"
-                className="fill-gray-400"
-                fontSize={9}
+                className="fill-gray-500"
+                fontSize={10}
               >
                 {formatPeriodLabel(p.period, groupBy)}
               </text>
