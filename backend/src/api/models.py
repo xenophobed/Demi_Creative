@@ -76,6 +76,12 @@ class VideoStyle(str, Enum):
     STORYBOOK = "storybook"                # 绘本风格
 
 
+class MembershipTier(str, Enum):
+    """Membership tier for referral-based upgrades (PRD §3.9.4)"""
+    FREE = "free"
+    PLUS = "plus"
+
+
 class ArtTheme(str, Enum):
     """Art style transfer theme for image-to-story (PRD §3.1.1)"""
     CARTOON = "cartoon"

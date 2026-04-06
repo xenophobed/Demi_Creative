@@ -1,7 +1,7 @@
 """
 Database Package
 
-SQLite数据库模块，提供异步数据库连接和仓储类
+Database module with adapter pattern: SQLite (dev) or PostgreSQL (prod).
 """
 
 from .connection import DatabaseManager, db_manager
@@ -19,6 +19,7 @@ from .subscription_repository import (
     MaxSubscriptionsExceededError,
 )
 from .usage_repository import UsageRepository, usage_repo
+from .referral_repository import ReferralRepository, referral_repo
 
 __all__ = [
     "DatabaseManager",
@@ -44,4 +45,6 @@ __all__ = [
     "MaxSubscriptionsExceededError",
     "UsageRepository",
     "usage_repo",
+    "ReferralRepository",
+    "referral_repo",
 ]

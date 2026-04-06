@@ -29,6 +29,7 @@ Every issue gets **one label from each required category**.
 - `domain:artifacts` — Artifact graph, provenance, lifecycle
 - `domain:library` — PRD §3.6 — My Library, unified content library
 - `domain:video` — Phase 3 video / dynamic picture book
+- `domain:referral` — PRD §3.9.4 — Referral-based membership tiers
 
 ### Priority (required)
 - `P0:critical` — Blocks launch or breaks safety — fix NOW
@@ -61,6 +62,7 @@ Every issue MUST be assigned to a milestone.
 | #45 | TTS & Audio Pipeline Upgrade     | domain:tts-audio      | 2     |
 | #49 | My Library — Unified Content Library | domain:library     | mvp   |
 | #313 | Production Launch — Supabase + Railway + Vercel | layer:infra | 2 |
+| #346 | Referral-Based Membership (裂变升级会员) | domain:referral | 2 |
 
 Every story/bug body MUST include `**Parent Epic**: #<number>`.
 
