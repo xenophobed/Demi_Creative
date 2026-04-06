@@ -1,5 +1,5 @@
 """
-Morning Show Live SDK Integration Test (#137)
+Kids Daily Live SDK Integration Test (#137)
 
 Validates end-to-end generation using the real Claude Agent SDK.
 Skipped when ANTHROPIC_API_KEY is not set.
@@ -22,16 +22,16 @@ async def test_live_sdk_generates_valid_episode():
     """Integration: live SDK call produces a valid DialogueScript with safety_score >= 0.85."""
     from unittest.mock import patch
 
-    from backend.src.agents.morning_show_agent import generate_morning_show_dialogue
+    from backend.src.agents.kids_daily_agent import generate_kids_daily_dialogue
     from backend.src.api.models import DialogueScript
 
     # Bypass pytest detection so the real SDK path runs
     with patch.dict(os.environ, {"PYTEST_CURRENT_TEST": ""}, clear=False):
         with patch(
-            "backend.src.agents.morning_show_agent._should_use_mock",
+            "backend.src.agents.kids_daily_agent._should_use_mock",
             return_value=False,
         ):
-            result = await generate_morning_show_dialogue(
+            result = await generate_kids_daily_dialogue(
                 news_text=(
                     "Scientists at NASA discovered a new type of ice on Europa, "
                     "one of Jupiter's moons. The ice glows blue in the dark and "

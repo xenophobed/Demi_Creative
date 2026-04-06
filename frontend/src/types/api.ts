@@ -3,13 +3,19 @@
  */
 
 // Enum types
-export type AgeGroup = '3-5' | '6-8' | '9-12';
+export type AgeGroup = "3-5" | "6-8" | "9-12";
 
-export type VoiceType = 'nova' | 'shimmer' | 'alloy' | 'echo' | 'fable' | 'onyx';
+export type VoiceType =
+  | "nova"
+  | "shimmer"
+  | "alloy"
+  | "echo"
+  | "fable"
+  | "onyx";
 
-export type StoryMode = 'linear' | 'interactive';
+export type StoryMode = "linear" | "interactive";
 
-export type SessionStatus = 'active' | 'completed' | 'expired';
+export type SessionStatus = "active" | "completed" | "expired";
 
 // Image-to-story request
 export interface ImageToStoryRequest {
@@ -81,9 +87,9 @@ export interface StorySegment {
   audio_url: string | null;
   choices: StoryChoice[];
   is_ending: boolean;
-  primary_mode?: 'audio' | 'text' | 'both';
+  primary_mode?: "audio" | "text" | "both";
   optional_content_available?: boolean;
-  optional_content_type?: 'text' | 'audio' | null;
+  optional_content_type?: "text" | "audio" | null;
 }
 
 // Start interactive story response
@@ -163,14 +169,14 @@ export interface HealthCheckResponse {
 // ============================================================================
 
 export type NewsCategory =
-  | 'science'
-  | 'nature'
-  | 'technology'
-  | 'space'
-  | 'animals'
-  | 'sports'
-  | 'culture'
-  | 'general';
+  | "science"
+  | "nature"
+  | "technology"
+  | "space"
+  | "animals"
+  | "sports"
+  | "culture"
+  | "general";
 
 export interface NewsToKidsRequest {
   news_url?: string;
@@ -212,8 +218,8 @@ export interface NewsToKidsResponse {
 // Kids Daily Types
 // ============================================================================
 
-export type DialogueRole = 'curious_kid' | 'fun_expert' | 'guest';
-export type IllustrationAnimationType = 'pan' | 'zoom' | 'ken_burns';
+export type DialogueRole = "curious_kid" | "fun_expert" | "guest";
+export type IllustrationAnimationType = "pan" | "zoom" | "ken_burns";
 
 export interface DialogueLine {
   role: DialogueRole;
@@ -248,7 +254,7 @@ export interface MorningShowEpisode {
   dialogue_script: DialogueScript;
   illustrations: EpisodeIllustration[];
   audio_urls: Record<string, string>;
-  story_type: 'morning_show';
+  story_type: "morning_show";
   duration_seconds?: number | null;
   is_played: boolean;
   is_new: boolean;
@@ -277,8 +283,8 @@ export interface MorningShowResponse {
 
 export interface MorningShowOnDemandRequest {
   child_id: string;
-  category: string;    // NewsCategory value
-  age_group: string;   // AgeGroup value
+  category: string; // NewsCategory value
+  age_group: string; // AgeGroup value
 }
 
 export interface MorningShowRateLimitResponse {
@@ -314,7 +320,11 @@ export interface SubscriptionListResponse {
   total: number;
 }
 
-export type MorningShowTrackEvent = 'start' | 'progress' | 'complete' | 'abandon';
+export type MorningShowTrackEvent =
+  | "start"
+  | "progress"
+  | "complete"
+  | "abandon";
 
 export interface MorningShowTrackRequest {
   child_id: string;
@@ -337,46 +347,62 @@ export interface MorningShowTrackResponse {
 // ============================================================================
 
 export interface MemoryCharacter {
-  name: string
-  description: string | null
-  visual_features: Record<string, unknown> | null
-  traits: string[] | null
-  appearance_count: number
-  first_seen_at: string
-  last_seen_at: string
+  name: string;
+  description: string | null;
+  visual_features: Record<string, unknown> | null;
+  traits: string[] | null;
+  appearance_count: number;
+  first_seen_at: string;
+  last_seen_at: string;
 }
 
 export interface MemoryCharactersResponse {
-  child_id: string
-  characters: MemoryCharacter[]
+  child_id: string;
+  characters: MemoryCharacter[];
 }
 
 export interface PreferenceProfile {
-  themes: Record<string, number>
-  concepts: Record<string, number>
-  interests: Record<string, number>
-  recent_choices: string[]
+  themes: Record<string, number>;
+  concepts: Record<string, number>;
+  interests: Record<string, number>;
+  recent_choices: string[];
   morning_show: {
-    topic_scores: Record<string, number>
-    topic_stats: Record<string, unknown>
-    last_event_at: string | null
-  }
+    topic_scores: Record<string, number>;
+    topic_stats: Record<string, unknown>;
+    last_event_at: string | null;
+  };
 }
 
 export interface MemoryPreferencesResponse {
-  child_id: string
-  profile: PreferenceProfile
-  data_collected_since: string | null
-  last_updated_at: string | null
+  child_id: string;
+  profile: PreferenceProfile;
+  data_collected_since: string | null;
+  last_updated_at: string | null;
 }
 
 export interface MemoryDeleteResponse {
-  child_id: string
-  deleted: boolean
+  child_id: string;
+  deleted: boolean;
   deleted_records: {
-    preferences: number
-    vectors: number
-  }
+    preferences: number;
+    characters: number;
+    vectors: number;
+  };
+}
+
+export type MemoryPreferenceCategory = "themes" | "interests" | "concepts";
+
+export interface MemoryDeletePreferenceItemResponse {
+  child_id: string;
+  category: MemoryPreferenceCategory;
+  label: string;
+  deleted: boolean;
+}
+
+export interface MemoryDeleteCharacterResponse {
+  child_id: string;
+  name: string;
+  deleted: boolean;
 }
 
 // Frontend-specific types
@@ -402,7 +428,12 @@ export interface ChildProfile {
 }
 
 // Upload status
-export type UploadStatus = 'idle' | 'uploading' | 'processing' | 'success' | 'error';
+export type UploadStatus =
+  | "idle"
+  | "uploading"
+  | "processing"
+  | "success"
+  | "error";
 
 // Audio playback state
 export interface AudioState {
@@ -418,18 +449,18 @@ export interface AudioState {
 
 // SSE event type
 export type SSEEventType =
-  | 'status'
-  | 'thinking'
-  | 'tool_use'
-  | 'tool_result'
-  | 'session'
-  | 'result'
-  | 'complete'
-  | 'error';
+  | "status"
+  | "thinking"
+  | "tool_use"
+  | "tool_result"
+  | "session"
+  | "result"
+  | "complete"
+  | "error";
 
 // SSE event data
 export interface SSEStatusData {
-  status: 'started' | 'processing' | 'completed';
+  status: "started" | "processing" | "completed";
   message: string;
   is_ending?: boolean;
 }

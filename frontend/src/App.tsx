@@ -1,21 +1,20 @@
-import { Routes, Route, Navigate } from 'react-router-dom'
-import { Suspense, lazy } from 'react'
-import PageContainer from './components/layout/PageContainer'
-import Loading from './components/common/Loading'
-import { AudioProvider } from './contexts/AudioContext'
+import { Routes, Route, Navigate } from "react-router-dom";
+import { Suspense, lazy } from "react";
+import PageContainer from "./components/layout/PageContainer";
+import Loading from "./components/common/Loading";
+import { AudioProvider } from "./contexts/AudioContext";
 
 // Lazy load pages for better performance
-const HomePage = lazy(() => import('./pages/HomePage'))
-const UploadPage = lazy(() => import('./pages/UploadPage'))
-const StoryPage = lazy(() => import('./pages/StoryPage'))
-const LibraryPage = lazy(() => import('./pages/LibraryPage'))
-const InteractiveStoryPage = lazy(() => import('./pages/InteractiveStoryPage'))
-const LoginPage = lazy(() => import('./pages/LoginPage'))
-const ProfilePage = lazy(() => import('./pages/ProfilePage'))
-const NewsPage = lazy(() => import('./pages/NewsPage'))
-const MorningShowPage = lazy(() => import('./pages/MorningShowPage'))
-const MorningShowSubscriptionsPage = lazy(() => import('./pages/MorningShowSubscriptionsPage'))
-const NewsDetailPage = lazy(() => import('./pages/NewsDetailPage'))
+const HomePage = lazy(() => import("./pages/HomePage"));
+const UploadPage = lazy(() => import("./pages/UploadPage"));
+const StoryPage = lazy(() => import("./pages/StoryPage"));
+const LibraryPage = lazy(() => import("./pages/LibraryPage"));
+const InteractiveStoryPage = lazy(() => import("./pages/InteractiveStoryPage"));
+const LoginPage = lazy(() => import("./pages/LoginPage"));
+const ProfilePage = lazy(() => import("./pages/ProfilePage"));
+const NewsPage = lazy(() => import("./pages/NewsPage"));
+const MorningShowPage = lazy(() => import("./pages/MorningShowPage"));
+const NewsDetailPage = lazy(() => import("./pages/NewsDetailPage"));
 
 function App() {
   return (
@@ -31,19 +30,28 @@ function App() {
             <Route path="upload" element={<UploadPage />} />
             <Route path="story/:storyId" element={<StoryPage />} />
             {/* /history redirects to /library for backwards compatibility */}
-            <Route path="history" element={<Navigate to="/library" replace />} />
+            <Route
+              path="history"
+              element={<Navigate to="/library" replace />}
+            />
             <Route path="library" element={<LibraryPage />} />
             <Route path="interactive" element={<InteractiveStoryPage />} />
             <Route path="news" element={<NewsPage />} />
             <Route path="news/:conversionId" element={<NewsDetailPage />} />
-            <Route path="morning-show/subscriptions" element={<MorningShowSubscriptionsPage />} />
-            <Route path="morning-show/:episodeId" element={<MorningShowPage />} />
+            <Route
+              path="morning-show/subscriptions"
+              element={<Navigate to="/news" replace />}
+            />
+            <Route
+              path="morning-show/:episodeId"
+              element={<MorningShowPage />}
+            />
             <Route path="profile" element={<ProfilePage />} />
           </Route>
         </Routes>
       </Suspense>
     </AudioProvider>
-  )
+  );
 }
 
-export default App
+export default App;

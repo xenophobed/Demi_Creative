@@ -4,33 +4,86 @@ Creative Agent FastAPI Application
 Children's Creative Workshop API Service
 """
 
+import asyncio
+import logging
 import os
+from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
-from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request, status
-from fastapi.responses import JSONResponse
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-from fastapi.exceptions import RequestValidationError
-from dotenv import load_dotenv
 
-from .api.models import ErrorResponse, ErrorDetail, HealthCheckResponse
-from .paths import DATA_DIR, UPLOAD_DIR, AUDIO_DIR, VIDEO_DIR, VIDEO_JOBS_DIR, STYLED_DIR
+from dotenv import load_dotenv
+from fastapi import FastAPI, Request, status
+from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
+
+from .api.models import ErrorDetail, ErrorResponse, HealthCheckResponse
+from .paths import (
+    AUDIO_DIR,
+    DATA_DIR,
+    STYLED_DIR,
+    UPLOAD_DIR,
+    VIDEO_DIR,
+    VIDEO_JOBS_DIR,
+)
 from .services.database import db_manager, session_repo
 from .services.database.schema import init_schema, migrate_json_sessions
-from .services.morning_show_scheduler import daily_drop_scheduler
+from .services.kids_daily_scheduler import daily_drop_scheduler
 from .services.retention_scheduler import retention_scheduler
 
+logger = logging.getLogger(__name__)
 
 # Load environment variables from backend/.env regardless of cwd
 _backend_dir = Path(__file__).resolve().parent.parent
 load_dotenv(_backend_dir / ".env")
 
 
+def _patch_anthropic_async_http_client_close() -> None:
+    """Guard anthropic async client close on partially-initialized wrappers.
+
+    In some env/version mixes, AsyncHttpxClientWrapper may be garbage-collected
+    before httpx.AsyncClient internals are fully initialized, which raises:
+    AttributeError: 'AsyncHttpxClientWrapper' object has no attribute '_state'
+    """
+    try:
+        from anthropic._base_client import AsyncHttpxClientWrapper
+    except Exception:
+        return
+
+    if getattr(AsyncHttpxClientWrapper, "_creative_agent_close_guard", False):
+        return
+
+    original_aclose = getattr(AsyncHttpxClientWrapper, "aclose", None)
+    if original_aclose is None:
+        return
+
+    async def _safe_aclose(self, *args, **kwargs):
+        if not hasattr(self, "_state"):
+            return
+        return await original_aclose(self, *args, **kwargs)
+
+    def _safe_del(self) -> None:
+        if not hasattr(self, "_state"):
+            return
+        try:
+            asyncio.get_running_loop().create_task(self.aclose())
+        except Exception:
+            pass
+
+    AsyncHttpxClientWrapper.aclose = _safe_aclose
+    AsyncHttpxClientWrapper.__del__ = _safe_del
+    AsyncHttpxClientWrapper._creative_agent_close_guard = True
+    logger.info("Installed anthropic AsyncHttpxClientWrapper close guard")
+
+
+_patch_anthropic_async_http_client_close()
+
+
 # ============================================================================
 # Lifespan Events
 # ============================================================================
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -66,12 +119,12 @@ async def lifespan(app: FastAPI):
 
     # MCP server diagnostics
     from .mcp_servers import MCP_SERVER_STATUS
+
     print("🔌 MCP Servers:")
     for server, status in MCP_SERVER_STATUS.items():
         icon = "✅" if status == "ok" else "❌"
         short_status = "OK" if status == "ok" else status
         print(f"  {icon} {server}: {short_status}")
-
 
     yield
 
@@ -101,7 +154,7 @@ app = FastAPI(
     lifespan=lifespan,
     docs_url="/api/docs",
     redoc_url="/api/redoc",
-    openapi_url="/api/openapi.json"
+    openapi_url="/api/openapi.json",
 )
 
 
@@ -133,20 +186,20 @@ app.add_middleware(
 # Exception Handlers
 # ============================================================================
 
+
 @app.exception_handler(RequestValidationError)
-async def validation_exception_handler(
-    request: Request,
-    exc: RequestValidationError
-):
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
     """Request validation error handler"""
     errors = []
 
     for error in exc.errors():
-        errors.append(ErrorDetail(
-            field=".".join(str(loc) for loc in error["loc"]),
-            message=error["msg"],
-            code=error["type"]
-        ))
+        errors.append(
+            ErrorDetail(
+                field=".".join(str(loc) for loc in error["loc"]),
+                message=error["msg"],
+                code=error["type"],
+            )
+        )
 
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -154,8 +207,8 @@ async def validation_exception_handler(
             error="ValidationError",
             message="Request parameter validation failed",
             details=errors,
-            timestamp=datetime.now()
-        ).model_dump(mode='json')
+            timestamp=datetime.now(),
+        ).model_dump(mode="json"),
     )
 
 
@@ -165,10 +218,8 @@ async def value_error_handler(request: Request, exc: ValueError):
     return JSONResponse(
         status_code=status.HTTP_400_BAD_REQUEST,
         content=ErrorResponse(
-            error="ValueError",
-            message=str(exc),
-            timestamp=datetime.now()
-        ).model_dump(mode='json')
+            error="ValueError", message=str(exc), timestamp=datetime.now()
+        ).model_dump(mode="json"),
     )
 
 
@@ -182,8 +233,8 @@ async def general_exception_handler(request: Request, exc: Exception):
         content=ErrorResponse(
             error="InternalServerError",
             message="Internal server error, please try again later",
-            timestamp=datetime.now()
-        ).model_dump(mode='json')
+            timestamp=datetime.now(),
+        ).model_dump(mode="json"),
     )
 
 
@@ -191,29 +242,19 @@ async def general_exception_handler(request: Request, exc: Exception):
 # Health Check
 # ============================================================================
 
-@app.get(
-    "/",
-    response_model=HealthCheckResponse,
-    tags=["Health Check"]
-)
+
+@app.get("/", response_model=HealthCheckResponse, tags=["Health Check"])
 async def root():
     """Root path health check"""
     return HealthCheckResponse(
         status="healthy",
         version="1.0.0",
         timestamp=datetime.now(),
-        services={
-            "api": "running",
-            "session_manager": "running"
-        }
+        services={"api": "running", "session_manager": "running"},
     )
 
 
-@app.get(
-    "/health",
-    response_model=HealthCheckResponse,
-    tags=["Health Check"]
-)
+@app.get("/health", response_model=HealthCheckResponse, tags=["Health Check"])
 async def health_check():
     """Health check endpoint"""
     # Check database connection
@@ -268,7 +309,7 @@ async def health_check():
         status=overall_status,
         version="1.0.0",
         timestamp=datetime.now(),
-        services=services_status
+        services=services_status,
     )
 
 
@@ -295,20 +336,19 @@ app.mount("/data/styled", StaticFiles(directory=str(STYLED_DIR)), name="styled")
 # ============================================================================
 
 from .api.routes import (
+    admin_artifacts,
+    artifacts,
+    audio,
     image_to_story,
     interactive_story,
-    audio,
-    video,
-    voice,
-    users,
-    news_to_kids,
-    morning_show,
-    subscriptions,
-    artifacts,
-    admin_artifacts,
+    kids_daily,
     library,
     memory,
+    subscriptions,
     usage,
+    users,
+    video,
+    voice,
 )
 
 app.include_router(image_to_story.router)
@@ -317,8 +357,7 @@ app.include_router(audio.router)
 app.include_router(video.router)
 app.include_router(voice.router)
 app.include_router(users.router)
-app.include_router(news_to_kids.router)
-app.include_router(morning_show.router)
+app.include_router(kids_daily.router)
 app.include_router(subscriptions.router)
 app.include_router(artifacts.router)
 app.include_router(admin_artifacts.router)
@@ -334,10 +373,4 @@ app.include_router(usage.router)
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(
-        "main:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=True,
-        log_level="info"
-    )
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True, log_level="info")

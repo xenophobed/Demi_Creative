@@ -967,7 +967,7 @@ docs/
 
 | Command | What it does | Side effects? | Isolated? |
 |---------|-------------|---------------|-----------|
-| `/product-audit` | Find gaps between PRD and code | No | Yes (fork) |
++| `/product-audit` | Find gaps between PRD and code | No | Yes (fork) |
 | `/feature-spec` | Design a new product feature | No | Yes (fork) |
 | `/prd` | Update the PRD document | Yes (edits files) | No |
 | `/dev` | Start/stop/restart dev servers | Yes (processes) | No |

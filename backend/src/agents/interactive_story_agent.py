@@ -5,19 +5,21 @@ Interactive Story Agent
 支持流式响应以减少超时和改善用户体验。
 """
 
-import os
 import json
-from typing import Dict, Any, List, Optional, AsyncGenerator
+import os
+import re
+from typing import Any, AsyncGenerator, Dict, List, Optional
 
 from pydantic import BaseModel
+
 try:
     from claude_agent_sdk import (
-        ClaudeAgentOptions,
-        ResultMessage,
-        ClaudeSDKClient,
         AssistantMessage,
-        ToolUseBlock,
+        ClaudeAgentOptions,
+        ClaudeSDKClient,
+        ResultMessage,
         ToolResultBlock,
+        ToolUseBlock,
     )
 except Exception:  # pragma: no cover - import fallback for test env
     ClaudeAgentOptions = None
@@ -30,15 +32,18 @@ except Exception:  # pragma: no cover - import fallback for test env
 
 from ..mcp_servers import (
     safety_server,
+    search_similar_stories,
     tts_server,
     vector_server,
-    search_similar_stories,
 )
 from ..services.database import preference_repo
 from ..services.story_memory import get_story_memory_prompt
+from ..utils.model_config import get_claude_agent_model
 
 
-async def _search_story_dedup(child_id: str, description: str, threshold: float = 0.9) -> str:
+async def _search_story_dedup(
+    child_id: str, description: str, threshold: float = 0.9
+) -> str:
     """Search for similar past stories and return a variation nudge if duplicates found.
 
     Best-effort: returns empty string on any failure. (#290)
@@ -46,12 +51,15 @@ async def _search_story_dedup(child_id: str, description: str, threshold: float 
     if not child_id or not description:
         return ""
     try:
-        result = await search_similar_stories({
-            "child_id": child_id,
-            "story_description": description,
-            "top_k": 3,
-        })
+        result = await search_similar_stories(
+            {
+                "child_id": child_id,
+                "story_description": description,
+                "top_k": 3,
+            }
+        )
         import json as _json
+
         data = _json.loads(result["content"][0]["text"])
         similar = data.get("similar_stories", [])
         high_sim = [s for s in similar if s.get("similarity_score", 0) >= threshold]
@@ -83,23 +91,29 @@ def _should_use_mock() -> bool:
 # 流式事件类型
 # ============================================================================
 
+
 class StreamEvent:
     """流式事件基类"""
+
     def __init__(self, event_type: str, data: Dict[str, Any]):
         self.type = event_type
         self.data = data
 
     def to_sse(self) -> str:
         """转换为 Server-Sent Event 格式"""
-        return f"event: {self.type}\ndata: {json.dumps(self.data, ensure_ascii=False)}\n\n"
+        return (
+            f"event: {self.type}\ndata: {json.dumps(self.data, ensure_ascii=False)}\n\n"
+        )
 
 
 # ============================================================================
 # Pydantic 模型定义（用于 Structured Output）
 # ============================================================================
 
+
 class StoryChoiceOutput(BaseModel):
     """故事选项"""
+
     choice_id: str
     text: str
     emoji: str
@@ -107,6 +121,7 @@ class StoryChoiceOutput(BaseModel):
 
 class StorySegmentOutput(BaseModel):
     """故事段落输出"""
+
     segment_id: int
     text: str
     choices: List[StoryChoiceOutput] = []
@@ -115,12 +130,14 @@ class StorySegmentOutput(BaseModel):
 
 class StoryOpeningOutput(BaseModel):
     """故事开场输出"""
+
     title: str
     segment: StorySegmentOutput
 
 
 class NextSegmentOutput(BaseModel):
     """下一段落输出"""
+
     segment: StorySegmentOutput
     is_ending: bool = False
     educational_summary: Optional[Dict[str, Any]] = None
@@ -142,7 +159,7 @@ AGE_CONFIG = {
         # Audio settings
         "audio_mode": "audio_first",
         "voice": "nova",
-        "speed": 0.9
+        "speed": 0.9,
     },
     "6-8": {
         "word_count": "100-200",
@@ -155,7 +172,7 @@ AGE_CONFIG = {
         # Audio settings
         "audio_mode": "simultaneous",
         "voice": "shimmer",
-        "speed": 1.0
+        "speed": 1.0,
     },
     "9-12": {
         "word_count": "150-300",
@@ -168,14 +185,15 @@ AGE_CONFIG = {
         # Audio settings
         "audio_mode": "text_first",
         "voice": "alloy",
-        "speed": 1.1
-    }
+        "speed": 1.1,
+    },
 }
 
 
 # ============================================================================
 # Prompt Construction Helpers (#72, #73)
 # ============================================================================
+
 
 async def _fetch_preference_context(child_id: str) -> str:
     """
@@ -241,12 +259,12 @@ def _build_opening_prompt(
 - 故事主题: {theme_str}
 
 **写作要求**（年龄适配）：
-- 每段字数: {config['word_count']}字
-- 句子长度: {config['sentence_length']}
-- 复杂度: {config['complexity']}
-- 词汇水平: {config['vocab_level']}
-- 主题深度: {config['theme_depth']}
-- 选项风格: {config['choices_style']}
+- 每段字数: {config["word_count"]}字
+- 句子长度: {config["sentence_length"]}
+- 复杂度: {config["complexity"]}
+- 词汇水平: {config["vocab_level"]}
+- 主题深度: {config["theme_depth"]}
+- 选项风格: {config["choices_style"]}
 """
 
     # Inject preference context (#72)
@@ -306,6 +324,8 @@ def _build_next_segment_prompt(
     choice_id: str,
     chosen_option: str,
     config: Dict[str, Any],
+    choice_history_context: str = "",
+    opening_hook: str = "",
 ) -> str:
     """Build prompt for generating the next story segment."""
     return f"""你是一位专业的儿童故事作家，正在继续一个互动故事。
@@ -313,44 +333,63 @@ def _build_next_segment_prompt(
 **故事信息**：
 - 故事标题: {story_title}
 - 年龄组: {age_group}岁
-- 兴趣爱好: {', '.join(interests)}
+- 兴趣爱好: {", ".join(interests)}
 - 主题: {theme}
 - 当前段落: 第 {segment_count + 1} 段（共 {total_segments} 段）
-- 是否为结局: {'是' if is_final_segment else '否'}
+- 是否为结局: {"是" if is_final_segment else "否"}
 
 **之前的故事内容**：
 {story_context if story_context else "这是故事的开始"}
+
+**用户决策轨迹（按时间顺序）**：
+{choice_history_context if choice_history_context else "（暂无历史选择）"}
+
+**开场关键线索（结局必须回扣）**：
+{opening_hook if opening_hook else "（无）"}
 
 **用户的选择**：
 选择ID: {choice_id}
 选择内容: {chosen_option or "继续故事"}
 
 **写作要求**（年龄适配）：
-- 每段字数: {config['word_count']}字
-- 句子长度: {config['sentence_length']}
-- 复杂度: {config['complexity']}
-- 词汇水平: {config['vocab_level']}
-- 选项风格: {config['choices_style']}
+- 每段字数: {config["word_count"]}字
+- 句子长度: {config["sentence_length"]}
+- 复杂度: {config["complexity"]}
+- 词汇水平: {config["vocab_level"]}
+- 选项风格: {config["choices_style"]}
 
 **重要规则**：
 1. 根据用户的选择自然延续故事
 2. 保持故事的连贯性和吸引力
-3. {'这是结局段落，请给出一个温馨、积极的结局，总结故事的教育意义' if is_final_segment else '继续发展情节，提供 2-3 个新选项'}
+3. {
+        "这是结局段落，请给出一个温馨、积极、完整的结局：必须明确回应开场线索，并回扣至少两个关键选择，让结尾和前文形成闭环"
+        if is_final_segment
+        else "继续发展情节，提供 2-3 个新选项"
+    }
 4. 所有内容必须适合儿童，积极向上
-5. {'不需要提供选项' if is_final_segment else '每个选项配一个合适的 emoji'}
+5. {"不需要提供选项" if is_final_segment else "每个选项配一个合适的 emoji"}
+6. {
+        "结局不要再引入新的大冲突，重点是解决之前的问题并给出成长收获"
+        if is_final_segment
+        else "确保新选项真实影响后续发展，避免重复表述"
+    }
 
 **输出格式**：
 请直接返回 JSON 格式，包含：
 - segment: 故事段落
   - segment_id: {segment_count}
   - text: 故事内容
-  - choices: {'空数组 []' if is_final_segment else '选项数组'}
+  - choices: {"空数组 []" if is_final_segment else "选项数组"}
   - is_ending: {str(is_final_segment).lower()}
 - is_ending: {str(is_final_segment).lower()}
-{f'''- educational_summary: 教育总结（仅结局时提供）
+{
+        f'''- educational_summary: 教育总结（仅结局时提供）
   - themes: 主题数组（如：["勇气", "友谊"]）
   - concepts: 概念数组（如：["决策", "合作"]）
-  - moral: 道德寓意（一句话总结）''' if is_final_segment else ''}
+  - moral: 道德寓意（一句话总结）'''
+        if is_final_segment
+        else ""
+    }
 
 继续这个精彩的故事吧！
 """
@@ -364,7 +403,9 @@ def _append_tts_instructions(
     id_value: str,
 ) -> str:
     """Append TTS generation instructions to a prompt."""
-    return prompt + f"""
+    return (
+        prompt
+        + f"""
 
 **语音生成**：
 故事创作完成后，请使用 `mcp__tts-generation__generate_story_audio` 工具为故事文本生成语音。
@@ -372,11 +413,170 @@ def _append_tts_instructions(
 - 语速: {speed}
 - {id_label}: {id_value}
 """
+    )
+
+
+# ============================================================================
+# Story Coherence Helpers
+# ============================================================================
+
+
+def _build_fallback_choices(segment_id: int, age_group: str) -> List[Dict[str, str]]:
+    """Fallback choices to keep interactive flow complete when model output is sparse."""
+    if age_group == "3-5":
+        templates = [("和伙伴一起前进", "🤝"), ("先观察再行动", "👀")]
+    elif age_group == "9-12":
+        templates = [("根据线索制定计划", "🧭"), ("先帮助伙伴再推进任务", "💡")]
+    else:
+        templates = [("顺着线索继续前进", "🔍"), ("和伙伴商量新计划", "🤝")]
+
+    return [
+        {
+            "choice_id": f"choice_{segment_id}_{chr(97 + i)}",
+            "text": text,
+            "emoji": emoji,
+        }
+        for i, (text, emoji) in enumerate(templates)
+    ]
+
+
+def _normalize_choices(
+    raw_choices: Any,
+    segment_id: int,
+    is_final_segment: bool,
+    age_group: str,
+) -> List[Dict[str, str]]:
+    """Guarantee non-ending segments always have 2-3 valid choices."""
+    if is_final_segment:
+        return []
+
+    normalized: List[Dict[str, str]] = []
+    seen_texts: set[str] = set()
+    emoji_defaults = ["✨", "🧭", "🤝"]
+
+    if isinstance(raw_choices, list):
+        for idx, choice in enumerate(raw_choices):
+            if len(normalized) >= 3:
+                break
+            if not isinstance(choice, dict):
+                continue
+            text = str(choice.get("text", "")).strip()
+            if not text or text in seen_texts:
+                continue
+            seen_texts.add(text)
+            emoji = (
+                str(choice.get("emoji", "")).strip()
+                or emoji_defaults[idx % len(emoji_defaults)]
+            )
+            normalized.append({"choice_id": "", "text": text, "emoji": emoji})
+
+    if len(normalized) < 2:
+        for fb in _build_fallback_choices(segment_id, age_group):
+            if fb["text"] in seen_texts:
+                continue
+            seen_texts.add(fb["text"])
+            normalized.append(
+                {"choice_id": "", "text": fb["text"], "emoji": fb["emoji"]}
+            )
+            if len(normalized) >= 2:
+                break
+
+    # Rewrite IDs in stable order for the current segment
+    for i, choice in enumerate(normalized[:3]):
+        choice["choice_id"] = f"choice_{segment_id}_{chr(97 + i)}"
+
+    return normalized[:3]
+
+
+def _build_choice_history_context(
+    segments: List[Dict[str, Any]], choice_history: List[str]
+) -> str:
+    """Build readable path history so the next segment can stay consistent."""
+    if not choice_history:
+        return "（暂无历史选择）"
+
+    lines: List[str] = []
+    for idx, choice_id in enumerate(choice_history):
+        choice_text = str(choice_id)
+        if idx < len(segments):
+            seg_choices = segments[idx].get("choices", [])
+            if isinstance(seg_choices, list):
+                for choice in seg_choices:
+                    if not isinstance(choice, dict):
+                        continue
+                    if choice.get("choice_id") == choice_id:
+                        choice_text = str(choice.get("text", choice_id))
+                        break
+        lines.append(f"{idx + 1}. {choice_text}")
+
+    return "\n".join(lines)
+
+
+def _extract_opening_hook(segments: List[Dict[str, Any]]) -> str:
+    """Extract first sentence from opening to enforce ending callback."""
+    if not segments:
+        return ""
+    opening_text = str(segments[0].get("text", "")).strip()
+    if not opening_text:
+        return ""
+    parts = re.split(r"[。！？!?]", opening_text)
+    hook = parts[0].strip() if parts else opening_text
+    return hook[:36]
+
+
+def _ensure_ending_coherence(
+    ending_text: str,
+    opening_hook: str,
+    chosen_option: Optional[str],
+    choice_history_context: str,
+) -> str:
+    """Ensure final segment explicitly connects to opening and recent choices."""
+    text = str(ending_text or "").strip()
+    if not text:
+        text = "这次冒险终于迎来了温暖的结局。"
+
+    additions: List[str] = []
+    if opening_hook and opening_hook not in text:
+        additions.append(
+            f"回想起故事开始时“{opening_hook}”，大家终于把这段冒险走到了温暖的结局。"
+        )
+
+    if chosen_option:
+        chosen_option = str(chosen_option).strip()
+        if chosen_option and chosen_option not in text:
+            additions.append(
+                f"也正因为最后选择了“{chosen_option}”，故事才迎来了现在的结果。"
+            )
+
+    if not any(k in text for k in ["最后", "终于", "结局", "回到", "学会", "从此"]):
+        additions.append("最后，大家带着新的勇气与智慧回到日常生活，故事也圆满结束。")
+
+    history_lines = [
+        line.strip()
+        for line in choice_history_context.splitlines()
+        if line.strip() and line.strip()[0].isdigit()
+    ]
+    if history_lines:
+        last_steps = []
+        for line in history_lines[-2:]:
+            if ". " in line:
+                last_steps.append(line.split(". ", 1)[1])
+            else:
+                last_steps.append(line)
+        summary = "；".join(last_steps)
+        if summary and summary not in text:
+            additions.append(f"一路上的关键选择（{summary}）在这一刻都得到了回应。")
+
+    if additions:
+        text = f"{text} {' '.join(additions)}"
+
+    return text
 
 
 # ============================================================================
 # Agent 函数
 # ============================================================================
+
 
 def _mock_opening(interests: List[str]) -> Dict[str, Any]:
     topic = interests[0] if interests else "冒险"
@@ -398,9 +598,19 @@ def _mock_next_segment(segment_count: int, is_final_segment: bool) -> Dict[str, 
     segment = {
         "segment_id": segment_count,
         "text": "小伙伴们继续前进，发现了新的线索，并学会了互相帮助。",
-        "choices": [] if is_final_segment else [
-            {"choice_id": f"choice_{segment_count}_a", "text": "勇敢尝试", "emoji": "✨"},
-            {"choice_id": f"choice_{segment_count}_b", "text": "团队讨论", "emoji": "🤝"},
+        "choices": []
+        if is_final_segment
+        else [
+            {
+                "choice_id": f"choice_{segment_count}_a",
+                "text": "勇敢尝试",
+                "emoji": "✨",
+            },
+            {
+                "choice_id": f"choice_{segment_count}_b",
+                "text": "团队讨论",
+                "emoji": "🤝",
+            },
         ],
         "is_ending": is_final_segment,
     }
@@ -412,6 +622,7 @@ def _mock_next_segment(segment_count: int, is_final_segment: bool) -> Dict[str, 
             "moral": "勇敢尝试并与伙伴合作，问题就会有答案。",
         }
     return result
+
 
 async def generate_story_opening(
     child_id: str,
@@ -440,7 +651,9 @@ async def generate_story_opening(
     if _should_use_mock():
         return _mock_opening(interests)
     interests_str = "、".join(interests) if interests else "冒险"
-    theme_str = theme if theme else f"关于{interests[0]}的冒险" if interests else "神秘的冒险"
+    theme_str = (
+        theme if theme else f"关于{interests[0]}的冒险" if interests else "神秘的冒险"
+    )
 
     # Fetch preference context (#72)
     preference_context = await _fetch_preference_context(child_id)
@@ -473,34 +686,40 @@ async def generate_story_opening(
 
     # Determine if we should generate audio based on age_group audio_mode
     audio_mode = config.get("audio_mode", "simultaneous")
-    should_generate_audio = enable_audio and audio_mode in ["audio_first", "simultaneous"]
+    should_generate_audio = enable_audio and audio_mode in [
+        "audio_first",
+        "simultaneous",
+    ]
     actual_voice = voice or config.get("voice", "nova")
     audio_speed = config.get("speed", 1.0)
 
     # Add TTS instruction if audio should be generated
     if should_generate_audio:
-        prompt = _append_tts_instructions(prompt, actual_voice, audio_speed, "儿童ID", child_id)
+        prompt = _append_tts_instructions(
+            prompt, actual_voice, audio_speed, "儿童ID", child_id
+        )
 
     options = ClaudeAgentOptions(
+        model=get_claude_agent_model(),
         mcp_servers={
             "safety-check": safety_server,
             "vector-search": vector_server,
-            "tts-generation": tts_server
+            "tts-generation": tts_server,
         },
         allowed_tools=[
             "mcp__safety-check__check_content_safety",
             "mcp__vector-search__search_similar_drawings",
             "mcp__vector-search__store_drawing_embedding",
             "mcp__vector-search__search_similar_stories",
-            "mcp__tts-generation__generate_story_audio"
+            "mcp__tts-generation__generate_story_audio",
         ],
         cwd=".",
         permission_mode="acceptEdits",
         max_turns=12,  # Increased: search + store + TTS add extra turns
         output_format={
             "type": "json_schema",
-            "schema": StoryOpeningOutput.model_json_schema()
-        }
+            "schema": StoryOpeningOutput.model_json_schema(),
+        },
     )
 
     result_data = {}
@@ -512,29 +731,31 @@ async def generate_story_opening(
         async for message in client.receive_response():
             # Check for TTS tool results in assistant messages
             if isinstance(message, AssistantMessage):
-                content = getattr(message, 'content', None)
+                content = getattr(message, "content", None)
                 if isinstance(content, list):
                     for block in content:
                         if isinstance(block, ToolResultBlock):
                             # Try to extract audio path from TTS result
-                            result_content = getattr(block, 'content', None)
+                            result_content = getattr(block, "content", None)
                             if result_content and isinstance(result_content, str):
                                 try:
                                     result_json = json.loads(result_content)
-                                    if 'audio_path' in result_json:
-                                        audio_path = result_json['audio_path']
+                                    if "audio_path" in result_json:
+                                        audio_path = result_json["audio_path"]
                                 except (json.JSONDecodeError, TypeError):
                                     pass
 
             if isinstance(message, ResultMessage):
-                if hasattr(message, 'structured_output') and message.structured_output:
+                if hasattr(message, "structured_output") and message.structured_output:
                     result_data = message.structured_output
                 elif message.result:
                     if isinstance(message.result, dict):
                         result_data = message.result
                     else:
                         # Fallback: create default structure
-                        result_data = _create_default_opening(theme_str, interests, config)
+                        result_data = _create_default_opening(
+                            theme_str, interests, config
+                        )
                 break
 
     # Validate and ensure required structure
@@ -545,11 +766,14 @@ async def generate_story_opening(
     if audio_path:
         result_data["audio_path"] = audio_path
 
-    # Ensure segment has proper choice IDs
+    # Ensure opening has valid interactive choices
     if "segment" in result_data and "choices" in result_data["segment"]:
-        for i, choice in enumerate(result_data["segment"]["choices"]):
-            if "choice_id" not in choice or not choice["choice_id"]:
-                choice["choice_id"] = f"choice_0_{chr(97 + i)}"
+        result_data["segment"]["choices"] = _normalize_choices(
+            result_data["segment"]["choices"],
+            segment_id=0,
+            is_final_segment=False,
+            age_group=age_group,
+        )
 
     return result_data
 
@@ -579,20 +803,25 @@ async def generate_story_opening_stream(
     """
     config = AGE_CONFIG.get(age_group, AGE_CONFIG["6-8"])
     if _should_use_mock():
-        yield {"type": "status", "data": {"status": "started", "message": "正在生成故事开场..."}}
+        yield {
+            "type": "status",
+            "data": {"status": "started", "message": "正在生成故事开场..."},
+        }
         yield {"type": "result", "data": _mock_opening(interests)}
-        yield {"type": "complete", "data": {"status": "completed", "message": "故事开场生成完成"}}
+        yield {
+            "type": "complete",
+            "data": {"status": "completed", "message": "故事开场生成完成"},
+        }
         return
     interests_str = "、".join(interests) if interests else "冒险"
-    theme_str = theme if theme else f"关于{interests[0]}的冒险" if interests else "神秘的冒险"
+    theme_str = (
+        theme if theme else f"关于{interests[0]}的冒险" if interests else "神秘的冒险"
+    )
 
     # 发送开始事件
     yield {
         "type": "status",
-        "data": {
-            "status": "started",
-            "message": "正在创作故事..."
-        }
+        "data": {"status": "started", "message": "正在创作故事..."},
     }
 
     # Fetch preference context (#72)
@@ -618,33 +847,39 @@ async def generate_story_opening_stream(
 
     # Determine if we should generate audio based on age_group audio_mode
     audio_mode = config.get("audio_mode", "simultaneous")
-    should_generate_audio = enable_audio and audio_mode in ["audio_first", "simultaneous"]
+    should_generate_audio = enable_audio and audio_mode in [
+        "audio_first",
+        "simultaneous",
+    ]
     actual_voice = voice or config.get("voice", "nova")
     audio_speed = config.get("speed", 1.0)
 
     # Add TTS instruction if audio should be generated
     if should_generate_audio:
-        prompt = _append_tts_instructions(prompt, actual_voice, audio_speed, "儿童ID", child_id)
+        prompt = _append_tts_instructions(
+            prompt, actual_voice, audio_speed, "儿童ID", child_id
+        )
 
     options = ClaudeAgentOptions(
+        model=get_claude_agent_model(),
         mcp_servers={
             "safety-check": safety_server,
             "vector-search": vector_server,
-            "tts-generation": tts_server
+            "tts-generation": tts_server,
         },
         allowed_tools=[
             "mcp__safety-check__check_content_safety",
             "mcp__vector-search__search_similar_drawings",
             "mcp__vector-search__store_drawing_embedding",
-            "mcp__tts-generation__generate_story_audio"
+            "mcp__tts-generation__generate_story_audio",
         ],
         cwd=".",
         permission_mode="acceptEdits",
         max_turns=12,  # Increased: search + store + TTS add extra turns
         output_format={
             "type": "json_schema",
-            "schema": StoryOpeningOutput.model_json_schema()
-        }
+            "schema": StoryOpeningOutput.model_json_schema(),
+        },
     )
 
     result_data = {}
@@ -662,7 +897,7 @@ async def generate_story_opening_stream(
                     turn_count += 1
 
                     # 获取消息内容
-                    content = getattr(message, 'content', None)
+                    content = getattr(message, "content", None)
 
                     # content 可能是字符串或内容块列表
                     if isinstance(content, str) and content:
@@ -670,45 +905,49 @@ async def generate_story_opening_stream(
                         yield {
                             "type": "thinking",
                             "data": {
-                                "content": content[:200] + "..." if len(content) > 200 else content,
-                                "turn": turn_count
-                            }
+                                "content": content[:200] + "..."
+                                if len(content) > 200
+                                else content,
+                                "turn": turn_count,
+                            },
                         }
                     elif isinstance(content, list):
                         # 遍历内容块
                         for block in content:
                             # 检查工具使用块
                             if isinstance(block, ToolUseBlock):
-                                tool_name = getattr(block, 'name', 'unknown')
+                                tool_name = getattr(block, "name", "unknown")
                                 # Friendly tool name mapping
                                 tool_messages = {
                                     "mcp__safety-check__check_content_safety": "正在检查内容安全...",
                                     "mcp__vector-search__search_similar_drawings": "正在搜索历史角色...",
                                     "mcp__vector-search__store_drawing_embedding": "正在存储角色记忆...",
-                                    "mcp__tts-generation__generate_story_audio": "正在生成语音..."
+                                    "mcp__tts-generation__generate_story_audio": "正在生成语音...",
                                 }
                                 yield {
                                     "type": "tool_use",
                                     "data": {
                                         "tool": tool_name,
-                                        "message": tool_messages.get(tool_name, f"正在使用 {tool_name}...")
-                                    }
+                                        "message": tool_messages.get(
+                                            tool_name, f"正在使用 {tool_name}..."
+                                        ),
+                                    },
                                 }
                             # 检查工具结果块
                             elif isinstance(block, ToolResultBlock):
                                 # Try to extract audio path from TTS result
-                                result_content = getattr(block, 'content', None)
+                                result_content = getattr(block, "content", None)
                                 if result_content and isinstance(result_content, str):
                                     try:
                                         result_json = json.loads(result_content)
-                                        if 'audio_path' in result_json:
-                                            audio_path = result_json['audio_path']
+                                        if "audio_path" in result_json:
+                                            audio_path = result_json["audio_path"]
                                             yield {
                                                 "type": "audio_generated",
                                                 "data": {
                                                     "audio_path": audio_path,
-                                                    "message": "语音生成完成"
-                                                }
+                                                    "message": "语音生成完成",
+                                                },
                                             }
                                     except (json.JSONDecodeError, TypeError):
                                         pass
@@ -717,40 +956,44 @@ async def generate_story_opening_stream(
                                     "type": "tool_result",
                                     "data": {
                                         "status": "completed",
-                                        "message": "工具执行完成"
-                                    }
+                                        "message": "工具执行完成",
+                                    },
                                 }
                             # 处理文本块
-                            elif hasattr(block, 'text'):
+                            elif hasattr(block, "text"):
                                 text = block.text
                                 if text:
                                     thinking_text += text
                                     yield {
                                         "type": "thinking",
                                         "data": {
-                                            "content": text[:200] + "..." if len(text) > 200 else text,
-                                            "turn": turn_count
-                                        }
+                                            "content": text[:200] + "..."
+                                            if len(text) > 200
+                                            else text,
+                                            "turn": turn_count,
+                                        },
                                     }
 
                 # 处理最终结果
                 elif isinstance(message, ResultMessage):
-                    if hasattr(message, 'structured_output') and message.structured_output:
+                    if (
+                        hasattr(message, "structured_output")
+                        and message.structured_output
+                    ):
                         result_data = message.structured_output
                     elif message.result:
                         if isinstance(message.result, dict):
                             result_data = message.result
                         else:
-                            result_data = _create_default_opening(theme_str, interests, config)
+                            result_data = _create_default_opening(
+                                theme_str, interests, config
+                            )
                     break
 
     except Exception as e:
         yield {
             "type": "error",
-            "data": {
-                "error": str(e),
-                "message": "生成故事时发生错误"
-            }
+            "data": {"error": str(e), "message": "生成故事时发生错误"},
         }
         # 使用默认开场
         result_data = _create_default_opening(theme_str, interests, config)
@@ -763,24 +1006,21 @@ async def generate_story_opening_stream(
     if audio_path:
         result_data["audio_path"] = audio_path
 
-    # 确保选项有正确的 ID
+    # 确保开场总是有有效选项，避免故事中途卡住
     if "segment" in result_data and "choices" in result_data["segment"]:
-        for i, choice in enumerate(result_data["segment"]["choices"]):
-            if "choice_id" not in choice or not choice["choice_id"]:
-                choice["choice_id"] = f"choice_0_{chr(97 + i)}"
+        result_data["segment"]["choices"] = _normalize_choices(
+            result_data["segment"]["choices"],
+            segment_id=0,
+            is_final_segment=False,
+            age_group=age_group,
+        )
 
     # 发送最终结果
-    yield {
-        "type": "result",
-        "data": result_data
-    }
+    yield {"type": "result", "data": result_data}
 
     yield {
         "type": "complete",
-        "data": {
-            "status": "completed",
-            "message": "故事创作完成！"
-        }
+        "data": {"status": "completed", "message": "故事创作完成！"},
     }
 
 
@@ -789,7 +1029,7 @@ async def generate_next_segment_stream(
     choice_id: str,
     session_data: Dict[str, Any],
     enable_audio: bool = True,
-    voice: str = None
+    voice: str = None,
 ) -> AsyncGenerator[Dict[str, Any], None]:
     """
     流式生成下一个故事段落
@@ -817,9 +1057,18 @@ async def generate_next_segment_stream(
     is_final_segment = segment_count >= total_segments - 1
 
     if _should_use_mock():
-        yield {"type": "status", "data": {"status": "processing", "message": "正在继续故事..."}}
-        yield {"type": "result", "data": _mock_next_segment(segment_count, is_final_segment)}
-        yield {"type": "complete", "data": {"status": "completed", "message": "段落生成完成"}}
+        yield {
+            "type": "status",
+            "data": {"status": "processing", "message": "正在继续故事..."},
+        }
+        yield {
+            "type": "result",
+            "data": _mock_next_segment(segment_count, is_final_segment),
+        }
+        yield {
+            "type": "complete",
+            "data": {"status": "completed", "message": "段落生成完成"},
+        }
         return
 
     # 发送开始事件
@@ -828,15 +1077,17 @@ async def generate_next_segment_stream(
         "data": {
             "status": "started",
             "message": "正在继续故事..." if not is_final_segment else "正在创作结局...",
-            "is_ending": is_final_segment
-        }
+            "is_ending": is_final_segment,
+        },
     }
 
     # Build story context from previous segments
-    story_context = "\n".join([
-        f"段落 {s.get('segment_id', i)}: {s.get('text', '')}"
-        for i, s in enumerate(segments)
-    ])
+    story_context = "\n".join(
+        [
+            f"段落 {s.get('segment_id', i)}: {s.get('text', '')}"
+            for i, s in enumerate(segments)
+        ]
+    )
 
     # Find what the last choice was
     last_segment = segments[-1] if segments else {}
@@ -846,6 +1097,9 @@ async def generate_next_segment_stream(
         if c.get("choice_id") == choice_id:
             chosen_option = c.get("text", "")
             break
+
+    choice_history_context = _build_choice_history_context(segments, choice_history)
+    opening_hook = _extract_opening_hook(segments)
 
     prompt = _build_next_segment_prompt(
         story_title=story_title,
@@ -859,34 +1113,39 @@ async def generate_next_segment_stream(
         choice_id=choice_id,
         chosen_option=chosen_option,
         config=config,
+        choice_history_context=choice_history_context,
+        opening_hook=opening_hook,
     )
 
     # Determine if we should generate audio based on age_group audio_mode
     audio_mode = config.get("audio_mode", "simultaneous")
-    should_generate_audio = enable_audio and audio_mode in ["audio_first", "simultaneous"]
+    should_generate_audio = enable_audio and audio_mode in [
+        "audio_first",
+        "simultaneous",
+    ]
     actual_voice = voice or config.get("voice", "nova")
     audio_speed = config.get("speed", 1.0)
 
     # Add TTS instruction if audio should be generated
     if should_generate_audio:
-        prompt = _append_tts_instructions(prompt, actual_voice, audio_speed, "会话ID", session_id)
+        prompt = _append_tts_instructions(
+            prompt, actual_voice, audio_speed, "会话ID", session_id
+        )
 
     options = ClaudeAgentOptions(
-        mcp_servers={
-            "safety-check": safety_server,
-            "tts-generation": tts_server
-        },
+        model=get_claude_agent_model(),
+        mcp_servers={"safety-check": safety_server, "tts-generation": tts_server},
         allowed_tools=[
             "mcp__safety-check__check_content_safety",
-            "mcp__tts-generation__generate_story_audio"
+            "mcp__tts-generation__generate_story_audio",
         ],
         cwd=".",
         permission_mode="acceptEdits",
         max_turns=10,  # Increased to allow for TTS generation
         output_format={
             "type": "json_schema",
-            "schema": NextSegmentOutput.model_json_schema()
-        }
+            "schema": NextSegmentOutput.model_json_schema(),
+        },
     )
 
     result_data = {}
@@ -902,68 +1161,75 @@ async def generate_next_segment_stream(
                 if isinstance(message, AssistantMessage):
                     turn_count += 1
 
-                    content = getattr(message, 'content', None)
+                    content = getattr(message, "content", None)
 
                     if isinstance(content, str) and content:
                         yield {
                             "type": "thinking",
                             "data": {
-                                "content": content[:200] + "..." if len(content) > 200 else content,
-                                "turn": turn_count
-                            }
+                                "content": content[:200] + "..."
+                                if len(content) > 200
+                                else content,
+                                "turn": turn_count,
+                            },
                         }
                     elif isinstance(content, list):
                         for block in content:
                             if isinstance(block, ToolUseBlock):
-                                tool_name = getattr(block, 'name', 'unknown')
+                                tool_name = getattr(block, "name", "unknown")
                                 tool_messages = {
                                     "mcp__safety-check__check_content_safety": "正在检查内容安全...",
-                                    "mcp__tts-generation__generate_story_audio": "正在生成语音..."
+                                    "mcp__tts-generation__generate_story_audio": "正在生成语音...",
                                 }
                                 yield {
                                     "type": "tool_use",
                                     "data": {
                                         "tool": tool_name,
-                                        "message": tool_messages.get(tool_name, f"正在使用 {tool_name}...")
-                                    }
+                                        "message": tool_messages.get(
+                                            tool_name, f"正在使用 {tool_name}..."
+                                        ),
+                                    },
                                 }
                             elif isinstance(block, ToolResultBlock):
                                 # Try to extract audio path from TTS result
-                                result_content = getattr(block, 'content', None)
+                                result_content = getattr(block, "content", None)
                                 if result_content and isinstance(result_content, str):
                                     try:
                                         result_json = json.loads(result_content)
-                                        if 'audio_path' in result_json:
-                                            audio_path = result_json['audio_path']
+                                        if "audio_path" in result_json:
+                                            audio_path = result_json["audio_path"]
                                             yield {
                                                 "type": "audio_generated",
                                                 "data": {
                                                     "audio_path": audio_path,
-                                                    "message": "语音生成完成"
-                                                }
+                                                    "message": "语音生成完成",
+                                                },
                                             }
                                     except (json.JSONDecodeError, TypeError):
                                         pass
 
                                 yield {
                                     "type": "tool_result",
-                                    "data": {
-                                        "status": "completed"
-                                    }
+                                    "data": {"status": "completed"},
                                 }
-                            elif hasattr(block, 'text'):
+                            elif hasattr(block, "text"):
                                 text = block.text
                                 if text:
                                     yield {
                                         "type": "thinking",
                                         "data": {
-                                            "content": text[:200] + "..." if len(text) > 200 else text,
-                                            "turn": turn_count
-                                        }
+                                            "content": text[:200] + "..."
+                                            if len(text) > 200
+                                            else text,
+                                            "turn": turn_count,
+                                        },
                                     }
 
                 elif isinstance(message, ResultMessage):
-                    if hasattr(message, 'structured_output') and message.structured_output:
+                    if (
+                        hasattr(message, "structured_output")
+                        and message.structured_output
+                    ):
                         result_data = message.structured_output
                     elif message.result:
                         if isinstance(message.result, dict):
@@ -977,50 +1243,56 @@ async def generate_next_segment_stream(
     except Exception as e:
         yield {
             "type": "error",
-            "data": {
-                "error": str(e),
-                "message": "生成故事时发生错误"
-            }
+            "data": {"error": str(e), "message": "生成故事时发生错误"},
         }
-        result_data = _create_default_segment(segment_count, is_final_segment, chosen_option)
+        result_data = _create_default_segment(
+            segment_count, is_final_segment, chosen_option
+        )
 
     # Validate and ensure required structure
     if not result_data or "segment" not in result_data:
-        result_data = _create_default_segment(segment_count, is_final_segment, chosen_option)
+        result_data = _create_default_segment(
+            segment_count, is_final_segment, chosen_option
+        )
 
     result_data["is_ending"] = is_final_segment
 
     if "segment" in result_data:
         result_data["segment"]["segment_id"] = segment_count
         result_data["segment"]["is_ending"] = is_final_segment
-
-        if not is_final_segment and "choices" in result_data["segment"]:
-            for i, choice in enumerate(result_data["segment"]["choices"]):
-                if "choice_id" not in choice or not choice["choice_id"]:
-                    choice["choice_id"] = f"choice_{segment_count}_{chr(97 + i)}"
+        result_data["segment"]["choices"] = _normalize_choices(
+            result_data["segment"].get("choices", []),
+            segment_id=segment_count,
+            is_final_segment=is_final_segment,
+            age_group=age_group,
+        )
+        if is_final_segment:
+            result_data["segment"]["text"] = _ensure_ending_coherence(
+                result_data["segment"].get("text", ""),
+                opening_hook=opening_hook,
+                chosen_option=chosen_option,
+                choice_history_context=choice_history_context,
+            )
 
     if is_final_segment and "educational_summary" not in result_data:
         result_data["educational_summary"] = {
             "themes": ["勇气", "友谊"],
             "concepts": ["决策", "探索"],
-            "moral": "勇敢面对挑战，和朋友一起会更有力量"
+            "moral": "勇敢面对挑战，和朋友一起会更有力量",
         }
 
     # Add audio path to result if available
     if audio_path:
         result_data["audio_path"] = audio_path
 
-    yield {
-        "type": "result",
-        "data": result_data
-    }
+    yield {"type": "result", "data": result_data}
 
     yield {
         "type": "complete",
         "data": {
             "status": "completed",
-            "message": "故事创作完成！" if is_final_segment else "段落生成完成！"
-        }
+            "message": "故事创作完成！" if is_final_segment else "段落生成完成！",
+        },
     }
 
 
@@ -1029,7 +1301,7 @@ async def generate_next_segment(
     choice_id: str,
     session_data: Dict[str, Any],
     enable_audio: bool = True,
-    voice: str = None
+    voice: str = None,
 ) -> Dict[str, Any]:
     """
     根据选择生成下一个故事段落
@@ -1062,10 +1334,12 @@ async def generate_next_segment(
         return _mock_next_segment(segment_count, is_final_segment)
 
     # Build story context from previous segments
-    story_context = "\n".join([
-        f"段落 {s.get('segment_id', i)}: {s.get('text', '')}"
-        for i, s in enumerate(segments)
-    ])
+    story_context = "\n".join(
+        [
+            f"段落 {s.get('segment_id', i)}: {s.get('text', '')}"
+            for i, s in enumerate(segments)
+        ]
+    )
 
     # Find what the last choice was
     last_segment = segments[-1] if segments else {}
@@ -1075,6 +1349,9 @@ async def generate_next_segment(
         if c.get("choice_id") == choice_id:
             chosen_option = c.get("text", "")
             break
+
+    choice_history_context = _build_choice_history_context(segments, choice_history)
+    opening_hook = _extract_opening_hook(segments)
 
     prompt = _build_next_segment_prompt(
         story_title=story_title,
@@ -1088,34 +1365,39 @@ async def generate_next_segment(
         choice_id=choice_id,
         chosen_option=chosen_option,
         config=config,
+        choice_history_context=choice_history_context,
+        opening_hook=opening_hook,
     )
 
     # Determine if we should generate audio based on age_group audio_mode
     audio_mode = config.get("audio_mode", "simultaneous")
-    should_generate_audio = enable_audio and audio_mode in ["audio_first", "simultaneous"]
+    should_generate_audio = enable_audio and audio_mode in [
+        "audio_first",
+        "simultaneous",
+    ]
     actual_voice = voice or config.get("voice", "nova")
     audio_speed = config.get("speed", 1.0)
 
     # Add TTS instruction if audio should be generated
     if should_generate_audio:
-        prompt = _append_tts_instructions(prompt, actual_voice, audio_speed, "会话ID", session_id)
+        prompt = _append_tts_instructions(
+            prompt, actual_voice, audio_speed, "会话ID", session_id
+        )
 
     options = ClaudeAgentOptions(
-        mcp_servers={
-            "safety-check": safety_server,
-            "tts-generation": tts_server
-        },
+        model=get_claude_agent_model(),
+        mcp_servers={"safety-check": safety_server, "tts-generation": tts_server},
         allowed_tools=[
             "mcp__safety-check__check_content_safety",
-            "mcp__tts-generation__generate_story_audio"
+            "mcp__tts-generation__generate_story_audio",
         ],
         cwd=".",
         permission_mode="acceptEdits",
         max_turns=10,  # Increased to allow for TTS generation
         output_format={
             "type": "json_schema",
-            "schema": NextSegmentOutput.model_json_schema()
-        }
+            "schema": NextSegmentOutput.model_json_schema(),
+        },
     )
 
     result_data = {}
@@ -1127,22 +1409,22 @@ async def generate_next_segment(
         async for message in client.receive_response():
             # Check for TTS tool results in assistant messages
             if isinstance(message, AssistantMessage):
-                content = getattr(message, 'content', None)
+                content = getattr(message, "content", None)
                 if isinstance(content, list):
                     for block in content:
                         if isinstance(block, ToolResultBlock):
                             # Try to extract audio path from TTS result
-                            result_content = getattr(block, 'content', None)
+                            result_content = getattr(block, "content", None)
                             if result_content and isinstance(result_content, str):
                                 try:
                                     result_json = json.loads(result_content)
-                                    if 'audio_path' in result_json:
-                                        audio_path = result_json['audio_path']
+                                    if "audio_path" in result_json:
+                                        audio_path = result_json["audio_path"]
                                 except (json.JSONDecodeError, TypeError):
                                     pass
 
             if isinstance(message, ResultMessage):
-                if hasattr(message, 'structured_output') and message.structured_output:
+                if hasattr(message, "structured_output") and message.structured_output:
                     result_data = message.structured_output
                 elif message.result:
                     if isinstance(message.result, dict):
@@ -1165,12 +1447,19 @@ async def generate_next_segment(
     if "segment" in result_data:
         result_data["segment"]["segment_id"] = segment_count
         result_data["segment"]["is_ending"] = is_final_segment
-
-        # Ensure choice IDs for non-ending segments
-        if not is_final_segment and "choices" in result_data["segment"]:
-            for i, choice in enumerate(result_data["segment"]["choices"]):
-                if "choice_id" not in choice or not choice["choice_id"]:
-                    choice["choice_id"] = f"choice_{segment_count}_{chr(97 + i)}"
+        result_data["segment"]["choices"] = _normalize_choices(
+            result_data["segment"].get("choices", []),
+            segment_id=segment_count,
+            is_final_segment=is_final_segment,
+            age_group=age_group,
+        )
+        if is_final_segment:
+            result_data["segment"]["text"] = _ensure_ending_coherence(
+                result_data["segment"].get("text", ""),
+                opening_hook=opening_hook,
+                chosen_option=chosen_option,
+                choice_history_context=choice_history_context,
+            )
 
     # Add audio path to result if available
     if audio_path:
@@ -1181,13 +1470,15 @@ async def generate_next_segment(
         result_data["educational_summary"] = {
             "themes": ["勇气", "友谊"],
             "concepts": ["决策", "探索"],
-            "moral": "勇敢面对挑战，和朋友一起会更有力量"
+            "moral": "勇敢面对挑战，和朋友一起会更有力量",
         }
 
     return result_data
 
 
-def _create_default_opening(theme: str, interests: List[str], config: Dict) -> Dict[str, Any]:
+def _create_default_opening(
+    theme: str, interests: List[str], config: Dict
+) -> Dict[str, Any]:
     """创建默认开场（当AI生成失败时使用）"""
     interest_item = interests[0] if interests else "宝箱"
     return {
@@ -1198,14 +1489,16 @@ def _create_default_opening(theme: str, interests: List[str], config: Dict) -> D
             "choices": [
                 {"choice_id": "choice_0_a", "text": "立刻去探索", "emoji": "🔍"},
                 {"choice_id": "choice_0_b", "text": "先找朋友一起", "emoji": "👫"},
-                {"choice_id": "choice_0_c", "text": "仔细观察一下", "emoji": "👀"}
+                {"choice_id": "choice_0_c", "text": "仔细观察一下", "emoji": "👀"},
             ],
-            "is_ending": False
-        }
+            "is_ending": False,
+        },
     }
 
 
-def _create_default_segment(segment_id: int, is_ending: bool, choice_text: str = None) -> Dict[str, Any]:
+def _create_default_segment(
+    segment_id: int, is_ending: bool, choice_text: str = None
+) -> Dict[str, Any]:
     """创建默认段落（当AI生成失败时使用）"""
     if is_ending:
         return {
@@ -1213,14 +1506,14 @@ def _create_default_segment(segment_id: int, is_ending: bool, choice_text: str =
                 "segment_id": segment_id,
                 "text": "经过这次奇妙的冒险，小主人公学会了很多。不管遇到什么困难，只要勇敢面对，善待朋友，就一定能找到解决办法。这真是一次难忘的经历！",
                 "choices": [],
-                "is_ending": True
+                "is_ending": True,
             },
             "is_ending": True,
             "educational_summary": {
                 "themes": ["勇气", "友谊"],
                 "concepts": ["决策", "探索"],
-                "moral": "勇敢面对挑战，和朋友一起会更有力量"
-            }
+                "moral": "勇敢面对挑战，和朋友一起会更有力量",
+            },
         }
     else:
         return {
@@ -1228,12 +1521,20 @@ def _create_default_segment(segment_id: int, is_ending: bool, choice_text: str =
                 "segment_id": segment_id,
                 "text": f"小主人公决定{choice_text or '继续探索'}。前方出现了一条分岔路，一边通向神秘的森林，一边通向闪闪发光的小溪...",
                 "choices": [
-                    {"choice_id": f"choice_{segment_id}_a", "text": "走向森林", "emoji": "🌲"},
-                    {"choice_id": f"choice_{segment_id}_b", "text": "走向小溪", "emoji": "💧"}
+                    {
+                        "choice_id": f"choice_{segment_id}_a",
+                        "text": "走向森林",
+                        "emoji": "🌲",
+                    },
+                    {
+                        "choice_id": f"choice_{segment_id}_b",
+                        "text": "走向小溪",
+                        "emoji": "💧",
+                    },
                 ],
-                "is_ending": False
+                "is_ending": False,
             },
-            "is_ending": False
+            "is_ending": False,
         }
 
 
@@ -1251,7 +1552,7 @@ if __name__ == "__main__":
                 child_id="test_child_001",
                 age_group="6-8",
                 interests=["恐龙", "冒险"],
-                theme="恐龙世界探险"
+                theme="恐龙世界探险",
             )
             print(f"标题: {opening.get('title')}")
             print(f"开场: {opening.get('segment', {}).get('text', '')[:100]}...")
@@ -1269,8 +1570,8 @@ if __name__ == "__main__":
                     "age_group": "6-8",
                     "interests": ["恐龙", "冒险"],
                     "theme": "恐龙世界探险",
-                    "story_title": opening.get("title", "冒险故事")
-                }
+                    "story_title": opening.get("title", "冒险故事"),
+                },
             )
             print(f"段落: {next_seg.get('segment', {}).get('text', '')[:100]}...")
             print(f"是否结局: {next_seg.get('is_ending')}")
@@ -1281,6 +1582,7 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"❌ 错误: {e}")
             import traceback
+
             traceback.print_exc()
 
     asyncio.run(test())

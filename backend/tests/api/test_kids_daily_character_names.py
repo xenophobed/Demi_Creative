@@ -1,5 +1,5 @@
 """
-API tests for Morning Show character names (Duo & Mimi) — #140.
+API tests for Kids Daily character names (Duo & Mimi) — #140.
 
 Validates that:
 - display_name appears on DialogueLine in mock-generated output
@@ -10,9 +10,9 @@ Validates that:
 
 import pytest
 
-from backend.src.agents.morning_show_agent import (
+from backend.src.agents.kids_daily_agent import (
     ROLE_DISPLAY_NAMES,
-    generate_morning_show_dialogue,
+    generate_kids_daily_dialogue,
     _build_mock_dialogue_script,
     pick_age_voice,
 )
@@ -55,8 +55,8 @@ class TestCharacterNamesInAgentOutput:
 
     @pytest.mark.asyncio
     async def test_generate_includes_role_display_names(self):
-        """generate_morning_show_dialogue must return role_display_names (#140)."""
-        result = await generate_morning_show_dialogue(
+        """generate_kids_daily_dialogue must return role_display_names (#140)."""
+        result = await generate_kids_daily_dialogue(
             news_text="Scientists found a new planet.",
             age_group="6-8",
         )
@@ -68,7 +68,7 @@ class TestCharacterNamesInAgentOutput:
     @pytest.mark.asyncio
     async def test_generate_dialogue_lines_have_display_name(self):
         """Each dialogue line in agent output must have display_name (#140)."""
-        result = await generate_morning_show_dialogue(
+        result = await generate_kids_daily_dialogue(
             news_text="New robot helps kids learn.",
             age_group="3-5",
         )

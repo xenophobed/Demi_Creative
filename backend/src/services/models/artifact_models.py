@@ -68,8 +68,7 @@ class WorkflowType(str, Enum):
     """Run workflow types"""
     IMAGE_TO_STORY = "image_to_story"
     INTERACTIVE_STORY = "interactive_story"
-    NEWS_TO_KIDS = "news_to_kids"
-    MORNING_SHOW = "morning_show"
+    KIDS_DAILY = "kids_daily"
 
 
 class AgentStepStatus(str, Enum):

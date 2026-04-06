@@ -72,7 +72,7 @@ class TestLibraryStatsEndpoint:
                 "educational_value": {"themes": ["nature"]},
                 "characters": [],
                 "safety_score": 0.90,
-                "story_type": "news_to_kids",
+                "story_type": "kids_daily",
                 "created_at": two_weeks_ago.isoformat(),
             })
 

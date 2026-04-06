@@ -7,6 +7,7 @@ import Button from '@/components/common/Button'
 import useChildStore from '@/store/useChildStore'
 import { storyService } from '@/api/services/storyService'
 import type { NewsCategory } from '@/types/api'
+import QuotaExceededOverlay, { isQuotaError } from '@/components/common/QuotaExceededOverlay'
 
 const TOPIC_CARDS: Array<{ topic: NewsCategory; titleZh: string; titleEn: string; icon: string; description: string }> = [
   { topic: 'space', titleZh: '太空', titleEn: 'Space', icon: '🚀', description: 'Planets, stars, and space discoveries.' },
@@ -191,7 +192,14 @@ function MorningShowSubscriptionsPage() {
         </div>
       </div>
 
-      {error && (
+      {/* Quota exceeded overlay */}
+      <QuotaExceededOverlay
+        show={isQuotaError(error)}
+        message={error ?? ''}
+        onDismiss={() => setError(null)}
+      />
+
+      {error && !isQuotaError(error) && (
         <Card className="border border-red-200 bg-red-50 text-red-700">
           <p className="text-sm">{error}</p>
         </Card>

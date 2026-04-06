@@ -1,4 +1,4 @@
-"""API tests for GET /api/v1/news-to-kids/conversion/{conversion_id} (#181)."""
+"""API tests for GET /api/v1/kids-daily/conversion/{conversion_id} (#181)."""
 
 import json
 import uuid
@@ -13,7 +13,7 @@ class TestNewsDetailRoute:
     async def _create_conversion(self, client, child_id: str = "child-news-detail"):
         """Helper: create a news conversion and return the response data."""
         response = await client.post(
-            "/api/v1/news-to-kids/convert",
+            "/api/v1/kids-daily/convert",
             json={
                 "child_id": child_id,
                 "age_group": "6-8",
@@ -32,7 +32,7 @@ class TestNewsDetailRoute:
             conversion_id = created["conversion_id"]
 
             response = await client.get(
-                f"/api/v1/news-to-kids/conversion/{conversion_id}"
+                f"/api/v1/kids-daily/conversion/{conversion_id}"
             )
             assert response.status_code == 200
             data = response.json()
@@ -55,7 +55,7 @@ class TestNewsDetailRoute:
         async with test_client as client:
             fake_id = str(uuid.uuid4())
             response = await client.get(
-                f"/api/v1/news-to-kids/conversion/{fake_id}"
+                f"/api/v1/kids-daily/conversion/{fake_id}"
             )
             assert response.status_code == 404
 
@@ -85,18 +85,18 @@ class TestNewsDetailRoute:
             "educational_value": {"themes": ["science"], "concepts": [], "moral": ""},
             "characters": [],
             "analysis": {
-                "story_type": "news_to_kids",
+                "story_type": "kids_daily",
                 "category": "science",
                 "kid_title": "Secret Story",
             },
-            "story_type": "news_to_kids",
+            "story_type": "kids_daily",
             "safety_score": 0.9,
             "audio_url": None,
         })
 
         async with test_client as client:
             response = await client.get(
-                f"/api/v1/news-to-kids/conversion/{other_user_conversion_id}"
+                f"/api/v1/kids-daily/conversion/{other_user_conversion_id}"
             )
             # Should not expose other user's data
             assert response.status_code == 404

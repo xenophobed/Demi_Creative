@@ -50,8 +50,10 @@ apiClient.interceptors.response.use(
       // Handle different status codes
       switch (error.response.status) {
         case 401:
-          // Token expired or invalid - reset all stores and persisted state
-          performFullLogout()
+          // Only auto-logout for expired tokens, NOT for login failures
+          if (!error.config?.url?.includes('/login')) {
+            performFullLogout()
+          }
           break
         case 400:
           // Bad request
@@ -78,12 +80,12 @@ export default apiClient
 export function getErrorMessage(error: unknown): string {
   if (axios.isAxiosError(error)) {
     const axiosError = error as AxiosError<ErrorResponse>
-    if (axiosError.response?.data?.message) {
-      return axiosError.response.data.message
-    }
-    if (axiosError.message) {
-      return axiosError.message
-    }
+    const data = axiosError.response?.data as Record<string, unknown> | undefined
+    // FastAPI uses "detail", custom APIs use "message"
+    const detail = data?.detail
+    if (typeof detail === 'string') return detail
+    if (data?.message && typeof data.message === 'string') return data.message
+    if (axiosError.message) return axiosError.message
   }
   if (error instanceof Error) {
     return error.message

@@ -2,14 +2,17 @@
  * Memory Service - API methods for character gallery and preference data
  */
 
-import apiClient from '../client'
+import apiClient from "../client";
 import type {
   MemoryCharactersResponse,
   MemoryPreferencesResponse,
   MemoryDeleteResponse,
-} from '@/types/api'
+  MemoryDeleteCharacterResponse,
+  MemoryDeletePreferenceItemResponse,
+  MemoryPreferenceCategory,
+} from "@/types/api";
 
-const MEMORY_BASE = '/memory'
+const MEMORY_BASE = "/memory";
 
 export const memoryService = {
   /**
@@ -17,9 +20,9 @@ export const memoryService = {
    */
   async getCharacters(childId: string): Promise<MemoryCharactersResponse> {
     const response = await apiClient.get<MemoryCharactersResponse>(
-      `${MEMORY_BASE}/characters/${childId}`
-    )
-    return response.data
+      `${MEMORY_BASE}/characters/${childId}`,
+    );
+    return response.data;
   },
 
   /**
@@ -27,9 +30,9 @@ export const memoryService = {
    */
   async getPreferences(childId: string): Promise<MemoryPreferencesResponse> {
     const response = await apiClient.get<MemoryPreferencesResponse>(
-      `${MEMORY_BASE}/preferences/${childId}`
-    )
-    return response.data
+      `${MEMORY_BASE}/preferences/${childId}`,
+    );
+    return response.data;
   },
 
   /**
@@ -37,9 +40,38 @@ export const memoryService = {
    */
   async deletePreferences(childId: string): Promise<MemoryDeleteResponse> {
     const response = await apiClient.delete<MemoryDeleteResponse>(
-      `${MEMORY_BASE}/preferences/${childId}`
-    )
-    return response.data
+      `${MEMORY_BASE}/preferences/${childId}`,
+    );
+    return response.data;
+  },
+
+  /**
+   * Delete one character by exact name
+   */
+  async deleteCharacter(
+    childId: string,
+    name: string,
+  ): Promise<MemoryDeleteCharacterResponse> {
+    const response = await apiClient.delete<MemoryDeleteCharacterResponse>(
+      `${MEMORY_BASE}/characters/${childId}/item`,
+      { params: { name } },
+    );
+    return response.data;
+  },
+
+  /**
+   * Delete one preference label from themes/interests/concepts
+   */
+  async deletePreferenceItem(
+    childId: string,
+    category: MemoryPreferenceCategory,
+    label: string,
+  ): Promise<MemoryDeletePreferenceItemResponse> {
+    const response = await apiClient.delete<MemoryDeletePreferenceItemResponse>(
+      `${MEMORY_BASE}/preferences/${childId}/item`,
+      { params: { category, label } },
+    );
+    return response.data;
   },
 
   /**
@@ -47,9 +79,9 @@ export const memoryService = {
    */
   async getChildId(): Promise<{ child_id: string | null }> {
     const response = await apiClient.get<{ child_id: string | null }>(
-      `${MEMORY_BASE}/child-id`
-    )
-    return response.data
+      `${MEMORY_BASE}/child-id`,
+    );
+    return response.data;
   },
 
   /**
@@ -57,14 +89,14 @@ export const memoryService = {
    */
   async getRecommendations(
     childId: string,
-    limit: number = 5
+    limit: number = 5,
   ): Promise<{ child_id: string; recommendations: string[] }> {
     const response = await apiClient.get<{
-      child_id: string
-      recommendations: string[]
-    }>(`${MEMORY_BASE}/recommendations/${childId}`, { params: { limit } })
-    return response.data
+      child_id: string;
+      recommendations: string[];
+    }>(`${MEMORY_BASE}/recommendations/${childId}`, { params: { limit } });
+    return response.data;
   },
-}
+};
 
-export default memoryService
+export default memoryService;

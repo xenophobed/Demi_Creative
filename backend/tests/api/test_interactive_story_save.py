@@ -35,13 +35,19 @@ class TestResolveStoryType:
         story = {}
         assert _resolve_story_type(story) == LibraryItemType.ART_STORY
 
-    def test_news_to_kids_maps_to_news(self):
-        story = {"story_type": "news_to_kids"}
-        assert _resolve_story_type(story) == LibraryItemType.NEWS
+    def test_kids_daily_maps_to_kids_daily(self):
+        story = {"story_type": "kids_daily"}
+        assert _resolve_story_type(story) == LibraryItemType.KIDS_DAILY
 
-    def test_morning_show_maps_to_morning_show(self):
+    def test_legacy_news_to_kids_maps_to_kids_daily(self):
+        """Legacy DB records with story_type='news_to_kids' map to KIDS_DAILY."""
+        story = {"story_type": "news_to_kids"}
+        assert _resolve_story_type(story) == LibraryItemType.KIDS_DAILY
+
+    def test_legacy_morning_show_maps_to_kids_daily(self):
+        """Legacy DB records with story_type='morning_show' map to KIDS_DAILY."""
         story = {"story_type": "morning_show"}
-        assert _resolve_story_type(story) == LibraryItemType.MORNING_SHOW
+        assert _resolve_story_type(story) == LibraryItemType.KIDS_DAILY
 
 
 # ============================================================================

@@ -446,7 +446,7 @@ class TestRunModel:
         Contract: Run requires:
         - run_id: UUID
         - story_id: UUID
-        - workflow_type: enum (image_to_story|interactive_story|news_to_kids)
+        - workflow_type: enum (image_to_story|interactive_story|kids_daily)
         - status: enum (pending|running|completed|failed)
         - created_at: datetime
         """
@@ -504,7 +504,7 @@ class TestRunModel:
         """
         Contract: Run workflow_type has specific values.
         """
-        valid_types = ["image_to_story", "interactive_story", "news_to_kids"]
+        valid_types = ["image_to_story", "interactive_story", "kids_daily"]
 
         for workflow_type in valid_types:
             assert workflow_type in valid_types

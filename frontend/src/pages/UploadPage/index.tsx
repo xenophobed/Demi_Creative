@@ -12,6 +12,7 @@ import useStoryStore from '@/store/useStoryStore'
 import useAuthStore from '@/store/useAuthStore'
 import useChildStore, { DEFAULT_INTERESTS } from '@/store/useChildStore'
 import useStoryGeneration from '@/hooks/useStoryGeneration'
+import QuotaExceededOverlay, { isQuotaError } from '@/components/common/QuotaExceededOverlay'
 import type { AgeGroup } from '@/types/api'
 import type { AnimationPhase } from '@/types/streaming'
 import LoginPrompt from '@/components/common/LoginPrompt'
@@ -45,6 +46,7 @@ function UploadPage() {
     selectedArtTheme,
     enableAudio,
     uploadError,
+    setUploadError,
     setSelectedImage,
     setSelectedVoice,
     setSelectedArtTheme,
@@ -439,9 +441,16 @@ function UploadPage() {
         </TiltCard>
       </motion.div>
 
-      {/* Error message */}
+      {/* Quota exceeded overlay */}
+      <QuotaExceededOverlay
+        show={isQuotaError(uploadError)}
+        message={uploadError ?? ''}
+        onDismiss={() => setUploadError(null)}
+      />
+
+      {/* Error message (non-quota errors) */}
       <AnimatePresence>
-        {uploadError && (
+        {uploadError && !isQuotaError(uploadError) && (
           <motion.div
             className="bg-red-100 border border-red-200 rounded-card p-4 text-red-700"
             initial={{ opacity: 0, y: -10, scale: 0.95 }}

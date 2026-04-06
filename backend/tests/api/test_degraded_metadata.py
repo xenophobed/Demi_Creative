@@ -22,7 +22,7 @@ class TestNewsDegradedMetadata:
 
         async with test_client as client:
             response = await client.post(
-                "/api/v1/news-to-kids/convert",
+                "/api/v1/kids-daily/convert",
                 json={
                     "child_id": child_id,
                     "age_group": "6-8",
@@ -40,7 +40,7 @@ class TestNewsDegradedMetadata:
             # Fetch persisted record and verify analysis has the fields
             conversion_id = data["conversion_id"]
             get_resp = await client.get(
-                f"/api/v1/news-to-kids/conversion/{conversion_id}"
+                f"/api/v1/kids-daily/conversion/{conversion_id}"
             )
             assert get_resp.status_code == 200
             stored = get_resp.json()
@@ -53,7 +53,7 @@ class TestNewsDegradedMetadata:
 
         async with test_client as client:
             response = await client.post(
-                "/api/v1/news-to-kids/convert/stream",
+                "/api/v1/kids-daily/convert/stream",
                 json={
                     "child_id": child_id,
                     "age_group": "6-8",
@@ -76,7 +76,7 @@ class TestNewsDegradedMetadata:
 
             # Verify stored record has degradation metadata
             get_resp = await client.get(
-                f"/api/v1/news-to-kids/conversion/{conversion_id}"
+                f"/api/v1/kids-daily/conversion/{conversion_id}"
             )
             assert get_resp.status_code == 200
             stored = get_resp.json()
@@ -97,7 +97,7 @@ class TestMorningShowDegradedMetadata:
 
         async with test_client as client:
             response = await client.post(
-                "/api/v1/morning-show/generate",
+                "/api/v1/kids-daily/generate",
                 json={
                     "child_id": child_id,
                     "age_group": "6-8",
@@ -121,7 +121,7 @@ class TestMorningShowDegradedMetadata:
             # Fetch persisted record
             episode_id = episode["episode_id"]
             get_resp = await client.get(
-                f"/api/v1/morning-show/episode/{episode_id}"
+                f"/api/v1/kids-daily/episode/{episode_id}"
             )
             assert get_resp.status_code == 200
             stored = get_resp.json()
@@ -139,7 +139,7 @@ class TestProvenanceArtifactDegradedMetadata:
 
         async with test_client as client:
             response = await client.post(
-                "/api/v1/news-to-kids/convert",
+                "/api/v1/kids-daily/convert",
                 json={
                     "child_id": child_id,
                     "age_group": "9-12",

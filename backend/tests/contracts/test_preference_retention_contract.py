@@ -67,30 +67,30 @@ class TestTopicScoreDecay:
     async def test_scores_decay_after_6_months(self, repo):
         stale_date = (datetime.now() - timedelta(days=200)).isoformat()
         profile = repo._empty_profile()
-        profile["morning_show"]["topic_scores"] = {"space": 10.0, "robots": 4.0}
-        profile["morning_show"]["last_event_at"] = stale_date
+        profile["kids_daily"]["topic_scores"] = {"space": 10.0, "robots": 4.0}
+        profile["kids_daily"]["last_event_at"] = stale_date
 
         result = repo._apply_retention(profile)
-        assert result["morning_show"]["topic_scores"]["space"] == 5.0
-        assert result["morning_show"]["topic_scores"]["robots"] == 2.0
+        assert result["kids_daily"]["topic_scores"]["space"] == 5.0
+        assert result["kids_daily"]["topic_scores"]["robots"] == 2.0
 
     @pytest.mark.asyncio
     async def test_scores_no_decay_if_recent(self, repo):
         recent_date = datetime.now().isoformat()
         profile = repo._empty_profile()
-        profile["morning_show"]["topic_scores"] = {"space": 10.0}
-        profile["morning_show"]["last_event_at"] = recent_date
+        profile["kids_daily"]["topic_scores"] = {"space": 10.0}
+        profile["kids_daily"]["last_event_at"] = recent_date
 
         result = repo._apply_retention(profile)
-        assert result["morning_show"]["topic_scores"]["space"] == 10.0
+        assert result["kids_daily"]["topic_scores"]["space"] == 10.0
 
     @pytest.mark.asyncio
     async def test_scores_no_decay_if_no_event(self, repo):
         profile = repo._empty_profile()
-        profile["morning_show"]["topic_scores"] = {"space": 10.0}
+        profile["kids_daily"]["topic_scores"] = {"space": 10.0}
         # last_event_at is None by default
         result = repo._apply_retention(profile)
-        assert result["morning_show"]["topic_scores"]["space"] == 10.0
+        assert result["kids_daily"]["topic_scores"]["space"] == 10.0
 
 
 class TestDeleteProfile:

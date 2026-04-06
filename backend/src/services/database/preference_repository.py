@@ -21,29 +21,47 @@ class PreferenceRepository:
         return f"{user_id}:{child_id}"
 
     async def update_from_story_result(
-        self, child_id: str, story_result: Dict[str, Any], *, user_id: str = "",
+        self,
+        child_id: str,
+        story_result: Dict[str, Any],
+        *,
+        user_id: str = "",
     ) -> None:
         key = self._composite_key(user_id, child_id) if user_id else child_id
         profile = await self._get_profile(key)
         self._bump(profile["themes"], story_result.get("themes", []), 1)
-        self._bump(profile["concepts"], self._extract_concepts(story_result.get("concepts", [])), 1)
+        self._bump(
+            profile["concepts"],
+            self._extract_concepts(story_result.get("concepts", [])),
+            1,
+        )
         await self._save_profile(key, profile)
 
     async def update_from_choices(
-        self, child_id: str, choice_history: List[str], session_data: Dict[str, Any],
-        *, user_id: str = "",
+        self,
+        child_id: str,
+        choice_history: List[str],
+        session_data: Dict[str, Any],
+        *,
+        user_id: str = "",
     ) -> None:
         key = self._composite_key(user_id, child_id) if user_id else child_id
         profile = await self._get_profile(key)
         self._bump(profile["interests"], session_data.get("interests", []), 2)
         if isinstance(session_data.get("theme"), str) and session_data["theme"].strip():
             self._bump(profile["themes"], [session_data["theme"].strip()], 2)
-        profile["recent_choices"] = [str(choice) for choice in (choice_history or [])[-20:]]
+        profile["recent_choices"] = [
+            str(choice) for choice in (choice_history or [])[-20:]
+        ]
         await self._save_profile(key, profile)
 
     async def update_from_news(
-        self, child_id: str, category: str, key_concepts: List[Dict[str, Any]],
-        *, user_id: str = "",
+        self,
+        child_id: str,
+        category: str,
+        key_concepts: List[Dict[str, Any]],
+        *,
+        user_id: str = "",
     ) -> None:
         key = self._composite_key(user_id, child_id) if user_id else child_id
         profile = await self._get_profile(key)
@@ -56,7 +74,7 @@ class PreferenceRepository:
         self._bump(profile["concepts"], concepts, 1)
         await self._save_profile(key, profile)
 
-    async def update_from_morning_show(
+    async def update_from_kids_daily(
         self,
         child_id: str,
         topic: str,
@@ -66,7 +84,7 @@ class PreferenceRepository:
         user_id: str = "",
     ) -> float:
         """
-        Update preference profile from Morning Show playback events (#102).
+        Update preference profile from Kids Daily playback events (#102).
 
         Returns:
             float: updated engagement score for the topic.
@@ -74,9 +92,11 @@ class PreferenceRepository:
         key = self._composite_key(user_id, child_id) if user_id else child_id
         profile = await self._get_profile(key)
 
-        morning = profile.setdefault("morning_show", {})
-        topic_scores = morning.setdefault("topic_scores", {})
-        topic_stats = morning.setdefault("topic_stats", {})
+        # Support both new and legacy profile key names
+        kids_daily = profile.get("kids_daily") or profile.get("morning_show") or {}
+        profile.setdefault("kids_daily", kids_daily)
+        topic_scores = kids_daily.setdefault("topic_scores", {})
+        topic_stats = kids_daily.setdefault("topic_stats", {})
 
         current_score = float(topic_scores.get(topic, 0.0))
         stats = topic_stats.get(topic, {"started": 0, "completed": 0, "abandoned": 0})
@@ -97,7 +117,7 @@ class PreferenceRepository:
 
         topic_stats[topic] = stats
         topic_scores[topic] = round(max(-5.0, min(20.0, current_score)), 3)
-        morning["last_event_at"] = datetime.now().isoformat()
+        kids_daily["last_event_at"] = datetime.now().isoformat()
 
         await self._save_profile(key, profile)
         return topic_scores[topic]
@@ -113,7 +133,9 @@ class PreferenceRepository:
                 profile = legacy
         return profile
 
-    async def get_profile_with_metadata(self, child_id: str, *, user_id: str = "") -> Dict[str, Any]:
+    async def get_profile_with_metadata(
+        self, child_id: str, *, user_id: str = ""
+    ) -> Dict[str, Any]:
         """Return profile with data_collected_since and last_updated_at timestamps."""
         key = self._composite_key(user_id, child_id) if user_id else child_id
         row = await self._db.fetchone(
@@ -137,7 +159,11 @@ class PreferenceRepository:
 
         if not row:
             profile = self._empty_profile()
-            return {"profile": profile, "data_collected_since": None, "last_updated_at": None}
+            return {
+                "profile": profile,
+                "data_collected_since": None,
+                "last_updated_at": None,
+            }
 
         try:
             loaded = json.loads(row.get("profile_json") or "{}")
@@ -161,6 +187,36 @@ class PreferenceRepository:
         )
         await self._db.commit()
         return cursor.rowcount > 0
+
+    async def delete_preference_label(
+        self,
+        child_id: str,
+        bucket: str,
+        label: str,
+        *,
+        user_id: str = "",
+    ) -> bool:
+        """Delete one label from themes/interests/concepts.
+
+        Returns True when the label existed and was removed.
+        """
+        if bucket not in {"themes", "interests", "concepts"}:
+            raise ValueError(f"Unsupported preference bucket: {bucket}")
+
+        token = (label or "").strip()
+        if not token:
+            return False
+
+        key = self._composite_key(user_id, child_id) if user_id else child_id
+        profile = await self.get_profile(child_id, user_id=user_id)
+        score_map = profile.get(bucket)
+        if not isinstance(score_map, dict) or token not in score_map:
+            return False
+
+        score_map.pop(token, None)
+        profile[bucket] = score_map
+        await self._save_profile(key, profile)
+        return True
 
     async def _get_profile(self, child_id: str) -> Dict[str, Any]:
         row = await self._db.fetchone(
@@ -214,7 +270,7 @@ class PreferenceRepository:
             "concepts": {},
             "interests": {},
             "recent_choices": [],
-            "morning_show": {
+            "kids_daily": {
                 "topic_scores": {},
                 "topic_stats": {},
                 "last_event_at": None,
@@ -231,14 +287,21 @@ class PreferenceRepository:
                 normalized[key] = {}
         if not isinstance(normalized.get("recent_choices"), list):
             normalized["recent_choices"] = []
-        if not isinstance(normalized.get("morning_show"), dict):
-            normalized["morning_show"] = self._empty_profile()["morning_show"]
+        # Support both legacy "morning_show" and new "kids_daily" keys
+        kids_daily_data = normalized.get("kids_daily")
+        morning_show_data = normalized.get("morning_show")
+        if not isinstance(kids_daily_data, dict):
+            if isinstance(morning_show_data, dict):
+                # Migrate legacy key
+                normalized["kids_daily"] = morning_show_data
+            else:
+                normalized["kids_daily"] = self._empty_profile()["kids_daily"]
         else:
-            morning = normalized["morning_show"]
-            if not isinstance(morning.get("topic_scores"), dict):
-                morning["topic_scores"] = {}
-            if not isinstance(morning.get("topic_stats"), dict):
-                morning["topic_stats"] = {}
+            kd = normalized["kids_daily"]
+            if not isinstance(kd.get("topic_scores"), dict):
+                kd["topic_scores"] = {}
+            if not isinstance(kd.get("topic_stats"), dict):
+                kd["topic_stats"] = {}
 
         return normalized
 
@@ -250,17 +313,17 @@ class PreferenceRepository:
         """
         profile["recent_choices"] = profile.get("recent_choices", [])[-50:]
 
-        morning = profile.get("morning_show", {})
-        last_event = morning.get("last_event_at")
+        kids_daily = profile.get("kids_daily", profile.get("morning_show", {}))
+        last_event = kids_daily.get("last_event_at")
         if last_event:
             try:
                 last_dt = datetime.fromisoformat(last_event)
                 cutoff = datetime.now() - timedelta(days=180)
                 if last_dt < cutoff:
-                    topic_scores = morning.get("topic_scores", {})
+                    topic_scores = kids_daily.get("topic_scores", {})
                     for topic in topic_scores:
                         topic_scores[topic] = round(float(topic_scores[topic]) * 0.5, 3)
-                    morning["topic_scores"] = topic_scores
+                    kids_daily["topic_scores"] = topic_scores
             except (ValueError, TypeError):
                 pass
 

@@ -265,7 +265,7 @@ async def test_news_to_kids_provenance_chain(db):
     tracker = ProvenanceTracker(db)
 
     run_id = await tracker.start_run(
-        story_id, WorkflowType.NEWS_TO_KIDS
+        story_id, WorkflowType.KIDS_DAILY
     )
     assert run_id is not None
 
@@ -282,7 +282,7 @@ async def test_news_to_kids_provenance_chain(db):
         artifact_payload="Kid-friendly technology news.",
         description="Converted news text",
         safety_score=0.90,
-        agent_name="news_to_kids",
+        agent_name="kids_daily",
         metadata=ArtifactMetadata(char_count=30, word_count=4),
     )
 
@@ -324,7 +324,7 @@ async def test_news_to_kids_provenance_chain(db):
     run_repo = RunRepository(db)
     run = await run_repo.get_by_id(run_id)
     assert run.status == "completed"
-    assert run.workflow_type == "news_to_kids"
+    assert run.workflow_type == "kids_daily"
 
     step_repo = AgentStepRepository(db)
     steps = await step_repo.list_by_run(run_id)
@@ -346,13 +346,13 @@ async def test_news_to_kids_without_audio(db):
     story_id = await create_test_story(db)
     tracker = ProvenanceTracker(db)
 
-    run_id = await tracker.start_run(story_id, WorkflowType.NEWS_TO_KIDS)
+    run_id = await tracker.start_run(story_id, WorkflowType.KIDS_DAILY)
 
     step_id = await tracker.start_step(run_id, "news_conversion", 1)
     text_id = await tracker.record_artifact(
         step_id, ArtifactType.TEXT, run_id=run_id,
         artifact_payload="Simple news for kids.",
-        agent_name="news_to_kids",
+        agent_name="kids_daily",
         safety_score=0.93,
     )
     await tracker.complete_step(step_id)
@@ -386,13 +386,13 @@ async def test_provenance_failure_does_not_block_news_content(db):
     story_id = await create_test_story(db)
     tracker = ProvenanceTracker(db)
 
-    run_id = await tracker.start_run(story_id, WorkflowType.NEWS_TO_KIDS)
+    run_id = await tracker.start_run(story_id, WorkflowType.KIDS_DAILY)
 
     step_id = await tracker.start_step(run_id, "news_conversion", 1)
     await tracker.record_artifact(
         step_id, ArtifactType.TEXT, run_id=run_id,
         artifact_payload="News content",
-        agent_name="news_to_kids",
+        agent_name="kids_daily",
     )
     await tracker.complete_step(step_id)
 

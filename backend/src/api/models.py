@@ -345,8 +345,8 @@ class InteractiveQuestionResponse(BaseModel):
     emoji: str = Field(default="🤔", description="问题图标")
 
 
-class NewsToKidsRequest(BaseModel):
-    """新闻转儿童内容请求"""
+class KidsDailyTextRequest(BaseModel):
+    """Kids Daily 文本转换请求（简单模式）"""
     child_id: str = Field(..., min_length=1, max_length=100, description="儿童唯一标识符")
     age_group: AgeGroup = Field(..., description="年龄组")
     category: NewsCategory = Field(default=NewsCategory.GENERAL, description="新闻分类")
@@ -356,8 +356,8 @@ class NewsToKidsRequest(BaseModel):
     voice: Optional[VoiceType] = Field(default=VoiceType.FABLE, description="语音类型")
 
 
-class NewsToKidsResponse(BaseModel):
-    """新闻转儿童内容响应"""
+class KidsDailyTextResponse(BaseModel):
+    """Kids Daily 文本转换响应"""
     conversion_id: str = Field(..., description="转换ID")
     kid_title: str = Field(..., description="儿童版标题")
     kid_content: str = Field(..., description="儿童版正文")
@@ -433,7 +433,7 @@ class EpisodeIllustration(BaseModel):
         return value
 
 
-class MorningShowEpisode(BaseModel):
+class KidsDailyEpisode(BaseModel):
     """Kids Daily 完整节目数据"""
     episode_id: str = Field(..., description="节目唯一 ID")
     child_id: str = Field(..., description="儿童 ID")
@@ -447,7 +447,7 @@ class MorningShowEpisode(BaseModel):
     dialogue_script: DialogueScript = Field(..., description="多角色对话脚本")
     illustrations: List[EpisodeIllustration] = Field(default_factory=list, description="插画列表")
     audio_urls: Dict[str, str] = Field(default_factory=dict, description="音频 URL 映射（line_index -> url）")
-    story_type: Literal["morning_show"] = Field(default="morning_show", description="内容类型")
+    story_type: Literal["kids_daily"] = Field(default="kids_daily", description="内容类型")
     duration_seconds: Optional[int] = Field(None, ge=0, description="节目总时长（秒）")
     is_played: bool = Field(default=False, description="是否已播放")
     is_new: bool = Field(default=True, description="是否新内容")
@@ -456,7 +456,7 @@ class MorningShowEpisode(BaseModel):
     created_at: datetime = Field(default_factory=datetime.now, description="创建时间")
 
 
-class MorningShowRequest(BaseModel):
+class KidsDailyRequest(BaseModel):
     """Kids Daily 生成请求"""
     news_url: Optional[str] = Field(None, description="新闻 URL")
     news_text: Optional[str] = Field(None, description="新闻正文")
@@ -465,20 +465,20 @@ class MorningShowRequest(BaseModel):
     category: NewsCategory = Field(default=NewsCategory.GENERAL, description="话题分类")
 
 
-class MorningShowOnDemandRequest(BaseModel):
+class KidsDailyOnDemandRequest(BaseModel):
     """按需生成 Kids Daily 请求 (#304)"""
     child_id: str = Field(..., min_length=1, max_length=100, description="儿童 ID")
     category: NewsCategory = Field(default=NewsCategory.GENERAL, description="话题分类")
     age_group: AgeGroup = Field(..., description="年龄组")
 
 
-class MorningShowRateLimitResponse(BaseModel):
+class KidsDailyRateLimitResponse(BaseModel):
     """速率限制响应 (#305)"""
     message: str = Field(..., description="友好提示消息")
     retry_after: int = Field(..., ge=0, description="距下次允许生成的秒数")
 
 
-class MorningShowGenerationMetadata(BaseModel):
+class KidsDailyGenerationMetadata(BaseModel):
     """Kids Daily 生成元数据"""
     generation_id: str = Field(..., description="生成任务 ID")
     safety_score: float = Field(..., ge=0.0, le=1.0, description="内容安全分数")
@@ -488,15 +488,15 @@ class MorningShowGenerationMetadata(BaseModel):
     created_at: datetime = Field(default_factory=datetime.now, description="生成时间")
 
 
-class MorningShowResponse(BaseModel):
+class KidsDailyResponse(BaseModel):
     """Kids Daily 生成响应"""
-    episode: MorningShowEpisode = Field(..., description="节目数据")
-    metadata: MorningShowGenerationMetadata = Field(..., description="生成元数据")
+    episode: KidsDailyEpisode = Field(..., description="节目数据")
+    metadata: KidsDailyGenerationMetadata = Field(..., description="生成元数据")
 
 
-class PaginatedMorningShowResponse(BaseModel):
+class PaginatedKidsDailyResponse(BaseModel):
     """Kids Daily 节目列表响应"""
-    items: List[MorningShowEpisode] = Field(default_factory=list, description="节目列表")
+    items: List[KidsDailyEpisode] = Field(default_factory=list, description="节目列表")
     total: int = Field(..., description="总数")
     limit: int = Field(..., description="分页大小")
     offset: int = Field(..., description="偏移量")
@@ -527,7 +527,7 @@ class SubscriptionListResponse(BaseModel):
     total: int = Field(..., description="订阅总数")
 
 
-class MorningShowTrackEvent(str, Enum):
+class KidsDailyTrackEvent(str, Enum):
     """Kids Daily 播放事件类型"""
     START = "start"
     PROGRESS = "progress"
@@ -535,18 +535,18 @@ class MorningShowTrackEvent(str, Enum):
     ABANDON = "abandon"
 
 
-class MorningShowTrackRequest(BaseModel):
+class KidsDailyTrackRequest(BaseModel):
     """Kids Daily 播放行为跟踪请求"""
     child_id: str = Field(..., min_length=1, max_length=100, description="儿童 ID")
     episode_id: str = Field(..., min_length=1, description="节目 ID")
     topic: NewsCategory = Field(..., description="节目话题")
-    event_type: MorningShowTrackEvent = Field(..., description="事件类型")
+    event_type: KidsDailyTrackEvent = Field(..., description="事件类型")
     progress: float = Field(default=0.0, ge=0.0, le=1.0, description="播放进度 0-1")
     played_seconds: Optional[float] = Field(default=None, ge=0.0, description="已播放秒数")
     event_at: datetime = Field(default_factory=datetime.now, description="事件时间")
 
 
-class MorningShowTrackResponse(BaseModel):
+class KidsDailyTrackResponse(BaseModel):
     """Kids Daily 跟踪响应"""
     status: str = Field(..., description="状态")
     topic_score: float = Field(..., description="当前话题参与度分数")
@@ -793,9 +793,15 @@ class UpdateProfileRequest(BaseModel):
 # ============================================================================
 
 class LibraryItemType(str, Enum):
-    """Library content type"""
+    """Library content type.
+
+    NEWS, MORNING_SHOW, and KIDS_NEWS are legacy aliases kept for API
+    backward compatibility; internally they all resolve to KIDS_DAILY.
+    """
     ART_STORY = "art-story"
     INTERACTIVE = "interactive"
+    KIDS_DAILY = "kids-daily"
+    # Legacy aliases (still accepted as query params)
     NEWS = "news"
     MORNING_SHOW = "morning-show"
     KIDS_NEWS = "kids-news"

@@ -8,6 +8,8 @@ Issue: #160 | Parent Epic: #42
 """
 
 import json
+import re
+import unicodedata
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -17,6 +19,88 @@ from .connection import db_manager
 class CharacterRepository:
     def __init__(self):
         self._db = db_manager
+
+    @staticmethod
+    def _sanitize_name(name: str) -> str:
+        """Normalize display name by trimming and removing invisible chars."""
+        if not isinstance(name, str):
+            return ""
+        cleaned = unicodedata.normalize("NFKC", name)
+        cleaned = re.sub(r"[\u200B-\u200D\uFEFF]", "", cleaned)
+        cleaned = " ".join(cleaned.split())
+        return cleaned.strip()
+
+    @classmethod
+    def _normalized_name_key(cls, name: str) -> str:
+        """Build key used for dedupe and matching.
+
+        Ignores case, spacing, and punctuation/symbol differences.
+        """
+        cleaned = cls._sanitize_name(name)
+        if not cleaned:
+            return ""
+        compact = "".join(
+            ch
+            for ch in cleaned
+            if not ch.isspace() and unicodedata.category(ch)[0] not in {"P", "S"}
+        )
+        return (compact or cleaned).casefold()
+
+    @staticmethod
+    def _merge_traits(existing: Any, incoming: Any) -> List[str]:
+        merged: List[str] = []
+        for source in (existing, incoming):
+            if isinstance(source, list):
+                for item in source:
+                    if isinstance(item, str) and item not in merged:
+                        merged.append(item)
+        return merged
+
+    @staticmethod
+    def _pick_description(existing: Any, incoming: Any) -> Optional[str]:
+        candidates = [
+            c for c in (existing, incoming) if isinstance(c, str) and c.strip()
+        ]
+        if not candidates:
+            return None
+        return max(candidates, key=len)
+
+    @staticmethod
+    def _pick_visual_features(existing: Any, incoming: Any) -> Any:
+        existing_score = len(existing) if isinstance(existing, dict) else 0
+        incoming_score = len(incoming) if isinstance(incoming, dict) else 0
+        if incoming_score > existing_score:
+            return incoming
+        return existing if existing is not None else incoming
+
+    @staticmethod
+    def _display_name_score(name: str) -> int:
+        if not isinstance(name, str) or not name:
+            return 0
+        score = 0
+        if any(ch.isupper() for ch in name):
+            score += 2
+        if name[:1].isupper():
+            score += 1
+        if name == name.title():
+            score += 1
+        return score
+
+    async def _find_by_normalized_name(
+        self, user_id: str, child_id: str, name: str
+    ) -> Optional[Dict[str, Any]]:
+        target = self._normalized_name_key(name)
+        if not target:
+            return None
+        rows = await self._db.fetchall(
+            "SELECT * FROM characters WHERE user_id = ? AND child_id = ?",
+            (user_id, child_id),
+        )
+        for row in rows:
+            parsed = self._deserialize(row)
+            if self._normalized_name_key(parsed.get("name", "")) == target:
+                return parsed
+        return None
 
     async def upsert_character(
         self,
@@ -39,8 +123,17 @@ class CharacterRepository:
 
         Returns the character row as a dict.
         """
+        cleaned_name = self._sanitize_name(name)
+        if not cleaned_name:
+            raise ValueError("Character name cannot be empty")
+
+        canonical = await self._find_by_normalized_name(user_id, child_id, cleaned_name)
+        target_name = canonical["name"] if canonical else cleaned_name
+
         now = datetime.now().isoformat()
-        features_json = json.dumps(visual_features, ensure_ascii=False) if visual_features else None
+        features_json = (
+            json.dumps(visual_features, ensure_ascii=False) if visual_features else None
+        )
         traits_json = json.dumps(traits, ensure_ascii=False) if traits else None
 
         await self._db.execute(
@@ -55,35 +148,111 @@ class CharacterRepository:
                 appearance_count = characters.appearance_count + 1,
                 last_seen_at = excluded.last_seen_at
             """,
-            (user_id, child_id, name, description, features_json, traits_json, now, now),
+            (
+                user_id,
+                child_id,
+                target_name,
+                description,
+                features_json,
+                traits_json,
+                now,
+                now,
+            ),
         )
         await self._db.commit()
 
-        return await self.get_character(user_id, child_id, name)
+        return await self.get_character(user_id, child_id, target_name)
 
     async def get_characters(self, user_id: str, child_id: str) -> List[Dict[str, Any]]:
-        """Return all characters for a child, ordered by appearance_count DESC."""
+        """Return all characters for a child, merged by normalized name."""
         rows = await self._db.fetchall(
             "SELECT * FROM characters WHERE user_id = ? AND child_id = ? ORDER BY appearance_count DESC",
             (user_id, child_id),
         )
-        return [self._deserialize(row) for row in rows]
+        deserialized = [self._deserialize(row) for row in rows]
 
-    async def get_character(self, user_id: str, child_id: str, name: str) -> Optional[Dict[str, Any]]:
+        merged: Dict[str, Dict[str, Any]] = {}
+        for item in deserialized:
+            key = self._normalized_name_key(item.get("name", ""))
+            if not key:
+                continue
+
+            if key not in merged:
+                merged[key] = dict(item)
+                merged[key]["name"] = self._sanitize_name(merged[key].get("name", ""))
+                continue
+
+            current = merged[key]
+            current["appearance_count"] = int(current.get("appearance_count", 0)) + int(
+                item.get("appearance_count", 0)
+            )
+            current["description"] = self._pick_description(
+                current.get("description"), item.get("description")
+            )
+            current_name = self._sanitize_name(current.get("name", ""))
+            incoming_name = self._sanitize_name(item.get("name", ""))
+            if self._display_name_score(incoming_name) > self._display_name_score(
+                current_name
+            ):
+                current["name"] = incoming_name
+            current["visual_features"] = self._pick_visual_features(
+                current.get("visual_features"), item.get("visual_features")
+            )
+            current["traits"] = self._merge_traits(
+                current.get("traits"), item.get("traits")
+            )
+
+            first_seen = [
+                v
+                for v in (current.get("first_seen_at"), item.get("first_seen_at"))
+                if v
+            ]
+            last_seen = [
+                v for v in (current.get("last_seen_at"), item.get("last_seen_at")) if v
+            ]
+            if first_seen:
+                current["first_seen_at"] = min(first_seen)
+            if last_seen:
+                current["last_seen_at"] = max(last_seen)
+
+        return sorted(
+            merged.values(),
+            key=lambda c: (
+                int(c.get("appearance_count", 0)),
+                c.get("last_seen_at", ""),
+            ),
+            reverse=True,
+        )
+
+    async def get_character(
+        self, user_id: str, child_id: str, name: str
+    ) -> Optional[Dict[str, Any]]:
         """Return a single character or None."""
+        cleaned_name = self._sanitize_name(name)
+        if not cleaned_name:
+            return None
         row = await self._db.fetchone(
             "SELECT * FROM characters WHERE user_id = ? AND child_id = ? AND name = ?",
-            (user_id, child_id, name),
+            (user_id, child_id, cleaned_name),
         )
         if not row:
-            return None
-        return self._deserialize(row)
+            return await self._find_by_normalized_name(user_id, child_id, cleaned_name)
+        parsed = self._deserialize(row)
+        parsed["name"] = self._sanitize_name(parsed.get("name", ""))
+        return parsed
 
-    async def increment_appearance(self, user_id: str, child_id: str, name: str) -> bool:
+    async def increment_appearance(
+        self, user_id: str, child_id: str, name: str
+    ) -> bool:
         """Increment appearance_count and update last_seen_at.
 
         Returns True if character existed, False otherwise.
         """
+        existing = await self._find_by_normalized_name(user_id, child_id, name)
+        if not existing:
+            return False
+        target_name = existing.get("name", "")
+
         now = datetime.now().isoformat()
         cursor = await self._db.execute(
             """
@@ -91,14 +260,119 @@ class CharacterRepository:
             SET appearance_count = appearance_count + 1, last_seen_at = ?
             WHERE user_id = ? AND child_id = ? AND name = ?
             """,
-            (now, user_id, child_id, name),
+            (now, user_id, child_id, target_name),
         )
         await self._db.commit()
         return cursor.rowcount > 0
 
+    async def decrement_appearance(
+        self, user_id: str, child_id: str, name: str, amount: int = 1
+    ) -> int:
+        """Decrement appearance_count for a character name.
+
+        Matches name using normalized key and decrements across all variants.
+        Removes rows whose count reaches zero.
+
+        Returns:
+            int: Actual decremented amount.
+        """
+        if amount <= 0:
+            return 0
+
+        target = self._normalized_name_key(name)
+        if not target:
+            return 0
+
+        rows = await self._db.fetchall(
+            "SELECT name, appearance_count FROM characters WHERE user_id = ? AND child_id = ?",
+            (user_id, child_id),
+        )
+        matches = [
+            {
+                "name": row.get("name", ""),
+                "appearance_count": int(row.get("appearance_count") or 0),
+            }
+            for row in rows
+            if self._normalized_name_key(row.get("name", "")) == target
+        ]
+        if not matches:
+            return 0
+
+        # Decrement from the smallest buckets first so stale duplicates are cleaned up.
+        matches.sort(key=lambda item: item["appearance_count"])
+        remaining = amount
+        decremented = 0
+
+        for item in matches:
+            if remaining <= 0:
+                break
+            current = max(0, int(item.get("appearance_count") or 0))
+            if current <= 0:
+                continue
+
+            token = item["name"]
+            if current <= remaining:
+                await self._db.execute(
+                    "DELETE FROM characters WHERE user_id = ? AND child_id = ? AND name = ?",
+                    (user_id, child_id, token),
+                )
+                decremented += current
+                remaining -= current
+            else:
+                next_count = current - remaining
+                await self._db.execute(
+                    "UPDATE characters SET appearance_count = ? WHERE user_id = ? AND child_id = ? AND name = ?",
+                    (next_count, user_id, child_id, token),
+                )
+                decremented += remaining
+                remaining = 0
+
+        await self._db.commit()
+        return decremented
+
+    async def delete_character(self, user_id: str, child_id: str, name: str) -> bool:
+        """Delete one character by exact name.
+
+        Returns True when a row is deleted, False when not found.
+        """
+        target = self._normalized_name_key(name)
+        if not target:
+            return False
+
+        rows = await self._db.fetchall(
+            "SELECT name FROM characters WHERE user_id = ? AND child_id = ?",
+            (user_id, child_id),
+        )
+        names_to_delete = [
+            row["name"]
+            for row in rows
+            if self._normalized_name_key(row.get("name", "")) == target
+        ]
+        if not names_to_delete:
+            return False
+
+        placeholders = ",".join("?" for _ in names_to_delete)
+        cursor = await self._db.execute(
+            f"DELETE FROM characters WHERE user_id = ? AND child_id = ? AND name IN ({placeholders})",
+            (user_id, child_id, *names_to_delete),
+        )
+        await self._db.commit()
+        return cursor.rowcount > 0
+
+    async def delete_characters_for_child(self, user_id: str, child_id: str) -> int:
+        """Delete all characters for one child and return deleted row count."""
+        cursor = await self._db.execute(
+            "DELETE FROM characters WHERE user_id = ? AND child_id = ?",
+            (user_id, child_id),
+        )
+        await self._db.commit()
+        return int(cursor.rowcount or 0)
+
     def _deserialize(self, row: Dict[str, Any]) -> Dict[str, Any]:
         """Parse JSON fields from a raw DB row."""
         result = dict(row)
+        if isinstance(result.get("name"), str):
+            result["name"] = self._sanitize_name(result["name"])
         for field in ("visual_features", "traits"):
             val = result.get(field)
             if isinstance(val, str):

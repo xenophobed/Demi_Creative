@@ -1,17 +1,17 @@
-"""Contract tests for News-to-Kids TTS audio narration (issue #155).
+"""Contract tests for Kids Daily TTS audio narration (issue #155).
 
 Verifies:
 - _get_audio_config returns correct config per age group
-- convert_news_to_kids accepts enable_audio/voice params
+- generate_kids_daily_text accepts enable_audio/voice params
 - enable_audio=False returns audio_path: None
 - enable_audio=True in mock env returns result (audio_path may be None)
 """
 
 import pytest
 
-from backend.src.agents.news_to_kids_agent import (
+from backend.src.agents.kids_daily_agent import (
     _get_audio_config,
-    convert_news_to_kids,
+    generate_kids_daily_text,
 )
 
 
@@ -41,12 +41,12 @@ class TestGetAudioConfig:
         assert config == _get_audio_config("6-8")
 
 
-class TestConvertNewsToKidsAudioParams:
-    """Contract: convert_news_to_kids accepts and handles audio parameters."""
+class TestKidsDailyTextAudioParams:
+    """Contract: generate_kids_daily_text accepts and handles audio parameters."""
 
     @pytest.mark.asyncio
     async def test_audio_disabled_returns_none_audio_path(self):
-        result = await convert_news_to_kids(
+        result = await generate_kids_daily_text(
             news_text="Scientists discovered a new species of butterfly in the Amazon rainforest.",
             age_group="6-8",
             child_id="test-child-1",
@@ -59,7 +59,7 @@ class TestConvertNewsToKidsAudioParams:
 
     @pytest.mark.asyncio
     async def test_audio_enabled_returns_result_with_audio_path_key(self):
-        result = await convert_news_to_kids(
+        result = await generate_kids_daily_text(
             news_text="A new park opened in the city center with a big playground.",
             age_group="3-5",
             child_id="test-child-2",
@@ -73,7 +73,7 @@ class TestConvertNewsToKidsAudioParams:
 
     @pytest.mark.asyncio
     async def test_result_still_contains_required_fields(self):
-        result = await convert_news_to_kids(
+        result = await generate_kids_daily_text(
             news_text="The school robotics team won the national competition.",
             age_group="9-12",
             child_id="test-child-3",
@@ -90,7 +90,7 @@ class TestConvertNewsToKidsAudioParams:
     @pytest.mark.asyncio
     async def test_signature_accepts_voice_param(self):
         """Ensure the function signature accepts voice without TypeError."""
-        result = await convert_news_to_kids(
+        result = await generate_kids_daily_text(
             news_text="Weather forecast shows sunny skies all week.",
             age_group="6-8",
             child_id="test-child-4",
