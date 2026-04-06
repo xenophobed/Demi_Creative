@@ -682,6 +682,11 @@ class UserRegisterRequest(BaseModel):
         max_length=100,
         description="显示名称"
     )
+    referral_code: Optional[str] = Field(
+        None,
+        max_length=8,
+        description="Referral code from share link (optional)"
+    )
 
     @field_validator('email')
     @classmethod

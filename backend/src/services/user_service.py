@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 from typing import Optional, Tuple
 from dataclasses import dataclass
 
-from .database import user_repo, db_manager, UserData
+from .database import user_repo, referral_repo, db_manager, UserData
 
 
 @dataclass
@@ -170,7 +170,8 @@ class UserService:
         username: str,
         email: str,
         password: str,
-        display_name: Optional[str] = None
+        display_name: Optional[str] = None,
+        referral_code: Optional[str] = None
     ) -> AuthResult:
         """
         User registration
@@ -180,6 +181,7 @@ class UserService:
             email: Email address
             password: Password
             display_name: Display name
+            referral_code: Referral code from share link (optional)
 
         Returns:
             AuthResult: Registration result
@@ -204,14 +206,35 @@ class UserService:
         if await self._repo.check_email_exists(email):
             return AuthResult(success=False, error="Email already registered")
 
+        # Look up referrer by code (silently ignore invalid codes)
+        referred_by = None
+        referrer_user_id = None
+        if referral_code:
+            referrer = await self._repo.get_by_referral_code(referral_code)
+            if referrer:
+                referred_by = referral_code
+                referrer_user_id = referrer.user_id
+
         # Create user
         password_hash, _ = self._hash_password(password)
         user = await self._repo.create_user(
             username=username,
             email=email,
             password_hash=password_hash,
-            display_name=display_name
+            display_name=display_name,
+            referred_by=referred_by
         )
+
+        # Create referral record if valid referrer found
+        if referrer_user_id:
+            try:
+                await referral_repo.create_referral(
+                    referrer_user_id=referrer_user_id,
+                    referred_user_id=user.user_id,
+                    referral_code=referral_code
+                )
+            except Exception:
+                pass  # Silently ignore (e.g. duplicate referral)
 
         # Generate token
         token = await self._generate_token(user.user_id)

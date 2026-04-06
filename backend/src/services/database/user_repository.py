@@ -153,6 +153,14 @@ class UserRepository:
         )
         return self._row_to_user(row) if row else None
 
+    async def get_by_referral_code(self, referral_code: str) -> Optional[UserData]:
+        """Get a user by their referral code."""
+        row = await self._db.fetchone(
+            "SELECT * FROM users WHERE referral_code = ?",
+            (referral_code,)
+        )
+        return self._row_to_user(row) if row else None
+
     async def get_by_email(self, email: str) -> Optional[UserData]:
         """
         Get a user by email (case-insensitive).
