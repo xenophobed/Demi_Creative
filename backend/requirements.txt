@@ -16,6 +16,10 @@ elevenlabs>=1.0.0
 # Vector Database (Local)
 chromadb==1.4.1
 
+# Vector Database (Production — pgvector)
+sentence-transformers>=2.2.0
+pgvector>=0.2.0
+
 # Image Processing
 pillow==10.2.0
 

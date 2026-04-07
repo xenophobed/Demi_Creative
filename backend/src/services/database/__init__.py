@@ -21,6 +21,7 @@ from .subscription_repository import (
 )
 from .usage_repository import UsageRepository, usage_repo
 from .referral_repository import ReferralRepository, referral_repo
+from .vector_repository import VectorRepository, vector_repo
 
 __all__ = [
     "CursorResult",
@@ -51,4 +52,6 @@ __all__ = [
     "usage_repo",
     "ReferralRepository",
     "referral_repo",
+    "VectorRepository",
+    "vector_repo",
 ]

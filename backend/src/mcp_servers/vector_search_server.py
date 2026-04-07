@@ -27,6 +27,18 @@ except Exception:  # pragma: no cover - import fallback for test env
     def create_sdk_mcp_server(**kwargs):
         return kwargs
 
+# pgvector repository for production (#342)
+from ..services.database.connection import db_manager
+from ..services.database.vector_repository import VectorRepository, vector_repo
+
+
+def _use_pgvector() -> bool:
+    """Return True when the database backend is PostgreSQL (pgvector available)."""
+    try:
+        return db_manager.is_connected and db_manager.dialect == "postgresql"
+    except Exception:
+        return False
+
 
 # 初始化 ChromaDB 客户端
 def get_chroma_client():
@@ -89,6 +101,25 @@ async def search_similar_drawings(args: Dict[str, Any]) -> Dict[str, Any]:
     top_k = args.get("top_k", 5)
 
     try:
+        # --- pgvector path (production) ---
+        if _use_pgvector():
+            similar_drawings = await vector_repo.search_similar_drawings(
+                query_text=drawing_description,
+                child_id=child_id,
+                top_k=top_k,
+            )
+            return {
+                "content": [{
+                    "type": "text",
+                    "text": json.dumps({
+                        "similar_drawings": similar_drawings,
+                        "total_found": len(similar_drawings),
+                        "query": {"child_id": child_id, "top_k": top_k}
+                    }, ensure_ascii=False, indent=2)
+                }]
+            }
+
+        # --- ChromaDB path (local dev) ---
         # 获取集合（offload blocking ChromaDB call to thread）
         collection = await anyio.to_thread.run_sync(get_or_create_collection)
 
@@ -213,9 +244,6 @@ async def store_drawing_embedding(args: Dict[str, Any]) -> Dict[str, Any]:
             drawing_analysis = {}
 
     try:
-        # 获取集合（offload blocking ChromaDB call to thread）
-        collection = await anyio.to_thread.run_sync(get_or_create_collection)
-
         # 生成唯一 ID
         timestamp = datetime.now().isoformat()
         doc_id = hashlib.md5(
@@ -238,6 +266,29 @@ async def store_drawing_embedding(args: Dict[str, Any]) -> Dict[str, Any]:
                 ensure_ascii=False
             )
         }
+
+        # --- pgvector path (production) ---
+        if _use_pgvector():
+            await vector_repo.add_drawing(
+                doc_id=doc_id,
+                child_id=child_id,
+                document_text=drawing_description,
+                metadata=metadata,
+            )
+            return {
+                "content": [{
+                    "type": "text",
+                    "text": json.dumps({
+                        "success": True,
+                        "document_id": doc_id,
+                        "message": "画作已成功存储到向量数据库 (pgvector)"
+                    }, ensure_ascii=False, indent=2)
+                }]
+            }
+
+        # --- ChromaDB path (local dev) ---
+        # 获取集合（offload blocking ChromaDB call to thread）
+        collection = await anyio.to_thread.run_sync(get_or_create_collection)
 
         # 存储到 ChromaDB
         # ChromaDB 会自动将文本转换为向量
@@ -294,8 +345,6 @@ async def store_story_embedding(args: Dict[str, Any]) -> Dict[str, Any]:
         }
 
     try:
-        collection = await anyio.to_thread.run_sync(get_or_create_story_collection)
-
         doc_id = story_id or hashlib.md5(f"{child_id}_{datetime.now().isoformat()}".encode()).hexdigest()
 
         metadata = {
@@ -305,6 +354,24 @@ async def store_story_embedding(args: Dict[str, Any]) -> Dict[str, Any]:
             "age_group": args.get("age_group", ""),
             "created_at": datetime.now().isoformat(),
         }
+
+        # --- pgvector path (production) ---
+        if _use_pgvector():
+            await vector_repo.add_story_embedding(
+                doc_id=doc_id,
+                child_id=child_id,
+                document_text=story_text[:2000],
+                metadata=metadata,
+            )
+            return {
+                "content": [{
+                    "type": "text",
+                    "text": json.dumps({"success": True, "document_id": doc_id}, ensure_ascii=False)
+                }]
+            }
+
+        # --- ChromaDB path (local dev) ---
+        collection = await anyio.to_thread.run_sync(get_or_create_story_collection)
 
         await anyio.to_thread.run_sync(lambda: collection.upsert(
             ids=[doc_id],
@@ -350,6 +417,25 @@ async def search_similar_stories(args: Dict[str, Any]) -> Dict[str, Any]:
         }
 
     try:
+        # --- pgvector path (production) ---
+        if _use_pgvector():
+            similar_stories = await vector_repo.search_similar_stories(
+                query_text=story_description,
+                child_id=child_id,
+                top_k=top_k,
+            )
+            return {
+                "content": [{
+                    "type": "text",
+                    "text": json.dumps({
+                        "similar_stories": similar_stories,
+                        "total_found": len(similar_stories),
+                        "query": {"child_id": child_id, "top_k": top_k}
+                    }, ensure_ascii=False, indent=2)
+                }]
+            }
+
+        # --- ChromaDB path (local dev) ---
         collection = await anyio.to_thread.run_sync(get_or_create_story_collection)
 
         results = await anyio.to_thread.run_sync(lambda: collection.query(

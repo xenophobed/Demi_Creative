@@ -77,25 +77,33 @@ async def delete_preferences(
         user.user_id, child_id
     )
 
-    # Delete ChromaDB vectors for this child
+    # Delete vector data for this child (#342 — pgvector or ChromaDB)
     deleted_vectors = 0
     try:
-        import anyio
+        from ...services.database.connection import db_manager as _db_mgr
 
-        from ...mcp_servers.vector_search_server import get_or_create_collection
+        if _db_mgr.is_connected and _db_mgr.dialect == "postgresql":
+            # --- pgvector path (production) ---
+            from ...services.database.vector_repository import vector_repo
 
-        collection = await anyio.to_thread.run_sync(get_or_create_collection)
-        # Get all document IDs for this child
-        results = await anyio.to_thread.run_sync(
-            lambda: collection.get(where={"child_id": child_id})
-        )
-        if results and results.get("ids"):
-            doc_ids = results["ids"]
-            deleted_vectors = len(doc_ids)
-            await anyio.to_thread.run_sync(lambda: collection.delete(ids=doc_ids))
+            deleted_vectors = await vector_repo.delete_by_child(child_id)
+        else:
+            # --- ChromaDB path (local dev) ---
+            import anyio
+
+            from ...mcp_servers.vector_search_server import get_or_create_collection
+
+            collection = await anyio.to_thread.run_sync(get_or_create_collection)
+            results = await anyio.to_thread.run_sync(
+                lambda: collection.get(where={"child_id": child_id})
+            )
+            if results and results.get("ids"):
+                doc_ids = results["ids"]
+                deleted_vectors = len(doc_ids)
+                await anyio.to_thread.run_sync(lambda: collection.delete(ids=doc_ids))
     except Exception:
         logger.warning(
-            "Failed to delete ChromaDB vectors for child %s", child_id, exc_info=True
+            "Failed to delete vectors for child %s", child_id, exc_info=True
         )
 
     return {
