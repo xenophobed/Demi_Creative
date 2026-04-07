@@ -17,6 +17,7 @@ from ...paths import AUDIO_DIR
 from ...services.database import favorite_repo, session_repo, story_repo
 from ...services.database.artifact_repository import StoryArtifactLinkRepository
 from ...services.database.connection import db_manager
+from ...services.database.sql_compat import date_format_sql
 from ...services.user_service import UserData
 from ...utils.text import count_words
 from ..deps import get_current_user
@@ -352,20 +353,20 @@ async def get_library_stats(
     period, and returns only aggregate counts — no personal data.
     """
     if group_by == LibraryStatsGroupBy.MONTH:
-        # SQLite strftime: %Y-%m → "2026-03"
         fmt = "%Y-%m"
     else:
-        # ISO week: %Y-W%W → "2026-W10"
         fmt = "%Y-W%W"
+
+    period_expr = date_format_sql("created_at", fmt, db_manager.dialect)
 
     query = f"""
         SELECT period, SUM(cnt) AS count FROM (
-            SELECT strftime('{fmt}', created_at) AS period, COUNT(*) AS cnt
+            SELECT {period_expr} AS period, COUNT(*) AS cnt
             FROM stories
             WHERE user_id = ?
             GROUP BY period
             UNION ALL
-            SELECT strftime('{fmt}', created_at) AS period, COUNT(*) AS cnt
+            SELECT {period_expr} AS period, COUNT(*) AS cnt
             FROM sessions
             WHERE user_id = ?
             GROUP BY period
@@ -408,11 +409,12 @@ async def get_rich_stats(
     Uses existing DB data — no schema changes needed.
     """
     fmt = "%Y-%m" if group_by == LibraryStatsGroupBy.MONTH else "%Y-W%W"
+    period_expr = date_format_sql("created_at", fmt, db_manager.dialect)
 
     # 1) Stories: count, word_count sum, themes, story_type per period
     stories_query = f"""
         SELECT
-            strftime('{fmt}', created_at) AS period,
+            {period_expr} AS period,
             COUNT(*) AS cnt,
             COALESCE(SUM(word_count), 0) AS total_words,
             GROUP_CONCAT(themes, '||') AS all_themes,
@@ -427,7 +429,7 @@ async def get_rich_stats(
     # 2) Sessions: count, completed count per period
     sessions_query = f"""
         SELECT
-            strftime('{fmt}', created_at) AS period,
+            {period_expr} AS period,
             COUNT(*) AS total_sessions,
             SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS completed_sessions
         FROM sessions

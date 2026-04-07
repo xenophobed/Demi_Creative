@@ -14,6 +14,8 @@ import json
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from .sql_compat import column_exists, table_create_sql, translate_ddl
+
 if TYPE_CHECKING:
     from .connection import DatabaseManager
 
@@ -294,27 +296,30 @@ async def init_schema(db: "DatabaseManager") -> None:
     Args:
         db: Database manager instance
     """
-    # Enable foreign keys (important for SQLite)
-    await db.execute("PRAGMA foreign_keys = ON")
+    # Enable foreign keys (SQLite only — PostgreSQL enforces by default)
+    if db.dialect == "sqlite":
+        await db.execute("PRAGMA foreign_keys = ON")
+
+    d = db.dialect  # shorthand for translate_ddl calls
 
     # Create users table first (referenced by other tables)
-    await db.execute(USERS_TABLE)
+    await db.execute(translate_ddl(USERS_TABLE, d))
     for stmt in USERS_INDEXES.strip().split(";"):
         if stmt.strip():
             await db.execute(stmt)
 
     # Create stories table (basic structure)
-    await db.execute(STORIES_TABLE)
+    await db.execute(translate_ddl(STORIES_TABLE, d))
 
     # Create sessions table (basic structure)
-    await db.execute(SESSIONS_TABLE)
+    await db.execute(translate_ddl(SESSIONS_TABLE, d))
 
     # Create story segments table
-    await db.execute(STORY_SEGMENTS_TABLE)
+    await db.execute(translate_ddl(STORY_SEGMENTS_TABLE, d))
     await db.execute(STORY_SEGMENTS_INDEX)
 
     # Create tokens table
-    await db.execute(TOKENS_TABLE)
+    await db.execute(translate_ddl(TOKENS_TABLE, d))
     for stmt in TOKENS_INDEXES.strip().split(";"):
         if stmt.strip():
             try:
@@ -323,7 +328,7 @@ async def init_schema(db: "DatabaseManager") -> None:
                 pass
 
     # Create child preferences table
-    await db.execute(CHILD_PREFERENCES_TABLE)
+    await db.execute(translate_ddl(CHILD_PREFERENCES_TABLE, d))
     for stmt in CHILD_PREFERENCES_INDEXES.strip().split(";"):
         if stmt.strip():
             try:
@@ -332,7 +337,7 @@ async def init_schema(db: "DatabaseManager") -> None:
                 pass
 
     # Create topic subscriptions table (#94)
-    await db.execute(TOPIC_SUBSCRIPTIONS_TABLE)
+    await db.execute(translate_ddl(TOPIC_SUBSCRIPTIONS_TABLE, d))
     for stmt in TOPIC_SUBSCRIPTIONS_INDEXES.strip().split(";"):
         if stmt.strip():
             try:
@@ -341,7 +346,7 @@ async def init_schema(db: "DatabaseManager") -> None:
                 pass
 
     # Create characters table (#160)
-    await db.execute(CHARACTERS_TABLE)
+    await db.execute(translate_ddl(CHARACTERS_TABLE, d))
     for stmt in CHARACTERS_INDEXES.strip().split(";"):
         if stmt.strip():
             try:
@@ -350,7 +355,7 @@ async def init_schema(db: "DatabaseManager") -> None:
                 pass
 
     # Create cloned voices table (#150)
-    await db.execute(CLONED_VOICES_TABLE)
+    await db.execute(translate_ddl(CLONED_VOICES_TABLE, d))
     for stmt in CLONED_VOICES_INDEXES.strip().split(";"):
         if stmt.strip():
             try:
@@ -359,7 +364,7 @@ async def init_schema(db: "DatabaseManager") -> None:
                 pass
 
     # Create daily usage quota table (#314)
-    await db.execute(DAILY_USAGE_TABLE)
+    await db.execute(translate_ddl(DAILY_USAGE_TABLE, d))
     for stmt in DAILY_USAGE_INDEXES.strip().split(";"):
         if stmt.strip():
             try:
@@ -368,7 +373,7 @@ async def init_schema(db: "DatabaseManager") -> None:
                 pass
 
     # Create referrals table (#347)
-    await db.execute(REFERRALS_TABLE)
+    await db.execute(translate_ddl(REFERRALS_TABLE, d))
     for stmt in REFERRALS_INDEXES.strip().split(";"):
         if stmt.strip():
             try:
@@ -423,10 +428,7 @@ async def _migrate_add_user_id(db: "DatabaseManager") -> None:
     Uses ALTER TABLE which is safe for SQLite (adds column if not exists pattern).
     """
     # Check if user_id column exists in stories table
-    stories_info = await db.fetchall("PRAGMA table_info(stories)")
-    stories_columns = [col['name'] for col in stories_info]
-
-    if 'user_id' not in stories_columns:
+    if not await column_exists(db, "stories", "user_id"):
         print("Migrating stories table: adding user_id column...")
         await db.execute("ALTER TABLE stories ADD COLUMN user_id TEXT REFERENCES users(user_id) ON DELETE SET NULL")
         await db.execute("CREATE INDEX IF NOT EXISTS idx_stories_user_id ON stories(user_id)")
@@ -434,10 +436,7 @@ async def _migrate_add_user_id(db: "DatabaseManager") -> None:
         print("Stories table migration completed")
 
     # Check if user_id column exists in sessions table
-    sessions_info = await db.fetchall("PRAGMA table_info(sessions)")
-    sessions_columns = [col['name'] for col in sessions_info]
-
-    if 'user_id' not in sessions_columns:
+    if not await column_exists(db, "sessions", "user_id"):
         print("Migrating sessions table: adding user_id column...")
         await db.execute("ALTER TABLE sessions ADD COLUMN user_id TEXT REFERENCES users(user_id) ON DELETE SET NULL")
         await db.execute("CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id)")
@@ -447,20 +446,14 @@ async def _migrate_add_user_id(db: "DatabaseManager") -> None:
 
 async def _migrate_add_story_type(db: "DatabaseManager") -> None:
     """Migration: Add story_type column to stories table."""
-    stories_info = await db.fetchall("PRAGMA table_info(stories)")
-    stories_columns = [col['name'] for col in stories_info]
-
-    if 'story_type' not in stories_columns:
+    if not await column_exists(db, "stories", "story_type"):
         await db.execute("ALTER TABLE stories ADD COLUMN story_type TEXT DEFAULT 'image_to_story'")
         await db.commit()
 
 
 async def _migrate_add_user_role(db: "DatabaseManager") -> None:
     """Migration: Add role column to users table (#232)."""
-    users_info = await db.fetchall("PRAGMA table_info(users)")
-    users_columns = [col['name'] for col in users_info]
-
-    if 'role' not in users_columns:
+    if not await column_exists(db, "users", "role"):
         await db.execute("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'child'")
         await db.commit()
 
@@ -501,12 +494,9 @@ async def _migrate_characters_user_id(db: "DatabaseManager") -> None:
     # Check if the UNIQUE constraint includes user_id by inspecting the CREATE TABLE SQL.
     # We need to handle both cases: (1) table has no user_id column at all,
     # (2) user_id was added via ALTER TABLE but UNIQUE still only covers (child_id, name).
-    table_sql_rows = await db.fetchall(
-        "SELECT sql FROM sqlite_master WHERE type='table' AND name='characters'"
-    )
+    create_sql = await table_create_sql(db, "characters")
     needs_migration = True
-    if table_sql_rows:
-        create_sql = table_sql_rows[0]['sql'] or ""
+    if create_sql:
         # If the CREATE TABLE already has UNIQUE(user_id, child_id, name), no migration needed
         if 'user_id' in create_sql and 'UNIQUE(user_id' in create_sql.replace(' ', ''):
             needs_migration = False
@@ -514,7 +504,7 @@ async def _migrate_characters_user_id(db: "DatabaseManager") -> None:
     if needs_migration:
         print("Migrating characters table: adding user_id column (#288)...")
         # SQLite requires table recreation to change UNIQUE constraints
-        await db.execute(
+        await db.execute(translate_ddl(
             """
             CREATE TABLE characters_new (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -529,8 +519,9 @@ async def _migrate_characters_user_id(db: "DatabaseManager") -> None:
                 last_seen_at TEXT NOT NULL,
                 UNIQUE(user_id, child_id, name)
             )
-            """
-        )
+            """,
+            db.dialect,
+        ))
         await db.execute(
             """
             INSERT INTO characters_new
@@ -557,10 +548,7 @@ async def _migrate_add_styled_image_url(db: "DatabaseManager") -> None:
     Persists the styled/cover image URL so it can be returned in GET responses.
     Backfills from analysis.styled_image for existing stories.
     """
-    stories_info = await db.fetchall("PRAGMA table_info(stories)")
-    stories_columns = [col['name'] for col in stories_info]
-
-    if 'styled_image_url' not in stories_columns:
+    if not await column_exists(db, "stories", "styled_image_url"):
         print("Migrating stories table: adding styled_image_url column...")
         await db.execute("ALTER TABLE stories ADD COLUMN styled_image_url TEXT")
 
@@ -594,10 +582,7 @@ async def _migrate_add_referral_columns(db: "DatabaseManager") -> None:
     import secrets
     import string
 
-    users_info = await db.fetchall("PRAGMA table_info(users)")
-    users_columns = [col['name'] for col in users_info]
-
-    if 'membership_tier' not in users_columns:
+    if not await column_exists(db, "users", "membership_tier"):
         print("Migrating users table: adding referral columns (#347)...")
         await db.execute(
             "ALTER TABLE users ADD COLUMN membership_tier TEXT DEFAULT 'free'"

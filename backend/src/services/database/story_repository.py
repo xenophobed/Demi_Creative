@@ -9,6 +9,7 @@ from datetime import datetime
 from typing import Optional, List, Dict, Any
 
 from .connection import db_manager
+from .sql_compat import json_value
 
 
 class StoryRepository:
@@ -73,9 +74,9 @@ class StoryRepository:
     async def find_by_session_id(self, session_id: str) -> Optional[Dict[str, Any]]:
         """Find a story saved from a specific interactive session."""
         row = await self._db.fetchone(
-            """SELECT * FROM stories
+            f"""SELECT * FROM stories
                WHERE story_type = 'interactive'
-                 AND json_extract(analysis, '$.session_id') = ?
+                 AND {json_value('analysis', 'session_id', self._db.dialect)} = ?
                ORDER BY created_at DESC
                LIMIT 1""",
             (session_id,),
@@ -271,12 +272,12 @@ class StoryRepository:
         Uses JSON analysis field to identify source = 'on_demand'.
         """
         row = await self._db.fetchone(
-            """
+            f"""
             SELECT COUNT(*) as count FROM stories
             WHERE child_id = ?
               AND story_type IN ('kids_daily', 'morning_show')
               AND created_at > ?
-              AND json_extract(analysis, '$.source') = 'on_demand'
+              AND {json_value('analysis', 'source', self._db.dialect)} = 'on_demand'
             """,
             (child_id, since_iso),
         )
@@ -288,12 +289,12 @@ class StoryRepository:
         Used to compute retry_after for rate limiting.
         """
         row = await self._db.fetchone(
-            """
+            f"""
             SELECT created_at FROM stories
             WHERE child_id = ?
               AND story_type IN ('kids_daily', 'morning_show')
               AND created_at > ?
-              AND json_extract(analysis, '$.source') = 'on_demand'
+              AND {json_value('analysis', 'source', self._db.dialect)} = 'on_demand'
             ORDER BY created_at ASC
             LIMIT 1
             """,

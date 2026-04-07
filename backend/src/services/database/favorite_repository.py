@@ -8,6 +8,7 @@ from datetime import datetime
 from typing import Optional, List, Dict, Any, Set
 
 from .connection import db_manager
+from .sql_compat import insert_or_ignore
 
 
 class FavoriteRepository:
@@ -30,10 +31,11 @@ class FavoriteRepository:
         """
         now = datetime.now().isoformat()
         await self._db.execute(
-            """
-            INSERT OR IGNORE INTO favorites (user_id, item_type, item_id, created_at)
-            VALUES (?, ?, ?, ?)
-            """,
+            insert_or_ignore(
+                "favorites",
+                ["user_id", "item_type", "item_id", "created_at"],
+                self._db.dialect,
+            ),
             (user_id, item_type, item_id, now)
         )
         await self._db.commit()
