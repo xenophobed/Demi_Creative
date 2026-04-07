@@ -301,6 +301,8 @@ async def _transform_art_style_tool(args: Dict[str, Any]) -> Dict[str, Any]:
             )
 
         # Save output image
+        # TODO: migrate to storage adapter (#343) — currently writes to local
+        # disk only; Supabase upload should happen after the file is saved.
         styled_dir = STYLED_DIR
         styled_dir.mkdir(parents=True, exist_ok=True)
         output_filename = f"{session_id}_{theme}.jpg"

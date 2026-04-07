@@ -36,6 +36,9 @@ asyncpg>=0.29.0
 # Auth (Supabase JWT validation)
 PyJWT[crypto]>=2.8.0
 
+# Supabase Storage (#343)
+supabase>=2.0.0
+
 # Utilities
 pyyaml==6.0.1
 
