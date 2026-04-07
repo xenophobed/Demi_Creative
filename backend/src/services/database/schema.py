@@ -417,6 +417,10 @@ async def init_schema(db: "DatabaseManager") -> None:
     from .schema_favorites import init_favorites_schema
     await init_favorites_schema(db)
 
+    # Initialize pgvector schema (#342) — only on PostgreSQL
+    from .schema_vectors import init_vector_schema
+    await init_vector_schema(db)
+
     print("Database schema initialized")
 
 
