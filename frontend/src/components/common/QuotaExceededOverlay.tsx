@@ -52,16 +52,16 @@ export default function QuotaExceededOverlay({ show, message, onDismiss, referra
             {referralCode && membershipTier === 'plus' ? (
               <div className="mb-4 px-4 py-3 rounded-2xl bg-gradient-to-r from-amber-100 to-yellow-100 border border-amber-200">
                 <p className="text-sm font-semibold text-amber-800">
-                  {"\u4f60\u5df2\u662f Plus \u4f1a\u5458\uff01"}
+                  You're a Plus member!
                 </p>
               </div>
             ) : referralCode ? (
               <div className="mb-4 px-4 py-3 rounded-2xl bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-200 space-y-2">
                 <p className="text-sm font-semibold text-purple-800">
-                  {"\u60f3\u8981\u66f4\u591a\uff1f\u5206\u4eab\u7ed9\u670b\u53cb\uff01"}
+                  Want more? Share with friends!
                 </p>
                 <p className="text-xs text-purple-600">
-                  {"\u6bcf\u9080\u8bf710\u4f4d\u670b\u53cb\u6ce8\u518c\uff0c\u83b7\u5f973\u500d\u6bcf\u65e5\u6b21\u6570"}
+                  Invite 10 friends to sign up and get 3x daily uses
                 </p>
                 <div className="flex items-center gap-2">
                   <input
@@ -78,7 +78,7 @@ export default function QuotaExceededOverlay({ show, message, onDismiss, referra
                     }}
                     className="px-3 py-1.5 text-xs font-medium rounded-lg bg-purple-500 text-white hover:bg-purple-600 transition-colors whitespace-nowrap"
                   >
-                    {copied ? "\u5df2\u590d\u5236" : "\u590d\u5236"}
+                    {copied ? "Copied!" : "Copy"}
                   </button>
                 </div>
               </div>

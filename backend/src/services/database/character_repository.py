@@ -224,6 +224,111 @@ class CharacterRepository:
             reverse=True,
         )
 
+    async def _get_main_story_counts(
+        self, user_id: str, child_id: str
+    ) -> Dict[str, int]:
+        """Count how many stories each character appears as the first character.
+
+        We treat the first character in each story's `characters` list as the
+        story protagonist (main character) for gallery grouping.
+        """
+        rows = await self._db.fetchall(
+            """
+            SELECT characters
+            FROM stories
+            WHERE user_id = ? AND child_id = ?
+            ORDER BY created_at DESC
+            """,
+            (user_id, child_id),
+        )
+
+        counts: Dict[str, int] = {}
+        for row in rows:
+            raw = row.get("characters")
+            if not raw:
+                continue
+
+            try:
+                parsed = json.loads(raw) if isinstance(raw, str) else raw
+            except (TypeError, json.JSONDecodeError):
+                continue
+            if not isinstance(parsed, list):
+                continue
+
+            lead_name = ""
+            for item in parsed:
+                candidate = ""
+                if isinstance(item, dict):
+                    candidate = (
+                        item.get("character_name")
+                        or item.get("name")
+                        or item.get("characterName")
+                        or ""
+                    )
+                elif isinstance(item, str):
+                    candidate = item
+
+                token = self._sanitize_name(str(candidate or ""))
+                if token:
+                    lead_name = token
+                    break
+
+            if not lead_name:
+                continue
+
+            key = self._normalized_name_key(lead_name)
+            if not key:
+                continue
+            counts[key] = counts.get(key, 0) + 1
+
+        return counts
+
+    async def get_characters_grouped(
+        self, user_id: str, child_id: str
+    ) -> Dict[str, List[Dict[str, Any]]]:
+        """Return character gallery split into main/supporting groups."""
+        characters = await self.get_characters(user_id, child_id)
+        main_story_counts = await self._get_main_story_counts(user_id, child_id)
+
+        main_characters: List[Dict[str, Any]] = []
+        other_characters: List[Dict[str, Any]] = []
+
+        for item in characters:
+            entry = dict(item)
+            key = self._normalized_name_key(entry.get("name", ""))
+            main_count = int(main_story_counts.get(key, 0)) if key else 0
+            entry["main_story_count"] = main_count
+            entry["character_role"] = "main" if main_count > 0 else "other"
+
+            if main_count > 0:
+                main_characters.append(entry)
+            else:
+                other_characters.append(entry)
+
+        main_characters.sort(
+            key=lambda c: (
+                int(c.get("main_story_count", 0)),
+                int(c.get("appearance_count", 0)),
+                c.get("last_seen_at", ""),
+            ),
+            reverse=True,
+        )
+        other_characters.sort(
+            key=lambda c: (
+                int(c.get("appearance_count", 0)),
+                c.get("last_seen_at", ""),
+            ),
+            reverse=True,
+        )
+
+        # Keep backward compatibility for existing consumers.
+        all_characters = main_characters + other_characters
+        return {
+            "characters": all_characters,
+            "main_characters": main_characters,
+            "other_characters": other_characters,
+        }
+
     async def get_character(
         self, user_id: str, child_id: str, name: str
     ) -> Optional[Dict[str, Any]]:

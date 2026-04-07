@@ -203,7 +203,7 @@ def _local_style_result(
         "session_id": str,
     },
 )
-async def transform_art_style(args: Dict[str, Any]) -> Dict[str, Any]:
+async def _transform_art_style_tool(args: Dict[str, Any]) -> Dict[str, Any]:
     """
     Transform a children's drawing into a specified art style.
 
@@ -572,9 +572,16 @@ async def validate_and_fallback(
         }
 
 
+# Expose a directly callable async function for in-process use (tests/routes),
+# while still preserving the MCP tool object for agent tool registration.
+transform_art_style = getattr(
+    _transform_art_style_tool, "handler", _transform_art_style_tool
+)
+
+
 # Create MCP Server
 image_style_server = create_sdk_mcp_server(
-    name="image-style", version="1.0.0", tools=[transform_art_style]
+    name="image-style", version="1.0.0", tools=[_transform_art_style_tool]
 )
 
 
