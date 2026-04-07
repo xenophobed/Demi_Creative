@@ -314,21 +314,24 @@ async def health_check():
 
 
 # ============================================================================
-# Static Files (Audio, Uploads)
+# Static Files (Audio, Uploads) — local dev only
 # ============================================================================
 
-# Ensure directories exist
-AUDIO_DIR.mkdir(parents=True, exist_ok=True)
-UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-VIDEO_DIR.mkdir(parents=True, exist_ok=True)
-VIDEO_JOBS_DIR.mkdir(parents=True, exist_ok=True)
-STYLED_DIR.mkdir(parents=True, exist_ok=True)
+# Only mount local StaticFiles when not using Supabase Storage (#343).
+# In production (STORAGE_BACKEND=supabase) files are served from the CDN.
+if os.getenv("STORAGE_BACKEND", "local").lower() != "supabase":
+    # Ensure directories exist
+    AUDIO_DIR.mkdir(parents=True, exist_ok=True)
+    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    VIDEO_DIR.mkdir(parents=True, exist_ok=True)
+    VIDEO_JOBS_DIR.mkdir(parents=True, exist_ok=True)
+    STYLED_DIR.mkdir(parents=True, exist_ok=True)
 
-# Scoped static file mounts (blocks access to DB files, sessions, vectors, video_jobs)
-app.mount("/data/audio", StaticFiles(directory=str(AUDIO_DIR)), name="audio")
-app.mount("/data/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
-app.mount("/data/videos", StaticFiles(directory=str(VIDEO_DIR)), name="videos")
-app.mount("/data/styled", StaticFiles(directory=str(STYLED_DIR)), name="styled")
+    # Scoped static file mounts (blocks access to DB files, sessions, vectors, video_jobs)
+    app.mount("/data/audio", StaticFiles(directory=str(AUDIO_DIR)), name="audio")
+    app.mount("/data/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
+    app.mount("/data/videos", StaticFiles(directory=str(VIDEO_DIR)), name="videos")
+    app.mount("/data/styled", StaticFiles(directory=str(STYLED_DIR)), name="styled")
 
 
 # ============================================================================

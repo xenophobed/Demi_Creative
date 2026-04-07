@@ -291,6 +291,7 @@ router = APIRouter(prefix="/api/v1", tags=["Image to Story"])
 # Configuration
 # ============================================================================
 from ...paths import UPLOAD_DIR
+from ...services.storage_adapter import storage
 from ...utils.text import count_words
 
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
@@ -396,8 +397,17 @@ async def save_upload_file(file: UploadFile, child_id: str) -> Path:
             detail="文件大小超过限制",
         )
 
+    # Use storage adapter (#343) — writes to local disk or Supabase Storage.
+    # We still write locally so that downstream code (agent vision analysis)
+    # can read the file by path.  The adapter additionally handles remote
+    # upload when STORAGE_BACKEND=supabase.
     with open(file_path, "wb") as f:
         f.write(content)
+
+    # Upload via storage adapter for URL generation / CDN replication.
+    content_type = file.content_type or ""
+    bucket_path = f"{child_id}/{unique_filename}"
+    await storage.upload("uploads", bucket_path, content, content_type)
 
     return file_path
 
