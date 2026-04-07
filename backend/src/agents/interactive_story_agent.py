@@ -242,6 +242,7 @@ def _build_opening_prompt(
     preference_context: str = "",
     story_memory_section: str = "",
     dedup_nudge: str = "",
+    character_memory_section: str = "",
 ) -> str:
     """
     Build the full prompt for interactive story opening generation.
@@ -274,6 +275,10 @@ def _build_opening_prompt(
     # Inject cross-story memory (#165)
     if story_memory_section:
         prompt += f"\n{story_memory_section}\n"
+
+    # Inject deterministic character memory (#365)
+    if character_memory_section:
+        prompt += f"\n{character_memory_section}\n"
 
     # Inject dedup variation nudge (#290)
     if dedup_nudge:
@@ -326,6 +331,7 @@ def _build_next_segment_prompt(
     config: Dict[str, Any],
     choice_history_context: str = "",
     opening_hook: str = "",
+    continuity_anchors: str = "",
 ) -> str:
     """Build prompt for generating the next story segment."""
     return f"""你是一位专业的儿童故事作家，正在继续一个互动故事。
@@ -347,6 +353,9 @@ def _build_next_segment_prompt(
 **开场关键线索（结局必须回扣）**：
 {opening_hook if opening_hook else "（无）"}
 
+**结局连续性锚点（结局必须引用至少 2 个）**：
+{continuity_anchors if continuity_anchors else "（无，可从上文事件与选择中提炼）"}
+
 **用户的选择**：
 选择ID: {choice_id}
 选择内容: {chosen_option or "继续故事"}
@@ -362,7 +371,7 @@ def _build_next_segment_prompt(
 1. 根据用户的选择自然延续故事
 2. 保持故事的连贯性和吸引力
 3. {
-        "这是结局段落，请给出一个温馨、积极、完整的结局：必须明确回应开场线索，并回扣至少两个关键选择，让结尾和前文形成闭环"
+        "这是结局段落，请给出一个温馨、积极、完整的结局：必须明确回应开场线索，并且原样引用上面“结局连续性锚点”中至少2个词组，不得引入全新主线任务，让结尾和前文形成闭环"
         if is_final_segment
         else "继续发展情节，提供 2-3 个新选项"
     }
@@ -524,16 +533,213 @@ def _extract_opening_hook(segments: List[Dict[str, Any]]) -> str:
     return hook[:36]
 
 
+def _extract_choice_history_steps(choice_history_context: str) -> List[str]:
+    """Extract selected choice texts from numbered history lines."""
+    history_lines = [
+        line.strip()
+        for line in str(choice_history_context or "").splitlines()
+        if line.strip() and line.strip()[0].isdigit()
+    ]
+    steps: List[str] = []
+    for line in history_lines:
+        if ". " in line:
+            steps.append(line.split(". ", 1)[1].strip())
+        else:
+            steps.append(line.strip())
+    return [step for step in steps if step]
+
+
+def _extract_salient_fragment(text: str, max_len: int = 14) -> str:
+    """Extract a concise phrase from a segment as a continuity anchor."""
+    content = str(text or "").strip()
+    if not content:
+        return ""
+    parts = [p.strip() for p in re.split(r"[，。！？!?；;：:]", content) if p.strip()]
+    for part in parts:
+        if 4 <= len(part) <= max_len:
+            return part
+    if parts:
+        part = parts[0]
+        return part[:max_len] if len(part) > max_len else part
+    return content[:max_len]
+
+
+def _extract_keywords(text: str, limit: int = 6) -> List[str]:
+    """Extract compact keywords from Chinese/English text."""
+    content = str(text or "")
+    if not content:
+        return []
+
+    stop_words = {
+        "我们",
+        "你们",
+        "他们",
+        "大家",
+        "小伙伴",
+        "小伙伴们",
+        "故事",
+        "冒险",
+        "最后",
+        "终于",
+        "然后",
+        "因为",
+        "所以",
+        "开始",
+        "继续",
+        "一起",
+        "这个",
+        "那个",
+        "这样",
+        "那里",
+        "这里",
+        "温暖",
+        "结局",
+        "成长",
+    }
+    en_stop_words = {
+        "the",
+        "and",
+        "with",
+        "that",
+        "this",
+        "from",
+        "then",
+        "they",
+        "them",
+        "story",
+        "ending",
+    }
+
+    tokens = re.findall(r"[\u4e00-\u9fff]{2,8}|[A-Za-z][A-Za-z0-9_-]{2,}", content)
+    keywords: List[str] = []
+    for token in tokens:
+        cleaned = token.strip()
+        if not cleaned:
+            continue
+        if cleaned in stop_words:
+            continue
+        if cleaned.lower() in en_stop_words:
+            continue
+        if cleaned not in keywords:
+            keywords.append(cleaned)
+        if len(keywords) >= limit:
+            break
+    return keywords
+
+
+def _build_continuity_anchors(
+    segments: List[Dict[str, Any]],
+    opening_hook: str,
+    chosen_option: Optional[str],
+    choice_history_context: str,
+    max_items: int = 6,
+) -> List[str]:
+    """Collect stable anchors from prior story so ending can stay on-topic."""
+    anchors: List[str] = []
+
+    def add_anchor(candidate: str) -> None:
+        item = str(candidate or "").strip()
+        if not item:
+            return
+        item = item[:20]
+        if item not in anchors:
+            anchors.append(item)
+
+    add_anchor(opening_hook)
+    add_anchor(chosen_option or "")
+
+    history_steps = _extract_choice_history_steps(choice_history_context)
+    for step in history_steps[-3:]:
+        add_anchor(step)
+
+    for seg in segments[-3:]:
+        add_anchor(_extract_salient_fragment(seg.get("text", "")))
+
+    keyword_sources: List[str] = []
+    if opening_hook:
+        keyword_sources.append(opening_hook)
+    if chosen_option:
+        keyword_sources.append(chosen_option)
+    keyword_sources.extend(history_steps[-3:])
+    for seg in segments[-2:]:
+        keyword_sources.append(str(seg.get("text", "")))
+
+    for source in keyword_sources:
+        for kw in _extract_keywords(source, limit=3):
+            add_anchor(kw)
+            if len(anchors) >= max_items:
+                return anchors[:max_items]
+
+    return anchors[:max_items]
+
+
+def _count_anchor_hits(text: str, anchors: List[str]) -> int:
+    """Count how many anchors appear in generated ending text."""
+    content = str(text or "")
+    return sum(1 for anchor in anchors if anchor and anchor in content)
+
+
+def _rewrite_ending_with_anchors(
+    opening_hook: str,
+    chosen_option: Optional[str],
+    choice_history_context: str,
+    continuity_anchors: List[str],
+) -> str:
+    """Rewrite ending into a coherent close that references earlier context."""
+    anchors = [a for a in continuity_anchors if a][:3]
+    history_steps = _extract_choice_history_steps(choice_history_context)
+
+    hook_clause = (
+        f"从故事一开始“{opening_hook}”的悬念，到现在终于有了清楚的答案。"
+        if opening_hook
+        else "这趟旅程终于把前面埋下的问题都解决了。"
+    )
+    option_clause = (
+        f"当大家做出“{chosen_option}”这个关键选择后，"
+        if chosen_option
+        else "在最后一次关键决定后，"
+    )
+
+    if anchors:
+        anchor_clause = f"围绕{'、'.join(anchors)}，大家把一路上的挑战一步步化解。"
+    else:
+        anchor_clause = "大家把一路上的挑战一步步化解，并让故事线索完整收束。"
+
+    history_clause = ""
+    if history_steps:
+        recent = "、".join(history_steps[-2:])
+        history_clause = f"回看之前的选择（{recent}），每一步都把故事推向了同一个方向。"
+
+    return (
+        f"{hook_clause}{option_clause}{anchor_clause}"
+        f"{history_clause}最后，伙伴们带着新的勇气与合作精神回到日常生活，故事圆满结束。"
+    )
+
+
 def _ensure_ending_coherence(
     ending_text: str,
     opening_hook: str,
     chosen_option: Optional[str],
     choice_history_context: str,
+    continuity_anchors: Optional[List[str]] = None,
 ) -> str:
     """Ensure final segment explicitly connects to opening and recent choices."""
     text = str(ending_text or "").strip()
     if not text:
         text = "这次冒险终于迎来了温暖的结局。"
+
+    anchors = [a.strip() for a in (continuity_anchors or []) if str(a).strip()]
+    required_hits = 2 if len(anchors) >= 2 else len(anchors)
+    anchor_hits = _count_anchor_hits(text, anchors)
+
+    # If ending drifts away from prior context, rewrite to force alignment.
+    if required_hits and anchor_hits < required_hits:
+        text = _rewrite_ending_with_anchors(
+            opening_hook=opening_hook,
+            chosen_option=chosen_option,
+            choice_history_context=choice_history_context,
+            continuity_anchors=anchors,
+        )
 
     additions: List[str] = []
     if opening_hook and opening_hook not in text:
@@ -551,19 +757,9 @@ def _ensure_ending_coherence(
     if not any(k in text for k in ["最后", "终于", "结局", "回到", "学会", "从此"]):
         additions.append("最后，大家带着新的勇气与智慧回到日常生活，故事也圆满结束。")
 
-    history_lines = [
-        line.strip()
-        for line in choice_history_context.splitlines()
-        if line.strip() and line.strip()[0].isdigit()
-    ]
-    if history_lines:
-        last_steps = []
-        for line in history_lines[-2:]:
-            if ". " in line:
-                last_steps.append(line.split(". ", 1)[1])
-            else:
-                last_steps.append(line)
-        summary = "；".join(last_steps)
+    history_steps = _extract_choice_history_steps(choice_history_context)
+    if history_steps:
+        summary = "；".join(history_steps[-2:])
         if summary and summary not in text:
             additions.append(f"一路上的关键选择（{summary}）在这一刻都得到了回应。")
 
@@ -1100,6 +1296,12 @@ async def generate_next_segment_stream(
 
     choice_history_context = _build_choice_history_context(segments, choice_history)
     opening_hook = _extract_opening_hook(segments)
+    continuity_anchors = _build_continuity_anchors(
+        segments=segments,
+        opening_hook=opening_hook,
+        chosen_option=chosen_option,
+        choice_history_context=choice_history_context,
+    )
 
     prompt = _build_next_segment_prompt(
         story_title=story_title,
@@ -1115,6 +1317,7 @@ async def generate_next_segment_stream(
         config=config,
         choice_history_context=choice_history_context,
         opening_hook=opening_hook,
+        continuity_anchors="、".join(continuity_anchors),
     )
 
     # Determine if we should generate audio based on age_group audio_mode
@@ -1272,6 +1475,7 @@ async def generate_next_segment_stream(
                 opening_hook=opening_hook,
                 chosen_option=chosen_option,
                 choice_history_context=choice_history_context,
+                continuity_anchors=continuity_anchors,
             )
 
     if is_final_segment and "educational_summary" not in result_data:
@@ -1352,6 +1556,12 @@ async def generate_next_segment(
 
     choice_history_context = _build_choice_history_context(segments, choice_history)
     opening_hook = _extract_opening_hook(segments)
+    continuity_anchors = _build_continuity_anchors(
+        segments=segments,
+        opening_hook=opening_hook,
+        chosen_option=chosen_option,
+        choice_history_context=choice_history_context,
+    )
 
     prompt = _build_next_segment_prompt(
         story_title=story_title,
@@ -1367,6 +1577,7 @@ async def generate_next_segment(
         config=config,
         choice_history_context=choice_history_context,
         opening_hook=opening_hook,
+        continuity_anchors="、".join(continuity_anchors),
     )
 
     # Determine if we should generate audio based on age_group audio_mode
@@ -1459,6 +1670,7 @@ async def generate_next_segment(
                 opening_hook=opening_hook,
                 chosen_option=chosen_option,
                 choice_history_context=choice_history_context,
+                continuity_anchors=continuity_anchors,
             )
 
     # Add audio path to result if available

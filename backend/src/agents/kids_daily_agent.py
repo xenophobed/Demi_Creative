@@ -17,6 +17,7 @@ from pydantic import BaseModel, ValidationError
 
 from ..api.models import DialogueLine, DialogueScript
 from ..mcp_servers import safety_server, tts_server, vector_server
+from ..services.database import character_repo
 from ..utils.model_config import get_claude_agent_model
 
 try:
@@ -908,7 +909,17 @@ async def generate_kids_daily_dialogue(
 
     source_text = _clean_source_text(news_text, news_url)
     topic = _headline_from_text(source_text)
+
+    # Resolve guest from recurring characters first (#365)
     guest_name = _default_guest(child_id)
+    if child_id:
+        try:
+            characters = await character_repo.get_characters("", child_id)
+            if characters:
+                guest_name = characters[0].get("name", guest_name)
+        except Exception:
+            pass  # Fall back to default guest
+
     used_mock = _should_use_mock()
     degraded_reason: Optional[str] = None
 
