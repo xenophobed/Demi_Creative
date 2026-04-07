@@ -12,8 +12,9 @@ import { StreamingVisualizer } from "@/components/streaming/StreamingVisualizer"
 import { PerspectiveContainer } from "@/components/depth/PerspectiveContainer";
 import { storyService } from "@/api/services/storyService";
 import useInteractiveStory from "@/hooks/useInteractiveStory";
-import QuotaExceededOverlay, { isQuotaError } from "@/components/common/QuotaExceededOverlay";
-import useInteractiveStoryStore from "@/store/useInteractiveStoryStore";
+import QuotaExceededOverlay, {
+  isQuotaError,
+} from "@/components/common/QuotaExceededOverlay";
 import useStreamVisualization from "@/hooks/useStreamVisualization";
 import useAuthStore from "@/store/useAuthStore";
 import useChildStore, { DEFAULT_INTERESTS } from "@/store/useChildStore";
@@ -96,26 +97,25 @@ function InteractiveStoryPage() {
     "idle" | "saving" | "saved" | "error"
   >("idle");
 
-  // Resume from URL ?session= param (e.g. from My Library card click)
-  // or detect persisted session for "Continue Your Story" prompt
-  const storeStatus = useInteractiveStoryStore((s) => s.status);
-  const storeTitle = useInteractiveStoryStore((s) => s.storyTitle);
-  const storeProgress = useInteractiveStoryStore((s) => s.progress);
-  const storeSessionId = useInteractiveStoryStore((s) => s.sessionId);
+  // Resume only when URL contains ?session=
   const [isResuming, setIsResuming] = useState(false);
-  const [hasPersistedSession, setHasPersistedSession] = useState(false);
-  const [sessionExpiredMsg, setSessionExpiredMsg] = useState<string | null>(null);
+  const [sessionExpiredMsg, setSessionExpiredMsg] = useState<string | null>(
+    null,
+  );
+  const sessionParam = searchParams.get("session");
 
   useEffect(() => {
-    const urlSessionId = searchParams.get("session");
-
-    // Case 1: URL has ?session= — resume from backend immediately
-    if (urlSessionId && urlSessionId !== sessionId) {
+    // Explicit resume path: /interactive?session=...
+    if (sessionParam) {
       let cancelled = false;
       setIsResuming(true);
-      resumeSession(urlSessionId)
+      setSessionExpiredMsg(null);
+      resumeSession(sessionParam)
         .catch(() => {
           reset();
+          if (!cancelled) {
+            setSessionExpiredMsg("该故事已不可用，请开始一个新故事。");
+          }
         })
         .finally(() => {
           if (!cancelled) setIsResuming(false);
@@ -125,53 +125,10 @@ function InteractiveStoryPage() {
       };
     }
 
-    // Case 2: No URL session but store has a persisted playing session
-    // Validate it's still active, then show "Continue" prompt
-    if (!urlSessionId && storeSessionId && storeStatus === "playing") {
-      let cancelled = false;
-      storyService
-        .getSessionStatus(storeSessionId)
-        .then((res) => {
-          if (cancelled) return;
-          if (res.status === "active") {
-            setHasPersistedSession(true);
-          } else {
-            reset();
-            setSessionExpiredMsg("上次的故事已经结束了，来开始一个新冒险吧！");
-          }
-        })
-        .catch(() => {
-          if (!cancelled) {
-            reset();
-            setSessionExpiredMsg("上次的故事已经结束了，来开始一个新冒险吧！");
-          }
-        });
-      return () => {
-        cancelled = true;
-      };
-    }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Handle "Continue" button click
-  const handleContinueStory = async () => {
-    if (!storeSessionId) return;
-    setIsResuming(true);
-    setHasPersistedSession(false);
-    try {
-      await resumeSession(storeSessionId);
-    } catch {
-      reset();
-      setSessionExpiredMsg("上次的故事已经结束了，来开始一个新冒险吧！");
-    } finally {
-      setIsResuming(false);
-    }
-  };
-
-  // Handle "Start New" — discard persisted session
-  const handleStartNew = () => {
-    setHasPersistedSession(false);
+    // No session param: always start from clean setup state.
     reset();
-  };
+    setSessionExpiredMsg(null);
+  }, [sessionParam]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Track segment changes for reveal animation
   const [isRevealing, setIsRevealing] = useState(false);
@@ -264,7 +221,6 @@ function InteractiveStoryPage() {
     setSelectedAge(null);
     setSelectedInterests([]);
     setTheme("");
-    setHasPersistedSession(false);
     setSessionExpiredMsg(null);
   };
 
@@ -357,7 +313,7 @@ function InteractiveStoryPage() {
       {/* Quota exceeded overlay */}
       <QuotaExceededOverlay
         show={isQuotaError(error) && !quotaDismissed}
-        message={error ?? ''}
+        message={error ?? ""}
         onDismiss={() => setQuotaDismissed(true)}
       />
 
@@ -390,50 +346,6 @@ function InteractiveStoryPage() {
               animate={{ opacity: 1, y: 0 }}
             >
               <span className="text-lg mr-1">🌅</span> {sessionExpiredMsg}
-            </motion.div>
-          )}
-
-          {/* Continue Your Story prompt */}
-          {hasPersistedSession && storeTitle && (
-            <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-            >
-              <Card variant="colorful" colorScheme="primary">
-                <div className="text-center space-y-3">
-                  <span className="text-3xl block">📖</span>
-                  <h3 className="text-lg font-bold text-gray-800">
-                    继续上次的故事？
-                  </h3>
-                  <p className="text-sm text-gray-600">
-                    <span className="font-medium">{storeTitle}</span>
-                    {storeProgress > 0 && (
-                      <span className="ml-2 text-primary">
-                        — 已完成 {Math.round(storeProgress * 100)}%
-                      </span>
-                    )}
-                  </p>
-                  <div className="flex gap-3 justify-center pt-1">
-                    <Button
-                      variant="primary"
-                      size="md"
-                      onClick={handleContinueStory}
-                      isLoading={isResuming}
-                      leftIcon={<span>▶️</span>}
-                    >
-                      Continue
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="md"
-                      onClick={handleStartNew}
-                      leftIcon={<span>✨</span>}
-                    >
-                      Start New
-                    </Button>
-                  </div>
-                </div>
-              </Card>
             </motion.div>
           )}
 
@@ -527,7 +439,11 @@ function InteractiveStoryPage() {
               maxLength={50}
             />
             <div className="mt-4">
-              <SuggestedThemes onSelect={(t) => setTheme(t)} />
+              <SuggestedThemes
+                mode="prompt"
+                limit={6}
+                onSelect={(t) => setTheme(t)}
+              />
             </div>
           </Card>
 

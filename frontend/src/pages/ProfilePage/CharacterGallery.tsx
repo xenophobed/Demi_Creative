@@ -5,6 +5,8 @@ import type { MemoryCharacter } from "@/types/api";
 
 interface CharacterGalleryProps {
   characters: MemoryCharacter[];
+  mainCharacters?: MemoryCharacter[];
+  otherCharacters?: MemoryCharacter[];
   isLoading: boolean;
   isEditMode?: boolean;
   onDeleteCharacter?: (name: string) => Promise<void> | void;
@@ -24,12 +26,83 @@ const CARD_COLORS = [
 
 function CharacterGallery({
   characters,
+  mainCharacters = [],
+  otherCharacters = [],
   isLoading,
   isEditMode = false,
   onDeleteCharacter,
   deletingCharacterName = null,
 }: CharacterGalleryProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const hasGrouped = mainCharacters.length > 0 || otherCharacters.length > 0;
+  const resolvedMainCharacters = hasGrouped
+    ? mainCharacters
+    : characters.filter(
+        (c) =>
+          Number(c.main_story_count || 0) > 0 || c.character_role === "main",
+      );
+  const resolvedOtherCharacters = hasGrouped
+    ? otherCharacters
+    : characters.filter(
+        (c) =>
+          !(Number(c.main_story_count || 0) > 0 || c.character_role === "main"),
+      );
+
+  const renderCharacterCards = (items: MemoryCharacter[], offset = 0) =>
+    items.map((character, index) => (
+      <motion.div
+        key={character.name}
+        className={`character-carousel-card relative rounded-xl border bg-gradient-to-br p-4 ${CARD_COLORS[(index + offset) % CARD_COLORS.length]}`}
+        initial={{ opacity: 0, scale: 0.9 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ delay: index * 0.05 }}
+        whileHover={{ scale: 1.03, y: -2 }}
+      >
+        {isEditMode && (
+          <button
+            type="button"
+            className="absolute top-2 left-2 h-6 w-6 rounded-full bg-white/90 text-gray-500 hover:text-red-500 border border-white/90 shadow-sm"
+            aria-label={`Delete ${character.name}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onDeleteCharacter?.(character.name);
+            }}
+            disabled={deletingCharacterName === character.name}
+          >
+            ×
+          </button>
+        )}
+
+        <span className="absolute top-2 right-2 bg-white/80 text-xs font-bold text-gray-600 rounded-full px-2 py-0.5 shadow-sm">
+          x{character.appearance_count}
+        </span>
+
+        <h3
+          className={`font-bold text-gray-800 text-sm truncate ${isEditMode ? "pl-8 pr-8" : "pr-8"}`}
+        >
+          {character.name}
+        </h3>
+
+        {character.description && (
+          <p className="text-gray-600 text-xs mt-1 line-clamp-2">
+            {character.description}
+          </p>
+        )}
+
+        {character.traits && character.traits.length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-2">
+            {character.traits.slice(0, 3).map((trait) => (
+              <span
+                key={trait}
+                className="bg-white/60 text-gray-600 text-[10px] rounded-full px-2 py-0.5"
+              >
+                {trait}
+              </span>
+            ))}
+          </div>
+        )}
+      </motion.div>
+    ));
 
   if (isLoading) {
     return (
@@ -66,62 +139,35 @@ function CharacterGallery({
           </p>
         </div>
       ) : (
-        <div ref={scrollRef} className="character-carousel">
-          {characters.map((character, index) => (
-            <motion.div
-              key={character.name}
-              className={`character-carousel-card relative rounded-xl border bg-gradient-to-br p-4 ${CARD_COLORS[index % CARD_COLORS.length]}`}
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: index * 0.05 }}
-              whileHover={{ scale: 1.03, y: -2 }}
-            >
-              {isEditMode && (
-                <button
-                  type="button"
-                  className="absolute top-2 left-2 h-6 w-6 rounded-full bg-white/90 text-gray-500 hover:text-red-500 border border-white/90 shadow-sm"
-                  aria-label={`Delete ${character.name}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDeleteCharacter?.(character.name);
-                  }}
-                  disabled={deletingCharacterName === character.name}
-                >
-                  ×
-                </button>
-              )}
+        <div className="space-y-4">
+          <div>
+            <p className="text-sm font-semibold text-gray-700 mb-2">
+              🌟 Main Characters ({resolvedMainCharacters.length})
+            </p>
+            {resolvedMainCharacters.length > 0 ? (
+              <div ref={scrollRef} className="character-carousel">
+                {renderCharacterCards(resolvedMainCharacters, 0)}
+              </div>
+            ) : (
+              <p className="text-xs text-gray-500">No main characters yet.</p>
+            )}
+          </div>
 
-              {/* Appearance count badge */}
-              <span className="absolute top-2 right-2 bg-white/80 text-xs font-bold text-gray-600 rounded-full px-2 py-0.5 shadow-sm">
-                x{character.appearance_count}
-              </span>
-
-              <h3
-                className={`font-bold text-gray-800 text-sm truncate ${isEditMode ? "pl-8 pr-8" : "pr-8"}`}
-              >
-                {character.name}
-              </h3>
-
-              {character.description && (
-                <p className="text-gray-600 text-xs mt-1 line-clamp-2">
-                  {character.description}
-                </p>
-              )}
-
-              {character.traits && character.traits.length > 0 && (
-                <div className="flex flex-wrap gap-1 mt-2">
-                  {character.traits.slice(0, 3).map((trait) => (
-                    <span
-                      key={trait}
-                      className="bg-white/60 text-gray-600 text-[10px] rounded-full px-2 py-0.5"
-                    >
-                      {trait}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </motion.div>
-          ))}
+          <div>
+            <p className="text-sm font-semibold text-gray-700 mb-2">
+              👥 Other Characters ({resolvedOtherCharacters.length})
+            </p>
+            {resolvedOtherCharacters.length > 0 ? (
+              <div className="character-carousel">
+                {renderCharacterCards(
+                  resolvedOtherCharacters,
+                  resolvedMainCharacters.length,
+                )}
+              </div>
+            ) : (
+              <p className="text-xs text-gray-500">No other characters yet.</p>
+            )}
+          </div>
         </div>
       )}
     </Card>

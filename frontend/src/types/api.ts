@@ -352,6 +352,8 @@ export interface MemoryCharacter {
   visual_features: Record<string, unknown> | null;
   traits: string[] | null;
   appearance_count: number;
+  main_story_count?: number;
+  character_role?: "main" | "other";
   first_seen_at: string;
   last_seen_at: string;
 }
@@ -359,6 +361,8 @@ export interface MemoryCharacter {
 export interface MemoryCharactersResponse {
   child_id: string;
   characters: MemoryCharacter[];
+  main_characters?: MemoryCharacter[];
+  other_characters?: MemoryCharacter[];
 }
 
 export interface PreferenceProfile {

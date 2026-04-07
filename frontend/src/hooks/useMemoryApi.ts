@@ -81,6 +81,15 @@ function mergeCharacters(items: MemoryCharacter[]): MemoryCharacter[] {
       appearance_count:
         Number(existing.appearance_count || 0) +
         Number(item.appearance_count || 0),
+      main_story_count:
+        Number(existing.main_story_count || 0) +
+        Number(item.main_story_count || 0),
+      character_role:
+        Number(existing.main_story_count || 0) +
+          Number(item.main_story_count || 0) >
+        0
+          ? "main"
+          : "other",
       description:
         (item.description?.length || 0) > (existing.description?.length || 0)
           ? item.description
@@ -95,9 +104,38 @@ function mergeCharacters(items: MemoryCharacter[]): MemoryCharacter[] {
     });
   }
 
-  return Array.from(merged.values()).sort(
-    (a, b) => Number(b.appearance_count || 0) - Number(a.appearance_count || 0),
+  return Array.from(merged.values())
+    .map((c) => {
+      const role: MemoryCharacter["character_role"] =
+        Number(c.main_story_count || 0) > 0 ? "main" : "other";
+      return {
+        ...c,
+        character_role: role,
+      };
+    })
+    .sort(
+      (a, b) =>
+        Number(b.appearance_count || 0) - Number(a.appearance_count || 0),
+    );
+}
+
+function splitCharacterGroups(
+  allCharacters: MemoryCharacter[],
+  hintedMain: MemoryCharacter[],
+  hintedOther: MemoryCharacter[],
+): { main: MemoryCharacter[]; other: MemoryCharacter[] } {
+  if (hintedMain.length > 0 || hintedOther.length > 0) {
+    return { main: hintedMain, other: hintedOther };
+  }
+
+  const main = allCharacters.filter(
+    (c) => Number(c.main_story_count || 0) > 0 || c.character_role === "main",
   );
+  const other = allCharacters.filter(
+    (c) =>
+      !(Number(c.main_story_count || 0) > 0 || c.character_role === "main"),
+  );
+  return { main, other };
 }
 
 function profileScore(profile: PreferenceProfile | null): number {
@@ -185,9 +223,21 @@ export function useMemoryApi(childId: string | null) {
   const preferredCharacters = mergeCharacters(
     preferredCharactersData?.characters ?? [],
   );
+  const preferredMainHint = mergeCharacters(
+    preferredCharactersData?.main_characters ?? [],
+  );
+  const preferredOtherHint = mergeCharacters(
+    preferredCharactersData?.other_characters ?? [],
+  );
   const preferredPreferences = preferredPreferencesData?.profile ?? null;
   const fallbackCharacters = mergeCharacters(
     fallbackCharactersData?.characters ?? [],
+  );
+  const fallbackMainHint = mergeCharacters(
+    fallbackCharactersData?.main_characters ?? [],
+  );
+  const fallbackOtherHint = mergeCharacters(
+    fallbackCharactersData?.other_characters ?? [],
   );
   const fallbackPreferences = fallbackPreferencesData?.profile ?? null;
 
@@ -205,6 +255,17 @@ export function useMemoryApi(childId: string | null) {
   const activeCharacters = useFallbackData
     ? fallbackCharacters
     : preferredCharacters;
+  const groupedCharacters = useFallbackData
+    ? splitCharacterGroups(
+        fallbackCharacters,
+        fallbackMainHint,
+        fallbackOtherHint,
+      )
+    : splitCharacterGroups(
+        preferredCharacters,
+        preferredMainHint,
+        preferredOtherHint,
+      );
   const activePreferences = useFallbackData
     ? fallbackPreferences
     : preferredPreferences;
@@ -272,6 +333,8 @@ export function useMemoryApi(childId: string | null) {
   return {
     childId: activeChildId,
     characters: activeCharacters,
+    mainCharacters: groupedCharacters.main,
+    otherCharacters: groupedCharacters.other,
     preferences: activePreferences,
     isLoading,
     error: activeError || (!activeChildId ? resolvingChildError : null),

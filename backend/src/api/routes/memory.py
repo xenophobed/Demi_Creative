@@ -161,8 +161,13 @@ async def get_characters(
 ):
     """Return all characters for a child, sorted by appearance count."""
     child_id = _validate_child_id(child_id)
-    characters = await character_repo.get_characters(user.user_id, child_id)
-    return {"child_id": child_id, "characters": characters}
+    grouped = await character_repo.get_characters_grouped(user.user_id, child_id)
+    return {
+        "child_id": child_id,
+        "characters": grouped["characters"],
+        "main_characters": grouped["main_characters"],
+        "other_characters": grouped["other_characters"],
+    }
 
 
 @router.delete(
