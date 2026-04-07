@@ -18,6 +18,7 @@ from ..services.database import (
     user_repo,
 )
 from ..services.database.session_repository import SessionData
+from ..services.database.sql_compat import insert_or_ignore
 from ..services.supabase_auth import decode_supabase_token
 from ..services.user_service import UserData, user_service
 
@@ -68,12 +69,12 @@ async def get_current_user(authorization: Optional[str] = Header(None)) -> UserD
     if not authorization:
         if _allow_test_auth_bypass():
             await db_manager.execute(
-                """
-                INSERT OR IGNORE INTO users (
-                    user_id, username, email, password_hash, display_name,
-                    is_active, is_verified, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
+                insert_or_ignore(
+                    "users",
+                    ["user_id", "username", "email", "password_hash", "display_name",
+                     "is_active", "is_verified", "created_at", "updated_at"],
+                    db_manager.dialect,
+                ),
                 (
                     "test_user",
                     "test_user",
@@ -153,12 +154,12 @@ async def _get_or_create_supabase_user(claims) -> Optional[UserData]:
 
     now = datetime.now().isoformat()
     await db_manager.execute(
-        """
-        INSERT OR IGNORE INTO users (
-            user_id, username, email, password_hash, display_name,
-            is_active, is_verified, role, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
+        insert_or_ignore(
+            "users",
+            ["user_id", "username", "email", "password_hash", "display_name",
+             "is_active", "is_verified", "role", "created_at", "updated_at"],
+            db_manager.dialect,
+        ),
         (
             claims.sub,
             username,

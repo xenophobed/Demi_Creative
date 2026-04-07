@@ -17,6 +17,8 @@ Design Principles:
 - Unique constraints prevent duplicates (UNIQUE relations, one primary per role)
 """
 
+from .sql_compat import column_exists, get_table_columns, translate_ddl
+
 # ============================================================================
 # Artifact Tables
 # ============================================================================
@@ -219,8 +221,10 @@ async def init_artifact_schema(db: "DatabaseManager") -> None:
     Args:
         db: Database manager instance
     """
+    d = db.dialect
+
     # Create artifacts table
-    await db.execute(ARTIFACTS_TABLE)
+    await db.execute(translate_ddl(ARTIFACTS_TABLE, d))
     for stmt in ARTIFACTS_INDEXES.strip().split(";"):
         if stmt.strip():
             try:
@@ -229,7 +233,7 @@ async def init_artifact_schema(db: "DatabaseManager") -> None:
                 pass  # Index might already exist
 
     # Create artifact_relations table
-    await db.execute(ARTIFACT_RELATIONS_TABLE)
+    await db.execute(translate_ddl(ARTIFACT_RELATIONS_TABLE, d))
     for stmt in ARTIFACT_RELATIONS_INDEXES.strip().split(";"):
         if stmt.strip():
             try:
@@ -238,7 +242,7 @@ async def init_artifact_schema(db: "DatabaseManager") -> None:
                 pass
 
     # Create story_artifact_links table
-    await db.execute(STORY_ARTIFACT_LINKS_TABLE)
+    await db.execute(translate_ddl(STORY_ARTIFACT_LINKS_TABLE, d))
     for stmt in STORY_ARTIFACT_LINKS_INDEXES.strip().split(";"):
         if stmt.strip():
             try:
@@ -247,7 +251,7 @@ async def init_artifact_schema(db: "DatabaseManager") -> None:
                 pass
 
     # Create runs table
-    await db.execute(RUNS_TABLE)
+    await db.execute(translate_ddl(RUNS_TABLE, d))
     for stmt in RUNS_INDEXES.strip().split(";"):
         if stmt.strip():
             try:
@@ -256,7 +260,7 @@ async def init_artifact_schema(db: "DatabaseManager") -> None:
                 pass
 
     # Create run_artifact_links table (after runs table due to FK)
-    await db.execute(RUN_ARTIFACT_LINKS_TABLE)
+    await db.execute(translate_ddl(RUN_ARTIFACT_LINKS_TABLE, d))
     for stmt in RUN_ARTIFACT_LINKS_INDEXES.strip().split(";"):
         if stmt.strip():
             try:
@@ -265,7 +269,7 @@ async def init_artifact_schema(db: "DatabaseManager") -> None:
                 pass
 
     # Create agent_steps table
-    await db.execute(AGENT_STEPS_TABLE)
+    await db.execute(translate_ddl(AGENT_STEPS_TABLE, d))
     for stmt in AGENT_STEPS_INDEXES.strip().split(";"):
         if stmt.strip():
             try:
@@ -297,8 +301,7 @@ async def _migrate_add_artifact_columns_to_stories(db: "DatabaseManager") -> Non
     Safe for existing databases (ADD COLUMN IF NOT EXISTS pattern).
     """
     # Check existing columns
-    stories_info = await db.fetchall("PRAGMA table_info(stories)")
-    stories_columns = {col['name'] for col in stories_info}
+    stories_columns = set(await get_table_columns(db, "stories"))
 
     new_columns = [
         ("cover_artifact_id", "TEXT REFERENCES artifacts(artifact_id) ON DELETE SET NULL"),
@@ -373,8 +376,7 @@ async def _migrate_add_artifact_columns_v2(db: "DatabaseManager") -> None:
     Creates migration_status table for resume/retry tracking.
     """
     # Check existing columns on artifacts table
-    artifacts_info = await db.fetchall("PRAGMA table_info(artifacts)")
-    artifacts_columns = {col['name'] for col in artifacts_info}
+    artifacts_columns = set(await get_table_columns(db, "artifacts"))
 
     new_columns = [
         ("mime_type", "TEXT"),
@@ -404,7 +406,7 @@ async def _migrate_add_artifact_columns_v2(db: "DatabaseManager") -> None:
             pass  # Index might already exist
 
     # Create migration_status table
-    await db.execute(MIGRATION_STATUS_TABLE)
+    await db.execute(translate_ddl(MIGRATION_STATUS_TABLE, db.dialect))
     for stmt in MIGRATION_STATUS_INDEXES.strip().split(";"):
         if stmt.strip():
             try:

@@ -408,10 +408,16 @@ class SessionRepository:
         """添加故事段落"""
         await self._db.execute(
             """
-            INSERT OR REPLACE INTO story_segments (
+            INSERT INTO story_segments (
                 session_id, segment_id, text, audio_url, is_ending,
                 choices, created_at
             ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(session_id, segment_id) DO UPDATE SET
+                text = excluded.text,
+                audio_url = excluded.audio_url,
+                is_ending = excluded.is_ending,
+                choices = excluded.choices,
+                created_at = excluded.created_at
             """,
             (
                 session_id,

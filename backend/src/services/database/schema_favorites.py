@@ -7,6 +7,8 @@ Follows the same pattern as schema_artifacts.py.
 
 from typing import TYPE_CHECKING
 
+from .sql_compat import translate_ddl
+
 if TYPE_CHECKING:
     from .connection import DatabaseManager
 
@@ -46,7 +48,7 @@ async def init_favorites_schema(db: "DatabaseManager") -> None:
     Creates the favorites table and indexes.
     Safe to call multiple times (uses CREATE IF NOT EXISTS).
     """
-    await db.execute(FAVORITES_TABLE)
+    await db.execute(translate_ddl(FAVORITES_TABLE, db.dialect))
     for stmt in FAVORITES_INDEXES.strip().split(";"):
         if stmt.strip():
             try:
