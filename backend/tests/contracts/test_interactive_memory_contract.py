@@ -5,21 +5,23 @@ Tests for preference-aware generation (#72) and character continuity (#73).
 Validates prompt construction helpers and allowed-tools contracts.
 """
 
-import pytest
 from unittest.mock import AsyncMock, patch
 
-from backend.src.agents.interactive_story_agent import (
-    _fetch_preference_context,
-    _build_opening_prompt,
-    _build_next_segment_prompt,
-    _append_tts_instructions,
-    AGE_CONFIG,
-)
+import pytest
 
+from backend.src.agents.interactive_story_agent import (
+    AGE_CONFIG,
+    _append_tts_instructions,
+    _build_next_segment_prompt,
+    _build_opening_prompt,
+    _ensure_ending_coherence,
+    _fetch_preference_context,
+)
 
 # ============================================================================
 # Preference Context Builder
 # ============================================================================
+
 
 class TestPreferenceContextBuilder:
     """Contract: _fetch_preference_context returns formatted string or empty."""
@@ -101,6 +103,7 @@ class TestPreferenceContextBuilder:
 # Opening Prompt Contract
 # ============================================================================
 
+
 class TestOpeningPromptContract:
     """Contract: _build_opening_prompt includes required sections."""
 
@@ -150,6 +153,7 @@ class TestOpeningPromptContract:
 # ============================================================================
 # Next Segment Prompt Contract
 # ============================================================================
+
 
 class TestNextSegmentPromptContract:
     """Contract: _build_next_segment_prompt does NOT include memory features."""
@@ -210,10 +214,52 @@ class TestNextSegmentPromptContract:
         assert "educational_summary" in prompt
         assert "是" in prompt  # 是否为结局: 是
 
+    def test_ending_includes_continuity_anchor_constraints(self):
+        """Final prompt includes anchor-based continuity constraints."""
+        config = AGE_CONFIG["6-8"]
+        prompt = _build_next_segment_prompt(
+            story_title="风铃塔探险",
+            age_group="6-8",
+            interests=["解谜"],
+            theme="合作冒险",
+            segment_count=3,
+            total_segments=4,
+            is_final_segment=True,
+            story_context="段落 2: 大家在风铃塔前发现了缺失的钥匙齿轮。",
+            choice_id="choice_2_a",
+            chosen_option="先修好坏掉的星图钥匙",
+            config=config,
+            continuity_anchors="风铃塔、星图钥匙、萤火桥",
+        )
+        assert "结局连续性锚点" in prompt
+        assert "风铃塔、星图钥匙、萤火桥" in prompt
+        assert "至少2个词组" in prompt
+
+
+class TestEndingCoherenceRepair:
+    """Contract: ending repair keeps final paragraph aligned with context."""
+
+    def test_rewrites_drifted_ending_with_story_anchors(self):
+        repaired = _ensure_ending_coherence(
+            ending_text="他们突然去了外太空，开了一家冰淇淋店。",
+            opening_hook="风铃塔的门一到黄昏就会发光",
+            chosen_option="先修好坏掉的星图钥匙",
+            choice_history_context=(
+                "1. 跟着萤火虫去风铃塔\n2. 先修好坏掉的星图钥匙\n3. 和河狸一起搭桥过河"
+            ),
+            continuity_anchors=["风铃塔", "星图钥匙", "搭桥过河"],
+        )
+
+        assert "风铃塔" in repaired
+        assert "星图钥匙" in repaired
+        assert "搭桥过河" in repaired
+        assert "冰淇淋店" not in repaired
+
 
 # ============================================================================
 # Allowed Tools Contract
 # ============================================================================
+
 
 class TestAllowedToolsContract:
     """Contract: opening includes memory tools, next-segment does not."""
@@ -238,6 +284,7 @@ class TestAllowedToolsContract:
 # ============================================================================
 # TTS Instructions Helper
 # ============================================================================
+
 
 class TestTTSInstructionsContract:
     """Contract: _append_tts_instructions appends correct block."""
