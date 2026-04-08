@@ -5,6 +5,7 @@ interface DailyTaskState {
   // Persisted state
   claimHistory: string[]  // ISO date strings: ["2026-04-08", "2026-04-09"]
   totalStars: number
+  lastClaimTimestamp: number | null  // Date.now() when last star was claimed
 
   // Actions
   canClaimToday: () => boolean
@@ -42,6 +43,7 @@ const useDailyTaskStore = create<DailyTaskState>()(
     (set, get) => ({
       claimHistory: [],
       totalStars: 0,
+      lastClaimTimestamp: null,
 
       canClaimToday: () => {
         const today = getToday()
@@ -55,6 +57,7 @@ const useDailyTaskStore = create<DailyTaskState>()(
         set({
           claimHistory: [...claimHistory, today],
           totalStars: totalStars + 1,
+          lastClaimTimestamp: Date.now(),
         })
       },
 
@@ -100,6 +103,7 @@ const useDailyTaskStore = create<DailyTaskState>()(
       partialize: (state) => ({
         claimHistory: state.claimHistory,
         totalStars: state.totalStars,
+        lastClaimTimestamp: state.lastClaimTimestamp,
       }),
     }
   )

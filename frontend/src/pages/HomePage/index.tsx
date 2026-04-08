@@ -87,10 +87,39 @@ function HomePage() {
   // Daily task system
   const canClaim = useDailyTaskStore((s) => s.canClaimToday())
   const claimStar = useDailyTaskStore((s) => s.claimStar)
+  const lastClaimTimestamp = useDailyTaskStore((s) => s.lastClaimTimestamp)
   const piggyBankRef = useRef<StarPiggyBankHandle>(null)
   const newspaperRef = useRef<HTMLDivElement>(null)
   const piggyBankElRef = useRef<HTMLDivElement>(null)
   const [starFlying, setStarFlying] = useState(false)
+
+  // Hide newspaper 5 minutes after claiming today
+  const HIDE_AFTER_MS = 5 * 60 * 1000
+  const [newspaperVisible, setNewspaperVisible] = useState(true)
+
+  useEffect(() => {
+    if (canClaim) {
+      // New day — show newspaper
+      setNewspaperVisible(true)
+      return
+    }
+
+    if (!lastClaimTimestamp) {
+      setNewspaperVisible(false)
+      return
+    }
+
+    const elapsed = Date.now() - lastClaimTimestamp
+    if (elapsed >= HIDE_AFTER_MS) {
+      setNewspaperVisible(false)
+      return
+    }
+
+    // Still within 5 min window — show claimed state, then auto-hide
+    setNewspaperVisible(true)
+    const timer = setTimeout(() => setNewspaperVisible(false), HIDE_AFTER_MS - elapsed)
+    return () => clearTimeout(timer)
+  }, [canClaim, lastClaimTimestamp, HIDE_AFTER_MS])
 
   const handleTearComplete = useCallback(() => {
     setStarFlying(true)
@@ -306,17 +335,22 @@ function HomePage() {
       </motion.div>
 
       {/* Daily Inspiration — newspaper tear card */}
-      <motion.section
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.45 }}
-      >
-        <div ref={newspaperRef}>
-          <TearAnimation onTearComplete={handleTearComplete} disabled={!canClaim}>
-            <InspirationDaily />
-          </TearAnimation>
-        </div>
-      </motion.section>
+      <AnimatePresence>
+        {newspaperVisible && (
+          <motion.section
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10, transition: { duration: 0.4 } }}
+            transition={{ delay: 0.45 }}
+          >
+            <div ref={newspaperRef}>
+              <TearAnimation onTearComplete={handleTearComplete} disabled={!canClaim}>
+                <InspirationDaily />
+              </TearAnimation>
+            </div>
+          </motion.section>
+        )}
+      </AnimatePresence>
 
       {/* Recent Creations */}
       {recentItems.length > 0 && (

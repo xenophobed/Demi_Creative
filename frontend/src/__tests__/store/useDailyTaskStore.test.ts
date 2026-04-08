@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
 import useDailyTaskStore from '../../store/useDailyTaskStore'
 
 function resetStore() {
-  useDailyTaskStore.setState({ claimHistory: [], totalStars: 0 })
+  useDailyTaskStore.setState({ claimHistory: [], totalStars: 0, lastClaimTimestamp: null })
 }
 
 describe('useDailyTaskStore', () => {
@@ -32,12 +32,13 @@ describe('useDailyTaskStore', () => {
   })
 
   describe('claimStar', () => {
-    it('marks today as claimed', () => {
+    it('marks today as claimed and records timestamp', () => {
       useDailyTaskStore.getState().claimStar()
       const state = useDailyTaskStore.getState()
       expect(state.canClaimToday()).toBe(false)
       expect(state.totalStars).toBe(1)
       expect(state.claimHistory).toContain('2026-04-08')
+      expect(state.lastClaimTimestamp).toBe(Date.now())
     })
 
     it('is idempotent — second call on same day is a no-op', () => {
