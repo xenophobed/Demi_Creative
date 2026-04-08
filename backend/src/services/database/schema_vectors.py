@@ -1,7 +1,8 @@
 """
 Vector Embedding Schema (pgvector)
 
-DDL for drawing_embeddings and story_embeddings tables with vector(384) columns.
+DDL for drawing_embeddings and story_embeddings tables with vector(1536) columns.
+Uses OpenAI text-embedding-3-small (1536 dimensions).
 Only initialized when dialect is 'postgresql' since SQLite does not support
 the pgvector extension.
 
@@ -26,7 +27,7 @@ CREATE TABLE IF NOT EXISTS drawing_embeddings (
     doc_id TEXT UNIQUE NOT NULL,
     child_id TEXT NOT NULL,
     document_text TEXT NOT NULL,
-    embedding vector(384) NOT NULL,
+    embedding vector(1536) NOT NULL,
     metadata_json TEXT,
     created_at TEXT NOT NULL
 );
@@ -52,7 +53,7 @@ CREATE TABLE IF NOT EXISTS story_embeddings_pg (
     doc_id TEXT UNIQUE NOT NULL,
     child_id TEXT NOT NULL,
     document_text TEXT NOT NULL,
-    embedding vector(384) NOT NULL,
+    embedding vector(1536) NOT NULL,
     metadata_json TEXT,
     created_at TEXT NOT NULL
 );

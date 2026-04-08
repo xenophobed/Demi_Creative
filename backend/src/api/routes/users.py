@@ -4,32 +4,85 @@ User API Routes
 User authentication and management API endpoints
 """
 
+import os
 from datetime import datetime
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, Header, Query, status
+from urllib.parse import urlparse
 
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
+
+from ...services.database import referral_repo
+from ...services.user_service import UserData, user_service
+from ..deps import get_current_user
 from ..models import (
-    UserRegisterRequest,
-    UserLoginRequest,
-    UserResponse,
-    PublicUserResponse,
-    UserWithStatsResponse,
-    ReferralStatusResponse,
-    TokenResponse,
     AuthResponse,
     ChangePasswordRequest,
-    UpdateProfileRequest,
     ErrorResponse,
+    PublicUserResponse,
+    ReferralStatusResponse,
+    TokenResponse,
+    UpdateProfileRequest,
+    UserLoginRequest,
+    UserRegisterRequest,
+    UserResponse,
+    UserWithStatsResponse,
 )
-from ..deps import get_current_user
-from ...services.user_service import user_service, UserData
-from ...services.database import referral_repo
+
+router = APIRouter(prefix="/api/v1/users", tags=["User Authentication"])
 
 
-router = APIRouter(
-    prefix="/api/v1/users",
-    tags=["User Authentication"]
-)
+_PLACEHOLDER_FRONTEND_URLS = {
+    "https://app.example.com",
+    "http://app.example.com",
+    "https://example.com",
+    "http://example.com",
+}
+
+
+def _normalize_url(value: str) -> str:
+    return (value or "").strip().rstrip("/")
+
+
+def _is_http_url(value: str) -> bool:
+    parsed = urlparse(value)
+    return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
+
+
+def _origin_from_referer(value: str) -> str:
+    parsed = urlparse(value or "")
+    if parsed.scheme in {"http", "https"} and parsed.netloc:
+        return f"{parsed.scheme}://{parsed.netloc}"
+    return ""
+
+
+def _resolve_frontend_base_url(request: Request) -> str:
+    """Resolve a usable frontend base URL for referral share links."""
+    env_url = _normalize_url(os.getenv("FRONTEND_URL", ""))
+    if (
+        env_url
+        and _is_http_url(env_url)
+        and env_url.lower() not in _PLACEHOLDER_FRONTEND_URLS
+    ):
+        return env_url
+
+    origin = _normalize_url(request.headers.get("origin", ""))
+    if origin and _is_http_url(origin):
+        return origin
+
+    referer_origin = _normalize_url(
+        _origin_from_referer(request.headers.get("referer", ""))
+    )
+    if referer_origin and _is_http_url(referer_origin):
+        return referer_origin
+
+    raw_allowed = os.getenv("ALLOWED_ORIGINS", "")
+    if raw_allowed:
+        for item in raw_allowed.split(","):
+            candidate = _normalize_url(item)
+            if candidate and _is_http_url(candidate):
+                return candidate
+
+    return "http://localhost:5173"
 
 
 def _user_to_public_response(user: UserData) -> PublicUserResponse:
@@ -55,7 +108,9 @@ def _user_to_response(user: UserData) -> UserResponse:
         is_verified=user.is_verified,
         role=user.role,
         created_at=datetime.fromisoformat(user.created_at),
-        last_login_at=datetime.fromisoformat(user.last_login_at) if user.last_login_at else None
+        last_login_at=datetime.fromisoformat(user.last_login_at)
+        if user.last_login_at
+        else None,
     )
 
 
@@ -65,10 +120,10 @@ def _user_to_response(user: UserData) -> UserResponse:
     status_code=status.HTTP_201_CREATED,
     responses={
         400: {"model": ErrorResponse, "description": "Invalid request parameters"},
-        409: {"model": ErrorResponse, "description": "User already exists"}
+        409: {"model": ErrorResponse, "description": "User already exists"},
     },
     summary="User registration",
-    description="Create a new user account and return an access token"
+    description="Create a new user account and return an access token",
 )
 async def register(request: UserRegisterRequest):
     """
@@ -84,19 +139,17 @@ async def register(request: UserRegisterRequest):
         email=request.email,
         password=request.password,
         display_name=request.display_name,
-        referral_code=request.referral_code
+        referral_code=request.referral_code,
     )
 
     if not result.success:
         # Determine whether it is a parameter error or a conflict error
         if "already exists" in result.error or "already registered" in result.error:
             raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=result.error
+                status_code=status.HTTP_409_CONFLICT, detail=result.error
             )
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=result.error
+            status_code=status.HTTP_400_BAD_REQUEST, detail=result.error
         )
 
     return AuthResponse(
@@ -104,19 +157,17 @@ async def register(request: UserRegisterRequest):
         token=TokenResponse(
             access_token=result.token.access_token,
             token_type=result.token.token_type,
-            expires_in=result.token.expires_in
-        )
+            expires_in=result.token.expires_in,
+        ),
     )
 
 
 @router.post(
     "/login",
     response_model=AuthResponse,
-    responses={
-        401: {"model": ErrorResponse, "description": "Authentication failed"}
-    },
+    responses={401: {"model": ErrorResponse, "description": "Authentication failed"}},
     summary="User login",
-    description="Log in with username/email and password"
+    description="Log in with username/email and password",
 )
 async def login(request: UserLoginRequest):
     """
@@ -128,14 +179,12 @@ async def login(request: UserLoginRequest):
     3. Generate and return access token
     """
     result = await user_service.login(
-        username_or_email=request.username_or_email,
-        password=request.password
+        username_or_email=request.username_or_email, password=request.password
     )
 
     if not result.success:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=result.error
+            status_code=status.HTTP_401_UNAUTHORIZED, detail=result.error
         )
 
     return AuthResponse(
@@ -143,8 +192,8 @@ async def login(request: UserLoginRequest):
         token=TokenResponse(
             access_token=result.token.access_token,
             token_type=result.token.token_type,
-            expires_in=result.token.expires_in
-        )
+            expires_in=result.token.expires_in,
+        ),
     )
 
 
@@ -152,13 +201,17 @@ async def login(request: UserLoginRequest):
     "/me/referrals",
     response_model=ReferralStatusResponse,
     summary="Get referral status",
-    description="Returns referral progress, share link, and membership tier"
+    description="Returns referral progress, share link, and membership tier",
 )
-async def get_referral_status(user: UserData = Depends(get_current_user)):
+async def get_referral_status(
+    request: Request,
+    user: UserData = Depends(get_current_user),
+):
     """Get the current user's referral status and membership tier."""
-    import os
-    base_url = os.getenv("FRONTEND_URL", "https://app.example.com")
-    qualified = await referral_repo.get_referral_count(user.user_id, qualified_only=True)
+    base_url = _resolve_frontend_base_url(request)
+    qualified = await referral_repo.get_referral_count(
+        user.user_id, qualified_only=True
+    )
     total = await referral_repo.get_referral_count(user.user_id)
     return ReferralStatusResponse(
         referral_code=user.referral_code,
@@ -174,7 +227,7 @@ async def get_referral_status(user: UserData = Depends(get_current_user)):
     "/logout",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="User logout",
-    description="Invalidate the current access token"
+    description="Invalidate the current access token",
 )
 async def logout(authorization: Optional[str] = Header(None)):
     """
@@ -191,11 +244,9 @@ async def logout(authorization: Optional[str] = Header(None)):
 @router.get(
     "/me",
     response_model=UserResponse,
-    responses={
-        401: {"model": ErrorResponse, "description": "Unauthorized"}
-    },
+    responses={401: {"model": ErrorResponse, "description": "Unauthorized"}},
     summary="Get current user info",
-    description="Get information about the currently logged-in user"
+    description="Get information about the currently logged-in user",
 )
 async def get_me(user: UserData = Depends(get_current_user)):
     """Get current user info"""
@@ -207,10 +258,10 @@ async def get_me(user: UserData = Depends(get_current_user)):
     response_model=UserResponse,
     responses={
         401: {"model": ErrorResponse, "description": "Unauthorized"},
-        400: {"model": ErrorResponse, "description": "Invalid request parameters"}
+        400: {"model": ErrorResponse, "description": "Invalid request parameters"},
     },
     summary="Update current user profile",
-    description="Update the display name and avatar of the currently logged-in user"
+    description="Update the display name and avatar of the currently logged-in user",
 )
 async def update_me(
     request: UpdateProfileRequest,
@@ -221,13 +272,12 @@ async def update_me(
     result = await user_service.update_profile(
         user_id=user.user_id,
         display_name=request.display_name,
-        avatar_url=request.avatar_url
+        avatar_url=request.avatar_url,
     )
 
     if not result.success:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=result.error
+            status_code=status.HTTP_400_BAD_REQUEST, detail=result.error
         )
 
     return _user_to_response(result.user)
@@ -237,11 +287,17 @@ async def update_me(
     "/me/change-password",
     response_model=UserResponse,
     responses={
-        401: {"model": ErrorResponse, "description": "Unauthorized or incorrect old password"},
-        400: {"model": ErrorResponse, "description": "New password does not meet requirements"}
+        401: {
+            "model": ErrorResponse,
+            "description": "Unauthorized or incorrect old password",
+        },
+        400: {
+            "model": ErrorResponse,
+            "description": "New password does not meet requirements",
+        },
     },
     summary="Change password",
-    description="Change the password of the currently logged-in user"
+    description="Change the password of the currently logged-in user",
 )
 async def change_password(
     request: ChangePasswordRequest,
@@ -252,18 +308,16 @@ async def change_password(
     result = await user_service.change_password(
         user_id=user.user_id,
         old_password=request.old_password,
-        new_password=request.new_password
+        new_password=request.new_password,
     )
 
     if not result.success:
         if "old password" in result.error.lower():
             raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=result.error
+                status_code=status.HTTP_401_UNAUTHORIZED, detail=result.error
             )
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=result.error
+            status_code=status.HTTP_400_BAD_REQUEST, detail=result.error
         )
 
     return _user_to_response(result.user)
@@ -272,22 +326,20 @@ async def change_password(
 @router.get(
     "/me/stats",
     response_model=UserWithStatsResponse,
-    responses={
-        401: {"model": ErrorResponse, "description": "Unauthorized"}
-    },
+    responses={401: {"model": ErrorResponse, "description": "Unauthorized"}},
     summary="Get current user stats",
-    description="Get current user info with story and session counts"
+    description="Get current user info with story and session counts",
 )
 async def get_me_stats(user: UserData = Depends(get_current_user)):
     """Get current user info with content statistics"""
 
     from ...services.database import user_repo
+
     user_with_stats = await user_repo.get_with_stats(user.user_id)
 
     if not user_with_stats:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
         )
 
     return UserWithStatsResponse(
@@ -300,7 +352,9 @@ async def get_me_stats(user: UserData = Depends(get_current_user)):
         is_verified=user_with_stats.is_verified,
         role=user_with_stats.role,
         created_at=datetime.fromisoformat(user_with_stats.created_at),
-        last_login_at=datetime.fromisoformat(user_with_stats.last_login_at) if user_with_stats.last_login_at else None,
+        last_login_at=datetime.fromisoformat(user_with_stats.last_login_at)
+        if user_with_stats.last_login_at
+        else None,
         story_count=user_with_stats.story_count,
         session_count=user_with_stats.session_count,
         art_story_count=user_with_stats.art_story_count,
@@ -311,11 +365,9 @@ async def get_me_stats(user: UserData = Depends(get_current_user)):
 
 @router.get(
     "/me/stories",
-    responses={
-        401: {"model": ErrorResponse, "description": "Unauthorized"}
-    },
+    responses={401: {"model": ErrorResponse, "description": "Unauthorized"}},
     summary="Get current user's stories",
-    description="Get paginated list of stories created by the current user"
+    description="Get paginated list of stories created by the current user",
 )
 async def get_me_stories(
     limit: int = 20,
@@ -325,17 +377,16 @@ async def get_me_stories(
     """Get current user's stories with pagination"""
 
     from ...services.database import user_repo
+
     result = await user_repo.get_user_stories(user.user_id, limit=limit, offset=offset)
     return result
 
 
 @router.get(
     "/me/sessions",
-    responses={
-        401: {"model": ErrorResponse, "description": "Unauthorized"}
-    },
+    responses={401: {"model": ErrorResponse, "description": "Unauthorized"}},
     summary="Get current user's sessions",
-    description="Get paginated list of interactive story sessions for the current user"
+    description="Get paginated list of interactive story sessions for the current user",
 )
 async def get_me_sessions(
     status: Optional[str] = None,
@@ -349,6 +400,7 @@ async def get_me_sessions(
     effective_status = status if status is not None else status_filter
 
     from ...services.database import user_repo
+
     result = await user_repo.get_user_sessions(
         user.user_id, status=effective_status, limit=limit, offset=offset
     )
@@ -358,11 +410,9 @@ async def get_me_sessions(
 @router.get(
     "/{user_id}",
     response_model=PublicUserResponse,
-    responses={
-        404: {"model": ErrorResponse, "description": "User not found"}
-    },
+    responses={404: {"model": ErrorResponse, "description": "User not found"}},
     summary="Get user info",
-    description="Get public user information by user ID"
+    description="Get public user information by user ID",
 )
 async def get_user(user_id: str):
     """
@@ -373,8 +423,7 @@ async def get_user(user_id: str):
     user = await user_repo.get_by_id(user_id)
     if not user:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
         )
 
     return _user_to_public_response(user)

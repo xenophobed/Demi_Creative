@@ -1,66 +1,64 @@
 """
 Vector Repository — pgvector-backed similarity search for production.
 
-Uses sentence-transformers (all-MiniLM-L6-v2, 384 dims) for embedding
-generation and PostgreSQL pgvector for storage and cosine similarity search.
+Uses OpenAI text-embedding-3-small (1536 dims) for embedding generation
+and PostgreSQL pgvector for storage and cosine similarity search.
 
-In dev/test environments where sentence-transformers is not installed,
-the class can still be imported safely (methods will raise at runtime).
-
-Issue: #342 | Parent Epic: #42
+Issue: #342 | Parent Epic: #313
 """
 
 import json
 import logging
-from datetime import datetime
+import os
 from typing import Any, Dict, List, Optional
 
 from .connection import db_manager
 
 logger = logging.getLogger(__name__)
 
-# Lazy import — sentence-transformers is heavy and only needed in production
 try:
-    from sentence_transformers import SentenceTransformer
+    from openai import OpenAI
 except Exception:  # pragma: no cover
-    SentenceTransformer = None  # type: ignore[assignment, misc]
+    OpenAI = None  # type: ignore[assignment, misc]
 
 
 class VectorRepository:
     """pgvector-backed vector storage and similarity search.
 
-    Embedding model is loaded lazily on first use to avoid import-time
-    overhead. Uses the same all-MiniLM-L6-v2 model that ChromaDB uses
-    internally, producing 384-dimensional vectors.
+    Embedding client is created lazily on first use. Uses OpenAI
+    text-embedding-3-small which produces 1536-dimensional vectors.
     """
 
-    MODEL_NAME = "all-MiniLM-L6-v2"
-    DIMENSIONS = 384
+    MODEL_NAME = "text-embedding-3-small"
+    DIMENSIONS = 1536
 
     def __init__(self):
         self._db = db_manager
-        self._model = None
+        self._client = None
 
     # ------------------------------------------------------------------
     # Embedding helpers
     # ------------------------------------------------------------------
 
-    def _get_model(self):
-        """Lazy-load the sentence-transformer model."""
-        if self._model is None:
-            if SentenceTransformer is None:
+    def _get_client(self):
+        """Lazy-init OpenAI client."""
+        if self._client is None:
+            if OpenAI is None:
                 raise RuntimeError(
-                    "sentence-transformers is not installed. "
-                    "Install it with: pip install sentence-transformers"
+                    "openai package is not installed. "
+                    "Install it with: pip install openai"
                 )
-            self._model = SentenceTransformer(self.MODEL_NAME)
-        return self._model
+            self._client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        return self._client
 
     def _embed(self, text: str) -> List[float]:
-        """Generate embedding vector for a text string."""
-        model = self._get_model()
-        vector = model.encode(text, normalize_embeddings=True)
-        return vector.tolist()
+        """Generate embedding vector for a text string via OpenAI API."""
+        client = self._get_client()
+        response = client.embeddings.create(
+            model=self.MODEL_NAME,
+            input=text,
+        )
+        return response.data[0].embedding
 
     @staticmethod
     def _vector_literal(vec: List[float]) -> str:
@@ -82,6 +80,7 @@ class VectorRepository:
         embedding = self._embed(document_text)
         vec_literal = self._vector_literal(embedding)
         metadata_json = json.dumps(metadata or {}, ensure_ascii=False)
+        from datetime import datetime
         now = datetime.now().isoformat()
 
         await self._db.execute(
@@ -177,6 +176,7 @@ class VectorRepository:
         embedding = self._embed(document_text)
         vec_literal = self._vector_literal(embedding)
         metadata_json = json.dumps(metadata or {}, ensure_ascii=False)
+        from datetime import datetime
         now = datetime.now().isoformat()
 
         await self._db.execute(

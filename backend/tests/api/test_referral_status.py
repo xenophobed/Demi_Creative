@@ -13,12 +13,12 @@ import sys
 import pytest
 import pytest_asyncio
 
+from backend.src.api.deps import _get_daily_quota
 from backend.src.services.database.connection import DatabaseManager
+from backend.src.services.database.referral_repository import ReferralRepository
 from backend.src.services.database.schema import init_schema
 from backend.src.services.database.user_repository import UserRepository
-from backend.src.services.database.referral_repository import ReferralRepository
 from backend.src.services.user_service import UserService
-from backend.src.api.deps import _get_daily_quota
 
 
 @pytest_asyncio.fixture
@@ -70,7 +70,8 @@ class TestAutoUpgrade:
         referred_ids = []
         for i in range(10):
             r = await svc.register(
-                username=f"ref_{i}", email=f"ref_{i}@test.com",
+                username=f"ref_{i}",
+                email=f"ref_{i}@test.com",
                 password="password123",
                 referral_code=referrer_user.referral_code,
             )
@@ -95,13 +96,15 @@ class TestAutoUpgrade:
         svc, user_repo, ref_repo = env["svc"], env["user_repo"], env["ref_repo"]
 
         referrer = await svc.register(
-            username="already_plus", email="already_plus@test.com",
-            password="password123"
+            username="already_plus",
+            email="already_plus@test.com",
+            password="password123",
         )
         await user_repo.update_membership_tier(referrer.user.user_id, "plus")
 
         r = await svc.register(
-            username="extra_ref", email="extra_ref@test.com",
+            username="extra_ref",
+            email="extra_ref@test.com",
             password="password123",
             referral_code=referrer.user.referral_code,
         )
@@ -125,6 +128,42 @@ class TestTierBasedQuota:
         finally:
             if orig is not None:
                 os.environ["DAILY_GENERATION_QUOTA"] = orig
+
+
+@pytest.mark.asyncio
+class TestReferralStatusEndpoint:
+    """HTTP-level checks for referral share link base URL resolution."""
+
+    async def test_share_url_uses_request_origin_when_frontend_url_missing(
+        self, test_client, monkeypatch
+    ):
+        monkeypatch.delenv("FRONTEND_URL", raising=False)
+        monkeypatch.delenv("ALLOWED_ORIGINS", raising=False)
+
+        async with test_client as client:
+            resp = await client.get(
+                "/api/v1/users/me/referrals",
+                headers={"Origin": "https://kids.example.cn"},
+            )
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["share_url"].startswith("https://kids.example.cn/login?ref=")
+
+    async def test_share_url_ignores_placeholder_frontend_url(
+        self, test_client, monkeypatch
+    ):
+        monkeypatch.setenv("FRONTEND_URL", "https://app.example.com")
+
+        async with test_client as client:
+            resp = await client.get(
+                "/api/v1/users/me/referrals",
+                headers={"Origin": "https://real.app.domain"},
+            )
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["share_url"].startswith("https://real.app.domain/login?ref=")
 
     def test_plus_tier_quota(self):
         orig = os.environ.pop("DAILY_GENERATION_QUOTA", None)

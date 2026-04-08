@@ -17,14 +17,14 @@ elevenlabs>=1.0.0
 chromadb==1.4.1
 
 # Vector Database (Production — pgvector)
-sentence-transformers>=2.2.0
+# Uses OpenAI embeddings (text-embedding-3-small) — no extra deps needed
 pgvector>=0.2.0
 
 # Image Processing
 pillow==10.2.0
 
 # HTTP Client
-httpx==0.26.0
+httpx>=0.27.0,<1
 
 # Web Search (News fetching for Daily Drop)
 tavily-python==0.5.0
