@@ -1,0 +1,15 @@
+[build]
+builder = "nixpacks"
+watchPatterns = ["backend/**"]
+
+[build.nixpacks]
+nixPkgs = ["python312"]
+installCmd = "cd backend && pip install -r requirements.txt"
+startCmd = "cd backend && python -m uvicorn src.main:app --host 0.0.0.0 --port ${PORT:-8000}"
+
+[deploy]
+startCommand = "cd backend && python -m uvicorn src.main:app --host 0.0.0.0 --port ${PORT:-8000}"
+healthcheckPath = "/health"
+healthcheckTimeout = 300
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3
