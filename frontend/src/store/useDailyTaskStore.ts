@@ -13,8 +13,15 @@ interface DailyTaskState {
   getStreak: () => number
 }
 
+function toDateStr(date: Date): string {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
 function getToday(): string {
-  return new Date().toISOString().slice(0, 10)
+  return toDateStr(new Date())
 }
 
 /**
@@ -27,7 +34,7 @@ function getWeekStart(dateStr: string): string {
   // JS getDay(): 0=Sun, 1=Mon...6=Sat → offset to Monday
   const offset = day === 0 ? 6 : day - 1
   date.setDate(date.getDate() - offset)
-  return date.toISOString().slice(0, 10)
+  return toDateStr(date)
 }
 
 const useDailyTaskStore = create<DailyTaskState>()(
@@ -70,7 +77,7 @@ const useDailyTaskStore = create<DailyTaskState>()(
         // Streak must include today or yesterday to be active
         const yesterday = new Date()
         yesterday.setDate(yesterday.getDate() - 1)
-        const yesterdayStr = yesterday.toISOString().slice(0, 10)
+        const yesterdayStr = toDateStr(yesterday)
 
         if (sorted[0] !== today && sorted[0] !== yesterdayStr) return 0
 
