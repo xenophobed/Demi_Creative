@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { motion, AnimatePresence, useSpring, useTransform } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
@@ -9,8 +9,13 @@ import { FloatingElement } from '@/components/depth/ParallaxContainer'
 import { DepthLayer } from '@/components/depth/DepthLayer'
 import { useStreamVisualizationContext } from '@/providers/StreamVisualizationProvider'
 import useAuthStore from '@/store/useAuthStore'
+import useDailyTaskStore from '@/store/useDailyTaskStore'
 import { libraryService, type LibraryItem } from '@/api/services/libraryService'
 import { StoryCard } from '@/components/story/StoryDisplay'
+import StarPiggyBank, { type StarPiggyBankHandle } from '@/components/daily/StarPiggyBank'
+import InspirationDaily from '@/components/daily/InspirationDaily'
+import TearAnimation from '@/components/daily/TearAnimation'
+import StarFlyAnimation from '@/components/daily/StarFlyAnimation'
 
 const TIPS = [
   { icon: '🎨', tip: 'The more colorful and detailed your artwork, the more magical your story! Try drawing your favorite animals, characters, or imaginary worlds~' },
@@ -79,6 +84,24 @@ function HomePage() {
   const { isAuthenticated } = useAuthStore()
   const { mousePosition, prefersReducedMotion } = useStreamVisualizationContext()
 
+  // Daily task system
+  const canClaim = useDailyTaskStore((s) => s.canClaimToday())
+  const claimStar = useDailyTaskStore((s) => s.claimStar)
+  const piggyBankRef = useRef<StarPiggyBankHandle>(null)
+  const newspaperRef = useRef<HTMLDivElement>(null)
+  const piggyBankElRef = useRef<HTMLDivElement>(null)
+  const [starFlying, setStarFlying] = useState(false)
+
+  const handleTearComplete = useCallback(() => {
+    setStarFlying(true)
+  }, [])
+
+  const handleStarArrived = useCallback(() => {
+    setStarFlying(false)
+    claimStar()
+    piggyBankRef.current?.onStarReceived()
+  }, [claimStar])
+
   // Fetch latest 3 items from unified library API (all content types)
   const { data: libraryData } = useQuery({
     queryKey: ['homepage-recent'],
@@ -114,6 +137,19 @@ function HomePage() {
 
   return (
     <div className="space-y-8 perspective-1500">
+      {/* Star Piggy Bank — top right */}
+      <div className="flex justify-end" ref={piggyBankElRef}>
+        <StarPiggyBank ref={piggyBankRef} />
+      </div>
+
+      {/* Star fly animation overlay */}
+      <StarFlyAnimation
+        active={starFlying}
+        fromRef={newspaperRef}
+        toRef={piggyBankElRef}
+        onComplete={handleStarArrived}
+      />
+
       {/* Hero Banner with 2.5D depth layers */}
       <motion.div
         className="hero-banner relative overflow-hidden rounded-card preserve-3d"
@@ -268,6 +304,19 @@ function HomePage() {
           </div>
         </DepthLayer>
       </motion.div>
+
+      {/* Daily Inspiration — newspaper tear card */}
+      <motion.section
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.45 }}
+      >
+        <div ref={newspaperRef}>
+          <TearAnimation onTearComplete={handleTearComplete} disabled={!canClaim}>
+            <InspirationDaily />
+          </TearAnimation>
+        </div>
+      </motion.section>
 
       {/* Recent Creations */}
       {recentItems.length > 0 && (
