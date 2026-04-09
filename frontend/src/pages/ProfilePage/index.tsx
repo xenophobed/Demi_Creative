@@ -7,9 +7,11 @@ import Card from "@/components/common/Card";
 import TiltCard from "@/components/depth/TiltCard";
 import useAuthStore from "@/store/useAuthStore";
 import useChildStore from "@/store/useChildStore";
+import useDailyTaskStore from "@/store/useDailyTaskStore";
 import { authService } from "@/api/services/authService";
 import type { UpdateProfileRequest, ReferralStatus } from "@/types/auth";
 import AvatarDisplay from "@/components/common/AvatarDisplay";
+import StarPiggyBank from "@/components/daily/StarPiggyBank";
 import CharacterGallery from "./CharacterGallery";
 import PreferenceSummary from "./PreferenceSummary";
 import { useMemoryApi } from "@/hooks/useMemoryApi";
@@ -37,6 +39,50 @@ const ANIMAL_EMOJIS = [
   "🐬",
   "🐙",
 ];
+
+function StarBoard() {
+  const totalStars = useDailyTaskStore((s) => s.totalStars);
+  const streak = useDailyTaskStore((s) => s.getStreak());
+
+  return (
+    <Card className="overflow-hidden">
+      <div className="bg-gradient-to-r from-amber-400 via-yellow-400 to-orange-400 px-5 py-4">
+        <div className="flex items-center gap-3">
+          <div className="text-3xl">🫙</div>
+          <div>
+            <h2 className="text-base font-bold text-white flex items-center gap-2">
+              My Star Collection
+              {streak >= 2 && (
+                <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-white/25 text-white backdrop-blur-sm border border-white/30">
+                  🔥 {streak} day streak
+                </span>
+              )}
+            </h2>
+            <p className="text-xs text-white/80 mt-0.5">
+              Tear the daily newspaper to collect stars!
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="p-5 space-y-4">
+        {/* Total stars */}
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-medium text-gray-500">Total Stars</span>
+          <span className="text-2xl font-bold text-amber-500">{totalStars}</span>
+        </div>
+
+        {/* Weekly progress with piggy bank */}
+        <div>
+          <p className="text-xs font-medium text-gray-500 mb-3">This Week</p>
+          <div className="flex justify-center">
+            <StarPiggyBank />
+          </div>
+        </div>
+      </div>
+    </Card>
+  );
+}
 
 function ProfilePage() {
   const navigate = useNavigate();
@@ -325,6 +371,15 @@ function ProfilePage() {
           </div>
         </TiltCard>
       </motion.div>
+
+      {/* Star Collection Board */}
+      <motion.section
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.12 }}
+      >
+        <StarBoard />
+      </motion.section>
 
       {/* Referral Section */}
       <motion.section
