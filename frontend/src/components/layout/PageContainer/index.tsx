@@ -6,13 +6,25 @@ import GenerationStatusBar from '@/components/layout/GenerationStatusBar'
 import useGenerationNavigator from '@/hooks/useGenerationNavigator'
 import AvatarDisplay from '@/components/common/AvatarDisplay'
 import useAuthStore from '@/store/useAuthStore'
+import useDailyTaskStore from '@/store/useDailyTaskStore'
 import { authService } from '@/api/services/authService'
 import { performFullLogout } from '@/utils/logout'
+import { NavRefProvider, useNavRef } from '@/contexts/NavRefContext'
 
 function PageContainer() {
+  return (
+    <NavRefProvider>
+      <PageContainerInner />
+    </NavRefProvider>
+  )
+}
+
+function PageContainerInner() {
   const location = useLocation()
   const navigate = useNavigate()
   const { isAuthenticated, user } = useAuthStore()
+  const { setProfileAvatarEl } = useNavRef()
+  const totalStars = useDailyTaskStore((s) => s.totalStars)
 
   useGenerationNavigator()
 
@@ -59,15 +71,22 @@ function PageContainer() {
               {isAuthenticated ? (
                 <div className="flex items-center gap-3 ml-2 pl-4 border-l border-gray-200">
                   <Link to="/profile">
-                    <motion.div
-                      className="flex items-center gap-2 text-gray-600"
-                      whileHover={{ scale: 1.02 }}
-                    >
-                      <AvatarDisplay avatarUrl={user?.avatar_url} size="sm" />
-                      <span className="text-sm font-medium hidden sm:inline">
-                        {user?.display_name || user?.username}
-                      </span>
-                    </motion.div>
+                    <div ref={setProfileAvatarEl} className="relative">
+                      <motion.div
+                        className="flex items-center gap-2 text-gray-600"
+                        whileHover={{ scale: 1.02 }}
+                      >
+                        <AvatarDisplay avatarUrl={user?.avatar_url} size="sm" />
+                        {totalStars > 0 && (
+                          <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] flex items-center justify-center text-[10px] font-bold text-white bg-gradient-to-r from-yellow-400 to-orange-400 rounded-full shadow-sm px-1 leading-none">
+                            {totalStars > 99 ? '99+' : totalStars}
+                          </span>
+                        )}
+                        <span className="text-sm font-medium hidden sm:inline">
+                          {user?.display_name || user?.username}
+                        </span>
+                      </motion.div>
+                    </div>
                   </Link>
                   <motion.button
                     onClick={handleLogout}

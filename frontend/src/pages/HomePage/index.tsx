@@ -12,10 +12,10 @@ import useAuthStore from '@/store/useAuthStore'
 import useDailyTaskStore from '@/store/useDailyTaskStore'
 import { libraryService, type LibraryItem } from '@/api/services/libraryService'
 import { StoryCard } from '@/components/story/StoryDisplay'
-import StarPiggyBank, { type StarPiggyBankHandle } from '@/components/daily/StarPiggyBank'
 import InspirationDaily from '@/components/daily/InspirationDaily'
 import TearAnimation from '@/components/daily/TearAnimation'
 import StarFlyAnimation from '@/components/daily/StarFlyAnimation'
+import { useNavRef } from '@/contexts/NavRefContext'
 
 const TIPS = [
   { icon: '🎨', tip: 'The more colorful and detailed your artwork, the more magical your story! Try drawing your favorite animals, characters, or imaginary worlds~' },
@@ -88,9 +88,8 @@ function HomePage() {
   const canClaim = useDailyTaskStore((s) => s.canClaimToday())
   const claimStar = useDailyTaskStore((s) => s.claimStar)
   const lastClaimTimestamp = useDailyTaskStore((s) => s.lastClaimTimestamp)
-  const piggyBankRef = useRef<StarPiggyBankHandle>(null)
+  const { profileAvatarRef } = useNavRef()
   const newspaperRef = useRef<HTMLDivElement>(null)
-  const piggyBankElRef = useRef<HTMLDivElement>(null)
   const [starFlying, setStarFlying] = useState(false)
 
   // Hide newspaper 5 minutes after claiming today
@@ -128,7 +127,6 @@ function HomePage() {
   const handleStarArrived = useCallback(() => {
     setStarFlying(false)
     claimStar()
-    piggyBankRef.current?.onStarReceived()
   }, [claimStar])
 
   // Fetch latest 3 items from unified library API (all content types)
@@ -166,16 +164,11 @@ function HomePage() {
 
   return (
     <div className="space-y-8 perspective-1500">
-      {/* Star Piggy Bank — top right */}
-      <div className="flex justify-end" ref={piggyBankElRef}>
-        <StarPiggyBank ref={piggyBankRef} />
-      </div>
-
-      {/* Star fly animation overlay */}
+      {/* Star fly animation — flies from newspaper to profile avatar in nav */}
       <StarFlyAnimation
         active={starFlying}
         fromRef={newspaperRef}
-        toRef={piggyBankElRef}
+        toRef={profileAvatarRef}
         onComplete={handleStarArrived}
       />
 
