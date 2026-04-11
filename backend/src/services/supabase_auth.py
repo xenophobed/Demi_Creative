@@ -20,7 +20,6 @@ import jwt
 import httpx
 
 logger = logging.getLogger(__name__)
-logger.warning("supabase_auth module loaded — httpx JWKS version (2026-04-11)")
 
 # Cache fetched JWKS keys to avoid HTTP calls on every request
 _jwks_keys: Optional[list[dict[str, Any]]] = None

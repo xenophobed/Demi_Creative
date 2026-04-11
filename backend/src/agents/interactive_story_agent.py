@@ -335,54 +335,54 @@ def _build_next_segment_prompt(
     opening_hook: str = "",
     continuity_anchors: str = "",
 ) -> str:
-    “””Build prompt for generating the next story segment.”””
-    return f”””You are a professional children's story writer, continuing an interactive story.
+    """Build prompt for generating the next story segment."""
+    return f"""You are a professional children's story writer, continuing an interactive story.
 
 **Story Information**:
 - Story title: {story_title}
 - Age group: {age_group} years old
-- Interests: {“, “.join(interests)}
+- Interests: {", ".join(interests)}
 - Theme: {theme}
 - Current segment: Segment {segment_count + 1} (of {total_segments} total)
-- Is this the ending: {“yes” if is_final_segment else “no”}
+- Is this the ending: {"yes" if is_final_segment else "no"}
 
 **Previous Story Content**:
-{story_context if story_context else “This is the beginning of the story”}
+{story_context if story_context else "This is the beginning of the story"}
 
 **User Decision Trail (chronological order)**:
-{choice_history_context if choice_history_context else “(no prior choices)”}
+{choice_history_context if choice_history_context else "(no prior choices)"}
 
 **Opening Key Clue (ending must callback to this)**:
-{opening_hook if opening_hook else “(none)”}
+{opening_hook if opening_hook else "(none)"}
 
 **Ending Continuity Anchors (ending must reference at least 2)**:
-{continuity_anchors if continuity_anchors else “(none — can be derived from prior events and choices)”}
+{continuity_anchors if continuity_anchors else "(none — can be derived from prior events and choices)"}
 
 **User's Choice**:
 Choice ID: {choice_id}
-Choice content: {chosen_option or “continue the story”}
+Choice content: {chosen_option or "continue the story"}
 
 **Writing Requirements** (age-adapted):
-- Words per segment: {config[“word_count”]} words
-- Sentence length: {config[“sentence_length”]}
-- Complexity: {config[“complexity”]}
-- Vocabulary level: {config[“vocab_level”]}
-- Choices style: {config[“choices_style”]}
+- Words per segment: {config["word_count"]} words
+- Sentence length: {config["sentence_length"]}
+- Complexity: {config["complexity"]}
+- Vocabulary level: {config["vocab_level"]}
+- Choices style: {config["choices_style"]}
 
 **Important Rules**:
 1. Naturally continue the story based on the user's choice
 2. Maintain story coherence and engagement
 3. {
-        “This is the ending segment. Please provide a warm, positive, complete ending: you must explicitly reference the opening clue, quote at least 2 phrases from the 'Ending Continuity Anchors' above verbatim, do not introduce any new main quests, and create a satisfying closure that connects back to earlier events”
+        "This is the ending segment. Please provide a warm, positive, complete ending: you must explicitly reference the opening clue, quote at least 2 phrases from the 'Ending Continuity Anchors' above verbatim, do not introduce any new main quests, and create a satisfying closure that connects back to earlier events"
         if is_final_segment
-        else “Continue developing the plot and provide 2-3 new choices”
+        else "Continue developing the plot and provide 2-3 new choices"
     }
 4. All content must be child-appropriate and positive
-5. {“No choices needed” if is_final_segment else “Each choice should have an appropriate emoji”}
+5. {"No choices needed" if is_final_segment else "Each choice should have an appropriate emoji"}
 6. {
-        “The ending should not introduce new major conflicts. Focus on resolving earlier problems and highlighting growth and lessons learned”
+        "The ending should not introduce new major conflicts. Focus on resolving earlier problems and highlighting growth and lessons learned"
         if is_final_segment
-        else “Ensure new choices genuinely affect subsequent developments and avoid repetitive phrasing”
+        else "Ensure new choices genuinely affect subsequent developments and avoid repetitive phrasing"
     }
 
 **Output Format**:
@@ -390,22 +390,22 @@ Return directly in JSON format, containing:
 - segment: Story segment
   - segment_id: {segment_count}
   - text: Story content
-  - choices: {“empty array []” if is_final_segment else “choices array”}
+  - choices: {"empty array []" if is_final_segment else "choices array"}
   - is_ending: {str(is_final_segment).lower()}
 - is_ending: {str(is_final_segment).lower()}
 {
         f'''- educational_summary: Educational summary (only for ending)
-  - themes: Themes array (e.g.: [“courage”, “friendship”])
-  - concepts: Concepts array (e.g.: [“decision-making”, “cooperation”])
+  - themes: Themes array (e.g.: ["courage", "friendship"])
+  - concepts: Concepts array (e.g.: ["decision-making", "cooperation"])
   - moral: Moral of the story (one sentence summary)'''
         if is_final_segment
-        else “”
+        else ""
     }
 
 Continue this amazing story!
 
 Always respond in English.
-“””
+"""
 
 
 def _append_tts_instructions(
@@ -694,29 +694,29 @@ def _rewrite_ending_with_anchors(
     history_steps = _extract_choice_history_steps(choice_history_context)
 
     hook_clause = (
-        f”From the very beginning of the story, the mystery of \”{opening_hook}\” has finally found its answer. “
+        f"From the very beginning of the story, the mystery of \"{opening_hook}\" has finally found its answer. "
         if opening_hook
-        else “This journey has finally resolved all the questions planted earlier. “
+        else "This journey has finally resolved all the questions planted earlier. "
     )
     option_clause = (
-        f”After everyone made the key choice of \”{chosen_option}\”, “
+        f"After everyone made the key choice of \"{chosen_option}\", "
         if chosen_option
-        else “After the final key decision, “
+        else "After the final key decision, "
     )
 
     if anchors:
-        anchor_clause = f”revolving around {', '.join(anchors)}, the friends overcame each challenge along the way. “
+        anchor_clause = f"revolving around {', '.join(anchors)}, the friends overcame each challenge along the way. "
     else:
-        anchor_clause = “the friends overcame each challenge along the way, bringing the story threads to a complete close. “
+        anchor_clause = "the friends overcame each challenge along the way, bringing the story threads to a complete close. "
 
-    history_clause = “”
+    history_clause = ""
     if history_steps:
-        recent = “, “.join(history_steps[-2:])
-        history_clause = f”Looking back at the earlier choices ({recent}), every step pushed the story in the same direction. “
+        recent = ", ".join(history_steps[-2:])
+        history_clause = f"Looking back at the earlier choices ({recent}), every step pushed the story in the same direction. "
 
     return (
-        f”{hook_clause}{option_clause}{anchor_clause}”
-        f”{history_clause}In the end, the friends returned to their daily lives with newfound courage and teamwork, and the story came to a satisfying close.”
+        f"{hook_clause}{option_clause}{anchor_clause}"
+        f"{history_clause}In the end, the friends returned to their daily lives with newfound courage and teamwork, and the story came to a satisfying close."
     )
 
 
@@ -728,9 +728,9 @@ def _ensure_ending_coherence(
     continuity_anchors: Optional[List[str]] = None,
 ) -> str:
     """Ensure final segment explicitly connects to opening and recent choices."""
-    text = str(ending_text or “”).strip()
+    text = str(ending_text or "").strip()
     if not text:
-        text = “This adventure has finally reached its warm conclusion.”
+        text = "This adventure has finally reached its warm conclusion."
 
     anchors = [a.strip() for a in (continuity_anchors or []) if str(a).strip()]
     required_hits = 2 if len(anchors) >= 2 else len(anchors)
@@ -748,24 +748,24 @@ def _ensure_ending_coherence(
     additions: List[str] = []
     if opening_hook and opening_hook not in text:
         additions.append(
-            f”Thinking back to the beginning when \”{opening_hook}\” first appeared, the friends have finally brought this adventure to a warm conclusion.”
+            f"Thinking back to the beginning when \"{opening_hook}\" first appeared, the friends have finally brought this adventure to a warm conclusion."
         )
 
     if chosen_option:
         chosen_option = str(chosen_option).strip()
         if chosen_option and chosen_option not in text:
             additions.append(
-                f”It was precisely because of choosing \”{chosen_option}\” that the story arrived at this outcome.”
+                f"It was precisely because of choosing \"{chosen_option}\" that the story arrived at this outcome."
             )
 
-    if not any(k in text for k in [“finally”, “in the end”, “ending”, “returned”, “learned”, “ever since”]):
-        additions.append(“In the end, everyone returned to daily life with newfound courage and wisdom, and the story came to a satisfying close.”)
+    if not any(k in text for k in ["finally", "in the end", "ending", "returned", "learned", "ever since"]):
+        additions.append("In the end, everyone returned to daily life with newfound courage and wisdom, and the story came to a satisfying close.")
 
     history_steps = _extract_choice_history_steps(choice_history_context)
     if history_steps:
-        summary = “; “.join(history_steps[-2:])
+        summary = "; ".join(history_steps[-2:])
         if summary and summary not in text:
-            additions.append(f”All the key choices along the way ({summary}) found their answer in this moment.”)
+            additions.append(f"All the key choices along the way ({summary}) found their answer in this moment.")
 
     if additions:
         text = f"{text} {' '.join(additions)}"
