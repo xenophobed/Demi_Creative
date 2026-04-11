@@ -12,6 +12,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { User } from '@/types/auth'
 import supabase, { isSupabaseEnabled } from '@/lib/supabase'
+import apiClient from '@/api/client'
 
 interface AuthState {
   // State
@@ -84,10 +85,26 @@ const useAuthStore = create<AuthState>()(
   )
 )
 
-// Listen for Supabase auth state changes (token refresh, sign out)
+// Listen for Supabase auth state changes (token refresh, sign out, email confirm)
 if (isSupabaseEnabled()) {
-  supabase!.auth.onAuthStateChange((event, session) => {
+  supabase!.auth.onAuthStateChange(async (event, session) => {
     const store = useAuthStore.getState()
+
+    if (event === 'SIGNED_IN' && session && !store.isAuthenticated) {
+      // User confirmed email and was redirected back — sync to backend
+      useAuthStore.getState().setLoading(true)
+      try {
+        const response = await apiClient.get<User>('/users/me', {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        })
+        useAuthStore.getState().setAuth(response.data, session.access_token)
+        // Navigate to home after successful auto-login (e.g. email confirmation)
+        window.location.href = '/'
+      } catch (err) {
+        console.error('[auth] Backend sync after SIGNED_IN failed:', err)
+        useAuthStore.getState().setLoading(false)
+      }
+    }
 
     if (event === 'TOKEN_REFRESHED' && session) {
       // Update the stored token so API calls use the fresh one

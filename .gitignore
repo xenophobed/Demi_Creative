@@ -45,3 +45,4 @@ frontend/dist/
 frontend/*.tsbuildinfo
 frontend/vite.config.d.ts
 frontend/vite.config.js
+.vercel

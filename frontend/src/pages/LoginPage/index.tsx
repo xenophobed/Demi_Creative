@@ -6,6 +6,7 @@ import Card from '@/components/common/Card'
 import { authService } from '@/api/services/authService'
 import { getErrorMessage } from '@/api/client'
 import useAuthStore from '@/store/useAuthStore'
+import supabase from '@/lib/supabase'
 
 type AuthMode = 'login' | 'register'
 
@@ -18,7 +19,7 @@ function friendlyAuthError(raw: string, mode: AuthMode): string {
     return '邮箱或密码不对哦，请检查后再试一次 🔑'
   if (lower.includes('account has been disabled'))
     return '这个账号已被停用，请联系管理员 🔒'
-  if (lower.includes('email not confirmed'))
+  if (lower.includes('email not confirmed') || lower.includes('please check your email'))
     return '请先去邮箱里点确认链接，然后再回来登录 📬'
   if (lower.includes('user already registered') || lower.includes('already exists'))
     return '这个邮箱已经注册过了，试试直接登录？'
@@ -31,6 +32,11 @@ function friendlyAuthError(raw: string, mode: AuthMode): string {
   if (mode === 'login')
     return `登录遇到了问题：${raw}`
   return `注册遇到了问题：${raw}`
+}
+
+/** Pick icon based on error content: 📬 for email-related, 🔑 for credentials. */
+function errorIcon(message: string): string {
+  return message.includes('📬') || message.includes('邮箱里点确认') ? '📬' : '🔑'
 }
 
 function LoginPage() {
@@ -53,6 +59,9 @@ function LoginPage() {
   // UI state
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [confirmationPending, setConfirmationPending] = useState(false)
+  const [confirmationEmail, setConfirmationEmail] = useState('')
+  const [resending, setResending] = useState(false)
 
   // Validation
   const validateForm = (): string | null => {
@@ -91,13 +100,21 @@ function LoginPage() {
           password,
         })
       } else {
-        response = await authService.register({
+        const result = await authService.register({
           username: username.trim(),
           email: email.trim().toLowerCase(),
           password,
           display_name: displayName.trim() || undefined,
           referral_code: referralCode,
         })
+
+        if ('pendingConfirmation' in result) {
+          setConfirmationPending(true)
+          setConfirmationEmail(result.email)
+          return
+        }
+
+        response = result
       }
 
       // Store auth data
@@ -117,6 +134,7 @@ function LoginPage() {
   const switchMode = () => {
     setMode(mode === 'login' ? 'register' : 'login')
     setError(null)
+    setConfirmationPending(false)
     setPassword('')
     setConfirmPassword('')
   }
@@ -183,7 +201,50 @@ function LoginPage() {
           </p>
         </motion.div>
 
+        {/* Email confirmation success card */}
+        {confirmationPending && (
+          <Card variant="elevated" padding="lg" className="backdrop-blur-sm bg-white/95">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="text-center space-y-4 py-4"
+            >
+              <div className="text-5xl">📬</div>
+              <h2 className="text-xl font-bold text-gray-800">注册成功！请去邮箱点击确认链接</h2>
+              <p className="text-gray-500 text-sm">确认后即可自动登录</p>
+              <p className="text-gray-400 text-xs">{confirmationEmail}</p>
+              <Button
+                type="button"
+                variant="secondary"
+                size="md"
+                isLoading={resending}
+                onClick={async () => {
+                  if (!supabase) return
+                  setResending(true)
+                  try {
+                    await supabase.auth.resend({ type: 'signup', email: confirmationEmail })
+                  } finally {
+                    setResending(false)
+                  }
+                }}
+              >
+                重新发送确认邮件
+              </Button>
+              <div>
+                <button
+                  type="button"
+                  onClick={() => { setConfirmationPending(false); setMode('login') }}
+                  className="text-sm text-gray-500 hover:text-primary transition-colors"
+                >
+                  返回登录
+                </button>
+              </div>
+            </motion.div>
+          </Card>
+        )}
+
         {/* Form Card */}
+        {!confirmationPending && (
         <Card variant="elevated" padding="lg" className="backdrop-blur-sm bg-white/95">
           <AnimatePresence mode="wait">
             <motion.form
@@ -204,7 +265,7 @@ function LoginPage() {
                     exit={{ opacity: 0, y: -10, scale: 0.95 }}
                     className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-amber-700 text-sm text-center space-y-1"
                   >
-                    <div className="text-2xl">🔑</div>
+                    <div className="text-2xl">{errorIcon(error)}</div>
                     <p className="font-medium">{error}</p>
                   </motion.div>
                 )}
@@ -370,6 +431,7 @@ function LoginPage() {
             )}
           </motion.button>
         </Card>
+        )}
 
         {/* Back to home link */}
         <motion.div

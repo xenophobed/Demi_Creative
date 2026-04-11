@@ -17,6 +17,7 @@ import type {
   LoginRequest,
   RegisterRequest,
   AuthResponse,
+  PendingConfirmation,
   User,
   UserWithStats,
   UpdateProfileRequest,
@@ -62,12 +63,13 @@ export const authService = {
   /**
    * Register a new user with email + password.
    */
-  async register(data: RegisterRequest): Promise<AuthResponse> {
+  async register(data: RegisterRequest): Promise<AuthResponse | PendingConfirmation> {
     if (isSupabaseEnabled()) {
       const { data: authData, error } = await supabase!.auth.signUp({
         email: data.email,
         password: data.password,
         options: {
+          emailRedirectTo: window.location.origin,
           data: {
             display_name: data.display_name || data.username,
             username: data.username,
@@ -77,7 +79,7 @@ export const authService = {
       if (error) throw new Error(error.message)
       if (!authData.session) {
         // Email confirmation required — Supabase doesn't return a session
-        throw new Error('Please check your email to verify your account before logging in.')
+        return { pendingConfirmation: true, email: data.email }
       }
 
       const user = await authService._syncUser(authData.session.access_token)

@@ -56,6 +56,12 @@ export interface AuthResponse {
   token: TokenResponse
 }
 
+// Returned when Supabase requires email confirmation before login
+export interface PendingConfirmation {
+  pendingConfirmation: true
+  email: string
+}
+
 // Profile update request
 export interface UpdateProfileRequest {
   display_name?: string
