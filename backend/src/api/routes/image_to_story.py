@@ -322,7 +322,7 @@ def validate_image_file(file: UploadFile) -> None:
     file_ext = Path(filename).suffix.lower()
     if file_ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="文件必须是图片类型"
+            status_code=status.HTTP_400_BAD_REQUEST, detail="File must be an image type"
         )
 
     # Check MIME type
@@ -394,7 +394,7 @@ async def save_upload_file(file: UploadFile, child_id: str) -> Path:
     if len(content) > MAX_FILE_SIZE:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail="文件大小超过限制",
+            detail="File size exceeds limit",
         )
 
     # Use storage adapter (#343) — writes to local disk or Supabase Storage.
@@ -499,7 +499,7 @@ async def create_story_from_image(
             interests_list = [i.strip() for i in interests.split(",") if i.strip()]
             if len(interests_list) > 5:
                 raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST, detail="兴趣标签最多5个"
+                    status_code=status.HTTP_400_BAD_REQUEST, detail="Maximum 5 interest tags"
                 )
 
         story_id = str(uuid.uuid4())
@@ -784,6 +784,7 @@ async def create_story_from_image(
                     vision_raw.get("objects")
                     or (
                         vision_text
+                        and "unable" not in vision_text.lower()
                         and "无法" not in vision_text
                         and "error" not in vision_text.lower()
                     )
@@ -1059,7 +1060,7 @@ async def create_story_from_image_stream(
         if len(interests_list) > 5:
 
             async def error_generator():
-                yield f"event: error\ndata: {json.dumps({'error': 'ValidationError', 'message': '兴趣标签最多5个'}, ensure_ascii=False)}\n\n"
+                yield f"event: error\ndata: {json.dumps({'error': 'ValidationError', 'message': 'Maximum 5 interest tags'}, ensure_ascii=False)}\n\n"
 
             return StreamingResponse(error_generator(), media_type="text/event-stream")
 
@@ -1324,6 +1325,7 @@ async def create_story_from_image_stream(
                                 s_vision_raw.get("objects")
                                 or (
                                     s_vision_text
+                                    and "unable" not in s_vision_text.lower()
                                     and "无法" not in s_vision_text
                                     and "error" not in s_vision_text.lower()
                                 )

@@ -662,7 +662,7 @@ async def generate_kids_daily_on_demand(
     if not has_sub:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="请先订阅该频道 (Subscribe to this topic first)",
+            detail="Please subscribe to this channel first",
         )
 
     # 2. Rate limit: max N on-demand generations per child per hour
@@ -680,7 +680,7 @@ async def generate_kids_daily_on_demand(
         return JSONResponse(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             content={
-                "message": f"你今天听了好多！{retry_after // 60} 分钟后再来吧",
+                "message": f"You've listened to a lot today! Try again in {retry_after // 60} minutes",
                 "retry_after": retry_after,
             },
             headers={"Retry-After": str(retry_after)},
@@ -691,7 +691,7 @@ async def generate_kids_daily_on_demand(
     if news_text is None:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="现在找不到新鲜新闻，过几分钟再试试！ (Could not fetch headlines)",
+            detail="No fresh news available right now, please try again in a few minutes",
         )
 
     # 4. Build episode using the shared pipeline
@@ -729,7 +729,7 @@ async def generate_kids_daily_on_demand_stream(
     if not has_sub:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="请先订阅该频道 (Subscribe to this topic first)",
+            detail="Please subscribe to this channel first",
         )
 
     # 2. Rate limit
@@ -747,7 +747,7 @@ async def generate_kids_daily_on_demand_stream(
         return JSONResponse(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             content={
-                "message": f"你今天听了好多！{retry_after // 60} 分钟后再来吧",
+                "message": f"You've listened to a lot today! Try again in {retry_after // 60} minutes",
                 "retry_after": retry_after,
             },
             headers={"Retry-After": str(retry_after)},
@@ -758,7 +758,7 @@ async def generate_kids_daily_on_demand_stream(
     if news_text is None:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="现在找不到新鲜新闻，过几分钟再试试！ (Could not fetch headlines)",
+            detail="No fresh news available right now, please try again in a few minutes",
         )
 
     build_request = KidsDailyRequest(
@@ -770,13 +770,13 @@ async def generate_kids_daily_on_demand_stream(
     )
 
     async def event_generator() -> AsyncGenerator[str, None]:
-        yield f"event: status\ndata: {json.dumps({'phase': 'fetching_news', 'message': '正在获取新闻...'}, ensure_ascii=False)}\n\n"
+        yield f"event: status\ndata: {json.dumps({'phase': 'fetching_news', 'message': 'Fetching news...'}, ensure_ascii=False)}\n\n"
 
         if await http_request.is_disconnected():
             logger.info("Client disconnected during on-demand stream, aborting")
             return
 
-        yield f"event: status\ndata: {json.dumps({'phase': 'generating_script', 'message': '正在生成脚本...'}, ensure_ascii=False)}\n\n"
+        yield f"event: status\ndata: {json.dumps({'phase': 'generating_script', 'message': 'Generating script...'}, ensure_ascii=False)}\n\n"
 
         async for event in stream_kids_daily_generation(
             news_text=news_text,
@@ -798,12 +798,12 @@ async def generate_kids_daily_on_demand_stream(
             logger.info("Client disconnected before on-demand audio/illustration, skipping")
             return
 
-        yield f"event: status\ndata: {json.dumps({'phase': 'generating_audio', 'message': '正在生成音频...'}, ensure_ascii=False)}\n\n"
+        yield f"event: status\ndata: {json.dumps({'phase': 'generating_audio', 'message': 'Generating audio...'}, ensure_ascii=False)}\n\n"
 
         if await http_request.is_disconnected():
             return
 
-        yield f"event: status\ndata: {json.dumps({'phase': 'generating_illustrations', 'message': '正在生成插画...'}, ensure_ascii=False)}\n\n"
+        yield f"event: status\ndata: {json.dumps({'phase': 'generating_illustrations', 'message': 'Generating illustrations...'}, ensure_ascii=False)}\n\n"
 
         if await http_request.is_disconnected():
             return
@@ -816,7 +816,7 @@ async def generate_kids_daily_on_demand_stream(
             yield f"event: complete\ndata: {json.dumps({'phase': 'complete', 'message': 'Kids Daily generation complete'}, ensure_ascii=False)}\n\n"
         except Exception as exc:
             logger.error("On-demand kids daily build failed: %s", exc)
-            yield f"event: error\ndata: {json.dumps({'phase': 'error', 'message': '节目生成失败，请稍后重试 / Episode generation failed, please try again later'}, ensure_ascii=False)}\n\n"
+            yield f"event: error\ndata: {json.dumps({'phase': 'error', 'message': 'Episode generation failed, please try again later'}, ensure_ascii=False)}\n\n"
             return
 
     return StreamingResponse(

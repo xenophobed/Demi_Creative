@@ -1,8 +1,8 @@
 """
 Image to Story Agent
 
-使用 Claude Agent SDK 将儿童画作转化为个性化故事。
-支持流式响应以减少超时和改善用户体验。
+Uses Claude Agent SDK to transform children's drawings into personalized stories.
+Supports streaming responses to reduce timeouts and improve user experience.
 """
 
 import json
@@ -228,12 +228,12 @@ def _mock_image_to_story_result(
 
 
 # ============================================================================
-# Pydantic 模型定义（用于 Structured Output）
+# Pydantic model definitions (for Structured Output)
 # ============================================================================
 
 
 class Character(BaseModel):
-    """故事中的角色"""
+    """A character in the story"""
 
     name: str
     description: str
@@ -241,7 +241,7 @@ class Character(BaseModel):
 
 
 class StoryOutput(BaseModel):
-    """故事生成的结构化输出"""
+    """Structured output for story generation"""
 
     story: str
     themes: List[str] = []
@@ -254,7 +254,7 @@ class StoryOutput(BaseModel):
 
 
 # ============================================================================
-# Agent 函数
+# Agent functions
 # ============================================================================
 
 
@@ -295,33 +295,33 @@ async def image_to_story(
     provider: str = None,
 ) -> Dict[str, Any]:
     """
-    将儿童画作转化为个性化故事
+    Transform a child's drawing into a personalized story
 
     Args:
-        image_path: 画作图片路径
-        child_id: 儿童ID
-        child_age: 儿童年龄（3-12岁）
-        interests: 儿童兴趣标签列表
-        enable_audio: 是否生成语音
-        voice: 语音类型（可选，默认根据年龄组选择）
-        art_theme: 艺术风格主题（可选，如 "cartoon", "watercolor" 等）
+        image_path: Path to the drawing image
+        child_id: Child ID
+        child_age: Child's age (3-12)
+        interests: List of child's interest tags
+        enable_audio: Whether to generate audio
+        voice: Voice type (optional, defaults based on age group)
+        art_theme: Art style theme (optional, e.g. "cartoon", "watercolor")
 
     Returns:
-        包含故事、音频等信息的字典
+        Dictionary containing story, audio, and other information
     """
     if _should_use_mock():
         return _mock_image_to_story_result(interests or [], art_theme=art_theme)
     runtime_issue = _runtime_unavailable_reason()
     if runtime_issue:
         raise RuntimeError(runtime_issue)
-    # 验证输入
+    # Validate input
     if not Path(image_path).exists():
-        raise FileNotFoundError(f"图片文件不存在: {image_path}")
+        raise FileNotFoundError(f"Image file not found: {image_path}")
 
     if not 3 <= child_age <= 12:
-        raise ValueError("儿童年龄必须在 3-12 岁之间")
+        raise ValueError("Child age must be between 3 and 12")
 
-    interests_str = "、".join(interests) if interests else "未指定"
+    interests_str = ", ".join(interests) if interests else "not specified"
 
     # Get age-based audio config
     age_group = _get_age_group_from_age(child_age)
@@ -349,65 +349,67 @@ async def image_to_story(
     except Exception:
         pass  # Best-effort
 
-    # 构建提示词
-    prompt = f"""请为这幅儿童画作创作一个适合{child_age}岁儿童的故事。
+    # Build prompt
+    prompt = f"""Please create a story suitable for a {child_age}-year-old child based on this children's drawing.
 
-**任务信息**：
-- 画作路径: {image_path}
-- 儿童ID: {child_id}
-- 儿童年龄: {child_age}岁
-- 兴趣爱好: {interests_str}
+**Task Information**:
+- Drawing path: {image_path}
+- Child ID: {child_id}
+- Child age: {child_age} years old
+- Interests: {interests_str}
 {story_memory_section}{dedup_nudge}
-**要求**：
-1. 首先使用 `mcp__vision-analysis__analyze_children_drawing` 工具分析画作
-2. 使用 `mcp__vector-search__search_similar_drawings` 工具搜索该儿童之前的相似画作，以保持角色和故事的连续性
-3. 根据分析结果创作一个温馨、有教育意义的故事
-4. 故事长度约 {min_words}-{max_words} 字
-5. 语言要适合 {child_age} 岁儿童
-6. **重要**：故事创作完成后，使用 `mcp__vector-search__store_drawing_embedding` 工具将画作存储到向量数据库，参数如下：
-   - drawing_description: 画作的文字描述（从分析结果中获取）
+**Requirements**:
+1. First, use the `mcp__vision-analysis__analyze_children_drawing` tool to analyze the drawing
+2. Use the `mcp__vector-search__search_similar_drawings` tool to search for this child's previous similar drawings to maintain character and story continuity
+3. Based on the analysis results, create a warm, educational story
+4. Story length should be approximately {min_words}-{max_words} words
+5. Language should be appropriate for a {child_age}-year-old child
+6. **Important**: After the story is created, use the `mcp__vector-search__store_drawing_embedding` tool to store the drawing in the vector database with the following parameters:
+   - drawing_description: Text description of the drawing (from the analysis results)
    - child_id: {child_id}
-   - drawing_analysis: 画作分析结果（包含 objects, scene, mood, colors, recurring_characters）
-   - story_text: 生成的故事文本
+   - drawing_analysis: Drawing analysis results (including objects, scene, mood, colors, recurring_characters)
+   - story_text: The generated story text
    - image_path: {image_path}
 
-请根据画作内容创作故事，并提取主题、概念和寓意。
+Please create a story based on the drawing content, and extract themes, concepts, and moral lessons.
 
-**安全检查（必须执行）**：
-故事创作完成后，你**必须**使用 `mcp__safety-check__check_content_safety` 工具检查故事内容的安全性，参数如下：
-- content_text: 生成的故事文本
+**Safety Check (Mandatory)**:
+After the story is created, you **must** use the `mcp__safety-check__check_content_safety` tool to check the story content safety with the following parameters:
+- content_text: The generated story text
 - target_age: {child_age}
 - content_type: "story"
-如果安全检查未通过（passed == false），**必须**使用 `mcp__safety-check__suggest_content_improvements` 工具改进内容，然后重新检查，最多重试3次。
-安全检查通过后才能继续后续步骤。
+If the safety check fails (passed == false), you **must** use the `mcp__safety-check__suggest_content_improvements` tool to improve the content, then re-check, up to 3 retries.
+Only proceed to the next steps after the safety check passes.
+
+Always respond in English.
 """
 
     # Add style transfer instruction if art_theme is specified
     if art_theme and art_theme != "none":
         prompt += f"""
-**画作风格转换**：
-在分析画作之后、创作故事之前，使用 `mcp__image-style__transform_art_style` 工具将画作转换为"{art_theme}"风格。参数：
+**Art Style Transfer**:
+After analyzing the drawing and before creating the story, use the `mcp__image-style__transform_art_style` tool to transform the drawing into "{art_theme}" style. Parameters:
 - image_path: {image_path}
 - theme: {art_theme}
 - child_age: {child_age}
 - session_id: {child_id}
 
-转换后的图片将作为故事封面。请在故事创作中考虑这种艺术风格，让故事的语调和氛围与风格相配。
-如果风格转换失败，请继续使用原始画作。
+The transformed image will serve as the story cover. Please consider this art style in the story creation, matching the story's tone and atmosphere to the style.
+If the style transfer fails, continue using the original drawing.
 """
 
     # Add TTS instruction if audio should be generated
     if should_generate_audio:
-        provider_line = f"\n- 供应商: {provider}" if provider else ""
+        provider_line = f"\n- Provider: {provider}" if provider else ""
         prompt += f"""
-**语音生成**：
-故事创作完成后，请使用 `mcp__tts-generation__generate_story_audio` 工具为故事文本生成语音。
-- 语音类型: {actual_voice}
-- 语速: {audio_speed}
-- 儿童ID: {child_id}{provider_line}
+**Audio Generation**:
+After the story is created, use the `mcp__tts-generation__generate_story_audio` tool to generate audio narration for the story text.
+- Voice type: {actual_voice}
+- Speed: {audio_speed}
+- Child ID: {child_id}{provider_line}
 """
 
-    # 配置 Agent 选项（使用 Structured Output）
+    # Configure Agent options (using Structured Output)
     mcp_servers = {
         "vision-analysis": vision_server,
         "vector-search": vector_server,
@@ -438,15 +440,15 @@ async def image_to_story(
         allowed_tools=allowed_tools,
         cwd=".",
         permission_mode="acceptEdits",
-        max_turns=15,  # 增加 turns 以适应更多工具调用
-        # 使用 Structured Output
+        max_turns=15,  # Increase turns to accommodate more tool calls
+        # Use Structured Output
         output_format={
             "type": "json_schema",
             "schema": StoryOutput.model_json_schema(),
         },
     )
 
-    # 使用 ClaudeSDKClient 调用 Agent
+    # Use ClaudeSDKClient to invoke the Agent
     result_data = {}
     audio_path = None
     styled_image_path = None
@@ -491,11 +493,11 @@ async def image_to_story(
                                     pass
 
             if isinstance(message, ResultMessage):
-                # 使用 structured_output 获取结构化结果
+                # Use structured_output to get structured results
                 if hasattr(message, "structured_output") and message.structured_output:
                     result_data = message.structured_output
                 elif message.result:
-                    # 回退：如果没有 structured_output，尝试解析 result
+                    # Fallback: if no structured_output, try parsing result
                     if isinstance(message.result, dict):
                         result_data = message.result
                     else:
@@ -533,24 +535,24 @@ async def stream_image_to_story(
     provider: str = None,
 ) -> AsyncGenerator[Dict[str, Any], None]:
     """
-    流式返回故事生成过程
+    Stream story generation progress
 
     Args:
-        image_path: 画作图片路径
-        child_id: 儿童ID
-        child_age: 儿童年龄
-        interests: 兴趣标签列表
-        enable_audio: 是否生成语音
-        voice: 语音类型（可选）
-        art_theme: 艺术风格主题（可选，如 "cartoon", "watercolor" 等）
+        image_path: Path to the drawing image
+        child_id: Child ID
+        child_age: Child's age
+        interests: List of interest tags
+        enable_audio: Whether to generate audio
+        voice: Voice type (optional)
+        art_theme: Art style theme (optional, e.g. "cartoon", "watercolor")
 
     Yields:
-        流式事件字典，包含 type 和 data 字段
+        Streaming event dictionaries containing type and data fields
     """
     if _should_use_mock():
         yield {
             "type": "status",
-            "data": {"status": "started", "message": "正在分析画作..."},
+            "data": {"status": "started", "message": "Analyzing drawing..."},
         }
         yield {
             "type": "result",
@@ -558,7 +560,7 @@ async def stream_image_to_story(
         }
         yield {
             "type": "complete",
-            "data": {"status": "completed", "message": "故事生成完成"},
+            "data": {"status": "completed", "message": "Story generation complete"},
         }
         return
     runtime_issue = _runtime_unavailable_reason()
@@ -568,13 +570,13 @@ async def stream_image_to_story(
             "data": {"error": "RuntimeError", "message": runtime_issue},
         }
         return
-    # 验证输入
+    # Validate input
     if not Path(image_path).exists():
         yield {
             "type": "error",
             "data": {
                 "error": "FileNotFoundError",
-                "message": f"图片文件不存在: {image_path}",
+                "message": f"Image file not found: {image_path}",
             },
         }
         return
@@ -582,11 +584,11 @@ async def stream_image_to_story(
     if not 3 <= child_age <= 12:
         yield {
             "type": "error",
-            "data": {"error": "ValueError", "message": "儿童年龄必须在 3-12 岁之间"},
+            "data": {"error": "ValueError", "message": "Child age must be between 3 and 12"},
         }
         return
 
-    interests_str = "、".join(interests) if interests else "未指定"
+    interests_str = ", ".join(interests) if interests else "not specified"
 
     # Get age-based audio config
     age_group = _get_age_group_from_age(child_age)
@@ -600,10 +602,10 @@ async def stream_image_to_story(
     actual_voice = voice or audio_config["voice"]
     audio_speed = audio_config["speed"]
 
-    # 发送开始事件
+    # Send start event
     yield {
         "type": "status",
-        "data": {"status": "started", "message": "正在分析画作..."},
+        "data": {"status": "started", "message": "Analyzing drawing..."},
     }
 
     # Build story memory section for streaming path (#165)
@@ -620,61 +622,63 @@ async def stream_image_to_story(
     except Exception:
         pass  # Best-effort
 
-    prompt = f"""请为这幅儿童画作创作一个适合{child_age}岁儿童的故事。
+    prompt = f"""Please create a story suitable for a {child_age}-year-old child based on this children's drawing.
 
-**任务信息**：
-- 画作路径: {image_path}
-- 儿童ID: {child_id}
-- 儿童年龄: {child_age}岁
-- 兴趣爱好: {interests_str}
+**Task Information**:
+- Drawing path: {image_path}
+- Child ID: {child_id}
+- Child age: {child_age} years old
+- Interests: {interests_str}
 {stream_memory_section}{stream_dedup_nudge}
-**要求**：
-1. 首先使用 `mcp__vision-analysis__analyze_children_drawing` 工具分析画作
-2. 使用 `mcp__vector-search__search_similar_drawings` 工具搜索该儿童之前的相似画作，以保持角色和故事的连续性
-3. 根据分析结果创作一个温馨、有教育意义的故事
-4. 故事长度约 {min_words}-{max_words} 字
-5. 语言要适合 {child_age} 岁儿童
-6. **重要**：故事创作完成后，使用 `mcp__vector-search__store_drawing_embedding` 工具将画作存储到向量数据库，参数如下：
-   - drawing_description: 画作的文字描述（从分析结果中获取）
+**Requirements**:
+1. First, use the `mcp__vision-analysis__analyze_children_drawing` tool to analyze the drawing
+2. Use the `mcp__vector-search__search_similar_drawings` tool to search for this child's previous similar drawings to maintain character and story continuity
+3. Based on the analysis results, create a warm, educational story
+4. Story length should be approximately {min_words}-{max_words} words
+5. Language should be appropriate for a {child_age}-year-old child
+6. **Important**: After the story is created, use the `mcp__vector-search__store_drawing_embedding` tool to store the drawing in the vector database with the following parameters:
+   - drawing_description: Text description of the drawing (from the analysis results)
    - child_id: {child_id}
-   - drawing_analysis: 画作分析结果（包含 objects, scene, mood, colors, recurring_characters）
-   - story_text: 生成的故事文本
+   - drawing_analysis: Drawing analysis results (including objects, scene, mood, colors, recurring_characters)
+   - story_text: The generated story text
    - image_path: {image_path}
 
-请根据画作内容创作故事，并提取主题、概念和寓意。
+Please create a story based on the drawing content, and extract themes, concepts, and moral lessons.
 
-**安全检查（必须执行）**：
-故事创作完成后，你**必须**使用 `mcp__safety-check__check_content_safety` 工具检查故事内容的安全性，参数如下：
-- content_text: 生成的故事文本
+**Safety Check (Mandatory)**:
+After the story is created, you **must** use the `mcp__safety-check__check_content_safety` tool to check the story content safety with the following parameters:
+- content_text: The generated story text
 - target_age: {child_age}
 - content_type: "story"
-如果安全检查未通过（passed == false），**必须**使用 `mcp__safety-check__suggest_content_improvements` 工具改进内容，然后重新检查，最多重试3次。
-安全检查通过后才能继续后续步骤。
+If the safety check fails (passed == false), you **must** use the `mcp__safety-check__suggest_content_improvements` tool to improve the content, then re-check, up to 3 retries.
+Only proceed to the next steps after the safety check passes.
+
+Always respond in English.
 """
 
     # Add style transfer instruction if art_theme is specified
     if art_theme and art_theme != "none":
         prompt += f"""
-**画作风格转换**：
-在分析画作之后、创作故事之前，使用 `mcp__image-style__transform_art_style` 工具将画作转换为"{art_theme}"风格。参数：
+**Art Style Transfer**:
+After analyzing the drawing and before creating the story, use the `mcp__image-style__transform_art_style` tool to transform the drawing into "{art_theme}" style. Parameters:
 - image_path: {image_path}
 - theme: {art_theme}
 - child_age: {child_age}
 - session_id: {child_id}
 
-转换后的图片将作为故事封面。请在故事创作中考虑这种艺术风格，让故事的语调和氛围与风格相配。
-如果风格转换失败，请继续使用原始画作。
+The transformed image will serve as the story cover. Please consider this art style in the story creation, matching the story's tone and atmosphere to the style.
+If the style transfer fails, continue using the original drawing.
 """
 
     # Add TTS instruction if audio should be generated
     if should_generate_audio:
-        provider_line = f"\n- 供应商: {provider}" if provider else ""
+        provider_line = f"\n- Provider: {provider}" if provider else ""
         prompt += f"""
-**语音生成**：
-故事创作完成后，请使用 `mcp__tts-generation__generate_story_audio` 工具为故事文本生成语音。
-- 语音类型: {actual_voice}
-- 语速: {audio_speed}
-- 儿童ID: {child_id}{provider_line}
+**Audio Generation**:
+After the story is created, use the `mcp__tts-generation__generate_story_audio` tool to generate audio narration for the story text.
+- Voice type: {actual_voice}
+- Speed: {audio_speed}
+- Child ID: {child_id}{provider_line}
 """
 
     mcp_servers = {
@@ -703,7 +707,7 @@ async def stream_image_to_story(
         allowed_tools=allowed_tools,
         cwd=".",
         permission_mode="acceptEdits",
-        max_turns=15,  # 增加 turns 以适应更多工具调用
+        max_turns=15,  # Increase turns to accommodate more tool calls
         output_format={
             "type": "json_schema",
             "schema": StoryOutput.model_json_schema(),
@@ -720,7 +724,7 @@ async def stream_image_to_story(
             await client.query(prompt)
 
             async for message in client.receive_response():
-                # 处理助手消息（思考过程和工具使用）
+                # Process assistant messages (thinking and tool use)
                 if isinstance(message, AssistantMessage):
                     turn_count += 1
 
@@ -740,21 +744,21 @@ async def stream_image_to_story(
                         for block in content:
                             if isinstance(block, ToolUseBlock):
                                 tool_name = getattr(block, "name", "unknown")
-                                # 友好的工具名称映射
+                                # Friendly tool name mapping
                                 tool_messages = {
-                                    "mcp__vision-analysis__analyze_children_drawing": "正在分析画作...",
-                                    "mcp__vector-search__search_similar_drawings": "正在搜索相似画作...",
-                                    "mcp__vector-search__store_drawing_embedding": "正在保存画作到记忆库...",
-                                    "mcp__safety-check__check_content_safety": "正在检查内容安全...",
-                                    "mcp__tts-generation__generate_story_audio": "正在生成语音...",
-                                    "mcp__image-style__transform_art_style": "正在转换画作风格...",
+                                    "mcp__vision-analysis__analyze_children_drawing": "Analyzing drawing...",
+                                    "mcp__vector-search__search_similar_drawings": "Searching similar drawings...",
+                                    "mcp__vector-search__store_drawing_embedding": "Saving drawing to memory...",
+                                    "mcp__safety-check__check_content_safety": "Checking content safety...",
+                                    "mcp__tts-generation__generate_story_audio": "Generating audio...",
+                                    "mcp__image-style__transform_art_style": "Applying art style...",
                                 }
                                 yield {
                                     "type": "tool_use",
                                     "data": {
                                         "tool": tool_name,
                                         "message": tool_messages.get(
-                                            tool_name, f"正在使用 {tool_name}..."
+                                            tool_name, f"Using {tool_name}..."
                                         ),
                                     },
                                 }
@@ -785,7 +789,7 @@ async def stream_image_to_story(
                                                 "type": "audio_generated",
                                                 "data": {
                                                     "audio_path": audio_path,
-                                                    "message": "语音生成完成",
+                                                    "message": "Audio generation complete",
                                                 },
                                             }
                                         if "styled_image_path" in result_json:
@@ -812,7 +816,7 @@ async def stream_image_to_story(
                                         },
                                     }
 
-                # 处理最终结果
+                # Process final result
                 elif isinstance(message, ResultMessage):
                     if (
                         hasattr(message, "structured_output")
@@ -839,7 +843,7 @@ async def stream_image_to_story(
             "type": "error",
             "data": {
                 "error": str(type(e).__name__),
-                "message": f"生成故事时发生错误: {str(e)}",
+                "message": f"Error generating story: {str(e)}",
             },
         }
         return
@@ -852,23 +856,23 @@ async def stream_image_to_story(
     if styled_image_path:
         result_data["styled_image_path"] = styled_image_path
 
-    # 发送最终结果
+    # Send final result
     yield {"type": "result", "data": result_data}
 
     yield {
         "type": "complete",
-        "data": {"status": "completed", "message": "故事创作完成！"},
+        "data": {"status": "completed", "message": "Story creation complete!"},
     }
 
 
 if __name__ == "__main__":
-    """测试 Agent"""
+    """Test Agent"""
     import asyncio
 
     async def test():
-        print("=== 测试 Image to Story Agent ===\n")
+        print("=== Test Image to Story Agent ===\n")
 
-        # 创建测试图片
+        # Create test image
         from PIL import Image
 
         test_image_path = "./test_drawing.png"
@@ -880,18 +884,18 @@ if __name__ == "__main__":
                 image_path=test_image_path,
                 child_id="test_child_001",
                 child_age=7,
-                interests=["动物", "冒险"],
+                interests=["animals", "adventure"],
             )
 
-            print("✅ 故事生成成功！")
-            print("\n结果：")
+            print("Story generation successful!")
+            print("\nResult:")
             print(result)
 
         except Exception as e:
-            print(f"❌ 错误: {e}")
+            print(f"Error: {e}")
 
         finally:
-            # 清理测试文件
+            # Clean up test file
             if Path(test_image_path).exists():
                 Path(test_image_path).unlink()
 

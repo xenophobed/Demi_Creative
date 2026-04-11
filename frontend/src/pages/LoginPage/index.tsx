@@ -16,27 +16,27 @@ function friendlyAuthError(raw: string, mode: AuthMode): string {
   // Wrong credentials (Supabase + legacy backend)
   if (lower.includes('invalid login credentials') || lower.includes('invalid credentials')
       || lower.includes('incorrect password') || lower.includes('user not found'))
-    return '邮箱或密码不对哦，请检查后再试一次 🔑'
+    return 'Incorrect email or password. Please try again.'
   if (lower.includes('account has been disabled'))
-    return '这个账号已被停用，请联系管理员 🔒'
+    return 'This account has been disabled. Please contact support.'
   if (lower.includes('email not confirmed') || lower.includes('please check your email'))
-    return '请先去邮箱里点确认链接，然后再回来登录 📬'
+    return 'Please click the confirmation link in your email first, then come back to log in.'
   if (lower.includes('user already registered') || lower.includes('already exists'))
-    return '这个邮箱已经注册过了，试试直接登录？'
+    return 'This email is already registered. Try signing in instead?'
   if (lower.includes('too many requests') || lower.includes('rate limit'))
-    return '尝试次数太多了，请稍等一会儿再试 ⏳'
+    return 'Too many attempts. Please wait a moment and try again.'
   if (lower.includes('network') || lower.includes('fetch') || lower.includes('timeout'))
-    return '网络好像有点问题，请检查网络连接后再试 📡'
+    return 'Network issue detected. Please check your connection and try again.'
   if (lower.includes('request failed with status code'))
-    return mode === 'login' ? '登录失败，请检查邮箱和密码是否正确 🔑' : '注册失败，请稍后再试'
+    return mode === 'login' ? 'Login failed. Please check your email and password.' : 'Registration failed. Please try again later.'
   if (mode === 'login')
-    return `登录遇到了问题：${raw}`
-  return `注册遇到了问题：${raw}`
+    return `Login error: ${raw}`
+  return `Registration error: ${raw}`
 }
 
 /** Pick icon based on error content: 📬 for email-related, 🔑 for credentials. */
 function errorIcon(message: string): string {
-  return message.includes('📬') || message.includes('邮箱里点确认') ? '📬' : '🔑'
+  return message.includes('confirmation link') ? '📬' : '🔑'
 }
 
 function LoginPage() {
@@ -210,8 +210,8 @@ function LoginPage() {
               className="text-center space-y-4 py-4"
             >
               <div className="text-5xl">📬</div>
-              <h2 className="text-xl font-bold text-gray-800">注册成功！请去邮箱点击确认链接</h2>
-              <p className="text-gray-500 text-sm">确认后即可自动登录</p>
+              <h2 className="text-xl font-bold text-gray-800">Registration successful! Please check your email for a confirmation link.</h2>
+              <p className="text-gray-500 text-sm">You can log in once confirmed.</p>
               <p className="text-gray-400 text-xs">{confirmationEmail}</p>
               <Button
                 type="button"
@@ -228,7 +228,7 @@ function LoginPage() {
                   }
                 }}
               >
-                重新发送确认邮件
+                Resend Confirmation Email
               </Button>
               <div>
                 <button
@@ -236,7 +236,7 @@ function LoginPage() {
                   onClick={() => { setConfirmationPending(false); setMode('login') }}
                   className="text-sm text-gray-500 hover:text-primary transition-colors"
                 >
-                  返回登录
+                  Back to Login
                 </button>
               </div>
             </motion.div>

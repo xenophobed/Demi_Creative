@@ -282,7 +282,7 @@ async def get_session_for_owner(session_id: str, user_id: str) -> SessionData:
     if not session:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="会话不存在",
+            detail="Session not found",
         )
 
     if session.user_id is None:
@@ -293,7 +293,7 @@ async def get_session_for_owner(session_id: str, user_id: str) -> SessionData:
     elif session.user_id != user_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="你无权访问该会话",
+            detail="You do not have permission to access this session",
         )
 
     return session

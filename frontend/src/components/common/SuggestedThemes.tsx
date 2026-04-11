@@ -59,12 +59,12 @@ const EN_PROMPT_TEMPLATES: Array<(seed: string) => string> = [
 ];
 
 const ZH_PROMPT_TEMPLATES: Array<(seed: string) => string> = [
-  (seed) => `在“${seed}”里的限时救援`,
-  (seed) => `如果“${seed}”藏着一个不可能的秘密`,
-  (seed) => `在日落前守护“${seed}”的竞速任务`,
-  (seed) => `一个小小英雄被困在“${seed}”`,
-  (seed) => `只有你能解开的“${seed}”谜题`,
-  (seed) => `一次选择改写“${seed}”的命运`,
+  (seed) => `A timed rescue inside ${seed}`,
+  (seed) => `What if ${seed} hid an impossible secret?`,
+  (seed) => `A race before sunset to protect ${seed}`,
+  (seed) => `A tiny hero trapped in ${seed}`,
+  (seed) => `A puzzle only you can solve about ${seed}`,
+  (seed) => `One choice that rewrites the fate of ${seed}`,
 ];
 
 function normalizeTheme(raw: string): string {
@@ -130,7 +130,7 @@ function buildPromptSuggestions(
     const first = seeds[i];
     const second = seeds[i + 1];
     if (isCJK(first + second)) {
-      prompts.push(`当“${first}”遇上“${second}”的一天`);
+      prompts.push(`The day when ${first} met ${second}`);
     } else {
       prompts.push(`When ${first} meets ${second}`);
     }

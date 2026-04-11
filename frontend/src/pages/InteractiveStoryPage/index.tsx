@@ -114,7 +114,7 @@ function InteractiveStoryPage() {
         .catch(() => {
           reset();
           if (!cancelled) {
-            setSessionExpiredMsg("该故事已不可用，请开始一个新故事。");
+            setSessionExpiredMsg("This story is no longer available. Please start a new story.");
           }
         })
         .finally(() => {

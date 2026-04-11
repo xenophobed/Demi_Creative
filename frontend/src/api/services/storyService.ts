@@ -158,14 +158,14 @@ export const storyService = {
         const errorData = await response.json().catch(() => ({}));
         const detail = errorData.detail ?? errorData;
         const resetsAt = detail.resets_at;
-        let friendlyMsg = "今天的创作次数用完啦！";
+        let friendlyMsg = "You've reached your daily creation limit!";
         if (resetsAt) {
           const resetDate = new Date(resetsAt);
           const hours = resetDate.getHours().toString().padStart(2, "0");
           const minutes = resetDate.getMinutes().toString().padStart(2, "0");
-          friendlyMsg += `明天 ${hours}:${minutes} 就可以继续创作了哦 ✨`;
+          friendlyMsg += ` You can create again tomorrow at ${hours}:${minutes}.`;
         } else {
-          friendlyMsg += "明天再来画新故事吧 ✨";
+          friendlyMsg += " Come back tomorrow to draw new stories!";
         }
         throw new Error(friendlyMsg);
       }
@@ -306,14 +306,14 @@ export const storyService = {
         const errorData = await response.json().catch(() => ({}));
         const detail = errorData.detail ?? errorData;
         const resetsAt = detail.resets_at;
-        let friendlyMsg = "今天的创作次数用完啦！";
+        let friendlyMsg = "You've reached your daily creation limit!";
         if (resetsAt) {
           const resetDate = new Date(resetsAt);
           const hours = resetDate.getHours().toString().padStart(2, "0");
           const minutes = resetDate.getMinutes().toString().padStart(2, "0");
-          friendlyMsg += `明天 ${hours}:${minutes} 就可以继续创作了哦 ✨`;
+          friendlyMsg += ` You can create again tomorrow at ${hours}:${minutes}.`;
         } else {
-          friendlyMsg += "明天再来画新故事吧 ✨";
+          friendlyMsg += " Come back tomorrow to draw new stories!";
         }
         throw new Error(friendlyMsg);
       }

@@ -42,7 +42,7 @@ export default function QuotaExceededOverlay({ show, message, onDismiss, referra
           >
             <div className="text-5xl mb-4">🌙</div>
             <h2 className="text-xl font-bold text-amber-800 mb-2">
-              今天的创作次数用完啦！
+              You've used up today's creations!
             </h2>
             <p className="text-amber-700 mb-4 leading-relaxed">
               {message}
@@ -88,7 +88,7 @@ export default function QuotaExceededOverlay({ show, message, onDismiss, referra
               onClick={onDismiss}
               className="px-6 py-2.5 rounded-full bg-amber-400 hover:bg-amber-500 text-white font-semibold shadow-md transition-colors"
             >
-              知道了
+              Got it
             </button>
           </motion.div>
         </motion.div>
@@ -99,5 +99,5 @@ export default function QuotaExceededOverlay({ show, message, onDismiss, referra
 
 /** Check whether an error message is a quota-exceeded error */
 export function isQuotaError(msg: string | null | undefined): boolean {
-  return !!msg && msg.includes('创作次数用完')
+  return !!msg && msg.includes('daily creation limit')
 }
