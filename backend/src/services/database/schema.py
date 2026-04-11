@@ -622,14 +622,14 @@ async def _migrate_add_referral_columns(db: "DatabaseManager") -> None:
 
 async def migrate_json_sessions(db: "DatabaseManager", sessions_dir: str = "./data/sessions") -> int:
     """
-    将JSON会话文件迁移到SQLite数据库
+    Migrate JSON session files to SQLite database
 
     Args:
-        db: 数据库管理器实例
-        sessions_dir: JSON会话文件目录
+        db: Database manager instance
+        sessions_dir: JSON session files directory
 
     Returns:
-        int: 迁移的会话数量
+        int: Number of migrated sessions
     """
     from datetime import datetime
 
@@ -647,7 +647,7 @@ async def migrate_json_sessions(db: "DatabaseManager", sessions_dir: str = "./da
             with open(json_file, 'r', encoding='utf-8') as f:
                 data = json.load(f)
 
-            # 检查是否已迁移（通过查询数据库）
+            # Check if already migrated (by querying database)
             existing = await db.fetchone(
                 "SELECT session_id FROM sessions WHERE session_id = ?",
                 (data['session_id'],)
@@ -655,7 +655,7 @@ async def migrate_json_sessions(db: "DatabaseManager", sessions_dir: str = "./da
             if existing:
                 continue
 
-            # 插入会话数据
+            # Insert session data
             await db.execute(
                 """
                 INSERT INTO sessions (
@@ -686,7 +686,7 @@ async def migrate_json_sessions(db: "DatabaseManager", sessions_dir: str = "./da
                 )
             )
 
-            # 插入故事段落
+            # Insert story segments
             for segment in data.get('segments', []):
                 await db.execute(
                     """
@@ -708,7 +708,7 @@ async def migrate_json_sessions(db: "DatabaseManager", sessions_dir: str = "./da
 
             await db.commit()
 
-            # 重命名已迁移的文件
+            # Rename migrated files
             migrated_file = json_file.with_suffix('.json.migrated')
             json_file.rename(migrated_file)
 

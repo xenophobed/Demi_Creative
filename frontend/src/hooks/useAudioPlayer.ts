@@ -29,7 +29,7 @@ export function useAudioPlayer(src: string | null, options?: UseAudioPlayerOptio
     onErrorRef.current = options?.onError
   }, [options?.onEnd, options?.onLoad, options?.onError])
 
-  // 清理函数
+  // Cleanup function
   const cleanup = useCallback(() => {
     if (intervalRef.current) {
       clearInterval(intervalRef.current)
@@ -41,7 +41,7 @@ export function useAudioPlayer(src: string | null, options?: UseAudioPlayerOptio
     }
   }, [])
 
-  // 初始化音频
+  // Initialize audio
   useEffect(() => {
     if (!src) {
       cleanup()
@@ -95,7 +95,7 @@ export function useAudioPlayer(src: string | null, options?: UseAudioPlayerOptio
     return cleanup
   }, [src, cleanup, options?.autoPlay])
 
-  // 更新播放进度
+  // Update playback progress
   useEffect(() => {
     if (!soundRef.current || !state.isPlaying) {
       if (intervalRef.current) {
@@ -122,7 +122,7 @@ export function useAudioPlayer(src: string | null, options?: UseAudioPlayerOptio
     }
   }, [state.isPlaying])
 
-  // 播放
+  // Play
   const play = useCallback(() => {
     if (soundRef.current) {
       soundRef.current.play()
@@ -130,7 +130,7 @@ export function useAudioPlayer(src: string | null, options?: UseAudioPlayerOptio
     }
   }, [])
 
-  // 暂停
+  // Pause
   const pause = useCallback(() => {
     if (soundRef.current) {
       soundRef.current.pause()
@@ -138,7 +138,7 @@ export function useAudioPlayer(src: string | null, options?: UseAudioPlayerOptio
     }
   }, [])
 
-  // 切换播放/暂停
+  // Toggle play/pause
   const toggle = useCallback(() => {
     if (state.isPlaying) {
       pause()
@@ -147,7 +147,7 @@ export function useAudioPlayer(src: string | null, options?: UseAudioPlayerOptio
     }
   }, [state.isPlaying, play, pause])
 
-  // 跳转到指定时间
+  // Seek to specific time
   const seek = useCallback((time: number) => {
     if (soundRef.current) {
       soundRef.current.seek(time)
@@ -155,7 +155,7 @@ export function useAudioPlayer(src: string | null, options?: UseAudioPlayerOptio
     }
   }, [])
 
-  // 停止并重置
+  // Stop and reset
   const stop = useCallback(() => {
     if (soundRef.current) {
       soundRef.current.stop()
@@ -167,14 +167,14 @@ export function useAudioPlayer(src: string | null, options?: UseAudioPlayerOptio
     }
   }, [])
 
-  // 设置音量 (0-1)
+  // Set volume (0-1)
   const setVolume = useCallback((volume: number) => {
     if (soundRef.current) {
       soundRef.current.volume(Math.max(0, Math.min(1, volume)))
     }
   }, [])
 
-  // 格式化时间
+  // Format time
   const formatTime = useCallback((seconds: number): string => {
     const mins = Math.floor(seconds / 60)
     const secs = Math.floor(seconds % 60)

@@ -138,13 +138,13 @@ class SessionRepository:
 
     async def get_session(self, session_id: str) -> Optional[SessionData]:
         """
-        获取会话数据
+        Get session data
 
         Args:
-            session_id: 会话ID
+            session_id: Session ID
 
         Returns:
-            SessionData 或 None
+            SessionData or None
         """
         row = await self._db.fetchone(
             "SELECT * FROM sessions WHERE session_id = ?",
@@ -154,7 +154,7 @@ class SessionRepository:
         if not row:
             return None
 
-        # 检查是否过期
+        # Check if expired
         expires_at = datetime.fromisoformat(row['expires_at'])
         if datetime.now() > expires_at and row['status'] == 'active':
             await self._db.execute(
@@ -165,7 +165,7 @@ class SessionRepository:
             row = dict(row)
             row['status'] = 'expired'
 
-        # 获取故事段落
+        # Get story segments
         segments = await self._get_segments(session_id)
 
         return self._row_to_session(row, segments)
@@ -181,19 +181,19 @@ class SessionRepository:
         segment_id: Optional[int] = None
     ) -> bool:
         """
-        更新会话数据
+        Update session data
 
         Args:
-            session_id: 会话ID
-            segment: 新的故事段落
-            choice_id: 选择的选项ID
-            status: 新状态
-            educational_summary: 教育总结
-            audio_url: 段落的音频URL
-            segment_id: 音频对应的段落ID
+            session_id: Session ID
+            segment: New story segment
+            choice_id: Selected choice ID
+            status: New status
+            educational_summary: Educational summary
+            audio_url: Audio URL for segment
+            segment_id: Segment ID for audio
 
         Returns:
-            bool: 是否更新成功
+            bool: Whether update succeeded
         """
         session = await self.get_session(session_id)
         if not session:
@@ -201,7 +201,7 @@ class SessionRepository:
 
         now = datetime.now().isoformat()
 
-        # 更新段落
+        # Update segments
         if segment:
             await self._add_segment(session_id, segment)
             new_segment_count = session.current_segment + 1
@@ -210,7 +210,7 @@ class SessionRepository:
                 (new_segment_count, now, session_id)
             )
 
-        # 更新选择历史
+        # Update choice history
         if choice_id:
             new_history = session.choice_history + [choice_id]
             await self._db.execute(
@@ -218,21 +218,21 @@ class SessionRepository:
                 (json.dumps(new_history, ensure_ascii=False), now, session_id)
             )
 
-        # 更新状态
+        # Update status
         if status:
             await self._db.execute(
                 "UPDATE sessions SET status = ?, updated_at = ? WHERE session_id = ?",
                 (status, now, session_id)
             )
 
-        # 更新教育总结
+        # Update educational summary
         if educational_summary:
             await self._db.execute(
                 "UPDATE sessions SET educational_summary = ?, updated_at = ? WHERE session_id = ?",
                 (json.dumps(educational_summary, ensure_ascii=False), now, session_id)
             )
 
-        # 更新音频URL
+        # Update audio URL
         if audio_url and segment_id is not None:
             audio_urls = session.audio_urls or {}
             audio_urls[segment_id] = audio_url
@@ -241,7 +241,7 @@ class SessionRepository:
                 (json.dumps(audio_urls, ensure_ascii=False), now, session_id)
             )
 
-            # 同时更新segment表中的audio_url
+            # Also update audio_url in segment table
             await self._db.execute(
                 "UPDATE story_segments SET audio_url = ? WHERE session_id = ? AND segment_id = ?",
                 (audio_url, session_id, segment_id)
@@ -252,15 +252,15 @@ class SessionRepository:
 
     async def delete_session(self, session_id: str) -> bool:
         """
-        删除会话
+        Delete session
 
         Args:
-            session_id: 会话ID
+            session_id: Session ID
 
         Returns:
-            bool: 是否删除成功
+            bool: Whether deletion succeeded
         """
-        # 级联删除会自动删除story_segments
+        # Cascade delete will auto-delete story_segments
         cursor = await self._db.execute(
             "DELETE FROM sessions WHERE session_id = ?",
             (session_id,)
@@ -385,10 +385,10 @@ class SessionRepository:
 
     async def cleanup_expired_sessions(self) -> int:
         """
-        清理过期会话
+        Clean up expired sessions
 
         Returns:
-            int: 清理的会话数量
+            int: Number of cleaned sessions
         """
         now = datetime.now()
         cutoff = (now - timedelta(days=7)).isoformat()
@@ -405,7 +405,7 @@ class SessionRepository:
         return cursor.rowcount
 
     async def _add_segment(self, session_id: str, segment: Dict[str, Any]) -> None:
-        """添加故事段落"""
+        """Add story segment"""
         await self._db.execute(
             """
             INSERT INTO story_segments (
@@ -431,7 +431,7 @@ class SessionRepository:
         )
 
     async def _get_segments(self, session_id: str) -> List[Dict[str, Any]]:
-        """获取会话的所有故事段落"""
+        """Get all story segments for a session"""
         rows = await self._db.fetchall(
             """
             SELECT * FROM story_segments

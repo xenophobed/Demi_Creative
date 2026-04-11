@@ -1,7 +1,7 @@
 """
 Session Manager
 
-互动故事会话管理系统，使用 JSON 文件存储会话数据
+Interactive story session management system using JSON file storage
 """
 
 import json
@@ -14,7 +14,7 @@ from dataclasses import dataclass, asdict
 
 @dataclass
 class SessionData:
-    """会话数据结构"""
+    """Session data structure"""
     session_id: str
     child_id: str
     story_title: str
@@ -24,25 +24,25 @@ class SessionData:
     voice: str
     enable_audio: bool
 
-    # 故事进度
+    # Story progress
     current_segment: int
     total_segments: int
     choice_history: List[str]
 
-    # 故事内容
-    segments: List[Dict[str, Any]]  # 已生成的段落
+    # Story content
+    segments: List[Dict[str, Any]]  # Generated segments
 
-    # 元数据
+    # Metadata
     status: str  # active, completed, expired
     created_at: str
     updated_at: str
     expires_at: str
 
     # Fields with defaults must come last
-    # 音频追踪
+    # Audio tracking
     audio_urls: Optional[Dict[int, str]] = None  # segment_id -> audio_url
 
-    # 教育总结（完成后）
+    # Educational summary (after completion)
     educational_summary: Optional[Dict[str, Any]] = None
 
     def __post_init__(self):
@@ -51,23 +51,23 @@ class SessionData:
 
 
 class SessionManager:
-    """会话管理器"""
+    """Session manager"""
 
     def __init__(self, sessions_dir: str = "./data/sessions"):
         """
-        初始化会话管理器
+        Initialize session manager
 
         Args:
-            sessions_dir: 会话数据存储目录
+            sessions_dir: Session data storage directory
         """
         self.sessions_dir = Path(sessions_dir)
         self.sessions_dir.mkdir(parents=True, exist_ok=True)
 
-        # 默认过期时间：24小时
+        # Default expiry: 24 hours
         self.default_expiry_hours = 24
 
     def _get_session_path(self, session_id: str) -> Path:
-        """获取会话文件路径"""
+        """Get session file path"""
         return self.sessions_dir / f"{session_id}.json"
 
     def create_session(
@@ -82,20 +82,20 @@ class SessionManager:
         total_segments: int = 5
     ) -> SessionData:
         """
-        创建新会话
+        Create new session
 
         Args:
-            child_id: 儿童ID
-            story_title: 故事标题
-            age_group: 年龄组
-            interests: 兴趣标签
-            theme: 故事主题
-            voice: 语音类型
-            enable_audio: 是否生成音频
-            total_segments: 预计总段落数
+            child_id: Child ID
+            story_title: Story title
+            age_group: Age group
+            interests: Interest tags
+            theme: Story theme
+            voice: Voice type
+            enable_audio: Whether to generate audio
+            total_segments: Expected total segments
 
         Returns:
-            SessionData: 会话数据
+            SessionData: Session data
         """
         session_id = str(uuid.uuid4())
         now = datetime.now()
@@ -125,13 +125,13 @@ class SessionManager:
 
     def get_session(self, session_id: str) -> Optional[SessionData]:
         """
-        获取会话数据
+        Get session data
 
         Args:
-            session_id: 会话ID
+            session_id: Session ID
 
         Returns:
-            SessionData 或 None（如果不存在）
+            SessionData or None (if not found)
         """
         session_path = self._get_session_path(session_id)
 
@@ -142,7 +142,7 @@ class SessionManager:
             with open(session_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
 
-            # 检查是否过期
+            # Check if expired
             expires_at = datetime.fromisoformat(data['expires_at'])
             if datetime.now() > expires_at and data['status'] == 'active':
                 data['status'] = 'expired'
@@ -168,48 +168,48 @@ class SessionManager:
         segment_id: Optional[int] = None
     ) -> bool:
         """
-        更新会话数据
+        Update session data
 
         Args:
-            session_id: 会话ID
-            segment: 新的故事段落
-            choice_id: 选择的选项ID
-            status: 新状态
-            educational_summary: 教育总结
-            audio_url: 段落的音频URL
-            segment_id: 音频对应的段落ID
+            session_id: Session ID
+            segment: New story segment
+            choice_id: Selected choice ID
+            status: New status
+            educational_summary: Educational summary
+            audio_url: Audio URL for segment
+            segment_id: Segment ID for audio
 
         Returns:
-            bool: 是否更新成功
+            bool: Whether update succeeded
         """
         session = self.get_session(session_id)
         if not session:
             return False
 
-        # 更新段落
+        # Update segments
         if segment:
             session.segments.append(segment)
             session.current_segment = len(session.segments)
 
-        # 更新选择历史
+        # Update choice history
         if choice_id:
             session.choice_history.append(choice_id)
 
-        # 更新状态
+        # Update status
         if status:
             session.status = status
 
-        # 更新教育总结
+        # Update educational summary
         if educational_summary:
             session.educational_summary = educational_summary
 
-        # 更新音频URL
+        # Update audio URL
         if audio_url and segment_id is not None:
             if session.audio_urls is None:
                 session.audio_urls = {}
             session.audio_urls[segment_id] = audio_url
 
-        # 更新时间戳
+        # Update timestamp
         session.updated_at = datetime.now().isoformat()
 
         self._save_session(session)
@@ -217,13 +217,13 @@ class SessionManager:
 
     def delete_session(self, session_id: str) -> bool:
         """
-        删除会话
+        Delete session
 
         Args:
-            session_id: 会话ID
+            session_id: Session ID
 
         Returns:
-            bool: 是否删除成功
+            bool: Whether deletion succeeded
         """
         session_path = self._get_session_path(session_id)
 
@@ -243,14 +243,14 @@ class SessionManager:
         status: Optional[str] = None
     ) -> List[SessionData]:
         """
-        列出会话
+        List sessions
 
         Args:
-            child_id: 按儿童ID过滤（可选）
-            status: 按状态过滤（可选）
+            child_id: Filter by child ID (optional)
+            status: Filter by status (optional)
 
         Returns:
-            List[SessionData]: 会话列表
+            List[SessionData]: List of sessions
         """
         sessions = []
 
@@ -259,7 +259,7 @@ class SessionManager:
                 with open(session_path, 'r', encoding='utf-8') as f:
                     data = json.load(f)
 
-                # 过滤条件
+                # Filter conditions
                 if child_id and data.get('child_id') != child_id:
                     continue
                 if status and data.get('status') != status:
@@ -269,16 +269,16 @@ class SessionManager:
             except Exception as e:
                 print(f"Error loading session {session_path.name}: {e}")
 
-        # 按更新时间倒序排序
+        # Sort by update time descending
         sessions.sort(key=lambda s: s.updated_at, reverse=True)
         return sessions
 
     def cleanup_expired_sessions(self) -> int:
         """
-        清理过期会话
+        Clean up expired sessions
 
         Returns:
-            int: 清理的会话数量
+            int: Number of cleaned sessions
         """
         cleaned = 0
         now = datetime.now()
@@ -290,7 +290,7 @@ class SessionManager:
 
                 expires_at = datetime.fromisoformat(data['expires_at'])
 
-                # 过期超过7天的会话删除
+                # Delete sessions expired for over 7 days
                 if now > expires_at + timedelta(days=7):
                     session_path.unlink()
                     cleaned += 1
@@ -300,7 +300,7 @@ class SessionManager:
         return cleaned
 
     def _save_session(self, session: SessionData):
-        """保存会话数据"""
+        """Save session data"""
         session_path = self._get_session_path(session.session_id)
 
         try:
@@ -311,7 +311,7 @@ class SessionManager:
             raise
 
     def _save_session_dict(self, session_id: str, data: Dict[str, Any]):
-        """保存会话数据（字典格式）"""
+        """Save session data (dict format)"""
         session_path = self._get_session_path(session_id)
 
         try:
@@ -322,5 +322,5 @@ class SessionManager:
             raise
 
 
-# 全局会话管理器实例
+# Global session manager instance
 session_manager = SessionManager()
