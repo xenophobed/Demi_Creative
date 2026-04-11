@@ -1,83 +1,285 @@
-import { motion } from 'framer-motion'
-import useDailyTaskStore from '@/store/useDailyTaskStore'
+import { motion } from "framer-motion";
+import { Link } from "react-router-dom";
+import useDailyTaskStore from "@/store/useDailyTaskStore";
 
 interface InspirationDailyProps {
-  className?: string
-  onTear?: () => void
+  className?: string;
+  onTear?: () => void;
+  isAuthenticated: boolean;
 }
 
 interface DailyContent {
-  headline: string
-  body: string
-  illustration: string
-  weather: string
-  weatherEmoji: string
-  miniAd: string
+  headline: string;
+  body: string;
+  illustration: string;
+  weather: string;
+  weatherEmoji: string;
+  miniAd: string;
 }
 
 const DAILY_CONTENT: DailyContent[] = [
-  { headline: '会飞的鱼被发现了！', body: '本报讯——南太平洋传来惊人消息：一群彩色飞鱼昨日飞越了整座小岛。目击者称，它们的翅膀上画满了彩虹。科学家呼吁全球小画家赶紧把它画下来，作为珍贵的科学记录。', illustration: '🐟✨', weather: '晴转棉花糖', weatherEmoji: '☀️', miniAd: '🖍️ 彩虹蜡笔第二盒半价' },
-  { headline: '棉花糖云朵来袭！', body: '本报讯——气象局发布甜蜜警报：受暖气流影响，今日全市云朵将变为棉花糖材质。建议市民携带长竹竿出门采集。草莓味较稀有，先到先得。', illustration: '☁️🍬', weather: '多云转甜', weatherEmoji: '☁️', miniAd: '🎒 飞行书包预售中' },
-  { headline: '海底城堡首次开放', body: '本报讯——美人鱼女王今日签署法令，向陆地儿童开放海底水晶宫参观。入场条件：提交一幅你心目中海底城堡的设计图。最佳作品将被建成真正的珊瑚雕塑。', illustration: '🏰🌊', weather: '海风轻拂', weatherEmoji: '🌊', miniAd: '🫧 防水画纸新到货' },
-  { headline: '恐龙厨师遇到难题', body: '本报讯——自然历史博物馆证实：一只复活的霸王龙已成功通过厨师资格考试，但因手臂太短无法翻锅。它正在全球征集解决方案，最实用的发明将获颁"最佳恐龙助手"奖章。', illustration: '🦕👨‍🍳', weather: '局部火山灰', weatherEmoji: '🌋', miniAd: '📏 恐龙手臂加长器热销' },
-  { headline: '星星列车即将发车', body: '本报讯——银河铁路公司宣布：开往北极星的特快列车将于今晚发车。列车由108节星光车厢组成，沿途停靠月球站和火星站。购票方式：画一幅最酷的火车交给站长。', illustration: '🚂⭐', weather: '满天星斗', weatherEmoji: '🌙', miniAd: '🔭 迷你望远镜买一送一' },
-  { headline: '宠物时装周开幕', body: '本报讯——第三届全球宠物时装周今日在中央公园隆重开幕。本届主题为"超级英雄"，所有参赛宠物须身着小主人亲手设计的披风。冠军奖品：一年份的小鱼干。', illustration: '🦸‍♀️🐕', weather: '适宜走秀', weatherEmoji: '✨', miniAd: '🧵 宠物披风DIY套装' },
-  { headline: '彩虹滑梯破世界纪录', body: '本报讯——工程师团队宣布，从彩虹最高点到棉花糖池塘的超级滑梯已竣工，全长7.7公里，创下吉尼斯世界纪录。试滑员表示：屁股有点烫，但非常值得。', illustration: '🌈🎢', weather: '七彩阵雨', weatherEmoji: '🌈', miniAd: '🩳 防烫滑梯裤限量发售' },
-  { headline: '魔法棒突发故障', body: '本报讯——魔法学院发布紧急通告：巫师爷爷的百年魔法棒出现罕见故障，目前只能将纸上的画变为实物。学院建议小朋友们谨慎作画——上次有人画了一只霸王龙，场面一度混乱。', illustration: '🪄✨', weather: '偶有魔法闪电', weatherEmoji: '⚡', miniAd: '📒 防魔法画纸上新' },
-  { headline: '月球游乐场盛大开业', body: '本报讯——经过三年建设，月球欢乐谷今日正式开业。由于引力仅为地球六分之一，跳一下可飞三米，摩天轮转一圈需要半小时。园方提醒：请系好安全带，不要飞太高。', illustration: '🌙🎠', weather: '月球：零重力晴', weatherEmoji: '🌙', miniAd: '🧑‍🚀 太空旅行险仅9.9元' },
-  { headline: '猫咪帽子设计大赛', body: '本报讯——全球猫咪联合会宣布举办首届帽子设计大赛。评委由三只资深布偶猫担任，评分标准：可爱度占60%，实用度占20%，猫粮贿赂度占20%。投稿截止日期：明天。', illustration: '🐱🎩', weather: '有猫毛飘落', weatherEmoji: '🐱', miniAd: '🧶 猫咪毛线球特惠' },
-  { headline: '糖果屋紧急修缮通知', body: '本报讯——童话镇建设局发布公告：三号街的糖果屋巧克力大门因高温融化，目前使用临时饼干门替代。急需一位小建筑师提交新设计方案，要求：好看、好吃、不怕热。', illustration: '🍭🏠', weather: '高温融巧克力', weatherEmoji: '🌡️', miniAd: '🍫 耐热巧克力砖发明' },
-  { headline: '小龙搬家引热议', body: '本报讯——一条三岁小火龙决定从冰山搬到火山旁边，理由是"想住暖和点"。邻居们担心它打喷嚏会引发火灾，建议它先学会控制火焰。小龙表示会努力练习。', illustration: '🐉🏡', weather: '局部喷火', weatherEmoji: '🔥', miniAd: '🧯 防火窗帘打折中' },
-  { headline: '果汁海洋震惊科学界', body: '本报讯——海洋研究所证实：北冰洋一片区域的海水已变为鲜榨橙汁。科学家推测与海底的巨型橙子矿脉有关。沿岸居民表示早餐方便多了，但鱼的意见很大。', illustration: '🧃🏊', weather: '有橙汁阵雨', weatherEmoji: '🍊', miniAd: '🥤 海洋橙汁瓶装版' },
-  { headline: '企鹅溜冰赛冠军出炉', body: '本报讯——南极冬季溜冰锦标赛落幕，穿粉色溜冰鞋的帝企鹅小粉以完美的三周半跳夺冠。赛后它表示获胜秘诀是：每天吃十条鱼保持体力。', illustration: '🐧⛸️', weather: '零下40°适宜溜冰', weatherEmoji: '❄️', miniAd: '⛸️ 企鹅同款溜冰鞋' },
-  { headline: '空中花园惊现市区', body: '本报讯——今晨六点，市中心一座花园缓缓升空，目前悬停在200米高处。园丁大叔淡定表示，是昨晚浇了太多魔法肥料。居民们改乘热气球去散步。', illustration: '🌺☁️', weather: '漂浮花粉', weatherEmoji: '🌸', miniAd: '🎈 私人热气球月租优惠' },
-  { headline: '青蛙国王加冕典礼', body: '本报讯——荷花池塘举行了盛大的国王加冕仪式。新任蛙王在就职演说中承诺：让每只青蛙都住上带阳台的荷叶。但王冠还没做好，急需一位小设计师帮忙！', illustration: '🐸👑', weather: '池塘微风', weatherEmoji: '🍃', miniAd: '👑 纯金小王冠代工' },
-  { headline: '树精灵招室友启事', body: '本报讯——住在千年橡树里的小精灵贴出招室友告示，要求：会画画、爱讲故事、不打呼噜。月租：三颗橡果。精灵表示上一任室友是只啄木鸟，"太吵了"。', illustration: '🧚‍♂️🌳', weather: '森林有薄雾', weatherEmoji: '🌲', miniAd: '🏡 树屋装修找我们' },
-  { headline: '变色森林之谜破解', body: '本报讯——植物学家经过三年研究终于发现：神秘变色森林的秘密是一群调皮的变色龙在树上玩捉迷藏时把颜色蹭到了树干上。林业局表示不打算制止，因为太好看了。', illustration: '🌲🎨', weather: '五彩缤纷', weatherEmoji: '🎨', miniAd: '🎨 森林写生团报名中' },
-  { headline: '音符桥通车典礼举行', body: '本报讯——历时两年建造的音符桥今日通车。行人每踩一步都会发出一个音符，快跑是摇滚乐，慢走是古典乐。桥管处提醒：禁止在桥上跳踢踏舞，上周差点塌了。', illustration: '🎶🌉', weather: '有旋律微风', weatherEmoji: '🎵', miniAd: '🎹 随身钢琴键盘特价' },
-  { headline: '太阳正式申请墨镜', body: '本报讯——太阳今日向宇宙管理局提交申请："本星工作38亿年，从未配发护目设备，强烈要求一副合适的墨镜。"局方表示正在全球征集设计方案。', illustration: '☀️😎', weather: '超级晴（太阳在抱怨）', weatherEmoji: '☀️', miniAd: '🕶️ 巨型墨镜定制服务' },
-  { headline: '棒棒糖树大丰收', body: '本报讯——魔法农场迎来棒棒糖树大丰收，今年产量是去年的三倍。草莓味最受欢迎，彩虹味最稀有。农场主提醒采摘者：吃之前请洗手，树上有魔法糖粉。', illustration: '🍭🌴', weather: '甜度超标', weatherEmoji: '🍬', miniAd: '🪣 棒棒糖采摘篮上新' },
-]
+  {
+    headline: "Flying Fish Spotted!",
+    body: "Breaking news from the South Pacific: a school of rainbow-colored flying fish soared over an entire island yesterday. Witnesses say their wings were covered in rainbow patterns. Scientists are calling on young artists everywhere to draw them as a precious scientific record.",
+    illustration: "🐟✨",
+    weather: "Sunny, turning to cotton candy",
+    weatherEmoji: "☀️",
+    miniAd: "🖍️ Rainbow crayons: buy one get one half off",
+  },
+  {
+    headline: "Cotton Candy Clouds Incoming!",
+    body: "Breaking news: the weather bureau has issued a sweet alert. Due to warm air currents, all clouds in the city will turn into cotton candy today. Residents are advised to bring long poles for collecting. Strawberry flavor is rare — first come, first served.",
+    illustration: "☁️🍬",
+    weather: "Cloudy, turning sweet",
+    weatherEmoji: "☁️",
+    miniAd: "🎒 Flying backpacks now on pre-order",
+  },
+  {
+    headline: "Undersea Castle Opens to Visitors",
+    body: "Breaking news: the Mermaid Queen has signed a royal decree opening the Undersea Crystal Palace to land children. Entry requirement: submit a drawing of your dream undersea castle. The best design will be built into a real coral sculpture.",
+    illustration: "🏰🌊",
+    weather: "Gentle sea breeze",
+    weatherEmoji: "🌊",
+    miniAd: "🫧 Waterproof drawing paper just arrived",
+  },
+  {
+    headline: "Dinosaur Chef Hits a Snag",
+    body: 'Breaking news: the Natural History Museum confirms a revived T-Rex has passed its chef exam but cannot flip a pan because its arms are too short. It is now seeking solutions worldwide — the most practical invention wins the "Best Dino Assistant" medal.',
+    illustration: "🦕👨‍🍳",
+    weather: "Partly volcanic ash",
+    weatherEmoji: "🌋",
+    miniAd: "📏 Dino arm extenders selling fast",
+  },
+  {
+    headline: "Star Train Departing Tonight!",
+    body: "Breaking news: the Milky Way Railway Company announces the express train to the North Star departs tonight. The train has 108 starlight carriages, stopping at Moon Station and Mars Station. How to get tickets: draw the coolest train and give it to the conductor.",
+    illustration: "🚂⭐",
+    weather: "Starry skies",
+    weatherEmoji: "🌙",
+    miniAd: "🔭 Mini telescopes: buy one get one free",
+  },
+  {
+    headline: "Pet Fashion Week Begins!",
+    body: "Breaking news: the 3rd Global Pet Fashion Week kicked off in Central Park today. This year's theme is \"Superheroes\" — all competing pets must wear capes designed by their young owners. Grand prize: a year's supply of fish treats.",
+    illustration: "🦸‍♀️🐕",
+    weather: "Perfect runway weather",
+    weatherEmoji: "✨",
+    miniAd: "🧵 DIY pet cape kit available",
+  },
+  {
+    headline: "Rainbow Slide Breaks World Record",
+    body: "Breaking news: the engineering team announces the mega slide from the top of a rainbow down to the marshmallow pond is complete. At 7.7 km long, it sets a new world record. Test riders report: a bit toasty on the bottom, but totally worth it.",
+    illustration: "🌈🎢",
+    weather: "Rainbow showers",
+    weatherEmoji: "🌈",
+    miniAd: "🩳 Heat-proof slide pants, limited edition",
+  },
+  {
+    headline: "Magic Wand Malfunction Alert",
+    body: "Breaking news: the School of Magic has issued an urgent notice. Grandpa Wizard's century-old wand has a rare glitch — it can only turn drawings on paper into real objects. The school advises kids to draw carefully. Last time someone drew a T-Rex, things got chaotic.",
+    illustration: "🪄✨",
+    weather: "Occasional magic lightning",
+    weatherEmoji: "⚡",
+    miniAd: "📒 Anti-magic drawing paper now in stock",
+  },
+  {
+    headline: "Moon Amusement Park Grand Opening",
+    body: "Breaking news: after three years of construction, the Moon Fun Valley is officially open. With gravity only one-sixth of Earth's, a single jump sends you three meters high, and the Ferris wheel takes half an hour per revolution. Park staff remind visitors: buckle up and don't fly too high.",
+    illustration: "🌙🎠",
+    weather: "Moon: zero-gravity clear",
+    weatherEmoji: "🌙",
+    miniAd: "🧑‍🚀 Space travel insurance, only $9.99",
+  },
+  {
+    headline: "Cat Hat Design Contest",
+    body: "Breaking news: the Global Cat Federation announces the first-ever hat design contest. The judges are three senior Ragdoll cats. Scoring criteria: cuteness 60%, practicality 20%, cat-treat bribery 20%. Submission deadline: tomorrow.",
+    illustration: "🐱🎩",
+    weather: "Light cat fur flurries",
+    weatherEmoji: "🐱",
+    miniAd: "🧶 Cat yarn balls on sale",
+  },
+  {
+    headline: "Candy House Emergency Repairs",
+    body: "Breaking news: the Fairytale Town building department announces the chocolate door of the candy house on Third Street has melted due to high temperatures. A temporary cookie door is in place. Urgently seeking a young architect to submit a new design — must be pretty, tasty, and heat-proof.",
+    illustration: "🍭🏠",
+    weather: "Hot enough to melt chocolate",
+    weatherEmoji: "🌡️",
+    miniAd: "🍫 Heat-resistant chocolate bricks invented",
+  },
+  {
+    headline: "Baby Dragon's Big Move Sparks Debate",
+    body: 'Breaking news: a three-year-old fire dragon has decided to move from an iceberg to a volcano, saying it "just wants to live somewhere warmer." Neighbors worry its sneezes could start fires and suggest it learns to control its flames first. The little dragon promises to practice hard.',
+    illustration: "🐉🏡",
+    weather: "Occasional fire-breathing",
+    weatherEmoji: "🔥",
+    miniAd: "🧯 Fireproof curtains on sale",
+  },
+  {
+    headline: "Juice Ocean Stuns Scientists",
+    body: "Breaking news: the Ocean Research Institute confirms that a section of the Arctic Ocean has turned into fresh-squeezed orange juice. Scientists believe it's linked to a giant underground orange vein. Coastal residents say breakfast is easier now, but the fish are not happy.",
+    illustration: "🧃🏊",
+    weather: "Orange juice showers expected",
+    weatherEmoji: "🍊",
+    miniAd: "🥤 Bottled ocean orange juice available",
+  },
+  {
+    headline: "Penguin Ice Skating Champion Crowned",
+    body: "Breaking news: the Antarctic Winter Skating Championship has concluded. Emperor penguin Pinky, wearing pink skates, won with a flawless triple axel. After the event, Pinky shared the secret to victory: eating ten fish a day to keep up energy.",
+    illustration: "🐧⛸️",
+    weather: "-40 degrees, perfect for skating",
+    weatherEmoji: "❄️",
+    miniAd: "⛸️ Penguin-brand ice skates now available",
+  },
+  {
+    headline: "Floating Garden Appears Downtown",
+    body: "Breaking news: at six this morning, a garden in the city center slowly rose into the air and is now hovering at 200 meters. The gardener calmly explains he used too much magic fertilizer last night. Residents have switched to hot air balloons for their morning walks.",
+    illustration: "🌺☁️",
+    weather: "Floating pollen",
+    weatherEmoji: "🌸",
+    miniAd: "🎈 Personal hot air balloon, monthly rental deal",
+  },
+  {
+    headline: "Frog King Coronation Ceremony",
+    body: "Breaking news: a grand coronation was held at the Lily Pond. The new Frog King promised in his inaugural speech to give every frog a lily pad with a balcony. But the crown isn't finished yet — urgently seeking a young designer to help!",
+    illustration: "🐸👑",
+    weather: "Pond breeze",
+    weatherEmoji: "🍃",
+    miniAd: "👑 Tiny gold crowns, custom-made",
+  },
+  {
+    headline: "Tree Sprite Seeks Roommate",
+    body: 'Breaking news: a sprite living in a thousand-year-old oak tree has posted a roommate wanted ad. Requirements: can draw, loves storytelling, no snoring. Rent: three acorns per month. The sprite says the last roommate was a woodpecker — "way too noisy."',
+    illustration: "🧚‍♂️🌳",
+    weather: "Forest mist",
+    weatherEmoji: "🌲",
+    miniAd: "🏡 Treehouse renovations — call us",
+  },
+  {
+    headline: "Color-Changing Forest Mystery Solved",
+    body: "Breaking news: after three years of research, botanists have finally discovered the secret of the mysterious color-changing forest. A group of playful chameleons rubbed their colors onto tree trunks while playing hide-and-seek. The forestry bureau says they won't stop them because it looks amazing.",
+    illustration: "🌲🎨",
+    weather: "Kaleidoscope skies",
+    weatherEmoji: "🎨",
+    miniAd: "🎨 Forest sketching trips, sign up now",
+  },
+  {
+    headline: "Musical Bridge Opens to Traffic",
+    body: "Breaking news: the Musical Note Bridge, two years in the making, opened today. Every step produces a musical note — running plays rock music, walking plays classical. Bridge management reminds everyone: no tap dancing on the bridge. It nearly collapsed last week.",
+    illustration: "🎶🌉",
+    weather: "Melodic breezes",
+    weatherEmoji: "🎵",
+    miniAd: "🎹 Portable piano keyboard on sale",
+  },
+  {
+    headline: "The Sun Officially Requests Sunglasses",
+    body: 'Breaking news: the Sun filed a formal request with the Cosmic Management Bureau today: "I have been working for 3.8 billion years and was never issued protective eyewear. I strongly demand a proper pair of sunglasses." The bureau is now collecting design proposals worldwide.',
+    illustration: "☀️😎",
+    weather: "Super sunny (Sun is complaining)",
+    weatherEmoji: "☀️",
+    miniAd: "🕶️ Giant custom sunglasses service",
+  },
+  {
+    headline: "Lollipop Trees: Bumper Harvest!",
+    body: "Breaking news: the Magic Farm celebrates a lollipop tree bumper harvest — this year's yield is triple last year's. Strawberry flavor is the most popular; rainbow flavor is the rarest. The farmer reminds pickers: wash your hands before eating — there's magic sugar dust on the trees.",
+    illustration: "🍭🌴",
+    weather: "Sweetness overload",
+    weatherEmoji: "🍬",
+    miniAd: "🪣 Lollipop picking baskets, just in",
+  },
+];
 
 function getDailyContent(): DailyContent {
-  const now = new Date()
-  const start = new Date(now.getFullYear(), 0, 0)
-  const dayOfYear = Math.floor((now.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
-  return DAILY_CONTENT[dayOfYear % DAILY_CONTENT.length]
+  const now = new Date();
+  const start = new Date(now.getFullYear(), 0, 0);
+  const dayOfYear = Math.floor(
+    (now.getTime() - start.getTime()) / (1000 * 60 * 60 * 24),
+  );
+  return DAILY_CONTENT[dayOfYear % DAILY_CONTENT.length];
 }
 
 function formatDate(): string {
-  const now = new Date()
-  const year = now.getFullYear()
-  const month = now.getMonth() + 1
-  const day = now.getDate()
-  const weekdays = ['日', '一', '二', '三', '四', '五', '六']
-  return `${year}年${month}月${day}日 星期${weekdays[now.getDay()]}`
+  const now = new Date();
+  const year = now.getFullYear();
+  const day = now.getDate();
+  const weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const months = [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+  ];
+  return `${weekdays[now.getDay()]}, ${months[now.getMonth()]} ${day}, ${year}`;
 }
 
 function getEditionNumber(): number {
-  const launch = new Date(2026, 0, 1)
-  return Math.floor((Date.now() - launch.getTime()) / (1000 * 60 * 60 * 24)) + 1
+  const launch = new Date(2026, 0, 1);
+  return (
+    Math.floor((Date.now() - launch.getTime()) / (1000 * 60 * 60 * 24)) + 1
+  );
 }
 
-const serif = '"Noto Serif SC", "Source Han Serif CN", "Songti SC", STSong, serif'
+const serif = '"Georgia", "Noto Serif", "Times New Roman", serif';
 
-export default function InspirationDaily({ className = '', onTear }: InspirationDailyProps) {
-  const canClaim = useDailyTaskStore((s) => s.canClaimToday())
-  const content = getDailyContent()
-  const dateStr = formatDate()
-  const edition = getEditionNumber()
+export default function InspirationDaily({
+  className = "",
+  onTear,
+  isAuthenticated,
+}: InspirationDailyProps) {
+  const canClaimToday = useDailyTaskStore((s) => s.canClaimToday());
+  const canClaim = isAuthenticated && canClaimToday;
+  const content = getDailyContent();
+  const dateStr = formatDate();
+  const edition = getEditionNumber();
 
-  const muted = !canClaim
+  const muted = !isAuthenticated || !canClaim;
+
+  if (!isAuthenticated) {
+    return (
+      <div
+        className={`relative overflow-hidden rounded-card ${className}`}
+        style={{ background: "#f4f4f5", color: "#3f3f46" }}
+      >
+        <div className="px-5 py-6 text-center">
+          <span className="text-4xl">🔒</span>
+          <h3
+            className="mt-2 text-lg font-semibold tracking-wide"
+            style={{ fontFamily: serif }}
+          >
+            Daily Reward Locked
+          </h3>
+          <p
+            className="mt-1 text-sm text-gray-600"
+            style={{ fontFamily: serif }}
+          >
+            Please log in first. Only logged-in users can claim daily rewards.
+          </p>
+          <Link
+            to="/login"
+            className="inline-block mt-3 px-3 py-1.5 rounded-full text-xs font-semibold bg-primary text-white hover:opacity-90 transition-opacity"
+          >
+            Log In
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
       className={`relative overflow-hidden rounded-card ${
-        muted ? 'opacity-60' : ''
+        muted ? "opacity-60" : ""
       } ${className}`}
       style={{
-        background: muted ? '#eae7e1' : '#FDF8F0',
-        color: muted ? '#999' : '#2a2a2a',
+        background: muted ? "#eae7e1" : "#FDF8F0",
+        color: muted ? "#999" : "#2a2a2a",
       }}
     >
       {/* Subtle paper grain */}
@@ -94,29 +296,36 @@ export default function InspirationDaily({ className = '', onTear }: Inspiration
       <div
         className="relative select-none"
         onClick={canClaim ? onTear : undefined}
-        style={canClaim ? { cursor: 'grab' } : undefined}
+        style={canClaim ? { cursor: "grab" } : undefined}
       >
         {/* Thick top rule */}
-        <div className={`h-[3px] ${muted ? 'bg-gray-300' : 'bg-gray-900'}`} />
-        <div className={`h-[1px] mt-[2px] mx-3 ${muted ? 'bg-gray-200' : 'bg-gray-900/40'}`} />
+        <div className={`h-[3px] ${muted ? "bg-gray-300" : "bg-gray-900"}`} />
+        <div
+          className={`h-[1px] mt-[2px] mx-3 ${muted ? "bg-gray-200" : "bg-gray-900/40"}`}
+        />
 
         <div className="px-4 pt-2 pb-1 text-center">
           {/* Date row */}
-          <div className="flex items-center justify-between" style={{ fontSize: 9, fontFamily: serif }}>
-            <span>第 {edition} 期</span>
+          <div
+            className="flex items-center justify-between"
+            style={{ fontSize: 9, fontFamily: serif }}
+          >
+            <span>Edition {edition}</span>
             <span>{dateStr}</span>
-            <span>每日一份 · 免费领取</span>
+            <span>Daily edition</span>
           </div>
 
           {/* Thin rule */}
-          <div className={`border-t my-1.5 ${muted ? 'border-gray-200' : 'border-gray-900/20'}`} />
+          <div
+            className={`border-t my-1.5 ${muted ? "border-gray-200" : "border-gray-900/20"}`}
+          />
 
           {/* Nameplate */}
           <h3
             className="text-3xl sm:text-4xl font-black tracking-[0.4em] leading-none py-1"
             style={{ fontFamily: serif }}
           >
-            灵感日报
+            Inspiration Daily
           </h3>
 
           {/* English subtitle */}
@@ -129,8 +338,12 @@ export default function InspirationDaily({ className = '', onTear }: Inspiration
 
           {/* Double rule */}
           <div className="mt-2 mb-1">
-            <div className={`border-t-[2.5px] ${muted ? 'border-gray-300' : 'border-gray-900'}`} />
-            <div className={`border-t mt-[2px] ${muted ? 'border-gray-200' : 'border-gray-900/50'}`} />
+            <div
+              className={`border-t-[2.5px] ${muted ? "border-gray-300" : "border-gray-900"}`}
+            />
+            <div
+              className={`border-t mt-[2px] ${muted ? "border-gray-200" : "border-gray-900/50"}`}
+            />
           </div>
         </div>
 
@@ -141,9 +354,9 @@ export default function InspirationDaily({ className = '', onTear }: Inspiration
             <motion.span
               className="absolute right-4 flex items-center gap-1 text-[10px] text-primary/50"
               animate={{ x: [0, 6, 0] }}
-              transition={{ repeat: Infinity, duration: 2, ease: 'easeInOut' }}
+              transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
             >
-              ✂️ 撕开领星星
+              ✂️ Tear to collect stars
             </motion.span>
           </div>
         )}
@@ -165,9 +378,10 @@ export default function InspirationDaily({ className = '', onTear }: Inspiration
               <div className={`border-t my-1.5 border-gray-900/10`} />
               <p
                 className="text-xs sm:text-sm leading-relaxed text-gray-700"
-                style={{ fontFamily: serif, textAlign: 'justify' }}
+                style={{ fontFamily: serif, textAlign: "justify" }}
               >
-                <span className="text-2xl font-bold float-left mr-1 leading-[1] text-primary/80"
+                <span
+                  className="text-2xl font-bold float-left mr-1 leading-[1] text-primary/80"
                   style={{ fontFamily: serif }}
                 >
                   {content.body[0]}
@@ -183,7 +397,11 @@ export default function InspirationDaily({ className = '', onTear }: Inspiration
                 <motion.span
                   className="text-4xl sm:text-5xl block"
                   animate={{ y: [0, -3, 0] }}
-                  transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+                  transition={{
+                    duration: 3,
+                    repeat: Infinity,
+                    ease: "easeInOut",
+                  }}
                 >
                   {content.illustration}
                 </motion.span>
@@ -194,20 +412,23 @@ export default function InspirationDaily({ className = '', onTear }: Inspiration
           {/* --- Bottom row: weather + mini-ad --- */}
           <div className="mt-2.5">
             <div className={`border-t border-gray-900/10 mb-2`} />
-            <div className="flex items-center justify-between text-[10px]" style={{ fontFamily: serif }}>
+            <div
+              className="flex items-center justify-between text-[10px]"
+              style={{ fontFamily: serif }}
+            >
               {/* Weather box */}
               <div className="flex items-center gap-1">
                 <span>{content.weatherEmoji}</span>
-                <span className="text-gray-500">今日天气：{content.weather}</span>
+                <span className="text-gray-500">
+                  Today's weather: {content.weather}
+                </span>
               </div>
 
               {/* Vertical divider */}
               <div className="w-px h-3 bg-gray-900/10 mx-2" />
 
               {/* Mini classified ad */}
-              <div className="text-gray-400 truncate">
-                {content.miniAd}
-              </div>
+              <div className="text-gray-400 truncate">{content.miniAd}</div>
             </div>
           </div>
         </div>
@@ -215,18 +436,28 @@ export default function InspirationDaily({ className = '', onTear }: Inspiration
         /* Claimed state */
         <div className="text-center px-4 py-5">
           <span className="text-3xl">📰</span>
-          <p className="text-sm text-gray-400 mt-2 font-semibold" style={{ fontFamily: serif }}>
-            今日报纸已阅
+          <p
+            className="text-sm text-gray-400 mt-2 font-semibold"
+            style={{ fontFamily: serif }}
+          >
+            Today's paper read
           </p>
-          <p className="text-[11px] text-gray-400 mt-0.5" style={{ fontFamily: serif }}>
-            明日新刊敬请期待
+          <p
+            className="text-[11px] text-gray-400 mt-0.5"
+            style={{ fontFamily: serif }}
+          >
+            Stay tuned for tomorrow's edition
           </p>
         </div>
       )}
 
       {/* Bottom rules */}
-      <div className={`h-px mx-3 ${muted ? 'bg-gray-200' : 'bg-gray-900/30'}`} />
-      <div className={`h-[2.5px] mt-[2px] ${muted ? 'bg-gray-300' : 'bg-gray-900'}`} />
+      <div
+        className={`h-px mx-3 ${muted ? "bg-gray-200" : "bg-gray-900/30"}`}
+      />
+      <div
+        className={`h-[2.5px] mt-[2px] ${muted ? "bg-gray-300" : "bg-gray-900"}`}
+      />
     </div>
-  )
+  );
 }

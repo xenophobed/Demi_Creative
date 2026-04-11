@@ -1,8 +1,8 @@
 """
 Interactive Story Agent
 
-使用 Claude Agent SDK 生成多分支互动故事。
-支持流式响应以减少超时和改善用户体验。
+Uses Claude Agent SDK to generate multi-branch interactive stories.
+Supports streaming responses to reduce timeouts and improve user experience.
 """
 
 import json
@@ -88,31 +88,31 @@ def _should_use_mock() -> bool:
 
 
 # ============================================================================
-# 流式事件类型
+# Streaming Event Types
 # ============================================================================
 
 
 class StreamEvent:
-    """流式事件基类"""
+    """Base class for streaming events"""
 
     def __init__(self, event_type: str, data: Dict[str, Any]):
         self.type = event_type
         self.data = data
 
     def to_sse(self) -> str:
-        """转换为 Server-Sent Event 格式"""
+        """Convert to Server-Sent Event format"""
         return (
             f"event: {self.type}\ndata: {json.dumps(self.data, ensure_ascii=False)}\n\n"
         )
 
 
 # ============================================================================
-# Pydantic 模型定义（用于 Structured Output）
+# Pydantic Models (for Structured Output)
 # ============================================================================
 
 
 class StoryChoiceOutput(BaseModel):
-    """故事选项"""
+    """Story choice option"""
 
     choice_id: str
     text: str
@@ -120,7 +120,7 @@ class StoryChoiceOutput(BaseModel):
 
 
 class StorySegmentOutput(BaseModel):
-    """故事段落输出"""
+    """Story segment output"""
 
     segment_id: int
     text: str
@@ -129,14 +129,14 @@ class StorySegmentOutput(BaseModel):
 
 
 class StoryOpeningOutput(BaseModel):
-    """故事开场输出"""
+    """Story opening output"""
 
     title: str
     segment: StorySegmentOutput
 
 
 class NextSegmentOutput(BaseModel):
-    """下一段落输出"""
+    """Next segment output"""
 
     segment: StorySegmentOutput
     is_ending: bool = False
@@ -144,17 +144,17 @@ class NextSegmentOutput(BaseModel):
 
 
 # ============================================================================
-# 年龄适配配置
+# Age Adaptation Configuration
 # ============================================================================
 
 AGE_CONFIG = {
     "3-5": {
         "word_count": "50-100",
-        "sentence_length": "5-10字",
-        "complexity": "非常简单",
-        "vocab_level": "基础日常词汇",
-        "theme_depth": "简单、具体、与日常生活相关",
-        "choices_style": "简单动作，配有大emoji",
+        "sentence_length": "5-10 words",
+        "complexity": "very simple",
+        "vocab_level": "basic everyday vocabulary",
+        "theme_depth": "simple, concrete, related to daily life",
+        "choices_style": "simple actions with large emojis",
         "total_segments": 3,
         # Audio settings
         "audio_mode": "audio_first",
@@ -163,11 +163,11 @@ AGE_CONFIG = {
     },
     "6-8": {
         "word_count": "100-200",
-        "sentence_length": "10-15字",
-        "complexity": "简单",
-        "vocab_level": "小学低年级词汇",
-        "theme_depth": "有趣的冒险，简单的道德选择",
-        "choices_style": "有趣的选择，配有emoji",
+        "sentence_length": "10-15 words",
+        "complexity": "simple",
+        "vocab_level": "elementary school vocabulary",
+        "theme_depth": "fun adventures, simple moral choices",
+        "choices_style": "fun choices with emojis",
         "total_segments": 4,
         # Audio settings
         "audio_mode": "simultaneous",
@@ -176,11 +176,11 @@ AGE_CONFIG = {
     },
     "9-12": {
         "word_count": "150-300",
-        "sentence_length": "15-25字",
-        "complexity": "中等",
-        "vocab_level": "小学高年级词汇",
-        "theme_depth": "复杂情节，品德和智慧的考验",
-        "choices_style": "有深度的选择，影响故事走向",
+        "sentence_length": "15-25 words",
+        "complexity": "moderate",
+        "vocab_level": "upper elementary vocabulary",
+        "theme_depth": "complex plots, tests of character and wisdom",
+        "choices_style": "meaningful choices that affect the story direction",
         "total_segments": 5,
         # Audio settings
         "audio_mode": "text_first",
@@ -213,24 +213,24 @@ async def _fetch_preference_context(child_id: str) -> str:
     themes = profile.get("themes", {})
     if themes:
         top_themes = sorted(themes.items(), key=lambda x: x[1], reverse=True)[:3]
-        sections.append(f"- 喜欢的主题: {', '.join(t[0] for t in top_themes)}")
+        sections.append(f"- Favorite themes: {', '.join(t[0] for t in top_themes)}")
 
     # Top 3 interests
     interests = profile.get("interests", {})
     if interests:
         top_interests = sorted(interests.items(), key=lambda x: x[1], reverse=True)[:3]
-        sections.append(f"- 兴趣偏好: {', '.join(t[0] for t in top_interests)}")
+        sections.append(f"- Interest preferences: {', '.join(t[0] for t in top_interests)}")
 
     # Last 3 recent choices
     recent = profile.get("recent_choices", [])
     if recent:
         last_3 = recent[-3:]
-        sections.append(f"- 最近选择: {', '.join(last_3)}")
+        sections.append(f"- Recent choices: {', '.join(last_3)}")
 
     if not sections:
         return ""
 
-    return "**儿童偏好记忆**：\n" + "\n".join(sections) + "\n"
+    return "**Child Preference Memory**:\n" + "\n".join(sections) + "\n"
 
 
 def _build_opening_prompt(
@@ -249,28 +249,28 @@ def _build_opening_prompt(
 
     Includes preference context (#72) and character continuity instructions (#73).
     """
-    prompt = f"""你是一位专业的儿童故事作家，擅长创作适合不同年龄段的互动故事。
+    prompt = f"""You are a professional children's story writer who specializes in creating interactive stories for different age groups.
 
-请为一个{age_group}岁的儿童创作一个互动故事的**开场**。
+Please create the **opening** of an interactive story for a {age_group} year old child.
 
-**儿童信息**：
-- 儿童ID: {child_id}
-- 年龄组: {age_group}岁
-- 兴趣爱好: {interests_str}
-- 故事主题: {theme_str}
+**Child Information**:
+- Child ID: {child_id}
+- Age group: {age_group} years old
+- Interests: {interests_str}
+- Story theme: {theme_str}
 
-**写作要求**（年龄适配）：
-- 每段字数: {config["word_count"]}字
-- 句子长度: {config["sentence_length"]}
-- 复杂度: {config["complexity"]}
-- 词汇水平: {config["vocab_level"]}
-- 主题深度: {config["theme_depth"]}
-- 选项风格: {config["choices_style"]}
+**Writing Requirements** (age-adapted):
+- Words per segment: {config["word_count"]} words
+- Sentence length: {config["sentence_length"]}
+- Complexity: {config["complexity"]}
+- Vocabulary level: {config["vocab_level"]}
+- Theme depth: {config["theme_depth"]}
+- Choices style: {config["choices_style"]}
 """
 
     # Inject preference context (#72)
     if preference_context:
-        prompt += f"\n{preference_context}\n请根据上述儿童偏好，自然地融入他们喜欢的主题和元素。\n"
+        prompt += f"\n{preference_context}\nPlease naturally incorporate the child's favorite themes and elements based on the preferences above.\n"
 
     # Inject cross-story memory (#165)
     if story_memory_section:
@@ -286,33 +286,35 @@ def _build_opening_prompt(
 
     # Character continuity (#73)
     prompt += f"""
-**角色连续性**：
-在创作故事前，请先使用 `mcp__vector-search__search_similar_drawings` 工具搜索该儿童之前的创作，查找是否有反复出现的角色。
-- 搜索参数: child_id="{child_id}", query="{interests_str}"
-- 如果发现 recurring_characters，自然地将这些角色融入新故事（不要强制，而是让角色自然出现）
-- 如果没有历史角色，正常创作全新故事
+**Character Continuity**:
+Before creating the story, use the `mcp__vector-search__search_similar_drawings` tool to search the child's previous creations for recurring characters.
+- Search parameters: child_id="{child_id}", query="{interests_str}"
+- If recurring_characters are found, naturally weave them into the new story (don't force it, let them appear organically)
+- If no historical characters exist, create an entirely new story
 
-**内容存储**：
-故事创作完成后，请使用 `mcp__vector-search__store_drawing_embedding` 工具存储本次创作的角色信息，以便未来的故事可以延续角色。
+**Content Storage**:
+After the story is created, use the `mcp__vector-search__store_drawing_embedding` tool to store the character information from this session, so future stories can maintain character continuity.
 
-**重要规则**：
-1. 故事必须温馨、积极、有教育意义
-2. 所有分支最终都应该是"好结局"（不惩罚儿童的选择）
-3. 自然融入 STEAM 或品德教育元素
-4. 开场需要吸引儿童的注意力，设置悬念
-5. 提供 2-3 个有趣的选项，每个选项配一个合适的 emoji
-6. 选项应该是平等的，没有"正确答案"
+**Important Rules**:
+1. The story must be warm, positive, and educational
+2. All branches should ultimately lead to a "good ending" (never punish the child's choices)
+3. Naturally incorporate STEAM or moral education elements
+4. The opening should capture the child's attention and set up suspense
+5. Provide 2-3 interesting choices, each with an appropriate emoji
+6. Choices should be equal — there is no "correct answer"
 
-**输出格式**：
-请直接返回 JSON 格式的故事开场，包含：
-- title: 故事标题（吸引人，与主题相关）
-- segment: 开场段落
+**Output Format**:
+Return the story opening directly in JSON format, containing:
+- title: Story title (engaging, related to the theme)
+- segment: Opening segment
   - segment_id: 0
-  - text: 故事开场文本
-  - choices: 选项数组，每个选项包含 choice_id, text, emoji
+  - text: Story opening text
+  - choices: Array of choices, each containing choice_id, text, emoji
   - is_ending: false
 
-创作一个精彩的故事开场吧！
+Create an amazing story opening!
+
+Always respond in English.
 """
     return prompt
 
@@ -333,75 +335,77 @@ def _build_next_segment_prompt(
     opening_hook: str = "",
     continuity_anchors: str = "",
 ) -> str:
-    """Build prompt for generating the next story segment."""
-    return f"""你是一位专业的儿童故事作家，正在继续一个互动故事。
+    “””Build prompt for generating the next story segment.”””
+    return f”””You are a professional children's story writer, continuing an interactive story.
 
-**故事信息**：
-- 故事标题: {story_title}
-- 年龄组: {age_group}岁
-- 兴趣爱好: {", ".join(interests)}
-- 主题: {theme}
-- 当前段落: 第 {segment_count + 1} 段（共 {total_segments} 段）
-- 是否为结局: {"是" if is_final_segment else "否"}
+**Story Information**:
+- Story title: {story_title}
+- Age group: {age_group} years old
+- Interests: {“, “.join(interests)}
+- Theme: {theme}
+- Current segment: Segment {segment_count + 1} (of {total_segments} total)
+- Is this the ending: {“yes” if is_final_segment else “no”}
 
-**之前的故事内容**：
-{story_context if story_context else "这是故事的开始"}
+**Previous Story Content**:
+{story_context if story_context else “This is the beginning of the story”}
 
-**用户决策轨迹（按时间顺序）**：
-{choice_history_context if choice_history_context else "（暂无历史选择）"}
+**User Decision Trail (chronological order)**:
+{choice_history_context if choice_history_context else “(no prior choices)”}
 
-**开场关键线索（结局必须回扣）**：
-{opening_hook if opening_hook else "（无）"}
+**Opening Key Clue (ending must callback to this)**:
+{opening_hook if opening_hook else “(none)”}
 
-**结局连续性锚点（结局必须引用至少 2 个）**：
-{continuity_anchors if continuity_anchors else "（无，可从上文事件与选择中提炼）"}
+**Ending Continuity Anchors (ending must reference at least 2)**:
+{continuity_anchors if continuity_anchors else “(none — can be derived from prior events and choices)”}
 
-**用户的选择**：
-选择ID: {choice_id}
-选择内容: {chosen_option or "继续故事"}
+**User's Choice**:
+Choice ID: {choice_id}
+Choice content: {chosen_option or “continue the story”}
 
-**写作要求**（年龄适配）：
-- 每段字数: {config["word_count"]}字
-- 句子长度: {config["sentence_length"]}
-- 复杂度: {config["complexity"]}
-- 词汇水平: {config["vocab_level"]}
-- 选项风格: {config["choices_style"]}
+**Writing Requirements** (age-adapted):
+- Words per segment: {config[“word_count”]} words
+- Sentence length: {config[“sentence_length”]}
+- Complexity: {config[“complexity”]}
+- Vocabulary level: {config[“vocab_level”]}
+- Choices style: {config[“choices_style”]}
 
-**重要规则**：
-1. 根据用户的选择自然延续故事
-2. 保持故事的连贯性和吸引力
+**Important Rules**:
+1. Naturally continue the story based on the user's choice
+2. Maintain story coherence and engagement
 3. {
-        "这是结局段落，请给出一个温馨、积极、完整的结局：必须明确回应开场线索，并且原样引用上面“结局连续性锚点”中至少2个词组，不得引入全新主线任务，让结尾和前文形成闭环"
+        “This is the ending segment. Please provide a warm, positive, complete ending: you must explicitly reference the opening clue, quote at least 2 phrases from the 'Ending Continuity Anchors' above verbatim, do not introduce any new main quests, and create a satisfying closure that connects back to earlier events”
         if is_final_segment
-        else "继续发展情节，提供 2-3 个新选项"
+        else “Continue developing the plot and provide 2-3 new choices”
     }
-4. 所有内容必须适合儿童，积极向上
-5. {"不需要提供选项" if is_final_segment else "每个选项配一个合适的 emoji"}
+4. All content must be child-appropriate and positive
+5. {“No choices needed” if is_final_segment else “Each choice should have an appropriate emoji”}
 6. {
-        "结局不要再引入新的大冲突，重点是解决之前的问题并给出成长收获"
+        “The ending should not introduce new major conflicts. Focus on resolving earlier problems and highlighting growth and lessons learned”
         if is_final_segment
-        else "确保新选项真实影响后续发展，避免重复表述"
+        else “Ensure new choices genuinely affect subsequent developments and avoid repetitive phrasing”
     }
 
-**输出格式**：
-请直接返回 JSON 格式，包含：
-- segment: 故事段落
+**Output Format**:
+Return directly in JSON format, containing:
+- segment: Story segment
   - segment_id: {segment_count}
-  - text: 故事内容
-  - choices: {"空数组 []" if is_final_segment else "选项数组"}
+  - text: Story content
+  - choices: {“empty array []” if is_final_segment else “choices array”}
   - is_ending: {str(is_final_segment).lower()}
 - is_ending: {str(is_final_segment).lower()}
 {
-        f'''- educational_summary: 教育总结（仅结局时提供）
-  - themes: 主题数组（如：["勇气", "友谊"]）
-  - concepts: 概念数组（如：["决策", "合作"]）
-  - moral: 道德寓意（一句话总结）'''
+        f'''- educational_summary: Educational summary (only for ending)
+  - themes: Themes array (e.g.: [“courage”, “friendship”])
+  - concepts: Concepts array (e.g.: [“decision-making”, “cooperation”])
+  - moral: Moral of the story (one sentence summary)'''
         if is_final_segment
-        else ""
+        else “”
     }
 
-继续这个精彩的故事吧！
-"""
+Continue this amazing story!
+
+Always respond in English.
+“””
 
 
 def _append_tts_instructions(
@@ -416,10 +420,10 @@ def _append_tts_instructions(
         prompt
         + f"""
 
-**语音生成**：
-故事创作完成后，请使用 `mcp__tts-generation__generate_story_audio` 工具为故事文本生成语音。
-- 语音类型: {voice}
-- 语速: {speed}
+**Audio Generation**:
+After the story is created, use the `mcp__tts-generation__generate_story_audio` tool to generate audio narration for the story text.
+- Voice type: {voice}
+- Speed: {speed}
 - {id_label}: {id_value}
 """
     )
@@ -433,11 +437,11 @@ def _append_tts_instructions(
 def _build_fallback_choices(segment_id: int, age_group: str) -> List[Dict[str, str]]:
     """Fallback choices to keep interactive flow complete when model output is sparse."""
     if age_group == "3-5":
-        templates = [("和伙伴一起前进", "🤝"), ("先观察再行动", "👀")]
+        templates = [("Move forward with friends", "🤝"), ("Observe first, then act", "👀")]
     elif age_group == "9-12":
-        templates = [("根据线索制定计划", "🧭"), ("先帮助伙伴再推进任务", "💡")]
+        templates = [("Make a plan based on clues", "🧭"), ("Help friends first, then proceed", "💡")]
     else:
-        templates = [("顺着线索继续前进", "🔍"), ("和伙伴商量新计划", "🤝")]
+        templates = [("Follow the clues forward", "🔍"), ("Discuss a new plan with friends", "🤝")]
 
     return [
         {
@@ -502,7 +506,7 @@ def _build_choice_history_context(
 ) -> str:
     """Build readable path history so the next segment can stay consistent."""
     if not choice_history:
-        return "（暂无历史选择）"
+        return "(no prior choices)"
 
     lines: List[str] = []
     for idx, choice_id in enumerate(choice_history):
@@ -690,29 +694,29 @@ def _rewrite_ending_with_anchors(
     history_steps = _extract_choice_history_steps(choice_history_context)
 
     hook_clause = (
-        f"从故事一开始“{opening_hook}”的悬念，到现在终于有了清楚的答案。"
+        f”From the very beginning of the story, the mystery of \”{opening_hook}\” has finally found its answer. “
         if opening_hook
-        else "这趟旅程终于把前面埋下的问题都解决了。"
+        else “This journey has finally resolved all the questions planted earlier. “
     )
     option_clause = (
-        f"当大家做出“{chosen_option}”这个关键选择后，"
+        f”After everyone made the key choice of \”{chosen_option}\”, “
         if chosen_option
-        else "在最后一次关键决定后，"
+        else “After the final key decision, “
     )
 
     if anchors:
-        anchor_clause = f"围绕{'、'.join(anchors)}，大家把一路上的挑战一步步化解。"
+        anchor_clause = f”revolving around {', '.join(anchors)}, the friends overcame each challenge along the way. “
     else:
-        anchor_clause = "大家把一路上的挑战一步步化解，并让故事线索完整收束。"
+        anchor_clause = “the friends overcame each challenge along the way, bringing the story threads to a complete close. “
 
-    history_clause = ""
+    history_clause = “”
     if history_steps:
-        recent = "、".join(history_steps[-2:])
-        history_clause = f"回看之前的选择（{recent}），每一步都把故事推向了同一个方向。"
+        recent = “, “.join(history_steps[-2:])
+        history_clause = f”Looking back at the earlier choices ({recent}), every step pushed the story in the same direction. “
 
     return (
-        f"{hook_clause}{option_clause}{anchor_clause}"
-        f"{history_clause}最后，伙伴们带着新的勇气与合作精神回到日常生活，故事圆满结束。"
+        f”{hook_clause}{option_clause}{anchor_clause}”
+        f”{history_clause}In the end, the friends returned to their daily lives with newfound courage and teamwork, and the story came to a satisfying close.”
     )
 
 
@@ -724,9 +728,9 @@ def _ensure_ending_coherence(
     continuity_anchors: Optional[List[str]] = None,
 ) -> str:
     """Ensure final segment explicitly connects to opening and recent choices."""
-    text = str(ending_text or "").strip()
+    text = str(ending_text or “”).strip()
     if not text:
-        text = "这次冒险终于迎来了温暖的结局。"
+        text = “This adventure has finally reached its warm conclusion.”
 
     anchors = [a.strip() for a in (continuity_anchors or []) if str(a).strip()]
     required_hits = 2 if len(anchors) >= 2 else len(anchors)
@@ -744,24 +748,24 @@ def _ensure_ending_coherence(
     additions: List[str] = []
     if opening_hook and opening_hook not in text:
         additions.append(
-            f"回想起故事开始时“{opening_hook}”，大家终于把这段冒险走到了温暖的结局。"
+            f”Thinking back to the beginning when \”{opening_hook}\” first appeared, the friends have finally brought this adventure to a warm conclusion.”
         )
 
     if chosen_option:
         chosen_option = str(chosen_option).strip()
         if chosen_option and chosen_option not in text:
             additions.append(
-                f"也正因为最后选择了“{chosen_option}”，故事才迎来了现在的结果。"
+                f”It was precisely because of choosing \”{chosen_option}\” that the story arrived at this outcome.”
             )
 
-    if not any(k in text for k in ["最后", "终于", "结局", "回到", "学会", "从此"]):
-        additions.append("最后，大家带着新的勇气与智慧回到日常生活，故事也圆满结束。")
+    if not any(k in text for k in [“finally”, “in the end”, “ending”, “returned”, “learned”, “ever since”]):
+        additions.append(“In the end, everyone returned to daily life with newfound courage and wisdom, and the story came to a satisfying close.”)
 
     history_steps = _extract_choice_history_steps(choice_history_context)
     if history_steps:
-        summary = "；".join(history_steps[-2:])
+        summary = “; “.join(history_steps[-2:])
         if summary and summary not in text:
-            additions.append(f"一路上的关键选择（{summary}）在这一刻都得到了回应。")
+            additions.append(f”All the key choices along the way ({summary}) found their answer in this moment.”)
 
     if additions:
         text = f"{text} {' '.join(additions)}"
@@ -770,20 +774,20 @@ def _ensure_ending_coherence(
 
 
 # ============================================================================
-# Agent 函数
+# Agent Functions
 # ============================================================================
 
 
 def _mock_opening(interests: List[str]) -> Dict[str, Any]:
-    topic = interests[0] if interests else "冒险"
+    topic = interests[0] if interests else "adventure"
     return {
-        "title": f"{topic}小队大冒险",
+        "title": f"The Great {topic} Adventure",
         "segment": {
             "segment_id": 0,
-            "text": f"在一个阳光明媚的早晨，小伙伴们决定开始一次关于{topic}的探索。",
+            "text": f"On a bright sunny morning, the friends decided to begin an exploration about {topic}.",
             "choices": [
-                {"choice_id": "choice_0_a", "text": "马上出发", "emoji": "🚀"},
-                {"choice_id": "choice_0_b", "text": "先做准备", "emoji": "🎒"},
+                {"choice_id": "choice_0_a", "text": "Let's go!", "emoji": "🚀"},
+                {"choice_id": "choice_0_b", "text": "Let's prepare first", "emoji": "🎒"},
             ],
             "is_ending": False,
         },
@@ -793,18 +797,18 @@ def _mock_opening(interests: List[str]) -> Dict[str, Any]:
 def _mock_next_segment(segment_count: int, is_final_segment: bool) -> Dict[str, Any]:
     segment = {
         "segment_id": segment_count,
-        "text": "小伙伴们继续前进，发现了新的线索，并学会了互相帮助。",
+        "text": "The friends continued forward, discovered new clues, and learned to help each other.",
         "choices": []
         if is_final_segment
         else [
             {
                 "choice_id": f"choice_{segment_count}_a",
-                "text": "勇敢尝试",
+                "text": "Try bravely",
                 "emoji": "✨",
             },
             {
                 "choice_id": f"choice_{segment_count}_b",
-                "text": "团队讨论",
+                "text": "Team discussion",
                 "emoji": "🤝",
             },
         ],
@@ -813,9 +817,9 @@ def _mock_next_segment(segment_count: int, is_final_segment: bool) -> Dict[str, 
     result = {"segment": segment, "is_ending": is_final_segment}
     if is_final_segment:
         result["educational_summary"] = {
-            "themes": ["勇气", "合作"],
-            "concepts": ["选择", "探索"],
-            "moral": "勇敢尝试并与伙伴合作，问题就会有答案。",
+            "themes": ["courage", "cooperation"],
+            "concepts": ["decision-making", "exploration"],
+            "moral": "By trying bravely and working with friends, every problem finds an answer.",
         }
     return result
 
@@ -830,25 +834,25 @@ async def generate_story_opening(
     user_id: str = "",
 ) -> Dict[str, Any]:
     """
-    生成互动故事开场
+    Generate interactive story opening.
 
     Args:
-        child_id: 儿童ID
-        age_group: 年龄组 ("3-5", "6-8", "9-12")
-        interests: 兴趣标签列表
-        theme: 故事主题（可选）
-        enable_audio: 是否生成语音
-        voice: 语音类型（可选，默认根据年龄组选择）
+        child_id: Child ID
+        age_group: Age group ("3-5", "6-8", "9-12")
+        interests: Interest tag list
+        theme: Story theme (optional)
+        enable_audio: Whether to generate audio
+        voice: Voice type (optional, defaults based on age group)
 
     Returns:
-        包含故事标题和开场段落的字典
+        Dictionary containing story title and opening segment
     """
     config = AGE_CONFIG.get(age_group, AGE_CONFIG["6-8"])
     if _should_use_mock():
         return _mock_opening(interests)
-    interests_str = "、".join(interests) if interests else "冒险"
+    interests_str = ", ".join(interests) if interests else "adventure"
     theme_str = (
-        theme if theme else f"关于{interests[0]}的冒险" if interests else "神秘的冒险"
+        theme if theme else f"An adventure about {interests[0]}" if interests else "A mysterious adventure"
     )
 
     # Fetch preference context (#72)
@@ -892,7 +896,7 @@ async def generate_story_opening(
     # Add TTS instruction if audio should be generated
     if should_generate_audio:
         prompt = _append_tts_instructions(
-            prompt, actual_voice, audio_speed, "儿童ID", child_id
+            prompt, actual_voice, audio_speed, "Child ID", child_id
         )
 
     options = ClaudeAgentOptions(
@@ -984,40 +988,40 @@ async def generate_story_opening_stream(
     user_id: str = "",
 ) -> AsyncGenerator[Dict[str, Any], None]:
     """
-    流式生成互动故事开场
+    Stream interactive story opening generation.
 
     Args:
-        child_id: 儿童ID
-        age_group: 年龄组 ("3-5", "6-8", "9-12")
-        interests: 兴趣标签列表
-        theme: 故事主题（可选）
-        enable_audio: 是否生成语音
-        voice: 语音类型（可选）
+        child_id: Child ID
+        age_group: Age group ("3-5", "6-8", "9-12")
+        interests: Interest tag list
+        theme: Story theme (optional)
+        enable_audio: Whether to generate audio
+        voice: Voice type (optional)
 
     Yields:
-        流式事件字典，包含 type 和 data 字段
+        Streaming event dictionaries containing type and data fields
     """
     config = AGE_CONFIG.get(age_group, AGE_CONFIG["6-8"])
     if _should_use_mock():
         yield {
             "type": "status",
-            "data": {"status": "started", "message": "正在生成故事开场..."},
+            "data": {"status": "started", "message": "Generating story opening..."},
         }
         yield {"type": "result", "data": _mock_opening(interests)}
         yield {
             "type": "complete",
-            "data": {"status": "completed", "message": "故事开场生成完成"},
+            "data": {"status": "completed", "message": "Story opening generation complete"},
         }
         return
-    interests_str = "、".join(interests) if interests else "冒险"
+    interests_str = ", ".join(interests) if interests else "adventure"
     theme_str = (
-        theme if theme else f"关于{interests[0]}的冒险" if interests else "神秘的冒险"
+        theme if theme else f"An adventure about {interests[0]}" if interests else "A mysterious adventure"
     )
 
-    # 发送开始事件
+    # Send start event
     yield {
         "type": "status",
-        "data": {"status": "started", "message": "正在创作故事..."},
+        "data": {"status": "started", "message": "Creating story..."},
     }
 
     # Fetch preference context (#72)
@@ -1053,7 +1057,7 @@ async def generate_story_opening_stream(
     # Add TTS instruction if audio should be generated
     if should_generate_audio:
         prompt = _append_tts_instructions(
-            prompt, actual_voice, audio_speed, "儿童ID", child_id
+            prompt, actual_voice, audio_speed, "Child ID", child_id
         )
 
     options = ClaudeAgentOptions(
@@ -1088,14 +1092,14 @@ async def generate_story_opening_stream(
             await client.query(prompt)
 
             async for message in client.receive_response():
-                # 处理助手消息（思考过程和工具使用）
+                # Process assistant messages (thinking and tool use)
                 if isinstance(message, AssistantMessage):
                     turn_count += 1
 
-                    # 获取消息内容
+                    # Get message content
                     content = getattr(message, "content", None)
 
-                    # content 可能是字符串或内容块列表
+                    # content may be a string or list of content blocks
                     if isinstance(content, str) and content:
                         thinking_text += content
                         yield {
@@ -1108,28 +1112,28 @@ async def generate_story_opening_stream(
                             },
                         }
                     elif isinstance(content, list):
-                        # 遍历内容块
+                        # Iterate content blocks
                         for block in content:
-                            # 检查工具使用块
+                            # Check tool use blocks
                             if isinstance(block, ToolUseBlock):
                                 tool_name = getattr(block, "name", "unknown")
                                 # Friendly tool name mapping
                                 tool_messages = {
-                                    "mcp__safety-check__check_content_safety": "正在检查内容安全...",
-                                    "mcp__vector-search__search_similar_drawings": "正在搜索历史角色...",
-                                    "mcp__vector-search__store_drawing_embedding": "正在存储角色记忆...",
-                                    "mcp__tts-generation__generate_story_audio": "正在生成语音...",
+                                    "mcp__safety-check__check_content_safety": "Checking content safety...",
+                                    "mcp__vector-search__search_similar_drawings": "Searching historical characters...",
+                                    "mcp__vector-search__store_drawing_embedding": "Saving character memory...",
+                                    "mcp__tts-generation__generate_story_audio": "Generating audio...",
                                 }
                                 yield {
                                     "type": "tool_use",
                                     "data": {
                                         "tool": tool_name,
                                         "message": tool_messages.get(
-                                            tool_name, f"正在使用 {tool_name}..."
+                                            tool_name, f"Using {tool_name}..."
                                         ),
                                     },
                                 }
-                            # 检查工具结果块
+                            # Check tool result blocks
                             elif isinstance(block, ToolResultBlock):
                                 # Try to extract audio path from TTS result
                                 result_content = getattr(block, "content", None)
@@ -1142,7 +1146,7 @@ async def generate_story_opening_stream(
                                                 "type": "audio_generated",
                                                 "data": {
                                                     "audio_path": audio_path,
-                                                    "message": "语音生成完成",
+                                                    "message": "Audio generation complete",
                                                 },
                                             }
                                     except (json.JSONDecodeError, TypeError):
@@ -1152,10 +1156,10 @@ async def generate_story_opening_stream(
                                     "type": "tool_result",
                                     "data": {
                                         "status": "completed",
-                                        "message": "工具执行完成",
+                                        "message": "Tool execution complete",
                                     },
                                 }
-                            # 处理文本块
+                            # Process text blocks
                             elif hasattr(block, "text"):
                                 text = block.text
                                 if text:
@@ -1170,7 +1174,7 @@ async def generate_story_opening_stream(
                                         },
                                     }
 
-                # 处理最终结果
+                # Process final result
                 elif isinstance(message, ResultMessage):
                     if (
                         hasattr(message, "structured_output")
@@ -1189,12 +1193,12 @@ async def generate_story_opening_stream(
     except Exception as e:
         yield {
             "type": "error",
-            "data": {"error": str(e), "message": "生成故事时发生错误"},
+            "data": {"error": str(e), "message": "Error generating story"},
         }
-        # 使用默认开场
+        # Use default opening
         result_data = _create_default_opening(theme_str, interests, config)
 
-    # 验证并确保必需的结构
+    # Validate and ensure required structure
     if not result_data or "title" not in result_data:
         result_data = _create_default_opening(theme_str, interests, config)
 
@@ -1202,7 +1206,7 @@ async def generate_story_opening_stream(
     if audio_path:
         result_data["audio_path"] = audio_path
 
-    # 确保开场总是有有效选项，避免故事中途卡住
+    # Ensure opening always has valid choices to prevent story from getting stuck
     if "segment" in result_data and "choices" in result_data["segment"]:
         result_data["segment"]["choices"] = _normalize_choices(
             result_data["segment"]["choices"],
@@ -1211,12 +1215,12 @@ async def generate_story_opening_stream(
             age_group=age_group,
         )
 
-    # 发送最终结果
+    # Send final result
     yield {"type": "result", "data": result_data}
 
     yield {
         "type": "complete",
-        "data": {"status": "completed", "message": "故事创作完成！"},
+        "data": {"status": "completed", "message": "Story creation complete!"},
     }
 
 
@@ -1228,24 +1232,24 @@ async def generate_next_segment_stream(
     voice: str = None,
 ) -> AsyncGenerator[Dict[str, Any], None]:
     """
-    流式生成下一个故事段落
+    Stream the next story segment generation.
 
     Args:
-        session_id: 会话ID
-        choice_id: 用户选择的选项ID
-        session_data: 会话数据
-        enable_audio: 是否生成语音
-        voice: 语音类型（可选）
+        session_id: Session ID
+        choice_id: User's chosen option ID
+        session_data: Session data
+        enable_audio: Whether to generate audio
+        voice: Voice type (optional)
 
     Yields:
-        流式事件字典
+        Streaming event dictionaries
     """
     segments = session_data.get("segments", [])
     choice_history = session_data.get("choice_history", [])
     age_group = session_data.get("age_group", "6-8")
-    interests = session_data.get("interests", ["冒险"])
-    theme = session_data.get("theme", "冒险故事")
-    story_title = session_data.get("story_title", "神秘的冒险")
+    interests = session_data.get("interests", ["adventure"])
+    theme = session_data.get("theme", "adventure story")
+    story_title = session_data.get("story_title", "A mysterious adventure")
 
     config = AGE_CONFIG.get(age_group, AGE_CONFIG["6-8"])
     segment_count = len(segments)
@@ -1255,7 +1259,7 @@ async def generate_next_segment_stream(
     if _should_use_mock():
         yield {
             "type": "status",
-            "data": {"status": "processing", "message": "正在继续故事..."},
+            "data": {"status": "processing", "message": "Continuing story..."},
         }
         yield {
             "type": "result",
@@ -1263,16 +1267,16 @@ async def generate_next_segment_stream(
         }
         yield {
             "type": "complete",
-            "data": {"status": "completed", "message": "段落生成完成"},
+            "data": {"status": "completed", "message": "Segment generation complete"},
         }
         return
 
-    # 发送开始事件
+    # Send start event
     yield {
         "type": "status",
         "data": {
             "status": "started",
-            "message": "正在继续故事..." if not is_final_segment else "正在创作结局...",
+            "message": "Continuing story..." if not is_final_segment else "Creating the ending...",
             "is_ending": is_final_segment,
         },
     }
@@ -1280,7 +1284,7 @@ async def generate_next_segment_stream(
     # Build story context from previous segments
     story_context = "\n".join(
         [
-            f"段落 {s.get('segment_id', i)}: {s.get('text', '')}"
+            f"Segment {s.get('segment_id', i)}: {s.get('text', '')}"
             for i, s in enumerate(segments)
         ]
     )
@@ -1332,7 +1336,7 @@ async def generate_next_segment_stream(
     # Add TTS instruction if audio should be generated
     if should_generate_audio:
         prompt = _append_tts_instructions(
-            prompt, actual_voice, audio_speed, "会话ID", session_id
+            prompt, actual_voice, audio_speed, "Session ID", session_id
         )
 
     options = ClaudeAgentOptions(
@@ -1360,7 +1364,7 @@ async def generate_next_segment_stream(
             await client.query(prompt)
 
             async for message in client.receive_response():
-                # 处理助手消息（思考过程和工具使用）
+                # Process assistant messages (thinking and tool use)
                 if isinstance(message, AssistantMessage):
                     turn_count += 1
 
@@ -1381,15 +1385,15 @@ async def generate_next_segment_stream(
                             if isinstance(block, ToolUseBlock):
                                 tool_name = getattr(block, "name", "unknown")
                                 tool_messages = {
-                                    "mcp__safety-check__check_content_safety": "正在检查内容安全...",
-                                    "mcp__tts-generation__generate_story_audio": "正在生成语音...",
+                                    "mcp__safety-check__check_content_safety": "Checking content safety...",
+                                    "mcp__tts-generation__generate_story_audio": "Generating audio...",
                                 }
                                 yield {
                                     "type": "tool_use",
                                     "data": {
                                         "tool": tool_name,
                                         "message": tool_messages.get(
-                                            tool_name, f"正在使用 {tool_name}..."
+                                            tool_name, f"Using {tool_name}..."
                                         ),
                                     },
                                 }
@@ -1405,7 +1409,7 @@ async def generate_next_segment_stream(
                                                 "type": "audio_generated",
                                                 "data": {
                                                     "audio_path": audio_path,
-                                                    "message": "语音生成完成",
+                                                    "message": "Audio generation complete",
                                                 },
                                             }
                                     except (json.JSONDecodeError, TypeError):
@@ -1446,7 +1450,7 @@ async def generate_next_segment_stream(
     except Exception as e:
         yield {
             "type": "error",
-            "data": {"error": str(e), "message": "生成故事时发生错误"},
+            "data": {"error": str(e), "message": "Error generating story"},
         }
         result_data = _create_default_segment(
             segment_count, is_final_segment, chosen_option
@@ -1480,9 +1484,9 @@ async def generate_next_segment_stream(
 
     if is_final_segment and "educational_summary" not in result_data:
         result_data["educational_summary"] = {
-            "themes": ["勇气", "友谊"],
-            "concepts": ["决策", "探索"],
-            "moral": "勇敢面对挑战，和朋友一起会更有力量",
+            "themes": ["courage", "friendship"],
+            "concepts": ["decision-making", "exploration"],
+            "moral": "By bravely facing challenges and working with friends, you become stronger.",
         }
 
     # Add audio path to result if available
@@ -1495,7 +1499,7 @@ async def generate_next_segment_stream(
         "type": "complete",
         "data": {
             "status": "completed",
-            "message": "故事创作完成！" if is_final_segment else "段落生成完成！",
+            "message": "Story creation complete!" if is_final_segment else "Segment generation complete!",
         },
     }
 
@@ -1508,24 +1512,24 @@ async def generate_next_segment(
     voice: str = None,
 ) -> Dict[str, Any]:
     """
-    根据选择生成下一个故事段落
+    Generate the next story segment based on user's choice.
 
     Args:
-        session_id: 会话ID
-        choice_id: 用户选择的选项ID
-        session_data: 会话数据，包含之前的段落和选择历史
-        enable_audio: 是否生成语音
-        voice: 语音类型（可选）
+        session_id: Session ID
+        choice_id: User's chosen option ID
+        session_data: Session data containing previous segments and choice history
+        enable_audio: Whether to generate audio
+        voice: Voice type (optional)
 
     Returns:
-        包含下一段落的字典
+        Dictionary containing the next segment
     """
     segments = session_data.get("segments", [])
     choice_history = session_data.get("choice_history", [])
     age_group = session_data.get("age_group", "6-8")
-    interests = session_data.get("interests", ["冒险"])
-    theme = session_data.get("theme", "冒险故事")
-    story_title = session_data.get("story_title", "神秘的冒险")
+    interests = session_data.get("interests", ["adventure"])
+    theme = session_data.get("theme", "adventure story")
+    story_title = session_data.get("story_title", "A mysterious adventure")
 
     config = AGE_CONFIG.get(age_group, AGE_CONFIG["6-8"])
     segment_count = len(segments)
@@ -1540,7 +1544,7 @@ async def generate_next_segment(
     # Build story context from previous segments
     story_context = "\n".join(
         [
-            f"段落 {s.get('segment_id', i)}: {s.get('text', '')}"
+            f"Segment {s.get('segment_id', i)}: {s.get('text', '')}"
             for i, s in enumerate(segments)
         ]
     )
@@ -1592,7 +1596,7 @@ async def generate_next_segment(
     # Add TTS instruction if audio should be generated
     if should_generate_audio:
         prompt = _append_tts_instructions(
-            prompt, actual_voice, audio_speed, "会话ID", session_id
+            prompt, actual_voice, audio_speed, "Session ID", session_id
         )
 
     options = ClaudeAgentOptions(
@@ -1680,9 +1684,9 @@ async def generate_next_segment(
     # Add educational summary for endings
     if is_final_segment and "educational_summary" not in result_data:
         result_data["educational_summary"] = {
-            "themes": ["勇气", "友谊"],
-            "concepts": ["决策", "探索"],
-            "moral": "勇敢面对挑战，和朋友一起会更有力量",
+            "themes": ["courage", "friendship"],
+            "concepts": ["decision-making", "exploration"],
+            "moral": "By bravely facing challenges and working with friends, you become stronger.",
         }
 
     return result_data
@@ -1691,17 +1695,17 @@ async def generate_next_segment(
 def _create_default_opening(
     theme: str, interests: List[str], config: Dict
 ) -> Dict[str, Any]:
-    """创建默认开场（当AI生成失败时使用）"""
-    interest_item = interests[0] if interests else "宝箱"
+    """Create default opening (used when AI generation fails)"""
+    interest_item = interests[0] if interests else "treasure chest"
     return {
-        "title": f"{theme}之旅",
+        "title": f"Journey of {theme}",
         "segment": {
             "segment_id": 0,
-            "text": f"在一个阳光明媚的早晨，小主人公发现了一个神秘的{interest_item}。它闪闪发光，好像在邀请小主人公来探索...",
+            "text": f"On a bright sunny morning, the young hero discovered a mysterious {interest_item}. It was sparkling and glowing, as if inviting the hero to come and explore...",
             "choices": [
-                {"choice_id": "choice_0_a", "text": "立刻去探索", "emoji": "🔍"},
-                {"choice_id": "choice_0_b", "text": "先找朋友一起", "emoji": "👫"},
-                {"choice_id": "choice_0_c", "text": "仔细观察一下", "emoji": "👀"},
+                {"choice_id": "choice_0_a", "text": "Explore right away", "emoji": "🔍"},
+                {"choice_id": "choice_0_b", "text": "Find friends first", "emoji": "👫"},
+                {"choice_id": "choice_0_c", "text": "Observe carefully", "emoji": "👀"},
             ],
             "is_ending": False,
         },
@@ -1711,36 +1715,36 @@ def _create_default_opening(
 def _create_default_segment(
     segment_id: int, is_ending: bool, choice_text: str = None
 ) -> Dict[str, Any]:
-    """创建默认段落（当AI生成失败时使用）"""
+    """Create default segment (used when AI generation fails)"""
     if is_ending:
         return {
             "segment": {
                 "segment_id": segment_id,
-                "text": "经过这次奇妙的冒险，小主人公学会了很多。不管遇到什么困难，只要勇敢面对，善待朋友，就一定能找到解决办法。这真是一次难忘的经历！",
+                "text": "After this wonderful adventure, the young hero learned so much. No matter what challenges come your way, as long as you face them bravely and treat your friends kindly, you can always find a solution. What an unforgettable experience!",
                 "choices": [],
                 "is_ending": True,
             },
             "is_ending": True,
             "educational_summary": {
-                "themes": ["勇气", "友谊"],
-                "concepts": ["决策", "探索"],
-                "moral": "勇敢面对挑战，和朋友一起会更有力量",
+                "themes": ["courage", "friendship"],
+                "concepts": ["decision-making", "exploration"],
+                "moral": "By bravely facing challenges and working with friends, you become stronger.",
             },
         }
     else:
         return {
             "segment": {
                 "segment_id": segment_id,
-                "text": f"小主人公决定{choice_text or '继续探索'}。前方出现了一条分岔路，一边通向神秘的森林，一边通向闪闪发光的小溪...",
+                "text": f"The young hero decided to {choice_text or 'continue exploring'}. Up ahead, a fork in the road appeared — one path led to a mysterious forest, the other to a sparkling stream...",
                 "choices": [
                     {
                         "choice_id": f"choice_{segment_id}_a",
-                        "text": "走向森林",
+                        "text": "Head to the forest",
                         "emoji": "🌲",
                     },
                     {
                         "choice_id": f"choice_{segment_id}_b",
-                        "text": "走向小溪",
+                        "text": "Head to the stream",
                         "emoji": "💧",
                     },
                 ],
@@ -1751,28 +1755,28 @@ def _create_default_segment(
 
 
 if __name__ == "__main__":
-    """测试 Agent"""
+    """Test Agent"""
     import asyncio
 
     async def test():
-        print("=== 测试 Interactive Story Agent ===\n")
+        print("=== Test Interactive Story Agent ===\n")
 
         try:
-            # 测试生成开场
-            print("1. 测试生成故事开场...")
+            # Test opening generation
+            print("1. Testing story opening generation...")
             opening = await generate_story_opening(
                 child_id="test_child_001",
                 age_group="6-8",
-                interests=["恐龙", "冒险"],
-                theme="恐龙世界探险",
+                interests=["dinosaurs", "adventure"],
+                theme="Dinosaur World Exploration",
             )
-            print(f"标题: {opening.get('title')}")
-            print(f"开场: {opening.get('segment', {}).get('text', '')[:100]}...")
-            print(f"选项数: {len(opening.get('segment', {}).get('choices', []))}")
+            print(f"Title: {opening.get('title')}")
+            print(f"Opening: {opening.get('segment', {}).get('text', '')[:100]}...")
+            print(f"Choices: {len(opening.get('segment', {}).get('choices', []))}")
             print()
 
-            # 测试生成下一段
-            print("2. 测试生成下一段...")
+            # Test next segment generation
+            print("2. Testing next segment generation...")
             next_seg = await generate_next_segment(
                 session_id="test_session",
                 choice_id="choice_0_a",
@@ -1780,19 +1784,19 @@ if __name__ == "__main__":
                     "segments": [opening.get("segment", {})],
                     "choice_history": ["choice_0_a"],
                     "age_group": "6-8",
-                    "interests": ["恐龙", "冒险"],
-                    "theme": "恐龙世界探险",
-                    "story_title": opening.get("title", "冒险故事"),
+                    "interests": ["dinosaurs", "adventure"],
+                    "theme": "Dinosaur World Exploration",
+                    "story_title": opening.get("title", "Adventure Story"),
                 },
             )
-            print(f"段落: {next_seg.get('segment', {}).get('text', '')[:100]}...")
-            print(f"是否结局: {next_seg.get('is_ending')}")
+            print(f"Segment: {next_seg.get('segment', {}).get('text', '')[:100]}...")
+            print(f"Is ending: {next_seg.get('is_ending')}")
             print()
 
-            print("✅ 测试完成！")
+            print("Test complete!")
 
         except Exception as e:
-            print(f"❌ 错误: {e}")
+            print(f"Error: {e}")
             import traceback
 
             traceback.print_exc()

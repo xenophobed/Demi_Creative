@@ -1,7 +1,7 @@
 """
 Services Package
 
-业务逻辑和服务层
+Business logic and service layer
 """
 
 # Legacy session manager (deprecated, use database.session_repo instead)

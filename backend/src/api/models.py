@@ -1,7 +1,7 @@
 """
 API Request/Response Models
 
-Pydantic 模型定义所有 API 端点的请求和响应格式
+Pydantic models defining request and response formats for all API endpoints
 """
 
 import re
@@ -12,11 +12,11 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 # ============================================================================
-# 枚举类型
+# Enum Types
 # ============================================================================
 
 class AgeGroup(str, Enum):
-    """年龄组 (PRD §2.1 canonical: 3-5, 6-8, 9-12)"""
+    """Age group (PRD §2.1 canonical: 3-5, 6-8, 9-12)"""
     AGE_3_5 = "3-5"
     AGE_6_8 = "6-8"
     AGE_9_12 = "9-12"
@@ -47,33 +47,33 @@ class EmotionType(str, Enum):
 
 
 class VoiceType(str, Enum):
-    """语音类型"""
-    NOVA = "nova"           # 温柔女性
-    SHIMMER = "shimmer"     # 活泼女性
-    ALLOY = "alloy"         # 中性
-    ECHO = "echo"           # 男性
-    FABLE = "fable"         # 故事讲述者
-    ONYX = "onyx"           # 深沉男性
+    """Voice type"""
+    NOVA = "nova"           # gentle female
+    SHIMMER = "shimmer"     # energetic female
+    ALLOY = "alloy"         # neutral
+    ECHO = "echo"           # male
+    FABLE = "fable"         # storyteller
+    ONYX = "onyx"           # deep male
 
 
 class StoryMode(str, Enum):
-    """故事模式"""
-    LINEAR = "linear"           # 线性故事
-    INTERACTIVE = "interactive" # 互动故事
+    """Story mode"""
+    LINEAR = "linear"           # linear story
+    INTERACTIVE = "interactive" # interactive story
 
 
 class SessionStatus(str, Enum):
-    """会话状态"""
+    """Session status"""
     ACTIVE = "active"
     COMPLETED = "completed"
     EXPIRED = "expired"
 
 
 class VideoStyle(str, Enum):
-    """视频风格"""
-    GENTLE_ANIMATION = "gentle_animation"  # 温和动画，通用儿童友好风格
-    PLAYFUL = "playful"                    # 活泼风格
-    STORYBOOK = "storybook"                # 绘本风格
+    """Video style"""
+    GENTLE_ANIMATION = "gentle_animation"  # gentle animation, child-friendly
+    PLAYFUL = "playful"                    # playful style
+    STORYBOOK = "storybook"                # storybook style
 
 
 class MembershipTier(str, Enum):
@@ -95,7 +95,7 @@ class ArtTheme(str, Enum):
 
 
 class VideoStatus(str, Enum):
-    """视频生成状态"""
+    """Video generation status"""
     PENDING = "pending"
     PROCESSING = "processing"
     COMPLETED = "completed"
@@ -103,7 +103,7 @@ class VideoStatus(str, Enum):
 
 
 class NewsCategory(str, Enum):
-    """新闻分类"""
+    """News category"""
     SCIENCE = "science"
     NATURE = "nature"
     TECHNOLOGY = "technology"
@@ -115,268 +115,268 @@ class NewsCategory(str, Enum):
 
 
 # ============================================================================
-# 画作转故事 API Models
+# Image-to-Story API Models
 # ============================================================================
 
 class ImageToStoryRequest(BaseModel):
-    """画作转故事请求"""
+    """Image-to-story request"""
     child_id: str = Field(
         ...,
         min_length=1,
         max_length=100,
-        description="儿童唯一标识符"
+        description="Child unique identifier"
     )
     age_group: AgeGroup = Field(
         ...,
-        description="年龄组：3-5, 6-9, 10-12"
+        description="Age group: 3-5, 6-9, 10-12"
     )
     interests: Optional[List[str]] = Field(
         default=None,
         max_length=5,
-        description="兴趣标签，最多5个"
+        description="Interest tags, maximum 5"
     )
     voice: VoiceType = Field(
         default=VoiceType.NOVA,
-        description="语音类型"
+        description="Voice type"
     )
     enable_audio: bool = Field(
         default=True,
-        description="是否生成语音"
+        description="Whether to generate audio"
     )
 
     @field_validator('interests')
     @classmethod
     def validate_interests(cls, v):
         if v is not None and len(v) > 5:
-            raise ValueError("最多只能有5个兴趣标签")
+            raise ValueError("Maximum 5 interest tags")
         return v
 
 
 class StoryContent(BaseModel):
-    """故事内容"""
-    text: str = Field(..., description="故事文本")
-    word_count: int = Field(..., description="字数")
-    age_adapted: bool = Field(..., description="是否经过年龄适配")
+    """Story content"""
+    text: str = Field(..., description="Story text")
+    word_count: int = Field(..., description="Word count")
+    age_adapted: bool = Field(..., description="Whether age-adapted")
     degraded_length: bool = Field(False, description="Story length outside expected range for age group")
 
 
 class EducationalValue(BaseModel):
-    """教育价值"""
-    themes: List[str] = Field(..., description="主题（如：友谊、勇气）")
-    concepts: List[str] = Field(..., description="概念（如：颜色、数字）")
-    moral: Optional[str] = Field(None, description="道德寓意")
+    """Educational value"""
+    themes: List[str] = Field(..., description="Themes (e.g., friendship, courage)")
+    concepts: List[str] = Field(..., description="Concepts (e.g., colors, numbers)")
+    moral: Optional[str] = Field(None, description="Moral lesson")
 
 
 class CharacterMemory(BaseModel):
-    """角色记忆"""
-    character_name: str = Field(..., description="角色名称")
-    description: str = Field(..., description="角色描述")
-    appearances: int = Field(..., description="出现次数")
+    """Character memory"""
+    character_name: str = Field(..., description="Character name")
+    description: str = Field(..., description="Character description")
+    appearances: int = Field(..., description="Appearance count")
 
 
 class ImageToStoryResponse(BaseModel):
-    """画作转故事响应"""
-    story_id: str = Field(..., description="故事唯一ID")
-    story: StoryContent = Field(..., description="故事内容")
-    image_url: Optional[str] = Field(None, description="画作图片URL")
-    styled_image_url: Optional[str] = Field(None, description="风格化图片URL")
-    audio_url: Optional[str] = Field(None, description="语音文件URL")
-    video_url: Optional[str] = Field(None, description="视频文件URL")
-    video_job_id: Optional[str] = Field(None, description="视频生成任务ID")
-    educational_value: EducationalValue = Field(..., description="教育价值")
+    """Image-to-story response"""
+    story_id: str = Field(..., description="Story unique ID")
+    story: StoryContent = Field(..., description="Story content")
+    image_url: Optional[str] = Field(None, description="Drawing image URL")
+    styled_image_url: Optional[str] = Field(None, description="Styled image URL")
+    audio_url: Optional[str] = Field(None, description="Audio file URL")
+    video_url: Optional[str] = Field(None, description="Video file URL")
+    video_job_id: Optional[str] = Field(None, description="Video generation job ID")
+    educational_value: EducationalValue = Field(..., description="Educational value")
     characters: List[CharacterMemory] = Field(
         default_factory=list,
-        description="识别到的角色"
+        description="Recognized characters"
     )
     analysis: Dict[str, Any] = Field(
         default_factory=dict,
-        description="画作分析结果"
+        description="Drawing analysis result"
     )
-    safety_score: float = Field(..., ge=0.0, le=1.0, description="安全评分")
+    safety_score: float = Field(..., ge=0.0, le=1.0, description="Safety score")
     created_at: datetime = Field(
         default_factory=datetime.now,
-        description="创建时间"
+        description="Created at"
     )
 
 
 # ============================================================================
-# 互动故事 API Models
+# Interactive Story API Models
 # ============================================================================
 
 class InteractiveStoryStartRequest(BaseModel):
-    """开始互动故事请求"""
+    """Start interactive story request"""
     child_id: str = Field(
         ...,
         min_length=1,
         max_length=100,
-        description="儿童唯一标识符"
+        description="Child unique identifier"
     )
-    age_group: AgeGroup = Field(..., description="年龄组")
+    age_group: AgeGroup = Field(..., description="Age group")
     interests: List[str] = Field(
         ...,
         min_length=1,
         max_length=5,
-        description="兴趣标签，1-5个"
+        description="Interest tags, 1-5"
     )
     theme: Optional[str] = Field(
         None,
-        description="故事主题（可选）"
+        description="Story theme (optional)"
     )
     voice: VoiceType = Field(
         default=VoiceType.FABLE,
-        description="语音类型"
+        description="Voice type"
     )
     enable_audio: bool = Field(
         default=True,
-        description="是否生成语音"
+        description="Whether to generate audio"
     )
 
     @field_validator('interests')
     @classmethod
     def validate_interests(cls, v):
         if len(v) < 1 or len(v) > 5:
-            raise ValueError("兴趣标签数量必须在1-5之间")
+            raise ValueError("Interest tags count must be between 1 and 5")
         return v
 
 
 class StoryChoice(BaseModel):
-    """故事选项"""
-    choice_id: str = Field(..., description="选项ID")
-    text: str = Field(..., description="选项文本")
-    emoji: str = Field(..., description="选项图标")
+    """Story choice"""
+    choice_id: str = Field(..., description="Choice ID")
+    text: str = Field(..., description="Choice text")
+    emoji: str = Field(..., description="Choice icon")
 
 
 class StorySegment(BaseModel):
-    """故事段落"""
-    segment_id: int = Field(..., description="段落序号")
-    text: str = Field(..., description="段落文本")
-    audio_url: Optional[str] = Field(None, description="语音URL")
+    """Story segment"""
+    segment_id: int = Field(..., description="Segment number")
+    text: str = Field(..., description="Segment text")
+    audio_url: Optional[str] = Field(None, description="Audio URL")
     choices: List[StoryChoice] = Field(
         default_factory=list,
-        description="可选择的分支"
+        description="Available branching choices"
     )
     is_ending: bool = Field(
         default=False,
-        description="是否为结局"
+        description="Whether this is an ending"
     )
     # Optional content support for age-based behavior
     primary_mode: str = Field(
         default="both",
-        description="主要内容模式: 'audio' | 'text' | 'both'"
+        description="Primary content mode: 'audio' | 'text' | 'both'"
     )
     optional_content_available: bool = Field(
         default=False,
-        description="是否有可选内容按钮"
+        description="Whether optional content button is available"
     )
     optional_content_type: Optional[str] = Field(
         None,
-        description="可选内容类型: 'text' (3-5岁显示文字) | 'audio' (10-12岁播放语音)"
+        description="Optional content type: 'text' (show text for 3-5) | 'audio' (play audio for 10-12)"
     )
 
 
 class InteractiveStoryStartResponse(BaseModel):
-    """开始互动故事响应"""
-    session_id: str = Field(..., description="会话ID")
-    story_title: str = Field(..., description="故事标题")
-    opening: StorySegment = Field(..., description="开场段落")
+    """Start interactive story response"""
+    session_id: str = Field(..., description="Session ID")
+    story_title: str = Field(..., description="Story title")
+    opening: StorySegment = Field(..., description="Opening segment")
     created_at: datetime = Field(
         default_factory=datetime.now,
-        description="创建时间"
+        description="Created at"
     )
 
 
 class ChoiceRequest(BaseModel):
-    """选择分支请求"""
-    choice_id: str = Field(..., description="选择的选项ID")
+    """Branch choice request"""
+    choice_id: str = Field(..., description="Selected choice ID")
 
 
 class ChoiceResponse(BaseModel):
-    """选择分支响应"""
-    session_id: str = Field(..., description="会话ID")
-    next_segment: StorySegment = Field(..., description="下一段落")
-    choice_history: List[str] = Field(..., description="选择历史")
-    progress: float = Field(..., ge=0.0, le=1.0, description="进度（0-1）")
+    """Branch choice response"""
+    session_id: str = Field(..., description="Session ID")
+    next_segment: StorySegment = Field(..., description="Next segment")
+    choice_history: List[str] = Field(..., description="Choice history")
+    progress: float = Field(..., ge=0.0, le=1.0, description="Progress (0-1)")
 
 
 class SessionStatusResponse(BaseModel):
-    """会话状态响应"""
-    session_id: str = Field(..., description="会话ID")
-    status: SessionStatus = Field(..., description="会话状态")
-    child_id: str = Field(..., description="儿童ID")
-    story_title: str = Field(..., description="故事标题")
-    current_segment: int = Field(..., description="当前段落序号")
-    total_segments: int = Field(..., description="总段落数")
-    choice_history: List[str] = Field(..., description="选择历史")
+    """Session status response"""
+    session_id: str = Field(..., description="Session ID")
+    status: SessionStatus = Field(..., description="Session status")
+    child_id: str = Field(..., description="Child ID")
+    story_title: str = Field(..., description="Story title")
+    current_segment: int = Field(..., description="Current segment number")
+    total_segments: int = Field(..., description="Total segments")
+    choice_history: List[str] = Field(..., description="Choice history")
     educational_summary: Optional[EducationalValue] = Field(
         None,
-        description="教育总结（完成后）"
+        description="Educational summary (after completion)"
     )
-    created_at: datetime = Field(..., description="创建时间")
-    updated_at: datetime = Field(..., description="更新时间")
-    expires_at: datetime = Field(..., description="过期时间")
+    created_at: datetime = Field(..., description="Created at")
+    updated_at: datetime = Field(..., description="Updated at")
+    expires_at: datetime = Field(..., description="Expires at")
 
 
 class SessionResumeResponse(BaseModel):
     """Resume an in-progress interactive story session."""
-    session_id: str = Field(..., description="会话ID")
-    status: SessionStatus = Field(..., description="会话状态")
-    story_title: str = Field(..., description="故事标题")
-    age_group: AgeGroup = Field(..., description="年龄组")
-    segments: List[StorySegment] = Field(..., description="所有已生成段落")
-    choice_history: List[str] = Field(..., description="选择历史")
-    progress: float = Field(..., ge=0.0, le=1.0, description="完成进度 0-1")
-    total_segments: int = Field(..., description="总段落数")
-    educational_summary: Optional[EducationalValue] = Field(None, description="教育总结")
+    session_id: str = Field(..., description="Session ID")
+    status: SessionStatus = Field(..., description="Session status")
+    story_title: str = Field(..., description="Story title")
+    age_group: AgeGroup = Field(..., description="Age group")
+    segments: List[StorySegment] = Field(..., description="All generated segments")
+    choice_history: List[str] = Field(..., description="Choice history")
+    progress: float = Field(..., ge=0.0, le=1.0, description="Completion progress 0-1")
+    total_segments: int = Field(..., description="Total segments")
+    educational_summary: Optional[EducationalValue] = Field(None, description="Educational summary")
 
 
 class SaveInteractiveStoryResponse(BaseModel):
-    """保存互动故事响应"""
-    story_id: str = Field(..., description="保存后的故事ID")
-    session_id: str = Field(..., description="互动会话ID")
-    message: str = Field(..., description="操作结果消息")
+    """Save interactive story response"""
+    story_id: str = Field(..., description="Saved story ID")
+    session_id: str = Field(..., description="Interactive session ID")
+    message: str = Field(..., description="Operation result message")
     already_saved: bool = Field(False, description="Whether the story was already saved previously")
 
 
 class KeyConceptResponse(BaseModel):
-    """新闻关键概念"""
-    term: str = Field(..., description="概念词")
-    explanation: str = Field(..., description="儿童友好解释")
-    emoji: str = Field(default="💡", description="概念图标")
+    """News key concept"""
+    term: str = Field(..., description="Concept term")
+    explanation: str = Field(..., description="Child-friendly explanation")
+    emoji: str = Field(default="💡", description="Concept icon")
 
 
 class InteractiveQuestionResponse(BaseModel):
-    """互动提问"""
-    question: str = Field(..., description="问题")
-    hint: Optional[str] = Field(None, description="提示")
-    emoji: str = Field(default="🤔", description="问题图标")
+    """Interactive question"""
+    question: str = Field(..., description="Question")
+    hint: Optional[str] = Field(None, description="Hint")
+    emoji: str = Field(default="🤔", description="Question icon")
 
 
 class KidsDailyTextRequest(BaseModel):
-    """Kids Daily 文本转换请求（简单模式）"""
-    child_id: str = Field(..., min_length=1, max_length=100, description="儿童唯一标识符")
-    age_group: AgeGroup = Field(..., description="年龄组")
-    category: NewsCategory = Field(default=NewsCategory.GENERAL, description="新闻分类")
-    news_url: Optional[str] = Field(None, description="新闻URL")
-    news_text: Optional[str] = Field(None, description="新闻原文")
-    enable_audio: bool = Field(default=True, description="是否生成音频")
-    voice: Optional[VoiceType] = Field(default=VoiceType.FABLE, description="语音类型")
+    """Kids Daily text conversion request (simple mode)"""
+    child_id: str = Field(..., min_length=1, max_length=100, description="Child unique identifier")
+    age_group: AgeGroup = Field(..., description="Age group")
+    category: NewsCategory = Field(default=NewsCategory.GENERAL, description="News category")
+    news_url: Optional[str] = Field(None, description="News URL")
+    news_text: Optional[str] = Field(None, description="News original text")
+    enable_audio: bool = Field(default=True, description="Whether to generate audio")
+    voice: Optional[VoiceType] = Field(default=VoiceType.FABLE, description="Voice type")
 
 
 class KidsDailyTextResponse(BaseModel):
-    """Kids Daily 文本转换响应"""
-    conversion_id: str = Field(..., description="转换ID")
-    kid_title: str = Field(..., description="儿童版标题")
-    kid_content: str = Field(..., description="儿童版正文")
-    why_care: str = Field(..., description="为什么重要")
-    key_concepts: List[KeyConceptResponse] = Field(default_factory=list, description="关键概念")
-    interactive_questions: List[InteractiveQuestionResponse] = Field(default_factory=list, description="互动问题")
-    category: NewsCategory = Field(..., description="新闻分类")
-    age_group: AgeGroup = Field(..., description="年龄组")
-    audio_url: Optional[str] = Field(None, description="音频URL")
-    original_url: Optional[str] = Field(None, description="原始新闻URL")
-    is_degraded: bool = Field(default=False, description="是否为降级/回退生成内容")
-    degraded_reason: Optional[str] = Field(None, description="降级原因")
-    created_at: datetime = Field(default_factory=datetime.now, description="创建时间")
+    """Kids Daily text conversion response"""
+    conversion_id: str = Field(..., description="Conversion ID")
+    kid_title: str = Field(..., description="Kid-friendly title")
+    kid_content: str = Field(..., description="Kid-friendly content")
+    why_care: str = Field(..., description="Why it matters")
+    key_concepts: List[KeyConceptResponse] = Field(default_factory=list, description="Key concepts")
+    interactive_questions: List[InteractiveQuestionResponse] = Field(default_factory=list, description="Interactive questions")
+    category: NewsCategory = Field(..., description="News category")
+    age_group: AgeGroup = Field(..., description="Age group")
+    audio_url: Optional[str] = Field(None, description="Audio URL")
+    original_url: Optional[str] = Field(None, description="Original news URL")
+    is_degraded: bool = Field(default=False, description="Whether degraded/fallback content")
+    degraded_reason: Optional[str] = Field(None, description="Degradation reason")
+    created_at: datetime = Field(default_factory=datetime.now, description="Created at")
 
 
 # ============================================================================
@@ -388,12 +388,12 @@ ALLOWED_ANIMATION_TYPES = {"pan", "zoom", "ken_burns"}
 
 
 class DialogueLine(BaseModel):
-    """Kids Daily 对话行"""
-    role: str = Field(..., description="角色: curious_kid | fun_expert | guest")
-    text: str = Field(..., min_length=1, description="对话内容")
-    display_name: Optional[str] = Field(None, description="角色显示名（Mimi / Duo）")
-    timestamp_start: float = Field(..., ge=0.0, description="开始时间（秒）")
-    timestamp_end: float = Field(..., ge=0.0, description="结束时间（秒）")
+    """Kids Daily dialogue line"""
+    role: str = Field(..., description="Role: curious_kid | fun_expert | guest")
+    text: str = Field(..., min_length=1, description="Dialogue content")
+    display_name: Optional[str] = Field(None, description="Role display name (Mimi / Duo)")
+    timestamp_start: float = Field(..., ge=0.0, description="Start time (seconds)")
+    timestamp_end: float = Field(..., ge=0.0, description="End time (seconds)")
 
     @field_validator("role")
     @classmethod
@@ -410,10 +410,10 @@ class DialogueLine(BaseModel):
 
 
 class DialogueScript(BaseModel):
-    """Kids Daily 对话脚本"""
-    lines: List[DialogueLine] = Field(default_factory=list, description="对话行列表")
-    total_duration: float = Field(..., ge=0.0, description="总时长（秒）")
-    guest_character: Optional[str] = Field(None, description="嘉宾角色名（可选）")
+    """Kids Daily dialogue script"""
+    lines: List[DialogueLine] = Field(default_factory=list, description="Dialogue lines")
+    total_duration: float = Field(..., ge=0.0, description="Total duration (seconds)")
+    guest_character: Optional[str] = Field(None, description="Guest character name (optional)")
 
     @model_validator(mode="after")
     def validate_total_duration(self):
@@ -425,11 +425,11 @@ class DialogueScript(BaseModel):
 
 
 class EpisodeIllustration(BaseModel):
-    """Kids Daily 插画元数据"""
-    url: str = Field(..., min_length=1, description="插画 URL")
-    description: str = Field(..., min_length=1, description="插画描述")
-    display_order: int = Field(..., ge=0, description="显示顺序")
-    animation_type: str = Field(..., description="动画类型: pan | zoom | ken_burns")
+    """Kids Daily illustration metadata"""
+    url: str = Field(..., min_length=1, description="Illustration URL")
+    description: str = Field(..., min_length=1, description="Illustration description")
+    display_order: int = Field(..., ge=0, description="Display order")
+    animation_type: str = Field(..., description="Animation type: pan | zoom | ken_burns")
 
     @field_validator("animation_type")
     @classmethod
@@ -440,101 +440,101 @@ class EpisodeIllustration(BaseModel):
 
 
 class KidsDailyEpisode(BaseModel):
-    """Kids Daily 完整节目数据"""
-    episode_id: str = Field(..., description="节目唯一 ID")
-    child_id: str = Field(..., description="儿童 ID")
-    age_group: AgeGroup = Field(..., description="年龄组")
-    category: NewsCategory = Field(..., description="话题分类")
-    kid_title: str = Field(..., description="儿童友好标题")
-    kid_content: str = Field(..., description="儿童友好正文")
-    why_care: str = Field(..., description="为什么重要")
-    key_concepts: List[KeyConceptResponse] = Field(default_factory=list, description="关键概念")
-    interactive_questions: List[InteractiveQuestionResponse] = Field(default_factory=list, description="互动问题")
-    dialogue_script: DialogueScript = Field(..., description="多角色对话脚本")
-    illustrations: List[EpisodeIllustration] = Field(default_factory=list, description="插画列表")
-    audio_urls: Dict[str, str] = Field(default_factory=dict, description="音频 URL 映射（line_index -> url）")
-    story_type: Literal["kids_daily"] = Field(default="kids_daily", description="内容类型")
-    duration_seconds: Optional[int] = Field(None, ge=0, description="节目总时长（秒）")
-    is_played: bool = Field(default=False, description="是否已播放")
-    is_new: bool = Field(default=True, description="是否新内容")
-    is_degraded: bool = Field(default=False, description="是否为降级/回退生成内容")
-    degraded_reason: Optional[str] = Field(None, description="降级原因")
-    created_at: datetime = Field(default_factory=datetime.now, description="创建时间")
+    """Kids Daily complete episode data"""
+    episode_id: str = Field(..., description="Episode unique ID")
+    child_id: str = Field(..., description="Child ID")
+    age_group: AgeGroup = Field(..., description="Age group")
+    category: NewsCategory = Field(..., description="Topic category")
+    kid_title: str = Field(..., description="Child-friendly title")
+    kid_content: str = Field(..., description="Child-friendly content")
+    why_care: str = Field(..., description="Why it matters")
+    key_concepts: List[KeyConceptResponse] = Field(default_factory=list, description="Key concepts")
+    interactive_questions: List[InteractiveQuestionResponse] = Field(default_factory=list, description="Interactive questions")
+    dialogue_script: DialogueScript = Field(..., description="Multi-character dialogue script")
+    illustrations: List[EpisodeIllustration] = Field(default_factory=list, description="Illustrations list")
+    audio_urls: Dict[str, str] = Field(default_factory=dict, description="Audio URL mapping (line_index -> url)")
+    story_type: Literal["kids_daily"] = Field(default="kids_daily", description="Content type")
+    duration_seconds: Optional[int] = Field(None, ge=0, description="Total episode duration (seconds)")
+    is_played: bool = Field(default=False, description="Whether played")
+    is_new: bool = Field(default=True, description="Whether new content")
+    is_degraded: bool = Field(default=False, description="Whether degraded/fallback generated content")
+    degraded_reason: Optional[str] = Field(None, description="Degradation reason")
+    created_at: datetime = Field(default_factory=datetime.now, description="Created at")
 
 
 class KidsDailyRequest(BaseModel):
-    """Kids Daily 生成请求"""
-    news_url: Optional[str] = Field(None, description="新闻 URL")
-    news_text: Optional[str] = Field(None, description="新闻正文")
-    age_group: AgeGroup = Field(..., description="年龄组")
-    child_id: Optional[str] = Field(None, description="儿童 ID（可选）")
-    category: NewsCategory = Field(default=NewsCategory.GENERAL, description="话题分类")
+    """Kids Daily generation request"""
+    news_url: Optional[str] = Field(None, description="News URL")
+    news_text: Optional[str] = Field(None, description="News body text")
+    age_group: AgeGroup = Field(..., description="Age group")
+    child_id: Optional[str] = Field(None, description="Child ID (optional)")
+    category: NewsCategory = Field(default=NewsCategory.GENERAL, description="Topic category")
 
 
 class KidsDailyOnDemandRequest(BaseModel):
-    """按需生成 Kids Daily 请求 (#304)"""
-    child_id: str = Field(..., min_length=1, max_length=100, description="儿童 ID")
-    category: NewsCategory = Field(default=NewsCategory.GENERAL, description="话题分类")
-    age_group: AgeGroup = Field(..., description="年龄组")
+    """On-demand Kids Daily generation request (#304)"""
+    child_id: str = Field(..., min_length=1, max_length=100, description="Child ID")
+    category: NewsCategory = Field(default=NewsCategory.GENERAL, description="Topic category")
+    age_group: AgeGroup = Field(..., description="Age group")
 
 
 class KidsDailyRateLimitResponse(BaseModel):
-    """速率限制响应 (#305)"""
-    message: str = Field(..., description="友好提示消息")
-    retry_after: int = Field(..., ge=0, description="距下次允许生成的秒数")
+    """Rate limit response (#305)"""
+    message: str = Field(..., description="Friendly prompt message")
+    retry_after: int = Field(..., ge=0, description="Seconds until next generation allowed")
 
 
 class KidsDailyGenerationMetadata(BaseModel):
-    """Kids Daily 生成元数据"""
-    generation_id: str = Field(..., description="生成任务 ID")
-    safety_score: float = Field(..., ge=0.0, le=1.0, description="内容安全分数")
-    used_mock: bool = Field(default=False, description="是否使用 mock fallback")
-    is_degraded: bool = Field(default=False, description="是否为降级/回退生成内容")
-    degraded_reason: Optional[str] = Field(None, description="降级原因")
-    created_at: datetime = Field(default_factory=datetime.now, description="生成时间")
+    """Kids Daily generation metadata"""
+    generation_id: str = Field(..., description="Generation task ID")
+    safety_score: float = Field(..., ge=0.0, le=1.0, description="Content safety score")
+    used_mock: bool = Field(default=False, description="Whether mock fallback was used")
+    is_degraded: bool = Field(default=False, description="Whether degraded/fallback generated content")
+    degraded_reason: Optional[str] = Field(None, description="Degradation reason")
+    created_at: datetime = Field(default_factory=datetime.now, description="Generated at")
 
 
 class KidsDailyResponse(BaseModel):
-    """Kids Daily 生成响应"""
-    episode: KidsDailyEpisode = Field(..., description="节目数据")
-    metadata: KidsDailyGenerationMetadata = Field(..., description="生成元数据")
+    """Kids Daily generation response"""
+    episode: KidsDailyEpisode = Field(..., description="Episode data")
+    metadata: KidsDailyGenerationMetadata = Field(..., description="Generation metadata")
 
 
 class PaginatedKidsDailyResponse(BaseModel):
-    """Kids Daily 节目列表响应"""
-    items: List[KidsDailyEpisode] = Field(default_factory=list, description="节目列表")
-    total: int = Field(..., description="总数")
-    limit: int = Field(..., description="分页大小")
-    offset: int = Field(..., description="偏移量")
+    """Kids Daily episode list response"""
+    items: List[KidsDailyEpisode] = Field(default_factory=list, description="Episode list")
+    total: int = Field(..., description="Total count")
+    limit: int = Field(..., description="Page size")
+    offset: int = Field(..., description="Offset")
 
 
 class TopicSubscription(BaseModel):
-    """话题订阅记录"""
-    child_id: str = Field(..., description="儿童 ID")
-    topic: NewsCategory = Field(..., description="订阅话题")
-    subscribed_at: datetime = Field(default_factory=datetime.now, description="订阅时间")
-    is_active: bool = Field(default=True, description="是否有效订阅")
+    """Topic subscription record"""
+    child_id: str = Field(..., description="Child ID")
+    topic: NewsCategory = Field(..., description="Subscribed topic")
+    subscribed_at: datetime = Field(default_factory=datetime.now, description="Subscribed at")
+    is_active: bool = Field(default=True, description="Whether subscription is active")
 
 
 class SubscriptionRequest(BaseModel):
-    """创建订阅请求"""
-    child_id: str = Field(..., min_length=1, max_length=100, description="儿童 ID")
-    topic: NewsCategory = Field(..., description="订阅话题")
+    """Create subscription request"""
+    child_id: str = Field(..., min_length=1, max_length=100, description="Child ID")
+    topic: NewsCategory = Field(..., description="Subscription topic")
 
 
 class SubscriptionResponse(TopicSubscription):
-    """订阅操作响应"""
-    message: str = Field(default="ok", description="操作结果消息")
+    """Subscription operation response"""
+    message: str = Field(default="ok", description="Operation result message")
 
 
 class SubscriptionListResponse(BaseModel):
-    """订阅列表响应"""
-    items: List[TopicSubscription] = Field(default_factory=list, description="订阅列表")
-    total: int = Field(..., description="订阅总数")
+    """Subscription list response"""
+    items: List[TopicSubscription] = Field(default_factory=list, description="Subscription list")
+    total: int = Field(..., description="Total subscriptions")
 
 
 class KidsDailyTrackEvent(str, Enum):
-    """Kids Daily 播放事件类型"""
+    """Kids Daily playback event type"""
     START = "start"
     PROGRESS = "progress"
     COMPLETE = "complete"
@@ -542,145 +542,145 @@ class KidsDailyTrackEvent(str, Enum):
 
 
 class KidsDailyTrackRequest(BaseModel):
-    """Kids Daily 播放行为跟踪请求"""
-    child_id: str = Field(..., min_length=1, max_length=100, description="儿童 ID")
-    episode_id: str = Field(..., min_length=1, description="节目 ID")
-    topic: NewsCategory = Field(..., description="节目话题")
-    event_type: KidsDailyTrackEvent = Field(..., description="事件类型")
-    progress: float = Field(default=0.0, ge=0.0, le=1.0, description="播放进度 0-1")
-    played_seconds: Optional[float] = Field(default=None, ge=0.0, description="已播放秒数")
-    event_at: datetime = Field(default_factory=datetime.now, description="事件时间")
+    """Kids Daily playback tracking request"""
+    child_id: str = Field(..., min_length=1, max_length=100, description="Child ID")
+    episode_id: str = Field(..., min_length=1, description="Episode ID")
+    topic: NewsCategory = Field(..., description="Episode topic")
+    event_type: KidsDailyTrackEvent = Field(..., description="Event type")
+    progress: float = Field(default=0.0, ge=0.0, le=1.0, description="Playback progress 0-1")
+    played_seconds: Optional[float] = Field(default=None, ge=0.0, description="Seconds played")
+    event_at: datetime = Field(default_factory=datetime.now, description="Event time")
 
 
 class KidsDailyTrackResponse(BaseModel):
-    """Kids Daily 跟踪响应"""
-    status: str = Field(..., description="状态")
-    topic_score: float = Field(..., description="当前话题参与度分数")
-    profile_updated_at: datetime = Field(default_factory=datetime.now, description="偏好更新时间")
+    """Kids Daily tracking response"""
+    status: str = Field(..., description="Status")
+    topic_score: float = Field(..., description="Current topic engagement score")
+    profile_updated_at: datetime = Field(default_factory=datetime.now, description="Preference updated at")
 
 
 # ============================================================================
-# 错误响应 Models
+# Error Response Models
 # ============================================================================
 
 class ErrorDetail(BaseModel):
-    """错误详情"""
-    field: Optional[str] = Field(None, description="错误字段")
-    message: str = Field(..., description="错误消息")
-    code: Optional[str] = Field(None, description="错误代码")
+    """Error details"""
+    field: Optional[str] = Field(None, description="Error field")
+    message: str = Field(..., description="Error message")
+    code: Optional[str] = Field(None, description="Error code")
 
 
 class ErrorResponse(BaseModel):
-    """错误响应"""
-    error: str = Field(..., description="错误类型")
-    message: str = Field(..., description="错误消息")
+    """Error response"""
+    error: str = Field(..., description="Error type")
+    message: str = Field(..., description="Error message")
     details: Optional[List[ErrorDetail]] = Field(
         None,
-        description="详细错误信息"
+        description="Detailed error information"
     )
     timestamp: datetime = Field(
         default_factory=datetime.now,
-        description="错误时间"
+        description="Error time"
     )
 
 
 # ============================================================================
-# 健康检查 Models
+# Health Check Models
 # ============================================================================
 
 class HealthCheckResponse(BaseModel):
-    """健康检查响应"""
-    status: str = Field(..., description="服务状态")
-    version: str = Field(..., description="API版本")
+    """Health check response"""
+    status: str = Field(..., description="Service status")
+    version: str = Field(..., description="API version")
     timestamp: datetime = Field(
         default_factory=datetime.now,
-        description="检查时间"
+        description="Check time"
     )
     services: Dict[str, Any] = Field(
         default_factory=dict,
-        description="依赖服务状态"
+        description="Dependent service statuses"
     )
 
 
 # ============================================================================
-# 视频生成 API Models
+# Video Generation API Models
 # ============================================================================
 
 class VideoJobRequest(BaseModel):
-    """视频生成请求"""
-    story_id: str = Field(..., description="故事ID")
+    """Video generation request"""
+    story_id: str = Field(..., description="Story ID")
     style: VideoStyle = Field(
         default=VideoStyle.GENTLE_ANIMATION,
-        description="视频风格"
+        description="Video style"
     )
     include_audio: bool = Field(
         default=True,
-        description="是否包含音频旁白"
+        description="Whether to include audio narration"
     )
     duration_seconds: int = Field(
         default=10,
         ge=5,
         le=30,
-        description="视频时长（秒）"
+        description="Video duration (seconds)"
     )
 
 
 class VideoJobResponse(BaseModel):
-    """视频生成任务响应"""
-    job_id: str = Field(..., description="任务ID")
-    story_id: str = Field(..., description="故事ID")
-    status: VideoStatus = Field(..., description="任务状态")
+    """Video generation job response"""
+    job_id: str = Field(..., description="Job ID")
+    story_id: str = Field(..., description="Story ID")
+    status: VideoStatus = Field(..., description="Job status")
     estimated_completion: Optional[datetime] = Field(
         None,
-        description="预计完成时间"
+        description="Estimated completion time"
     )
     created_at: datetime = Field(
         default_factory=datetime.now,
-        description="创建时间"
+        description="Created at"
     )
 
 
 class VideoJobStatusResponse(BaseModel):
-    """视频任务状态响应"""
-    job_id: str = Field(..., description="任务ID")
-    status: VideoStatus = Field(..., description="任务状态")
+    """Video job status response"""
+    job_id: str = Field(..., description="Job ID")
+    status: VideoStatus = Field(..., description="Job status")
     progress_percent: int = Field(
         default=0,
         ge=0,
         le=100,
-        description="进度百分比"
+        description="Progress percentage"
     )
-    video_url: Optional[str] = Field(None, description="视频URL")
-    error_message: Optional[str] = Field(None, description="错误信息")
-    created_at: datetime = Field(..., description="创建时间")
-    completed_at: Optional[datetime] = Field(None, description="完成时间")
+    video_url: Optional[str] = Field(None, description="Video URL")
+    error_message: Optional[str] = Field(None, description="Error message")
+    created_at: datetime = Field(..., description="Created at")
+    completed_at: Optional[datetime] = Field(None, description="Completed at")
 
 
 # ============================================================================
-# 用户认证 API Models
+# User Authentication API Models
 # ============================================================================
 
 class UserRegisterRequest(BaseModel):
-    """用户注册请求"""
+    """User registration request"""
     username: str = Field(
         ...,
         min_length=3,
         max_length=50,
-        description="用户名"
+        description="Username"
     )
     email: str = Field(
         ...,
-        description="邮箱地址"
+        description="Email address"
     )
     password: str = Field(
         ...,
         min_length=6,
-        description="密码，至少6个字符"
+        description="Password, at least 6 characters"
     )
     display_name: Optional[str] = Field(
         None,
         max_length=100,
-        description="显示名称"
+        description="Display name"
     )
     referral_code: Optional[str] = Field(
         None,
@@ -692,50 +692,50 @@ class UserRegisterRequest(BaseModel):
     @classmethod
     def validate_email(cls, v):
         if "@" not in v or "." not in v:
-            raise ValueError("邮箱格式不正确")
+            raise ValueError("Invalid email format")
         return v.lower()
 
     @field_validator('username')
     @classmethod
     def validate_username(cls, v):
         if not v.replace("_", "").replace("-", "").isalnum():
-            raise ValueError("用户名只能包含字母、数字、下划线和连字符")
+            raise ValueError("Username can only contain letters, numbers, underscores, and hyphens")
         return v.lower()
 
 
 class UserLoginRequest(BaseModel):
-    """用户登录请求"""
+    """User login request"""
     username_or_email: str = Field(
         ...,
-        description="用户名或邮箱"
+        description="Username or email"
     )
     password: str = Field(
         ...,
-        description="密码"
+        description="Password"
     )
 
 
 class PublicUserResponse(BaseModel):
     """Public user profile — safe for unauthenticated access"""
-    user_id: str = Field(..., description="用户唯一ID")
-    username: str = Field(..., description="用户名")
-    display_name: Optional[str] = Field(None, description="显示名称")
-    avatar_url: Optional[str] = Field(None, description="头像URL")
-    created_at: datetime = Field(..., description="注册时间")
+    user_id: str = Field(..., description="User unique ID")
+    username: str = Field(..., description="Username")
+    display_name: Optional[str] = Field(None, description="Display name")
+    avatar_url: Optional[str] = Field(None, description="Avatar URL")
+    created_at: datetime = Field(..., description="Registered at")
 
 
 class UserResponse(BaseModel):
-    """用户信息响应"""
-    user_id: str = Field(..., description="用户唯一ID")
-    username: str = Field(..., description="用户名")
-    email: str = Field(..., description="邮箱")
-    display_name: Optional[str] = Field(None, description="显示名称")
-    avatar_url: Optional[str] = Field(None, description="头像URL")
-    is_active: bool = Field(..., description="是否激活")
-    is_verified: bool = Field(..., description="是否已验证")
+    """User info response"""
+    user_id: str = Field(..., description="User unique ID")
+    username: str = Field(..., description="Username")
+    email: str = Field(..., description="Email")
+    display_name: Optional[str] = Field(None, description="Display name")
+    avatar_url: Optional[str] = Field(None, description="Avatar URL")
+    is_active: bool = Field(..., description="Whether active")
+    is_verified: bool = Field(..., description="Whether verified")
     role: str = Field(default="child", description="User role: 'child' or 'parent'")
-    created_at: datetime = Field(..., description="注册时间")
-    last_login_at: Optional[datetime] = Field(None, description="最后登录时间")
+    created_at: datetime = Field(..., description="Registered at")
+    last_login_at: Optional[datetime] = Field(None, description="Last login time")
 
 
 class ReferralStatusResponse(BaseModel):
@@ -758,38 +758,38 @@ class UserWithStatsResponse(UserResponse):
 
 
 class TokenResponse(BaseModel):
-    """令牌响应"""
-    access_token: str = Field(..., description="访问令牌")
-    token_type: str = Field(default="bearer", description="令牌类型")
-    expires_in: int = Field(..., description="过期时间（秒）")
+    """Token response"""
+    access_token: str = Field(..., description="Access token")
+    token_type: str = Field(default="bearer", description="Token type")
+    expires_in: int = Field(..., description="Expiration time (seconds)")
 
 
 class AuthResponse(BaseModel):
-    """认证响应（登录/注册）"""
-    user: UserResponse = Field(..., description="用户信息")
-    token: TokenResponse = Field(..., description="访问令牌")
+    """Authentication response (login/register)"""
+    user: UserResponse = Field(..., description="User info")
+    token: TokenResponse = Field(..., description="Access token")
 
 
 class ChangePasswordRequest(BaseModel):
-    """修改密码请求"""
-    old_password: str = Field(..., description="旧密码")
+    """Change password request"""
+    old_password: str = Field(..., description="Old password")
     new_password: str = Field(
         ...,
         min_length=6,
-        description="新密码，至少6个字符"
+        description="New password, at least 6 characters"
     )
 
 
 class UpdateProfileRequest(BaseModel):
-    """更新资料请求"""
+    """Update profile request"""
     display_name: Optional[str] = Field(
         None,
         max_length=100,
-        description="显示名称"
+        description="Display name"
     )
     avatar_url: Optional[str] = Field(
         None,
-        description="头像URL — emoji:🐼 格式或 https:// URL"
+        description="Avatar URL — emoji:🐼 format or https:// URL"
     )
 
     @field_validator('avatar_url', mode='before')

@@ -93,7 +93,7 @@ const useStoryStore = create<StoryState>((set, get) => ({
 
   setCurrentStory: (story) => {
     set({ currentStory: story })
-    // 自动添加到历史
+    // Automatically add to history
     if (story) {
       get().addToHistory(story)
     }
@@ -106,7 +106,7 @@ const useStoryStore = create<StoryState>((set, get) => ({
   setUploadError: (error) => set({ uploadError: error }),
 
   setSelectedImage: (file) => {
-    // 释放旧的预览 URL
+    // Release old preview URL
     const oldUrl = get().imagePreviewUrl
     if (oldUrl) {
       URL.revokeObjectURL(oldUrl)
@@ -138,10 +138,10 @@ const useStoryStore = create<StoryState>((set, get) => ({
 
   addToHistory: (story) => {
     const history = get().storyHistory
-    // 避免重复
+    // Avoid duplicates
     if (!history.find(s => s.story_id === story.story_id)) {
       set({
-        storyHistory: [story, ...history].slice(0, 50), // 保留最近50个
+        storyHistory: [story, ...history].slice(0, 50), // Keep latest 50
       })
     }
   },

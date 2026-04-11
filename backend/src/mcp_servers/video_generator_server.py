@@ -39,27 +39,27 @@ VIDEO_STYLE_PROMPTS = {
 
 
 def get_video_output_path():
-    """获取视频输出目录"""
+    """Get video output directory"""
     video_dir = os.getenv("VIDEO_OUTPUT_PATH", "./data/videos")
     Path(video_dir).mkdir(parents=True, exist_ok=True)
     return video_dir
 
 
 def get_video_jobs_path():
-    """获取视频任务目录"""
+    """Get video jobs directory"""
     jobs_dir = "./data/video_jobs"
     Path(jobs_dir).mkdir(parents=True, exist_ok=True)
     return jobs_dir
 
 
 def encode_image_to_base64(image_path: str) -> str:
-    """将图片编码为 base64"""
+    """Encode image to base64"""
     with open(image_path, "rb") as image_file:
         return base64.standard_b64encode(image_file.read()).decode("utf-8")
 
 
 def get_image_mime_type(image_path: str) -> str:
-    """获取图片 MIME 类型"""
+    """Get image MIME type"""
     ext = Path(image_path).suffix.lower()
     mime_types = {
         ".jpg": "image/jpeg",
@@ -72,7 +72,7 @@ def get_image_mime_type(image_path: str) -> str:
 
 
 def save_job_status(job_id: str, job_data: Dict[str, Any]) -> None:
-    """保存任务状态到文件"""
+    """Save job status to file"""
     jobs_dir = get_video_jobs_path()
     job_file = Path(jobs_dir) / f"{job_id}.json"
     with open(job_file, "w", encoding="utf-8") as f:
@@ -80,7 +80,7 @@ def save_job_status(job_id: str, job_data: Dict[str, Any]) -> None:
 
 
 def load_job_status(job_id: str) -> Optional[Dict[str, Any]]:
-    """加载任务状态"""
+    """Load job status"""
     jobs_dir = get_video_jobs_path()
     job_file = Path(jobs_dir) / f"{job_id}.json"
     if job_file.exists():
@@ -109,33 +109,33 @@ def load_job_status(job_id: str) -> Optional[Dict[str, Any]]:
 )
 async def generate_painting_video(args: Dict[str, Any]) -> Dict[str, Any]:
     """
-    生成画作动画视频
+    Generate animated video from painting
 
     Args:
-        args: 包含 image_path, style, duration_seconds, story_id 的字典
+        args: Dictionary containing image_path, style, duration_seconds, story_id
 
     Returns:
-        包含任务ID和状态的字典
+        Dictionary containing job ID and status
     """
     image_path = args["image_path"]
     style = args.get("style", "gentle_animation")
     duration_seconds = args.get("duration_seconds", 10)
     story_id = args.get("story_id", "")
 
-    # 验证图片存在
+    # Verify image exists
     if not Path(image_path).exists():
         return {
             "content": [{
                 "type": "text",
                 "text": json.dumps({
                     "success": False,
-                    "error": f"图片文件不存在: {image_path}",
+                    "error": f"Image file not found: {image_path}",
                     "job_id": None
                 }, ensure_ascii=False)
             }]
         }
 
-    # 检查 OpenAI API Key
+    # Check OpenAI API Key
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         return {
@@ -143,7 +143,7 @@ async def generate_painting_video(args: Dict[str, Any]) -> Dict[str, Any]:
                 "type": "text",
                 "text": json.dumps({
                     "success": False,
-                    "error": "未配置 OPENAI_API_KEY 环境变量",
+                    "error": "OPENAI_API_KEY environment variable not configured",
                     "job_id": None
                 }, ensure_ascii=False)
             }]
@@ -152,22 +152,22 @@ async def generate_painting_video(args: Dict[str, Any]) -> Dict[str, Any]:
     try:
         client = OpenAI(api_key=api_key)
 
-        # 生成任务ID
+        # Generate job ID
         job_id = str(uuid.uuid4())
         timestamp = datetime.now()
 
-        # 获取风格提示词
+        # Get style prompt
         style_prompt = VIDEO_STYLE_PROMPTS.get(
             style,
             VIDEO_STYLE_PROMPTS["gentle_animation"]
         )
 
-        # 编码图片
+        # Encode image
         image_base64 = encode_image_to_base64(image_path)
         mime_type = get_image_mime_type(image_path)
 
-        # 调用 OpenAI Sora API 生成视频
-        # 注意：这里使用 OpenAI 的视频生成 API（Sora）
+        # Call OpenAI Sora API to generate video
+        # Note: Using OpenAI's video generation API (Sora)
         response = client.images.generate(
             model="sora",
             prompt=style_prompt,
@@ -177,23 +177,23 @@ async def generate_painting_video(args: Dict[str, Any]) -> Dict[str, Any]:
             response_format="url"
         )
 
-        # 获取生成的视频URL
+        # Get generated video URL
         if response.data and len(response.data) > 0:
             video_url = response.data[0].url
 
-            # 下载视频到本地
+            # Download video locally
             video_dir = get_video_output_path()
             video_filename = f"video_{job_id}.mp4"
             video_path = Path(video_dir) / video_filename
 
-            # 使用 requests 下载视频
+            # Use httpx to download video
             import httpx
             async with httpx.AsyncClient() as http_client:
                 video_response = await http_client.get(video_url)
                 with open(video_path, "wb") as f:
                     f.write(video_response.content)
 
-            # 保存任务状态
+            # Save job status
             job_data = {
                 "job_id": job_id,
                 "story_id": story_id,
@@ -265,13 +265,13 @@ async def generate_painting_video(args: Dict[str, Any]) -> Dict[str, Any]:
 )
 async def check_video_status(args: Dict[str, Any]) -> Dict[str, Any]:
     """
-    检查视频生成任务状态
+    Check video generation job status
 
     Args:
-        args: 包含 job_id 的字典
+        args: Dictionary containing job_id
 
     Returns:
-        任务状态信息
+        Job status information
     """
     job_id = args["job_id"]
 
@@ -282,13 +282,13 @@ async def check_video_status(args: Dict[str, Any]) -> Dict[str, Any]:
                 "type": "text",
                 "text": json.dumps({
                     "success": False,
-                    "error": f"任务不存在: {job_id}"
+                    "error": f"Job not found: {job_id}"
                 }, ensure_ascii=False)
             }]
         }
 
-    # 如果任务是 pending 状态，检查是否有外部更新
-    # 在实际生产中，这里可能会轮询外部 API 或消息队列
+    # If job is in pending status, check for external updates
+    # In production, this might poll an external API or message queue
     status = job_data.get("status", "pending")
 
     response = {
@@ -327,26 +327,26 @@ async def check_video_status(args: Dict[str, Any]) -> Dict[str, Any]:
 )
 async def combine_video_audio(args: Dict[str, Any]) -> Dict[str, Any]:
     """
-    合并视频和音频
+    Combine video and audio
 
     Args:
-        args: 包含 video_path, audio_path, output_filename 的字典
+        args: Dictionary containing video_path, audio_path, output_filename
 
     Returns:
-        合并后的视频路径
+        Combined video path
     """
     video_path = args["video_path"]
     audio_path = args["audio_path"]
     output_filename = args.get("output_filename")
 
-    # 验证文件存在
+    # Verify files exist
     if not Path(video_path).exists():
         return {
             "content": [{
                 "type": "text",
                 "text": json.dumps({
                     "success": False,
-                    "error": f"视频文件不存在: {video_path}"
+                    "error": f"Video file not found: {video_path}"
                 }, ensure_ascii=False)
             }]
         }
@@ -357,13 +357,13 @@ async def combine_video_audio(args: Dict[str, Any]) -> Dict[str, Any]:
                 "type": "text",
                 "text": json.dumps({
                     "success": False,
-                    "error": f"音频文件不存在: {audio_path}"
+                    "error": f"Audio file not found: {audio_path}"
                 }, ensure_ascii=False)
             }]
         }
 
     try:
-        # 生成输出文件名
+        # Generate output filename
         if not output_filename:
             video_stem = Path(video_path).stem
             output_filename = f"combined_{video_stem}.mp4"
@@ -371,14 +371,14 @@ async def combine_video_audio(args: Dict[str, Any]) -> Dict[str, Any]:
         video_dir = get_video_output_path()
         output_path = Path(video_dir) / output_filename
 
-        # 使用 ffmpeg 合并视频和音频
-        # -i: 输入文件
-        # -c:v copy: 复制视频流（不重新编码）
-        # -c:a aac: 使用 AAC 编码音频
-        # -shortest: 以最短的流为准
+        # Use ffmpeg to combine video and audio
+        # -i: input file
+        # -c:v copy: copy video stream (no re-encoding)
+        # -c:a aac: encode audio with AAC
+        # -shortest: use the shortest stream as reference
         cmd = [
             "ffmpeg",
-            "-y",  # 覆盖输出文件
+            "-y",  # Overwrite output file
             "-i", video_path,
             "-i", audio_path,
             "-c:v", "copy",
@@ -391,7 +391,7 @@ async def combine_video_audio(args: Dict[str, Any]) -> Dict[str, Any]:
             cmd,
             capture_output=True,
             text=True,
-            timeout=120  # 2分钟超时
+            timeout=120  # 2-minute timeout
         )
 
         if result.returncode != 0:
@@ -400,12 +400,12 @@ async def combine_video_audio(args: Dict[str, Any]) -> Dict[str, Any]:
                     "type": "text",
                     "text": json.dumps({
                         "success": False,
-                        "error": f"ffmpeg 合并失败: {result.stderr}"
+                        "error": f"ffmpeg merge failed: {result.stderr}"
                     }, ensure_ascii=False)
                 }]
             }
 
-        # 获取文件大小
+        # Get file size
         file_size = output_path.stat().st_size
         file_size_mb = round(file_size / (1024 * 1024), 2)
 
@@ -428,7 +428,7 @@ async def combine_video_audio(args: Dict[str, Any]) -> Dict[str, Any]:
                 "type": "text",
                 "text": json.dumps({
                     "success": False,
-                    "error": "ffmpeg 处理超时"
+                    "error": "ffmpeg processing timed out"
                 }, ensure_ascii=False)
             }]
         }
@@ -438,7 +438,7 @@ async def combine_video_audio(args: Dict[str, Any]) -> Dict[str, Any]:
                 "type": "text",
                 "text": json.dumps({
                     "success": False,
-                    "error": "ffmpeg 未安装，请先安装 ffmpeg"
+                    "error": "ffmpeg not installed, please install ffmpeg first"
                 }, ensure_ascii=False)
             }]
         }
@@ -448,13 +448,13 @@ async def combine_video_audio(args: Dict[str, Any]) -> Dict[str, Any]:
                 "type": "text",
                 "text": json.dumps({
                     "success": False,
-                    "error": f"合并失败: {str(e)}"
+                    "error": f"Merge failed: {str(e)}"
                 }, ensure_ascii=False)
             }]
         }
 
 
-# 创建 MCP Server
+# Create MCP Server
 video_server = create_sdk_mcp_server(
     name="video-generation",
     version="1.0.0",
@@ -463,25 +463,25 @@ video_server = create_sdk_mcp_server(
 
 
 if __name__ == "__main__":
-    """测试工具"""
+    """Test tools"""
     import asyncio
 
     async def test():
-        print("=== 测试 Video Generation ===\n")
+        print("=== Test Video Generation ===\n")
 
-        # 测试检查不存在的任务
-        print("1. 检查不存在的任务...")
+        # Test checking a non-existent job
+        print("1. Checking non-existent job...")
         status_result = await check_video_status({"job_id": "non-existent"})
         print(json.loads(status_result["content"][0]["text"]))
         print()
 
-        # 测试生成视频（需要有效的图片路径）
-        print("2. 生成画作视频（示例）...")
-        print("   需要提供有效的 image_path 进行测试")
+        # Test video generation (requires valid image path)
+        print("2. Generate painting video (example)...")
+        print("   Requires a valid image_path for testing")
         print()
 
-        # 测试合并视频音频（需要有效的文件）
-        print("3. 合并视频音频（示例）...")
-        print("   需要提供有效的 video_path 和 audio_path 进行测试")
+        # Test combining video and audio (requires valid files)
+        print("3. Combine video and audio (example)...")
+        print("   Requires valid video_path and audio_path for testing")
 
     asyncio.run(test())

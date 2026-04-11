@@ -58,7 +58,7 @@
 }
 
 @layer components {
-  /* 儿童友好的按钮样式 */
+  /* Child-friendly button styles */
   .btn-kid {
     @apply px-6 py-3 rounded-btn font-bold text-white;
     @apply transition-all duration-200 ease-out;
@@ -78,7 +78,7 @@
     @apply btn-kid bg-accent text-gray-800 hover:bg-accent-dark;
   }
 
-  /* 卡片样式 */
+  /* Card styles */
   .card-kid {
     @apply bg-white rounded-card p-6;
     @apply shadow-card;
@@ -86,7 +86,7 @@
     @apply hover:shadow-lg hover:-translate-y-1;
   }
 
-  /* 输入框样式 */
+  /* Input field styles */
   .input-kid {
     @apply w-full px-4 py-3 rounded-input;
     @apply border-2 border-gray-200;
@@ -95,7 +95,7 @@
     @apply text-base;
   }
 
-  /* 标签气泡样式 */
+  /* Tag bubble styles */
   .tag-bubble {
     @apply inline-flex items-center px-4 py-2;
     @apply rounded-full text-sm font-medium;
@@ -113,7 +113,7 @@
     @apply shadow-md;
   }
 
-  /* 安全评分徽章 */
+  /* Safety score badge */
   .safety-badge {
     @apply inline-flex items-center gap-1 px-3 py-1;
     @apply rounded-full text-sm font-bold;
@@ -131,18 +131,18 @@
     @apply safety-badge bg-red-100 text-red-700;
   }
 
-  /* 页面容器 */
+  /* Page container */
   .page-container {
     @apply min-h-screen py-8 px-4;
     @apply max-w-4xl mx-auto;
   }
 
-  /* 渐变背景 */
+  /* Gradient background */
   .gradient-bg {
     background: linear-gradient(135deg, #FFF9F5 0%, #FFE8E8 50%, #E8FFF9 100%);
   }
 
-  /* 上传区域样式 */
+  /* Upload zone styles */
   .upload-zone {
     @apply border-4 border-dashed border-gray-300 rounded-card;
     @apply p-8 text-center;
@@ -161,18 +161,18 @@
 }
 
 @layer utilities {
-  /* 文本渐变 */
+  /* Text gradient */
   .text-gradient {
     @apply bg-clip-text text-transparent;
     background-image: linear-gradient(135deg, #FF6B6B 0%, #4ECDC4 100%);
   }
 
-  /* 玻璃态效果 */
+  /* Glass morphism effect */
   .glass {
     @apply bg-white/80 backdrop-blur-md;
   }
 
-  /* 隐藏滚动条 */
+  /* Hide scrollbar */
   .scrollbar-hide {
     -ms-overflow-style: none;
     scrollbar-width: none;
@@ -182,7 +182,7 @@
     display: none;
   }
 
-  /* 儿童友好的阴影 */
+  /* Child-friendly shadows */
   .shadow-kid-sm {
     box-shadow: 0 2px 8px rgba(255, 107, 107, 0.15);
   }
@@ -532,7 +532,7 @@
   animation: sparkle-rotate 3s ease-in-out infinite;
 }
 
-/* 自定义动画 */
+/* Custom animations */
 @keyframes pulse-soft {
   0%, 100% {
     opacity: 1;

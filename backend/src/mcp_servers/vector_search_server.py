@@ -40,28 +40,28 @@ def _use_pgvector() -> bool:
         return False
 
 
-# 初始化 ChromaDB 客户端
+# Initialize ChromaDB client
 def get_chroma_client():
-    """获取 ChromaDB 客户端"""
+    """Get ChromaDB client"""
     if chromadb is None:
         raise RuntimeError("ChromaDB SDK is unavailable in current environment")
 
-    # 使用持久化存储
+    # Use persistent storage
     persist_directory = os.getenv("CHROMA_PATH", "./data/vectors")
     return chromadb.PersistentClient(path=persist_directory)
 
 
-# 集合名称
+# Collection names
 COLLECTION_NAME = "children_drawings"
 STORY_COLLECTION_NAME = "story_embeddings"
 
 
 def get_or_create_collection():
-    """获取或创建集合"""
+    """Get or create collection"""
     client = get_chroma_client()
     return client.get_or_create_collection(
         name=COLLECTION_NAME,
-        metadata={"description": "儿童画作的向量存储"}
+        metadata={"description": "Vector store for children's drawings"}
     )
 
 
@@ -76,25 +76,25 @@ def get_or_create_story_collection():
 
 @tool(
     "search_similar_drawings",
-    """在向量数据库中搜索与当前画作相似的历史画作。
+    """Search for historical drawings similar to the current drawing in the vector database.
 
-    这个工具用于：
-    1. 查找儿童之前画过的相似内容
-    2. 识别重复出现的角色（如"闪电小狗"）
-    3. 保持故事连续性
+    This tool is used to:
+    1. Find similar content the child has drawn before
+    2. Identify recurring characters (e.g. "Lightning Dog")
+    3. Maintain story continuity
 
-    返回相似画作列表，包含相似度分数。""",
+    Returns a list of similar drawings with similarity scores.""",
     {"drawing_description": str, "child_id": str, "top_k": int}
 )
 async def search_similar_drawings(args: Dict[str, Any]) -> Dict[str, Any]:
     """
-    搜索相似的历史画作
+    Search for similar historical drawings
 
     Args:
-        args: 包含 drawing_description, child_id, top_k 的字典
+        args: Dictionary containing drawing_description, child_id, top_k
 
     Returns:
-        包含相似画作列表的字典
+        Dictionary containing list of similar drawings
     """
     drawing_description = args["drawing_description"]
     child_id = args["child_id"]
@@ -120,18 +120,18 @@ async def search_similar_drawings(args: Dict[str, Any]) -> Dict[str, Any]:
             }
 
         # --- ChromaDB path (local dev) ---
-        # 获取集合（offload blocking ChromaDB call to thread）
+        # Get collection (offload blocking ChromaDB call to thread)
         collection = await anyio.to_thread.run_sync(get_or_create_collection)
 
-        # 使用 ChromaDB 的查询功能
-        # ChromaDB 会自动将查询文本转换为向量并搜索
+        # Use ChromaDB query functionality
+        # ChromaDB automatically converts query text to vectors and searches
         results = await anyio.to_thread.run_sync(lambda: collection.query(
             query_texts=[drawing_description],
             n_results=top_k,
-            where={"child_id": child_id}  # 过滤该儿童的画作
+            where={"child_id": child_id}  # Filter this child's drawings
         ))
 
-        # 格式化结果
+        # Format results
         similar_drawings = []
         if results and results['ids'] and len(results['ids']) > 0:
             ids = results['ids'][0]
@@ -140,8 +140,8 @@ async def search_similar_drawings(args: Dict[str, Any]) -> Dict[str, Any]:
             documents = results['documents'][0] if 'documents' in results else [""] * len(ids)
 
             for i, doc_id in enumerate(ids):
-                # ChromaDB 返回的是距离，需要转换为相似度分数
-                # 距离越小，相似度越高
+                # ChromaDB returns distance, need to convert to similarity score
+                # Smaller distance means higher similarity
                 similarity_score = 1.0 / (1.0 + distances[i]) if i < len(distances) else 0.0
 
                 similar_drawings.append({
@@ -171,7 +171,7 @@ async def search_similar_drawings(args: Dict[str, Any]) -> Dict[str, Any]:
             "content": [{
                 "type": "text",
                 "text": json.dumps({
-                    "error": f"向量搜索失败: {str(e)}",
+                    "error": f"Vector search failed: {str(e)}",
                     "similar_drawings": [],
                     "total_found": 0
                 }, ensure_ascii=False)
@@ -181,29 +181,29 @@ async def search_similar_drawings(args: Dict[str, Any]) -> Dict[str, Any]:
 
 @tool(
     "store_drawing_embedding",
-    """将儿童画作的分析结果存储到向量数据库。
+    """Store children's drawing analysis results in the vector database.
 
-    这个工具用于：
-    1. 保存画作的向量表示
-    2. 存储画作的元数据（物体、场景、角色等）
-    3. 建立长期记忆系统
+    This tool is used to:
+    1. Save the vector representation of drawings
+    2. Store drawing metadata (objects, scenes, characters, etc.)
+    3. Build a long-term memory system
 
-    每次创作新故事后调用此工具。""",
+    Call this tool after each new story creation.""",
     {"drawing_description": str, "child_id": str, "drawing_analysis": dict, "story_text": str, "image_path": str}
 )
 async def store_drawing_embedding(args: Dict[str, Any]) -> Dict[str, Any]:
     """
-    存储画作到向量数据库
+    Store drawing in vector database
 
     Args:
-        args: 包含画作信息的字典
+        args: Dictionary containing drawing information
 
     Returns:
-        存储结果
+        Storage result
     """
     import logging
     logger = logging.getLogger(__name__)
-    logger.info(f"[VectorStore] 收到存储请求，参数: {json.dumps(args, ensure_ascii=False, default=str)[:500]}")
+    logger.info(f"[VectorStore] Received storage request, args: {json.dumps(args, ensure_ascii=False, default=str)[:500]}")
 
     drawing_description = args.get("drawing_description", "")
     child_id = args.get("child_id", "")
@@ -211,32 +211,32 @@ async def store_drawing_embedding(args: Dict[str, Any]) -> Dict[str, Any]:
     story_text = args.get("story_text", "")
     image_path = args.get("image_path", "")
 
-    # 参数验证
+    # Parameter validation
     if not drawing_description:
-        logger.warning("[VectorStore] drawing_description 为空")
+        logger.warning("[VectorStore] drawing_description is empty")
         return {
             "content": [{
                 "type": "text",
                 "text": json.dumps({
                     "success": False,
-                    "error": "drawing_description 不能为空"
+                    "error": "drawing_description cannot be empty"
                 }, ensure_ascii=False)
             }]
         }
 
     if not child_id:
-        logger.warning("[VectorStore] child_id 为空")
+        logger.warning("[VectorStore] child_id is empty")
         return {
             "content": [{
                 "type": "text",
                 "text": json.dumps({
                     "success": False,
-                    "error": "child_id 不能为空"
+                    "error": "child_id cannot be empty"
                 }, ensure_ascii=False)
             }]
         }
 
-    # 如果 drawing_analysis 是字符串，尝试解析为 dict
+    # If drawing_analysis is a string, try to parse it as dict
     if isinstance(drawing_analysis, str):
         try:
             drawing_analysis = json.loads(drawing_analysis)
@@ -244,21 +244,21 @@ async def store_drawing_embedding(args: Dict[str, Any]) -> Dict[str, Any]:
             drawing_analysis = {}
 
     try:
-        # 生成唯一 ID
+        # Generate unique ID
         timestamp = datetime.now().isoformat()
         doc_id = hashlib.md5(
             f"{child_id}_{timestamp}".encode()
         ).hexdigest()
 
-        # 准备 metadata
+        # Prepare metadata
         metadata = {
             "child_id": child_id,
             "scene": drawing_analysis.get("scene", ""),
             "mood": drawing_analysis.get("mood", ""),
-            "story_text": story_text[:500] if story_text else "",  # 限制长度
+            "story_text": story_text[:500] if story_text else "",  # Limit length
             "image_path": image_path,
             "created_at": timestamp,
-            # ChromaDB metadata 只支持基本类型，列表需要转为字符串
+            # ChromaDB metadata only supports basic types, lists need to be converted to strings
             "objects": json.dumps(drawing_analysis.get("objects", []), ensure_ascii=False),
             "colors": json.dumps(drawing_analysis.get("colors", []), ensure_ascii=False),
             "recurring_characters": json.dumps(
@@ -281,17 +281,17 @@ async def store_drawing_embedding(args: Dict[str, Any]) -> Dict[str, Any]:
                     "text": json.dumps({
                         "success": True,
                         "document_id": doc_id,
-                        "message": "画作已成功存储到向量数据库 (pgvector)"
+                        "message": "Drawing successfully stored in vector database (pgvector)"
                     }, ensure_ascii=False, indent=2)
                 }]
             }
 
         # --- ChromaDB path (local dev) ---
-        # 获取集合（offload blocking ChromaDB call to thread）
+        # Get collection (offload blocking ChromaDB call to thread)
         collection = await anyio.to_thread.run_sync(get_or_create_collection)
 
-        # 存储到 ChromaDB
-        # ChromaDB 会自动将文本转换为向量
+        # Store in ChromaDB
+        # ChromaDB automatically converts text to vectors
         await anyio.to_thread.run_sync(lambda: collection.add(
             ids=[doc_id],
             documents=[drawing_description],
@@ -304,7 +304,7 @@ async def store_drawing_embedding(args: Dict[str, Any]) -> Dict[str, Any]:
                 "text": json.dumps({
                     "success": True,
                     "document_id": doc_id,
-                    "message": "画作已成功存储到向量数据库"
+                    "message": "Drawing successfully stored in vector database"
                 }, ensure_ascii=False, indent=2)
             }]
         }
@@ -315,7 +315,7 @@ async def store_drawing_embedding(args: Dict[str, Any]) -> Dict[str, Any]:
                 "type": "text",
                 "text": json.dumps({
                     "success": False,
-                    "error": f"存储失败: {str(e)}"
+                    "error": f"Storage failed: {str(e)}"
                 }, ensure_ascii=False)
             }]
         }
@@ -479,7 +479,7 @@ async def search_similar_stories(args: Dict[str, Any]) -> Dict[str, Any]:
         }
 
 
-# 创建 MCP Server
+# Create MCP Server
 vector_server = create_sdk_mcp_server(
     name="vector-search",
     version="1.0.0",
@@ -488,41 +488,41 @@ vector_server = create_sdk_mcp_server(
 
 
 if __name__ == "__main__":
-    """测试工具"""
+    """Test tools"""
     import asyncio
 
     async def test():
-        print("=== 测试 ChromaDB Vector Search ===\n")
+        print("=== Test ChromaDB Vector Search ===\n")
 
-        # 测试存储
-        print("1. 测试存储画作...")
+        # Test storage
+        print("1. Testing drawing storage...")
         store_result = await store_drawing_embedding({
-            "drawing_description": "一只穿蓝色衣服的小狗在公园玩耍，旁边有树木和太阳",
+            "drawing_description": "A puppy wearing blue clothes playing in the park, with trees and sun nearby",
             "child_id": "child_123",
             "drawing_analysis": {
-                "objects": ["小狗", "树木", "太阳", "草地"],
-                "scene": "户外公园",
-                "mood": "快乐",
-                "colors": ["蓝色", "绿色", "黄色"],
+                "objects": ["puppy", "trees", "sun", "grass"],
+                "scene": "outdoor park",
+                "mood": "happy",
+                "colors": ["blue", "green", "yellow"],
                 "recurring_characters": [{
-                    "name": "闪电",
-                    "description": "穿蓝色衣服的小狗",
-                    "visual_features": ["蓝色衣服", "尖耳朵"]
+                    "name": "Lightning",
+                    "description": "A puppy wearing blue clothes",
+                    "visual_features": ["blue clothes", "pointed ears"]
                 }]
             },
-            "story_text": "闪电小狗今天来到了它最喜欢的公园..."
+            "story_text": "Lightning the puppy came to its favorite park today..."
         })
-        print("存储结果:")
+        print("Storage result:")
         print(json.loads(store_result["content"][0]["text"]))
 
-        # 测试搜索
-        print("\n2. 测试搜索相似画作...")
+        # Test search
+        print("\n2. Testing similar drawing search...")
         search_result = await search_similar_drawings({
-            "drawing_description": "一只小狗在户外",
+            "drawing_description": "A puppy outdoors",
             "child_id": "child_123",
             "top_k": 3
         })
-        print("搜索结果:")
+        print("Search result:")
         print(json.loads(search_result["content"][0]["text"]))
 
     asyncio.run(test())
