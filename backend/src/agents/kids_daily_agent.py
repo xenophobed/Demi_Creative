@@ -350,11 +350,11 @@ async def _generate_kids_daily_text_live(
     # Add TTS instruction if audio should be generated
     if should_generate_audio:
         prompt += (
-            f"\n**语音生成**：\n"
-            f"内容转换完成后，请使用 `mcp__tts-generation__generate_story_audio` 工具为 kid_content 生成语音。\n"
-            f"- 语音类型: {actual_voice}\n"
-            f"- 语速: {audio_speed}\n"
-            f"- 儿童ID: {child_id}\n"
+            f"\n**Audio Generation**:\n"
+            f"After content conversion is complete, use the `mcp__tts-generation__generate_story_audio` tool to generate audio for kid_content.\n"
+            f"- Voice type: {actual_voice}\n"
+            f"- Speed: {audio_speed}\n"
+            f"- Child ID: {child_id}\n"
         )
 
     # Build MCP servers and allowed tools lists

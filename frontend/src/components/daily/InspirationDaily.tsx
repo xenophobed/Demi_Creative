@@ -5,7 +5,7 @@ import useDailyTaskStore from "@/store/useDailyTaskStore";
 interface InspirationDailyProps {
   className?: string;
   onTear?: () => void;
-  isAuthenticated: boolean;
+  isAuthenticated?: boolean;
 }
 
 interface DailyContent {

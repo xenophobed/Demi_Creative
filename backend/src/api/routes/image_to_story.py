@@ -785,7 +785,7 @@ async def create_story_from_image(
                     or (
                         vision_text
                         and "unable" not in vision_text.lower()
-                        and "无法" not in vision_text
+                        and "failed" not in vision_text.lower()
                         and "error" not in vision_text.lower()
                     )
                 )
@@ -1326,7 +1326,7 @@ async def create_story_from_image_stream(
                                 or (
                                     s_vision_text
                                     and "unable" not in s_vision_text.lower()
-                                    and "无法" not in s_vision_text
+                                    and "failed" not in s_vision_text.lower()
                                     and "error" not in s_vision_text.lower()
                                 )
                             )

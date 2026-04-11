@@ -9,15 +9,15 @@ import { storyService } from '@/api/services/storyService'
 import type { NewsCategory } from '@/types/api'
 import QuotaExceededOverlay, { isQuotaError } from '@/components/common/QuotaExceededOverlay'
 
-const TOPIC_CARDS: Array<{ topic: NewsCategory; titleZh: string; titleEn: string; icon: string; description: string }> = [
-  { topic: 'space', titleZh: '太空', titleEn: 'Space', icon: '🚀', description: 'Planets, stars, and space discoveries.' },
-  { topic: 'animals', titleZh: '动物', titleEn: 'Animals', icon: '🐼', description: 'Wildlife stories and animal science.' },
-  { topic: 'technology', titleZh: '机器人', titleEn: 'Robots/Tech', icon: '🤖', description: 'Inventors, robots, and new technology.' },
-  { topic: 'science', titleZh: '科学', titleEn: 'Science', icon: '🔬', description: 'Experiments and explainers for curious kids.' },
-  { topic: 'nature', titleZh: '自然', titleEn: 'Nature', icon: '🌿', description: 'Forests, oceans, weather, and ecosystems.' },
-  { topic: 'culture', titleZh: '文化', titleEn: 'Culture', icon: '🎭', description: 'Arts, traditions, and stories from around the world.' },
-  { topic: 'sports', titleZh: '体育', titleEn: 'Sports', icon: '⚽', description: 'Kid-friendly sports highlights and teamwork lessons.' },
-  { topic: 'general', titleZh: '综合', titleEn: 'General', icon: '📰', description: 'A balanced mix of trending kid-safe topics.' },
+const TOPIC_CARDS: Array<{ topic: NewsCategory; title: string; icon: string; description: string }> = [
+  { topic: 'space', title: 'Space', icon: '🚀', description: 'Planets, stars, and space discoveries.' },
+  { topic: 'animals', title: 'Animals', icon: '🐼', description: 'Wildlife stories and animal science.' },
+  { topic: 'technology', title: 'Robots/Tech', icon: '🤖', description: 'Inventors, robots, and new technology.' },
+  { topic: 'science', title: 'Science', icon: '🔬', description: 'Experiments and explainers for curious kids.' },
+  { topic: 'nature', title: 'Nature', icon: '🌿', description: 'Forests, oceans, weather, and ecosystems.' },
+  { topic: 'culture', title: 'Culture', icon: '🎭', description: 'Arts, traditions, and stories from around the world.' },
+  { topic: 'sports', title: 'Sports', icon: '⚽', description: 'Kid-friendly sports highlights and teamwork lessons.' },
+  { topic: 'general', title: 'General', icon: '📰', description: 'A balanced mix of trending kid-safe topics.' },
 ]
 
 const MAX_SUBSCRIPTIONS = 5
@@ -226,7 +226,7 @@ function MorningShowSubscriptionsPage() {
                     <div className="flex items-start justify-between gap-2">
                       <div>
                         <div className="text-3xl">{card.icon}</div>
-                        <h2 className="text-lg font-bold text-gray-800 mt-2">{card.titleEn}</h2>
+                        <h2 className="text-lg font-bold text-gray-800 mt-2">{card.title}</h2>
                       </div>
                       {active && (
                         <div className="px-2 py-1 rounded-full bg-emerald-100 text-emerald-700 text-xs font-semibold">
@@ -300,7 +300,7 @@ function MorningShowSubscriptionsPage() {
                         className={`text-left rounded-xl border px-3 py-2 transition-colors ${selected ? 'border-primary bg-primary/10' : 'border-gray-200 hover:border-primary/40'}`}
                         onClick={() => toggleDraftTopic(card.topic)}
                       >
-                        <div className="text-lg">{card.icon} {card.titleEn}</div>
+                        <div className="text-lg">{card.icon} {card.title}</div>
                       </button>
                     )
                   })}
@@ -321,7 +321,7 @@ function MorningShowSubscriptionsPage() {
                     const card = TOPIC_CARDS.find((item) => item.topic === topic)
                     return (
                       <span key={topic} className="text-sm px-2 py-1 rounded-full bg-primary/10 text-primary">
-                        {card?.icon} {card?.titleEn}
+                        {card?.icon} {card?.title}
                       </span>
                     )
                   })}

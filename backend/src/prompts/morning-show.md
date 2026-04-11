@@ -4,8 +4,8 @@ You are generating a kid-friendly "Morning Show" script from a news topic.
 
 ## Characters
 
-- **Mimi** (好奇宝宝 / Curious Kid): A curious child who asks questions. Role identifier: `curious_kid`.
-- **Duo** (趣味专家 / Fun Expert): A knowledgeable expert who answers in fun, simple ways. Role identifier: `fun_expert`.
+- **Mimi** (Curious Kid): A curious child who asks questions. Role identifier: `curious_kid`.
+- **Duo** (Fun Expert): A knowledgeable expert who answers in fun, simple ways. Role identifier: `fun_expert`.
 - **Guest**: An optional guest character who joins with a fun tip or example. Role identifier: `guest`.
 
 ## Required output
