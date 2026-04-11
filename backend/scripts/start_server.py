@@ -1,34 +1,34 @@
 #!/usr/bin/env python3
 """
-启动 FastAPI 服务器
+Start FastAPI server
 """
 
 import sys
 from pathlib import Path
 
-# 添加项目路径
+# Add project path
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
-print("=== 启动 Creative Agent API 服务 ===\n")
+print("=== Starting Creative Agent API Service ===\n")
 
 try:
-    print("1. 导入 FastAPI...")
+    print("1. Importing FastAPI...")
     import fastapi
-    print(f"   ✅ FastAPI 版本: {fastapi.__version__}")
+    print(f"   ✅ FastAPI version: {fastapi.__version__}")
 
-    print("2. 导入 uvicorn...")
+    print("2. Importing uvicorn...")
     import uvicorn
-    print(f"   ✅ Uvicorn 已导入")
+    print(f"   ✅ Uvicorn imported")
 
-    print("3. 导入应用...")
+    print("3. Importing application...")
     from backend.src.main import app
-    print("   ✅ 应用导入成功")
+    print("   ✅ Application imported successfully")
 
-    print("\n4. 启动服务器...")
-    print("   地址: http://localhost:8000")
-    print("   文档: http://localhost:8000/api/docs")
-    print("   按 Ctrl+C 停止服务\n")
+    print("\n4. Starting server...")
+    print("   Address: http://localhost:8000")
+    print("   Docs: http://localhost:8000/api/docs")
+    print("   Press Ctrl+C to stop the server\n")
 
     uvicorn.run(
         app,
@@ -38,14 +38,14 @@ try:
     )
 
 except ImportError as e:
-    print(f"\n❌ 导入错误: {e}")
-    print("\n请确保已安装所有依赖:")
+    print(f"\n❌ Import error: {e}")
+    print("\nPlease ensure all dependencies are installed:")
     print("  cd backend")
     print("  pip install -r requirements.txt")
     sys.exit(1)
 
 except Exception as e:
-    print(f"\n❌ 启动失败: {e}")
+    print(f"\n❌ Startup failed: {e}")
     import traceback
     traceback.print_exc()
     sys.exit(1)

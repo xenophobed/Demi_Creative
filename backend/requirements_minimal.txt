@@ -1,4 +1,4 @@
-# 最小依赖 - 用于启动 FastAPI 服务
+# Minimal dependencies - for starting the FastAPI service
 
 # Core Framework
 fastapi==0.110.0

@@ -52,20 +52,20 @@ class TestImageToStorySafetyPromptContract:
         # Look for mandatory language near the safety tool reference
         has_mandatory = bool(
             re.search(
-                r"(MUST|必须|mandatory|required|一定).{0,120}"
+                r"(MUST|mandatory|required).{0,120}"
                 + re.escape(SAFETY_TOOL),
                 source,
                 re.IGNORECASE | re.DOTALL,
             )
             or re.search(
                 re.escape(SAFETY_TOOL)
-                + r".{0,120}(MUST|必须|mandatory|required|一定)",
+                + r".{0,120}(MUST|mandatory|required)",
                 source,
                 re.IGNORECASE | re.DOTALL,
             )
         )
         assert has_mandatory, (
-            "image_to_story prompt must use mandatory language (MUST/必须) "
+            "image_to_story prompt must use mandatory language (MUST/mandatory/required) "
             "when instructing the agent to call the safety check tool"
         )
 
@@ -89,14 +89,14 @@ class TestImageToStorySafetyPromptContract:
         source = _build_stream_prompt()
         has_mandatory = bool(
             re.search(
-                r"(MUST|必须|mandatory|required|一定).{0,120}"
+                r"(MUST|mandatory|required).{0,120}"
                 + re.escape(SAFETY_TOOL),
                 source,
                 re.IGNORECASE | re.DOTALL,
             )
             or re.search(
                 re.escape(SAFETY_TOOL)
-                + r".{0,120}(MUST|必须|mandatory|required|一定)",
+                + r".{0,120}(MUST|mandatory|required)",
                 source,
                 re.IGNORECASE | re.DOTALL,
             )

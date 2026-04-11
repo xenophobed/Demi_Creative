@@ -1,5 +1,5 @@
 """
 Integration Tests Package
 
-集成测试和端到端测试
+Integration tests and end-to-end tests
 """

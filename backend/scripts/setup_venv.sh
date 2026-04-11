@@ -1,52 +1,52 @@
 #!/bin/bash
 
-# 虚拟环境设置脚本
+# Virtual environment setup script
 
 echo "=========================================="
-echo "创建虚拟环境"
+echo "Creating virtual environment"
 echo "=========================================="
 echo ""
 
-# 检查当前目录
-echo "当前目录: $(pwd)"
+# Check current directory
+echo "Current directory: $(pwd)"
 echo ""
 
-# 创建虚拟环境
-echo "步骤 1: 创建虚拟环境..."
+# Create virtual environment
+echo "Step 1: Creating virtual environment..."
 python3 -m venv venv
 
-# 检查是否创建成功
+# Check if creation succeeded
 if [ -d "venv" ]; then
-    echo "✅ 虚拟环境创建成功！"
+    echo "✅ Virtual environment created successfully!"
     echo ""
 
-    echo "步骤 2: 检查虚拟环境结构..."
+    echo "Step 2: Checking virtual environment structure..."
     ls -la venv/
     echo ""
 
     echo "=========================================="
-    echo "✅ 虚拟环境已准备好！"
+    echo "✅ Virtual environment is ready!"
     echo "=========================================="
     echo ""
-    echo "下一步："
-    echo "1. 激活虚拟环境："
+    echo "Next steps:"
+    echo "1. Activate the virtual environment:"
     echo "   source venv/bin/activate"
     echo ""
-    echo "2. 安装依赖："
+    echo "2. Install dependencies:"
     echo "   pip install -r backend/requirements.txt"
     echo ""
-    echo "3. 启动服务："
+    echo "3. Start the service:"
     echo "   python -m backend.src.main"
     echo ""
 else
-    echo "❌ 虚拟环境创建失败"
+    echo "❌ Virtual environment creation failed"
     echo ""
-    echo "可能的原因："
-    echo "1. Python venv 模块未安装"
-    echo "2. 磁盘空间不足"
-    echo "3. 权限问题"
+    echo "Possible reasons:"
+    echo "1. Python venv module not installed"
+    echo "2. Insufficient disk space"
+    echo "3. Permission issues"
     echo ""
-    echo "尝试使用 virtualenv："
+    echo "Try using virtualenv instead:"
     echo "  virtualenv venv"
     exit 1
 fi

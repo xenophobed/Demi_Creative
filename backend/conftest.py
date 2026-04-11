@@ -1,10 +1,10 @@
 """
-Root conftest.py - 设置 Python 路径以便测试能正确导入模块
+Root conftest.py - Set up Python path so tests can import modules correctly
 """
 import sys
 from pathlib import Path
 
-# 将项目根目录添加到 Python 路径
+# Add project root to Python path
 project_root = Path(__file__).parent
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))

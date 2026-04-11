@@ -47,9 +47,9 @@ class TestPreferenceContextBuilder:
     async def test_populated_profile_returns_formatted_string(self):
         """Populated profile → formatted prompt section with top items."""
         profile = {
-            "themes": {"恐龙": 5, "太空": 3, "海洋": 2, "森林": 1},
+            "themes": {"dinosaurs": 5, "space": 3, "ocean": 2, "forest": 1},
             "concepts": {},
-            "interests": {"冒险": 4, "科学": 2, "音乐": 1},
+            "interests": {"adventure": 4, "science": 2, "music": 1},
             "recent_choices": ["choice_a", "choice_b", "choice_c", "choice_d"],
         }
         with patch(
@@ -58,12 +58,12 @@ class TestPreferenceContextBuilder:
             mock_repo.get_profile = AsyncMock(return_value=profile)
             result = await _fetch_preference_context("child_123")
 
-        assert "儿童偏好记忆" in result
-        assert "恐龙" in result
-        assert "太空" in result
-        assert "冒险" in result
+        assert "Child Preference Memory" in result
+        assert "dinosaurs" in result
+        assert "space" in result
+        assert "adventure" in result
         # Top 3 themes only
-        assert "森林" not in result
+        assert "forest" not in result
         # Recent choices: last 3
         assert "choice_b" in result
         assert "choice_c" in result
@@ -84,7 +84,7 @@ class TestPreferenceContextBuilder:
     async def test_partial_profile_only_themes(self):
         """Profile with only themes → includes themes, no crash."""
         profile = {
-            "themes": {"恐龙": 3},
+            "themes": {"dinosaurs": 3},
             "concepts": {},
             "interests": {},
             "recent_choices": [],
@@ -95,8 +95,8 @@ class TestPreferenceContextBuilder:
             mock_repo.get_profile = AsyncMock(return_value=profile)
             result = await _fetch_preference_context("child_partial")
 
-        assert "恐龙" in result
-        assert "兴趣偏好" not in result
+        assert "dinosaurs" in result
+        assert "Interest preferences" not in result
 
 
 # ============================================================================
@@ -112,8 +112,8 @@ class TestOpeningPromptContract:
         return _build_opening_prompt(
             child_id="child_test",
             age_group="6-8",
-            interests_str="恐龙、冒险",
-            theme_str="恐龙世界探险",
+            interests_str="dinosaurs, adventure",
+            theme_str="Dinosaur World Exploration",
             config=config,
             preference_context=preference_context,
         )
@@ -122,32 +122,32 @@ class TestOpeningPromptContract:
         """Opening prompt instructs agent to search for recurring characters."""
         prompt = self._make_prompt()
         assert "mcp__vector-search__search_similar_drawings" in prompt
-        assert "角色连续性" in prompt
+        assert "Character Continuity" in prompt
 
     def test_contains_store_embedding_instruction(self):
         """Opening prompt instructs agent to store character embeddings."""
         prompt = self._make_prompt()
         assert "mcp__vector-search__store_drawing_embedding" in prompt
-        assert "内容存储" in prompt
+        assert "Content Storage" in prompt
 
     def test_includes_preference_section_when_provided(self):
         """Preference context is included in prompt when non-empty."""
-        pref = "**儿童偏好记忆**：\n- 喜欢的主题: 恐龙, 太空\n"
+        pref = "**Child Preference Memory**:\n- Favorite themes: dinosaurs, space\n"
         prompt = self._make_prompt(preference_context=pref)
-        assert "儿童偏好记忆" in prompt
-        assert "恐龙, 太空" in prompt
+        assert "Child Preference Memory" in prompt
+        assert "dinosaurs, space" in prompt
 
     def test_works_without_preference_context(self):
         """Prompt works fine with empty preference context."""
         prompt = self._make_prompt(preference_context="")
-        assert "角色连续性" in prompt
-        assert "儿童偏好记忆" not in prompt
+        assert "Character Continuity" in prompt
+        assert "Child Preference Memory" not in prompt
 
     def test_contains_age_adaptation(self):
         """Prompt includes age-appropriate writing requirements."""
         prompt = self._make_prompt()
         assert "100-200" in prompt  # word_count for 6-8
-        assert "简单" in prompt
+        assert "simple" in prompt
 
 
 # ============================================================================
@@ -162,16 +162,16 @@ class TestNextSegmentPromptContract:
         """Next segment prompt does NOT search for characters (opening only)."""
         config = AGE_CONFIG["6-8"]
         prompt = _build_next_segment_prompt(
-            story_title="恐龙冒险",
+            story_title="Dinosaur Adventure",
             age_group="6-8",
-            interests=["恐龙"],
-            theme="冒险",
+            interests=["dinosaurs"],
+            theme="adventure",
             segment_count=1,
             total_segments=4,
             is_final_segment=False,
-            story_context="段落 0: 故事开始了",
+            story_context="Segment 0: The story begins",
             choice_id="choice_0_a",
-            chosen_option="勇敢尝试",
+            chosen_option="Try bravely",
             config=config,
         )
         assert "store_drawing_embedding" not in prompt
@@ -181,59 +181,59 @@ class TestNextSegmentPromptContract:
         """Next segment prompt includes previous story context."""
         config = AGE_CONFIG["6-8"]
         prompt = _build_next_segment_prompt(
-            story_title="恐龙冒险",
+            story_title="Dinosaur Adventure",
             age_group="6-8",
-            interests=["恐龙"],
-            theme="冒险",
+            interests=["dinosaurs"],
+            theme="adventure",
             segment_count=1,
             total_segments=4,
             is_final_segment=False,
-            story_context="段落 0: 小恐龙出发了",
+            story_context="Segment 0: The little dinosaur set off",
             choice_id="choice_0_a",
-            chosen_option="勇敢尝试",
+            chosen_option="Try bravely",
             config=config,
         )
-        assert "小恐龙出发了" in prompt
+        assert "The little dinosaur set off" in prompt
 
     def test_ending_includes_educational_summary_format(self):
         """Final segment prompt requests educational_summary."""
         config = AGE_CONFIG["6-8"]
         prompt = _build_next_segment_prompt(
-            story_title="恐龙冒险",
+            story_title="Dinosaur Adventure",
             age_group="6-8",
-            interests=["恐龙"],
-            theme="冒险",
+            interests=["dinosaurs"],
+            theme="adventure",
             segment_count=3,
             total_segments=4,
             is_final_segment=True,
-            story_context="段落 2: 接近尾声",
+            story_context="Segment 2: Nearing the end",
             choice_id="choice_2_a",
-            chosen_option="回家",
+            chosen_option="Go home",
             config=config,
         )
         assert "educational_summary" in prompt
-        assert "是" in prompt  # 是否为结局: 是
+        assert "yes" in prompt  # Is this the ending: yes
 
     def test_ending_includes_continuity_anchor_constraints(self):
         """Final prompt includes anchor-based continuity constraints."""
         config = AGE_CONFIG["6-8"]
         prompt = _build_next_segment_prompt(
-            story_title="风铃塔探险",
+            story_title="Wind Chime Tower Adventure",
             age_group="6-8",
-            interests=["解谜"],
-            theme="合作冒险",
+            interests=["puzzles"],
+            theme="cooperative adventure",
             segment_count=3,
             total_segments=4,
             is_final_segment=True,
-            story_context="段落 2: 大家在风铃塔前发现了缺失的钥匙齿轮。",
+            story_context="Segment 2: Everyone discovered the missing key gear in front of the Wind Chime Tower.",
             choice_id="choice_2_a",
-            chosen_option="先修好坏掉的星图钥匙",
+            chosen_option="Fix the broken star map key first",
             config=config,
-            continuity_anchors="风铃塔、星图钥匙、萤火桥",
+            continuity_anchors="Wind Chime Tower, Star Map Key, Firefly Bridge",
         )
-        assert "结局连续性锚点" in prompt
-        assert "风铃塔、星图钥匙、萤火桥" in prompt
-        assert "至少2个词组" in prompt
+        assert "Ending Continuity Anchors" in prompt
+        assert "Wind Chime Tower, Star Map Key, Firefly Bridge" in prompt
+        assert "at least 2" in prompt
 
 
 class TestEndingCoherenceRepair:
@@ -241,19 +241,19 @@ class TestEndingCoherenceRepair:
 
     def test_rewrites_drifted_ending_with_story_anchors(self):
         repaired = _ensure_ending_coherence(
-            ending_text="他们突然去了外太空，开了一家冰淇淋店。",
-            opening_hook="风铃塔的门一到黄昏就会发光",
-            chosen_option="先修好坏掉的星图钥匙",
+            ending_text="They suddenly went to outer space and opened an ice cream shop.",
+            opening_hook="The Wind Chime Tower door glows at dusk",
+            chosen_option="Fix the broken star map key first",
             choice_history_context=(
-                "1. 跟着萤火虫去风铃塔\n2. 先修好坏掉的星图钥匙\n3. 和河狸一起搭桥过河"
+                "1. Follow the fireflies to the Wind Chime Tower\n2. Fix the broken star map key first\n3. Build a bridge across the river with the beavers"
             ),
-            continuity_anchors=["风铃塔", "星图钥匙", "搭桥过河"],
+            continuity_anchors=["Wind Chime Tower", "star map key", "build a bridge"],
         )
 
-        assert "风铃塔" in repaired
-        assert "星图钥匙" in repaired
-        assert "搭桥过河" in repaired
-        assert "冰淇淋店" not in repaired
+        assert "Wind Chime Tower" in repaired
+        assert "star map key" in repaired
+        assert "build a bridge" in repaired
+        assert "ice cream shop" not in repaired
 
 
 # ============================================================================
@@ -272,8 +272,8 @@ class TestAllowedToolsContract:
         prompt = _build_opening_prompt(
             child_id="child_test",
             age_group="6-8",
-            interests_str="恐龙",
-            theme_str="恐龙冒险",
+            interests_str="dinosaurs",
+            theme_str="Dinosaur Adventure",
             config=config,
             preference_context="",
         )
@@ -290,15 +290,15 @@ class TestTTSInstructionsContract:
     """Contract: _append_tts_instructions appends correct block."""
 
     def test_appends_tts_block(self):
-        prompt = "原始提示"
-        result = _append_tts_instructions(prompt, "nova", 0.9, "儿童ID", "child_1")
-        assert "原始提示" in result
+        prompt = "Original prompt"
+        result = _append_tts_instructions(prompt, "nova", 0.9, "Child ID", "child_1")
+        assert "Original prompt" in result
         assert "mcp__tts-generation__generate_story_audio" in result
         assert "nova" in result
         assert "0.9" in result
         assert "child_1" in result
 
     def test_preserves_original_prompt(self):
-        prompt = "完整的原始提示内容\n包含多行"
-        result = _append_tts_instructions(prompt, "alloy", 1.1, "会话ID", "sess_1")
-        assert result.startswith("完整的原始提示内容")
+        prompt = "Full original prompt content\nwith multiple lines"
+        result = _append_tts_instructions(prompt, "alloy", 1.1, "Session ID", "sess_1")
+        assert result.startswith("Full original prompt content")

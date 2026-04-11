@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-API 测试脚本
+API test script
 """
 
 import requests
@@ -9,29 +9,29 @@ import json
 BASE_URL = "http://localhost:8000"
 
 print("=" * 60)
-print("Creative Agent API 测试")
+print("Creative Agent API Tests")
 print("=" * 60)
 print()
 
-# 测试 1: 健康检查
-print("测试 1: 健康检查")
+# Test 1: Health check
+print("Test 1: Health check")
 print("-" * 60)
 try:
     response = requests.get(f"{BASE_URL}/health")
-    print(f"状态码: {response.status_code}")
-    print(f"响应: {json.dumps(response.json(), indent=2, ensure_ascii=False)}")
-    print("✅ 健康检查通过\n")
+    print(f"Status code: {response.status_code}")
+    print(f"Response: {json.dumps(response.json(), indent=2, ensure_ascii=False)}")
+    print("✅ Health check passed\n")
 except Exception as e:
-    print(f"❌ 错误: {e}\n")
+    print(f"❌ Error: {e}\n")
 
-# 测试 2: 开始互动故事
-print("测试 2: 开始互动故事")
+# Test 2: Start interactive story
+print("Test 2: Start interactive story")
 print("-" * 60)
 try:
     payload = {
         "child_id": "test_001",
         "age_group": "6-8",
-        "interests": ["动物", "冒险"]
+        "interests": ["animals", "adventure"]
     }
 
     response = requests.post(
@@ -39,31 +39,31 @@ try:
         json=payload
     )
 
-    print(f"状态码: {response.status_code}")
+    print(f"Status code: {response.status_code}")
     result = response.json()
-    print(f"响应: {json.dumps(result, indent=2, ensure_ascii=False)}")
+    print(f"Response: {json.dumps(result, indent=2, ensure_ascii=False)}")
 
     if response.status_code == 201:
         session_id = result['session_id']
-        print(f"\n✅ 互动故事创建成功")
-        print(f"   会话 ID: {session_id}")
-        print(f"   故事标题: {result['story_title']}")
-        print(f"   开场文本: {result['opening']['text'][:50]}...")
+        print(f"\n✅ Interactive story created successfully")
+        print(f"   Session ID: {session_id}")
+        print(f"   Story title: {result['story_title']}")
+        print(f"   Opening text: {result['opening']['text'][:50]}...")
         print()
 
-        # 测试 3: 获取会话状态
-        print("测试 3: 获取会话状态")
+        # Test 3: Get session status
+        print("Test 3: Get session status")
         print("-" * 60)
         status_response = requests.get(
             f"{BASE_URL}/api/v1/story/interactive/{session_id}/status"
         )
-        print(f"状态码: {status_response.status_code}")
+        print(f"Status code: {status_response.status_code}")
         status_result = status_response.json()
-        print(f"响应: {json.dumps(status_result, indent=2, ensure_ascii=False)}")
-        print("✅ 状态查询成功\n")
+        print(f"Response: {json.dumps(status_result, indent=2, ensure_ascii=False)}")
+        print("✅ Status query succeeded\n")
 
-        # 测试 4: 选择分支
-        print("测试 4: 选择故事分支")
+        # Test 4: Choose branch
+        print("Test 4: Choose story branch")
         print("-" * 60)
         choice_payload = {
             "choice_id": "choice_0_a"
@@ -73,25 +73,25 @@ try:
             f"{BASE_URL}/api/v1/story/interactive/{session_id}/choose",
             json=choice_payload
         )
-        print(f"状态码: {choice_response.status_code}")
+        print(f"Status code: {choice_response.status_code}")
         choice_result = choice_response.json()
-        print(f"响应: {json.dumps(choice_result, indent=2, ensure_ascii=False)}")
-        print("✅ 分支选择成功\n")
+        print(f"Response: {json.dumps(choice_result, indent=2, ensure_ascii=False)}")
+        print("✅ Branch selection succeeded\n")
 
     else:
-        print(f"❌ 故事创建失败\n")
+        print(f"❌ Story creation failed\n")
 
 except Exception as e:
-    print(f"❌ 错误: {e}\n")
+    print(f"❌ Error: {e}\n")
 
-# 测试 5: 错误处理 - 无效年龄组
-print("测试 5: 错误处理 - 无效年龄组")
+# Test 5: Error handling - invalid age group
+print("Test 5: Error handling - invalid age group")
 print("-" * 60)
 try:
     invalid_payload = {
         "child_id": "test_002",
         "age_group": "invalid",
-        "interests": ["动物"]
+        "interests": ["animals"]
     }
 
     response = requests.post(
@@ -99,36 +99,36 @@ try:
         json=invalid_payload
     )
 
-    print(f"状态码: {response.status_code}")
+    print(f"Status code: {response.status_code}")
     if response.status_code == 422:
-        print("✅ 验证错误正确捕获")
-        print(f"响应: {json.dumps(response.json(), indent=2, ensure_ascii=False)}")
+        print("✅ Validation error correctly caught")
+        print(f"Response: {json.dumps(response.json(), indent=2, ensure_ascii=False)}")
     else:
-        print(f"❌ 未正确处理验证错误")
+        print(f"❌ Validation error not handled correctly")
     print()
 
 except Exception as e:
-    print(f"❌ 错误: {e}\n")
+    print(f"❌ Error: {e}\n")
 
-# 测试 6: 错误处理 - 不存在的会话
-print("测试 6: 错误处理 - 不存在的会话")
+# Test 6: Error handling - nonexistent session
+print("Test 6: Error handling - nonexistent session")
 print("-" * 60)
 try:
     response = requests.get(
         f"{BASE_URL}/api/v1/story/interactive/nonexistent_id/status"
     )
 
-    print(f"状态码: {response.status_code}")
+    print(f"Status code: {response.status_code}")
     if response.status_code == 404:
-        print("✅ 404 错误正确处理")
-        print(f"响应: {json.dumps(response.json(), indent=2, ensure_ascii=False)}")
+        print("✅ 404 error correctly handled")
+        print(f"Response: {json.dumps(response.json(), indent=2, ensure_ascii=False)}")
     else:
-        print(f"❌ 未正确处理 404 错误")
+        print(f"❌ 404 error not handled correctly")
     print()
 
 except Exception as e:
-    print(f"❌ 错误: {e}\n")
+    print(f"❌ Error: {e}\n")
 
 print("=" * 60)
-print("✅ API 测试完成！")
+print("✅ API tests completed!")
 print("=" * 60)

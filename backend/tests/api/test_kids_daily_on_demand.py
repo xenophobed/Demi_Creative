@@ -141,7 +141,7 @@ class TestGenerateNowEndpoint:
                 )
 
             assert response.status_code == 400
-            assert "Subscribe" in response.json()["detail"] or "订阅" in response.json()["detail"]
+            assert "Subscribe" in response.json()["detail"] or "subscribe" in response.json()["detail"].lower()
 
     async def test_returns_429_when_rate_limited(self, test_client):
         """4th request within 1 hour returns 429 with retry_after."""

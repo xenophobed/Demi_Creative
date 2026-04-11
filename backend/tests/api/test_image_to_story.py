@@ -1,7 +1,7 @@
 """
 Tests for Image to Story API
 
-画作转故事 API 单元测试
+Image-to-story API unit tests
 """
 
 import json
@@ -18,7 +18,7 @@ from backend.src.main import app
 
 @pytest.fixture
 def sample_image():
-    """创建测试图片"""
+    """Create a test image"""
     img = Image.new("RGB", (400, 300), color="lightblue")
     img_bytes = BytesIO()
     img.save(img_bytes, format="PNG")
@@ -28,16 +28,16 @@ def sample_image():
 
 @pytest.mark.asyncio
 class TestImageToStoryAPI:
-    """画作转故事 API 测试"""
+    """Image-to-story API tests"""
 
     async def test_upload_valid_image(self, sample_image, test_client):
-        """测试上传有效图片 — uses agent mock fallback for test env."""
+        """Test uploading a valid image — uses agent mock fallback for test env."""
         async with test_client as client:
             files = {"image": ("drawing.png", sample_image, "image/png")}
             data = {
                 "child_id": "test_child_001",
                 "age_group": "6-8",
-                "interests": "动物,冒险",
+                "interests": "animals,adventure",
                 "voice": "nova",
                 "enable_audio": "true",
             }
@@ -77,11 +77,11 @@ class TestImageToStoryAPI:
             assert isinstance(edu["concepts"], list)
 
     async def test_upload_invalid_file_type(self):
-        """测试上传无效文件类型"""
+        """Test uploading an invalid file type"""
         async with AsyncClient(
             transport=ASGITransport(app=app), base_url="http://test"
         ) as client:
-            # 创建文本文件
+            # Create a text file
             text_file = BytesIO(b"This is not an image")
 
             files = {"image": ("test.txt", text_file, "text/plain")}
@@ -92,14 +92,14 @@ class TestImageToStoryAPI:
             )
 
             assert response.status_code == 400
-            assert "文件必须是图片类型" in response.json()["detail"]
+            assert "File must be an image type" in response.json()["detail"]
 
     async def test_upload_too_large_file(self):
-        """测试上传超大文件"""
+        """Test uploading an oversized file"""
         async with AsyncClient(
             transport=ASGITransport(app=app), base_url="http://test"
         ) as client:
-            # 创建超大图片（模拟）
+            # Create oversized image (simulated)
             large_file = BytesIO(b"0" * (11 * 1024 * 1024))  # 11MB
 
             files = {"image": ("large.png", large_file, "image/png")}
@@ -110,17 +110,17 @@ class TestImageToStoryAPI:
             )
 
             assert response.status_code == 413
-            assert "文件大小超过限制" in response.json()["detail"]
+            assert "File size exceeds limit" in response.json()["detail"]
 
     async def test_missing_required_fields(self, sample_image):
-        """测试缺少必填字段"""
+        """Test missing required fields"""
         async with AsyncClient(
             transport=ASGITransport(app=app), base_url="http://test"
         ) as client:
             files = {"image": ("drawing.png", sample_image, "image/png")}
             data = {
                 "child_id": "test_child_001"
-                # 缺少 age_group
+                # Missing age_group
             }
 
             response = await client.post(
@@ -132,14 +132,14 @@ class TestImageToStoryAPI:
             assert error_response["error"] == "ValidationError"
 
     async def test_invalid_age_group(self, sample_image):
-        """测试无效的年龄组"""
+        """Test invalid age group"""
         async with AsyncClient(
             transport=ASGITransport(app=app), base_url="http://test"
         ) as client:
             files = {"image": ("drawing.png", sample_image, "image/png")}
             data = {
                 "child_id": "test_child_001",
-                "age_group": "13-15",  # 无效年龄组
+                "age_group": "13-15",  # Invalid age group
             }
 
             response = await client.post(
@@ -149,7 +149,7 @@ class TestImageToStoryAPI:
             assert response.status_code == 422
 
     async def test_too_many_interests(self, sample_image):
-        """测试兴趣标签过多"""
+        """Test too many interest tags"""
         async with AsyncClient(
             transport=ASGITransport(app=app), base_url="http://test"
         ) as client:
@@ -157,7 +157,7 @@ class TestImageToStoryAPI:
             data = {
                 "child_id": "test_child_001",
                 "age_group": "6-8",
-                "interests": "动物,冒险,太空,科学,音乐,运动",  # 6个标签
+                "interests": "animals,adventure,space,science,music,sports",  # 6 tags
             }
 
             response = await client.post(
@@ -165,21 +165,21 @@ class TestImageToStoryAPI:
             )
 
             assert response.status_code == 400
-            assert "兴趣标签最多5个" in response.json()["detail"]
+            assert "Maximum 5 interest tags" in response.json()["detail"]
 
 
 @pytest.mark.asyncio
 class TestImageToStoryResponseFormat:
-    """响应格式测试 — uses agent mock fallback for test env."""
+    """Response format tests — uses agent mock fallback for test env."""
 
     async def test_response_structure(self, sample_image, test_client):
-        """测试响应结构"""
+        """Test response structure"""
         async with test_client as client:
             files = {"image": ("drawing.png", sample_image, "image/png")}
             data = {
                 "child_id": "test_child_001",
                 "age_group": "6-8",
-                "interests": "动物,冒险",
+                "interests": "animals,adventure",
             }
 
             response = await client.post(
@@ -189,7 +189,7 @@ class TestImageToStoryResponseFormat:
             assert response.status_code == 201
             result = response.json()
 
-            # 验证响应字段
+            # Verify response fields
             assert "story_id" in result
             assert "story" in result
             assert "text" in result["story"]

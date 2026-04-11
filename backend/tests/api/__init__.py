@@ -1,5 +1,5 @@
 """
 API Tests Package
 
-FastAPI 端点测试
+FastAPI endpoint tests
 """

@@ -1,372 +1,372 @@
-# 儿童创意工坊 - 领域背景
+# Kids Creative Workshop - Domain Background
 
-## 1. 领域概述
+## 1. Domain Overview
 
-### 1.1 问题空间
+### 1.1 Problem Space
 
-**当前儿童内容领域的痛点**：
-1. **创造力表达受限**: 儿童有丰富的想象力，但缺乏将想象转化为完整故事的能力
-2. **内容安全隐患**: 互联网上充斥不适合儿童的内容，家长担忧内容安全
-3. **个性化不足**: 市面上的儿童内容多为标准化产品，缺乏个性化
-4. **被动消费**: 传统故事书、动画片都是单向输出，儿童缺乏参与感
-5. **知识获取门槛**: 成人世界的新闻、知识对儿童来说过于复杂
+**Current pain points in the children's content space**:
+1. **Limited creative expression**: Children have rich imaginations but lack the ability to turn imagination into complete stories
+2. **Content safety risks**: The internet is flooded with content unsuitable for children, causing parental concern about content safety
+3. **Insufficient personalization**: Children's content on the market is mostly standardized products, lacking personalization
+4. **Passive consumption**: Traditional storybooks and cartoons are one-directional output; children lack a sense of participation
+5. **Knowledge access barriers**: News and knowledge from the adult world is too complex for children
 
-### 1.2 解决方案
+### 1.2 Solution
 
-利用 **AI Agent 技术**，构建智能儿童内容创作平台：
-- 将儿童画作转化为故事
-- 生成互动式个性化故事
-- 转化成人新闻为儿童友好资讯
-- 提供安全、有趣、有教育意义的内容
-
----
-
-## 2. 核心领域概念
-
-### 2.1 儿童发展阶段
-
-#### 3-5岁（学龄前）
-- **认知特点**: 具象思维，喜欢重复，注意力短暂
-- **语言能力**: 简单句子，常用词汇 500-2000 个
-- **兴趣点**: 动物、家庭、简单冒险
-- **内容要求**: 故事简短（100-200字），语言简单，结局明确
-
-#### 6-8岁（小学低年级）
-- **认知特点**: 开始逻辑思考，好奇心强，喜欢探索
-- **语言能力**: 复杂句子，词汇量 3000-5000
-- **兴趣点**: 恐龙、太空、魔法、友谊
-- **内容要求**: 故事中等（200-400字），可以有简单情节转折
-
-#### 9-12岁（小学高年级）
-- **认知特点**: 抽象思维能力增强，开始批判性思考
-- **语言能力**: 丰富表达，词汇量 5000-8000
-- **兴趣点**: 科学、历史、复杂冒险、人际关系
-- **内容要求**: 故事较长（400-800字），可以有多线叙事
-
-### 2.2 内容安全标准
-
-#### 负面内容过滤
-- **暴力**: 打斗、血腥、武器使用
-- **恐怖**: 鬼怪、黑暗、惊悚元素
-- **不当语言**: 脏话、侮辱性词汇、歧视性表达
-- **成人话题**: 性、毒品、酗酒、政治争议
-
-#### 正向价值引导
-- **性别平等**: 避免刻板印象（如"女孩应该温柔，男孩应该勇敢"）
-- **文化多样性**: 展现不同文化、种族、家庭结构
-- **品德教育**: 友谊、勇气、诚实、同理心、责任感
-- **包容性**: 尊重不同能力、外貌、背景的人
-
-### 2.3 教育目标
-
-#### STEAM 教育
-- **Science (科学)**: 激发对自然、科学的好奇
-- **Technology (技术)**: 了解科技如何改变世界
-- **Engineering (工程)**: 培养解决问题的思维
-- **Arts (艺术)**: 鼓励创意表达
-- **Math (数学)**: 在故事中融入数学概念
-
-#### 品德教育
-- **友谊**: 如何交朋友，维护友谊
-- **勇气**: 面对困难不退缩
-- **诚实**: 说真话的重要性
-- **同理心**: 理解他人感受
-- **责任感**: 对自己行为负责
+Leveraging **AI Agent technology** to build an intelligent children's content creation platform:
+- Transform children's drawings into stories
+- Generate interactive personalized stories
+- Convert adult news into child-friendly content
+- Provide safe, fun, and educational content
 
 ---
 
-## 3. 技术领域概念
+## 2. Core Domain Concepts
 
-### 3.1 AI Agent 架构
+### 2.1 Child Development Stages
 
-#### Agent 定义
-**Agent** 是一个自主的智能实体，能够：
-- 感知环境（接收输入）
-- 自主决策（选择使用哪些工具）
-- 执行动作（调用工具完成任务）
-- 学习反馈（根据结果调整策略）
+#### Ages 3-5 (Preschool)
+- **Cognitive Traits**: Concrete thinking, enjoys repetition, short attention span
+- **Language Ability**: Simple sentences, common vocabulary of 500-2000 words
+- **Interests**: Animals, family, simple adventures
+- **Content Requirements**: Short stories (100-200 words), simple language, clear endings
 
-#### Agent vs 传统 API
+#### Ages 6-8 (Early Elementary)
+- **Cognitive Traits**: Beginning logical thinking, strong curiosity, enjoys exploration
+- **Language Ability**: Complex sentences, vocabulary of 3000-5000 words
+- **Interests**: Dinosaurs, space, magic, friendship
+- **Content Requirements**: Medium stories (200-400 words), can include simple plot twists
+
+#### Ages 9-12 (Upper Elementary)
+- **Cognitive Traits**: Enhanced abstract thinking, beginning critical thinking
+- **Language Ability**: Rich expression, vocabulary of 5000-8000 words
+- **Interests**: Science, history, complex adventures, interpersonal relationships
+- **Content Requirements**: Longer stories (400-800 words), can include multi-thread narratives
+
+### 2.2 Content Safety Standards
+
+#### Negative Content Filtering
+- **Violence**: Fighting, blood, weapon use
+- **Horror**: Ghosts, darkness, thriller elements
+- **Inappropriate Language**: Profanity, insulting words, discriminatory expressions
+- **Adult Topics**: Sex, drugs, alcoholism, political controversy
+
+#### Positive Value Guidance
+- **Gender Equality**: Avoid stereotypes (e.g. "girls should be gentle, boys should be brave")
+- **Cultural Diversity**: Represent different cultures, races, and family structures
+- **Character Education**: Friendship, courage, honesty, empathy, responsibility
+- **Inclusivity**: Respect people of different abilities, appearances, and backgrounds
+
+### 2.3 Educational Goals
+
+#### STEAM Education
+- **Science**: Inspire curiosity about nature and science
+- **Technology**: Understand how technology changes the world
+- **Engineering**: Develop problem-solving thinking
+- **Arts**: Encourage creative expression
+- **Math**: Integrate mathematical concepts into stories
+
+#### Character Education
+- **Friendship**: How to make friends and maintain friendships
+- **Courage**: Not backing down when facing difficulties
+- **Honesty**: The importance of telling the truth
+- **Empathy**: Understanding others' feelings
+- **Responsibility**: Being accountable for one's actions
+
+---
+
+## 3. Technical Domain Concepts
+
+### 3.1 AI Agent Architecture
+
+#### Agent Definition
+An **Agent** is an autonomous intelligent entity that can:
+- Perceive the environment (receive input)
+- Make autonomous decisions (choose which tools to use)
+- Execute actions (call tools to complete tasks)
+- Learn from feedback (adjust strategy based on results)
+
+#### Agent vs Traditional API
 ```
-传统 API:
-  输入 → 固定处理逻辑 → 输出
+Traditional API:
+  Input → Fixed processing logic → Output
 
 AI Agent:
-  输入 → Agent 推理 → 选择工具 → 执行 → 评估结果 → 输出
-         ↑__________________________|（可能多轮）
+  Input → Agent reasoning → Select tools → Execute → Evaluate results → Output
+          ↑___________________________________|（may iterate multiple rounds）
 ```
 
-### 3.2 核心 Agent 角色
+### 3.2 Core Agent Roles
 
-#### 1. ImageAnalysisAgent（画作分析师）
-**职责**: 理解儿童画作的含义
+#### 1. ImageAnalysisAgent (Drawing Analyst)
+**Responsibility**: Understand the meaning of children's drawings
 
-**工具（Skills）**:
-- `vision_analyze`: 调用 Claude Vision API 识别画作元素
-- `vector_search`: 在向量数据库中搜索相似画作
-- `emotion_detect`: 分析画作情绪和氛围
+**Tools (Skills)**:
+- `vision_analyze`: Call Claude Vision API to identify drawing elements
+- `vector_search`: Search for similar drawings in vector database
+- `emotion_detect`: Analyze drawing mood and atmosphere
 
-**输入**: 画作图片 + 儿童信息
-**输出**: 画作描述（物体、场景、情绪、重复角色）
+**Input**: Drawing image + child information
+**Output**: Drawing description (objects, scene, mood, recurring characters)
 
-#### 2. StoryGeneratorAgent（故事创作家）
-**职责**: 创作适合儿童的故事
+#### 2. StoryGeneratorAgent (Story Creator)
+**Responsibility**: Create age-appropriate stories for children
 
-**工具（Skills）**:
-- `story_template`: 使用故事模板
-- `age_adapter`: 根据年龄调整语言复杂度
-- `branch_generator`: 生成互动分支（互动模式）
-- `tts_generate`: 生成语音朗读
+**Tools (Skills)**:
+- `story_template`: Use story templates
+- `age_adapter`: Adjust language complexity based on age
+- `branch_generator`: Generate interactive branches (interactive mode)
+- `tts_generate`: Generate audio narration
 
-**输入**: 画作分析结果 / 兴趣标签 + 儿童年龄
-**输出**: 故事文本 + 语音 + 互动选项
+**Input**: Drawing analysis results / interest tags + child's age
+**Output**: Story text + audio + interactive options
 
-#### 3. MorningShowAgent（早间秀主持人）
-**职责**: 将新闻转化为双角色对话播客，整合记忆系统中的儿童角色
+#### 3. MorningShowAgent (Morning Show Host)
+**Responsibility**: Transform news into dual-character dialogue podcasts, integrating children's characters from the memory system
 
-**工具（Skills）**:
-- `dialogue_script_generator`: 生成好奇宝宝 + 趣味专家的对话剧本
-- `character_injector`: 从 Memory System 查询重复角色并注入为嘉宾主播
-- `multi_speaker_tts`: 编排多角色 TTS 生成（不同语音参数）
-- `illustration_generator`: 基于新闻主题生成 3-4 张配套插画
-- `simplify_language`: 语言简化（使用比喻、日常词汇）
-- `concept_explainer`: 解释复杂概念
+**Tools (Skills)**:
+- `dialogue_script_generator`: Generate Curious Kid + Fun Expert dialogue scripts
+- `character_injector`: Query recurring characters from Memory System and inject as guest hosts
+- `multi_speaker_tts`: Orchestrate multi-character TTS generation (different voice parameters)
+- `illustration_generator`: Generate 3-4 accompanying illustrations based on news themes
+- `simplify_language`: Language simplification (using metaphors, everyday vocabulary)
+- `concept_explainer`: Explain complex concepts
 
-**输入**: 新闻 URL/文本 + 目标年龄 + 订阅频道 + 儿童偏好
-**输出**: 对话剧本 + 多角色音频 + 插画 + 儿童版标题/概念/互动问题
+**Input**: News URL/text + target age + subscription channels + child preferences
+**Output**: Dialogue script + multi-character audio + illustrations + child-friendly title/concepts/interactive questions
 
-> 注: 保留原 NewsConverterAgent 作为手动模式/回退方案
+> Note: Original NewsConverterAgent retained as manual mode/fallback
 
-#### 4. SafetyAgent（内容审查员）
-**职责**: 确保所有内容安全、价值观正确
+#### 4. SafetyAgent (Content Reviewer)
+**Responsibility**: Ensure all content is safe and values-aligned
 
-**工具（Skills）**:
-- `content_filter`: 负面内容过滤
-- `bias_detector`: 检测性别、文化偏见
-- `sentiment_analysis`: 情感分析
-- `value_checker`: 价值观检查
+**Tools (Skills)**:
+- `content_filter`: Negative content filtering
+- `bias_detector`: Detect gender and cultural bias
+- `sentiment_analysis`: Sentiment analysis
+- `value_checker`: Values check
 
-**输入**: 待审查内容 + 目标年龄
-**输出**: 安全评分 + 问题列表 + 修改建议
+**Input**: Content to review + target age
+**Output**: Safety score + issue list + modification suggestions
 
-#### 5. MemoryAgent（记忆管理员）
-**职责**: 管理儿童的创作历史和偏好
+#### 5. MemoryAgent (Memory Manager)
+**Responsibility**: Manage children's creation history and preferences
 
-**工具（Skills）**:
-- `embedding_create`: 生成内容向量
-- `vector_store`: 存储到向量数据库
-- `similarity_search`: 相似度搜索
-- `preference_track`: 追踪偏好变化
+**Tools (Skills)**:
+- `embedding_create`: Generate content vectors
+- `vector_store`: Store in vector database
+- `similarity_search`: Similarity search
+- `preference_track`: Track preference changes
 
-**输入**: 内容 + 用户ID
-**输出**: 相关历史记录 + 偏好标签
+**Input**: Content + user ID
+**Output**: Related historical records + preference tags
 
 ---
 
-## 4. 领域规则
+## 4. Domain Rules
 
-### 4.1 年龄适配规则
+### 4.1 Age Adaptation Rules
 
 ```yaml
-3-5岁:
-  词汇: 简单名词、动词
-  句式: 主谓宾结构，不超过10个字
-  故事长度: 100-200字
-  主题: 日常生活、动物、简单冒险
-  结局: 必须明确、正面
+Ages 3-5:
+  Vocabulary: Simple nouns and verbs
+  Sentence structure: Subject-verb-object, no more than 10 words
+  Story length: 100-200 words
+  Themes: Daily life, animals, simple adventures
+  Ending: Must be clear and positive
 
-6-8岁:
-  词汇: 常用词汇 + 形容词
-  句式: 可以有复合句，适当修辞
-  故事长度: 200-400字
-  主题: 友谊、探索、魔法、科学
-  结局: 可以有小转折，但必须正面
+Ages 6-8:
+  Vocabulary: Common words + adjectives
+  Sentence structure: Compound sentences allowed, moderate rhetoric
+  Story length: 200-400 words
+  Themes: Friendship, exploration, magic, science
+  Ending: Can have minor twists, but must be positive
 
-9-12岁:
-  词汇: 丰富词汇 + 成语
-  句式: 复杂句式，多种修辞
-  故事长度: 400-800字
-  主题: 复杂情节、多线叙事、深度思考
-  结局: 可以开放式，引发思考
+Ages 9-12:
+  Vocabulary: Rich vocabulary + idioms
+  Sentence structure: Complex sentences, varied rhetoric
+  Story length: 400-800 words
+  Themes: Complex plots, multi-thread narratives, deep thinking
+  Ending: Can be open-ended, thought-provoking
 ```
 
-### 4.2 互动故事规则
+### 4.2 Interactive Story Rules
 
 ```yaml
-决策点设置:
-  - 数量: 每个故事 2-4 个决策点
-  - 间隔: 每 100-150 字设置一个
-  - 选项数: 2-3 个选项
-  - 后果: 所有选项都是"好结局"（不惩罚儿童的选择）
+Decision point setup:
+  - Count: 2-4 decision points per story
+  - Interval: One every 100-150 words
+  - Options: 2-3 options per decision point
+  - Consequence: All options lead to "good endings" (never punish children's choices)
 
-选项设计:
-  - 清晰性: 选项文本清晰，儿童能理解
-  - 对比性: 选项之间有明显区别（如勇敢 vs 谨慎）
-  - 趣味性: 使用 emoji 增加趣味
-  - 教育性: 每个选项背后有教育意义
+Option design:
+  - Clarity: Option text is clear, children can understand
+  - Contrast: Clear distinction between options (e.g. brave vs cautious)
+  - Fun: Use emoji to add fun
+  - Educational: Each option has educational value behind it
 ```
 
-### 4.3 内容连续性规则
+### 4.3 Content Continuity Rules
 
 ```yaml
-角色记忆:
-  - 识别重复角色: 如儿童多次画"闪电小狗"
-  - 保持角色一致性: "闪电小狗"的特征在不同故事中保持
-  - 角色成长: 随着时间推移，角色可以"成长"
+Character memory:
+  - Recognize recurring characters: e.g. child draws "Lightning the puppy" multiple times
+  - Maintain character consistency: "Lightning the puppy"'s traits persist across stories
+  - Character growth: Over time, characters can "grow"
 
-故事关联:
-  - 历史引用: "你还记得上次闪电小狗的冒险吗？"
-  - 主题延续: 如果儿童喜欢太空主题，后续故事优先推荐
-  - 学习进阶: 根据儿童反馈，逐步增加难度
+Story associations:
+  - Historical references: "Do you remember Lightning the puppy's adventure last time?"
+  - Theme continuity: If child enjoys space themes, prioritize recommending those in future stories
+  - Learning progression: Gradually increase difficulty based on child feedback
 ```
 
 ---
 
-## 5. 关键术语表
+## 5. Key Glossary
 
-### Agent 相关
-- **Agent**: 自主智能实体，能够感知、决策、执行
-- **Tool/Skill**: Agent 可以使用的工具/技能
-- **System Prompt**: 定义 Agent 角色和行为的指令
-- **Multi-turn**: 多轮对话，Agent 可以分步骤完成任务
+### Agent-Related
+- **Agent**: Autonomous intelligent entity capable of perceiving, deciding, and executing
+- **Tool/Skill**: Tools/abilities that an Agent can use
+- **System Prompt**: Instructions that define an Agent's role and behavior
+- **Multi-turn**: Multi-round dialogue; Agent can complete tasks in steps
 
-### 内容相关
-- **Interactive Story**: 互动故事，儿童可以在关键点做选择
-- **Branch**: 故事分支，不同选择导向不同情节
-- **Linear Story**: 线性故事，传统的单线叙事
-- **TTS (Text-to-Speech)**: 文本转语音
-- **Dynamic Picture Book**: 动态绘本，让静态画作元素动起来
-- **Morning Show**: 早间秀，双角色对话播客形式的新闻内容
-- **Dialogue Script**: 对话剧本，标注角色和台词的结构化脚本
-- **Animatic**: 动态插画，静态图片配合 Ken Burns 平移/缩放动画模拟视频效果
-- **Daily Drop**: 每日推送，定时自动为订阅频道生成的新节目
-- **Topic Subscription**: 频道订阅，儿童选择感兴趣的新闻类别自动接收内容
+### Content-Related
+- **Interactive Story**: Story where children can make choices at key points
+- **Branch**: Story branch; different choices lead to different plot lines
+- **Linear Story**: Traditional single-thread narrative
+- **TTS (Text-to-Speech)**: Text to speech conversion
+- **Dynamic Picture Book**: Animated picture book that brings static drawing elements to life
+- **Morning Show**: Dual-character dialogue podcast format for news content
+- **Dialogue Script**: Structured script annotated with character roles and lines
+- **Animatic**: Animated illustration; static images with Ken Burns pan/zoom animation simulating video effect
+- **Daily Drop**: Daily delivery; episodes auto-generated on schedule for subscribed channels
+- **Topic Subscription**: Channel subscription; children select news categories of interest to automatically receive content
 
-### 技术相关
-- **Vector Database**: 向量数据库，用于存储和搜索高维向量
-- **Embedding**: 嵌入向量，将文本/图片转为数字向量
-- **Similarity Search**: 相似度搜索，找到相似的内容
-- **Contract Testing**: 契约测试，定义输入输出规范
+### Technology-Related
+- **Vector Database**: Database for storing and searching high-dimensional vectors
+- **Embedding**: Vector embedding; converting text/images into numerical vectors
+- **Similarity Search**: Finding similar content based on vector proximity
+- **Contract Testing**: Tests that define input/output specifications
 
-### 儿童教育相关
-- **COPPA**: 儿童在线隐私保护法
-- **Age-appropriate**: 适龄内容
-- **STEAM**: 科学、技术、工程、艺术、数学综合教育
-- **Social-Emotional Learning**: 社会情感学习
+### Children's Education-Related
+- **COPPA**: Children's Online Privacy Protection Act
+- **Age-appropriate**: Content suitable for the target age group
+- **STEAM**: Integrated education across Science, Technology, Engineering, Arts, and Mathematics
+- **Social-Emotional Learning**: Learning focused on social and emotional development
 
 ---
 
-## 6. 业务场景示例
+## 6. Business Scenario Examples
 
-### 场景 1: 画作转故事
+### Scenario 1: Image-to-Story
 ```
-小明（7岁）画了一幅画：
-- 画面：一只小狗在树下，旁边有太阳和云朵
-- 情绪：快乐、温暖
+Xiaoming (age 7) drew a picture:
+- Scene: A puppy under a tree, with sun and clouds nearby
+- Mood: Happy, warm
 
-Agent 工作流程：
-1. ImageAnalysisAgent 分析：
-   - 识别：小狗、树、太阳、云朵
-   - 场景：户外公园
-   - 情绪：快乐、温暖
-   - 向量搜索：发现小明上周也画过类似的小狗，命名为"闪电"
+Agent workflow:
+1. ImageAnalysisAgent analyzes:
+   - Identifies: puppy, tree, sun, clouds
+   - Scene: outdoor park
+   - Mood: happy, warm
+   - Vector search: discovers Xiaoming drew a similar puppy last week, named "Lightning"
 
-2. StoryGeneratorAgent 创作故事：
-   "闪电小狗今天又来到了它最喜欢的公园。阳光暖暖的照在身上，
-    树叶在微风中沙沙作响。闪电开心地摇着尾巴..."
-   （适合7岁儿童，200字，融入"闪电"这个重复角色）
+2. StoryGeneratorAgent creates story:
+   "Lightning the puppy came to its favorite park again today. The warm sunlight
+    shone down, and the leaves rustled softly in the breeze. Lightning wagged its tail happily..."
+   (Suitable for age 7, 200 words, incorporating "Lightning" as a recurring character)
 
-3. SafetyAgent 审查：✅ 通过（无安全问题）
+3. SafetyAgent review: ✅ Passed (no safety issues)
 
-4. TTS 生成语音：使用"温柔奶奶"声音朗读
+4. TTS generates audio: uses "gentle grandma" voice for narration
 
-输出：故事文本 + 语音 + 配图建议
+Output: story text + audio + illustration suggestions
 ```
 
-### 场景 2: 互动故事生成
+### Scenario 2: Interactive Story Generation
 ```
-小红（8岁）想听恐龙故事：
-- 年龄：8岁
-- 兴趣：恐龙、科学
-- 模式：互动
+Xiaohong (age 8) wants to hear a dinosaur story:
+- Age: 8
+- Interests: dinosaurs, science
+- Mode: interactive
 
-Agent 工作流程：
+Agent workflow:
 Round 1:
-  Story: "小恐龙在森林里发现了一个神秘的山洞，洞口闪烁着奇异的光..."
+  Story: "The little dinosaur discovered a mysterious cave in the forest, with a strange light flickering at the entrance..."
   Choices:
-    A. 勇敢地走进去 🏔️
-    B. 先回家叫上朋友 👫
+    A. Bravely walk inside 🏔️
+    B. Go home first and bring friends 👫
 
-小红选择 A → Round 2:
-  Story: "小恐龙鼓起勇气走进山洞，里面竟然有一块会发光的化石..."
+Xiaohong chooses A → Round 2:
+  Story: "The little dinosaur gathered its courage and entered the cave, only to find a glowing fossil inside..."
   Choices:
-    A. 仔细研究化石 🔬
-    B. 把化石带回家 🏠
+    A. Study the fossil carefully 🔬
+    B. Take the fossil home 🏠
 
-... (继续 3-5 轮)
+... (continues for 3-5 rounds)
 
-最终结局 + 教育要点：勇气、科学探索精神
+Final ending + educational highlights: courage, spirit of scientific exploration
 ```
 
-### 场景 3: 新闻早间秀
+### Scenario 3: News Morning Show
 ```
-新闻：SpaceX 成功发射火箭到月球
-小明（7岁）订阅了"太空"频道，有重复角色"闪电小狗"
+News: SpaceX successfully launches rocket to the moon
+Xiaoming (age 7) subscribed to "Space" channel, has recurring character "Lightning the puppy"
 
-MorningShowAgent 生成早间秀：
-1. 生成双角色对话剧本：
-   好奇宝宝：嘿！我听说有人往月球发射了一辆超级大公交车？
-   趣味专家：没错！科学家们造了一艘巨大的火箭，比30层楼还高！
-   好奇宝宝：哇，那比我们学校还高！它是怎么飞上去的？
-   趣味专家：它用了超级强大的发动机，喷出的火焰有蓝色和橙色...
+MorningShowAgent generates morning show:
+1. Generates dual-character dialogue script:
+   Curious Kid: Hey! I heard someone launched a super huge bus to the moon?
+   Fun Expert: That's right! Scientists built a giant rocket, taller than a 30-story building!
+   Curious Kid: Wow, that's taller than our school! How did it fly up there?
+   Fun Expert: It used super powerful engines that shot out blue and orange flames...
 
-2. Memory System 查到"闪电小狗"→ 注入为嘉宾：
-   [闪电小狗]：汪汪！我也想坐火箭去月球！月球上有骨头吗？
-   趣味专家：哈哈，月球上没有骨头，但有很多陨石坑...
+2. Memory System finds "Lightning the puppy" → injected as guest:
+   [Lightning the Puppy]: Woof woof! I want to ride a rocket to the moon too! Are there bones on the moon?
+   Fun Expert: Haha, there are no bones on the moon, but there are lots of craters...
 
-3. 多角色 TTS：好奇宝宝(shimmer) + 趣味专家(fable) + 闪电小狗(nova)
+3. Multi-character TTS: Curious Kid (shimmer) + Fun Expert (fable) + Lightning the Puppy (nova)
 
-4. 生成 3 张配套插画 → Ken Burns 动画 → 与对话段落同步
+4. Generates 3 accompanying illustrations → Ken Burns animation → synchronized with dialogue segments
 
-5. SafetyAgent 审查：✅ 通过
+5. SafetyAgent review: ✅ Passed
 
-输出：2分钟早间秀节目 → 自动存入"我的创作库"
+Output: 2-minute morning show episode → auto-saved to "My Library"
 ```
 
 ---
 
-## 7. 成功指标
+## 7. Success Metrics
 
-### 产品指标
-- **使用频率**: 儿童每周使用 3+ 次
-- **完成率**: 互动故事完成率 > 80%
-- **家长满意度**: > 4.5/5.0
-- **内容安全**: 不当内容通过率 < 0.1%
+### Product Metrics
+- **Usage Frequency**: Children use the platform 3+ times per week
+- **Completion Rate**: Interactive story completion rate > 80%
+- **Parent Satisfaction**: > 4.5/5.0
+- **Content Safety**: Inappropriate content pass-through rate < 0.1%
 
-### 教育效果
-- **创造力**: 儿童主动创作频率提升
-- **阅读兴趣**: 阅读时长增加
-- **知识获取**: 能用自己的话解释复杂概念
-- **品德培养**: 家长反馈儿童行为改善
+### Educational Outcomes
+- **Creativity**: Increase in children's proactive creation frequency
+- **Reading Interest**: Increase in reading time
+- **Knowledge Acquisition**: Children can explain complex concepts in their own words
+- **Character Development**: Parents report improved child behavior
 
-### 技术指标
-- **响应速度**: 故事生成 < 10 秒
-- **准确性**: Agent 输出符合契约 > 95%
-- **安全性**: 安全检查通过率 100%
+### Technical Metrics
+- **Response Speed**: Story generation < 10 seconds
+- **Accuracy**: Agent output matches contract > 95%
+- **Safety**: Safety check pass rate 100%
 
 ---
 
-## 8. 参考资料
+## 8. References
 
-### 儿童发展
+### Child Development
 - Piaget's Stages of Cognitive Development
 - Vygotsky's Zone of Proximal Development
-- Common Core State Standards (分年龄阅读标准)
+- Common Core State Standards (age-based reading standards)
 
-### 内容安全
-- COPPA (儿童在线隐私保护法)
-- GDPR-K (儿童数据保护)
-- ESRB Rating System (娱乐软件分级)
+### Content Safety
+- COPPA (Children's Online Privacy Protection Act)
+- GDPR-K (Children's Data Protection)
+- ESRB Rating System (Entertainment Software Rating)
 
 ### AI Agent
 - [Claude Agent SDK Documentation](https://docs.anthropic.com/agent-sdk)

@@ -1,39 +1,39 @@
-# Health Check API (健康检查)
+# Health Check API
 
-> 服务健康状态检查的 API 端点
+> API endpoints for service health status monitoring
 
-## 概述
+## Overview
 
-Health Check API 提供服务状态监控功能，用于检查 API 服务及其依赖组件的运行状态。
+The Health Check API provides service status monitoring functionality, used to check the operational status of the API service and its dependent components.
 
 **Base URL:** `/`
 
 ---
 
-## 端点列表
+## Endpoint List
 
-| 方法 | 端点 | 描述 |
-|------|------|------|
-| GET | `/` | 根路径健康检查 |
-| GET | `/health` | 详细健康检查 |
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/` | Root path health check |
+| GET | `/health` | Detailed health check |
 
 ---
 
-## 1. 根路径健康检查
+## 1. Root Path Health Check
 
 ### `GET /`
 
-快速检查服务是否运行。
+Quickly check whether the service is running.
 
-#### 请求示例
+#### Request Example
 
 ```bash
 curl "http://localhost:8000/"
 ```
 
-#### 响应格式
+#### Response Format
 
-**状态码:** `200 OK`
+**Status Code:** `200 OK`
 
 ```json
 {
@@ -49,21 +49,21 @@ curl "http://localhost:8000/"
 
 ---
 
-## 2. 详细健康检查
+## 2. Detailed Health Check
 
 ### `GET /health`
 
-检查服务及所有依赖组件的状态。
+Check the status of the service and all dependent components.
 
-#### 请求示例
+#### Request Example
 
 ```bash
 curl "http://localhost:8000/health"
 ```
 
-#### 响应格式
+#### Response Format
 
-**状态码:** `200 OK`
+**Status Code:** `200 OK`
 
 ```json
 {
@@ -78,9 +78,9 @@ curl "http://localhost:8000/health"
 }
 ```
 
-#### 降级状态
+#### Degraded State
 
-当某些组件出现问题时：
+When certain components encounter issues:
 
 ```json
 {
@@ -97,42 +97,42 @@ curl "http://localhost:8000/health"
 
 ---
 
-## 状态说明
+## Status Descriptions
 
-### 整体状态 (status)
+### Overall Status (status)
 
-| 状态 | 描述 |
-|------|------|
-| `healthy` | 所有服务正常运行 |
-| `degraded` | 部分服务异常，核心功能可用 |
+| Status | Description |
+|--------|-------------|
+| `healthy` | All services are running normally |
+| `degraded` | Some services are abnormal, but core functionality is available |
 
-### 服务状态 (services)
+### Service Status (services)
 
-| 服务 | 状态值 | 描述 |
-|------|--------|------|
-| `api` | `running` | API 服务正在运行 |
-| `session_manager` | `running` | 会话管理器正常 |
-| `session_manager` | `degraded` | 会话目录不可访问 |
-| `environment` | `configured` | 环境变量已配置 |
-| `environment` | `missing_keys` | 缺少必需的环境变量 |
-
----
-
-## 必需的环境变量
-
-| 变量名 | 描述 |
-|--------|------|
-| `ANTHROPIC_API_KEY` | Anthropic API 密钥 |
-| `OPENAI_API_KEY` | OpenAI API 密钥（用于 TTS） |
+| Service | Status Value | Description |
+|---------|-------------|-------------|
+| `api` | `running` | API service is running |
+| `session_manager` | `running` | Session manager is healthy |
+| `session_manager` | `degraded` | Session directory is inaccessible |
+| `environment` | `configured` | Environment variables are configured |
+| `environment` | `missing_keys` | Required environment variables are missing |
 
 ---
 
-## 使用场景
+## Required Environment Variables
 
-### 负载均衡器健康检查
+| Variable | Description |
+|----------|-------------|
+| `ANTHROPIC_API_KEY` | Anthropic API key |
+| `OPENAI_API_KEY` | OpenAI API key (for TTS) |
+
+---
+
+## Use Cases
+
+### Load Balancer Health Check
 
 ```nginx
-# Nginx 配置示例
+# Nginx configuration example
 upstream backend {
     server localhost:8000;
 }
@@ -147,7 +147,7 @@ server {
 ### Kubernetes Liveness/Readiness Probe
 
 ```yaml
-# Kubernetes 配置示例
+# Kubernetes configuration example
 apiVersion: v1
 kind: Pod
 spec:
@@ -183,9 +183,9 @@ services:
 
 ---
 
-## 监控示例
+## Monitoring Examples
 
-### Python 健康检查脚本
+### Python Health Check Script
 
 ```python
 import requests
@@ -197,21 +197,21 @@ def check_health():
         data = response.json()
 
         if data["status"] == "healthy":
-            print("✅ Service is healthy")
+            print("Service is healthy")
             return 0
         else:
-            print(f"⚠️ Service is degraded: {data['services']}")
+            print(f"Service is degraded: {data['services']}")
             return 1
 
     except requests.exceptions.RequestException as e:
-        print(f"❌ Service is down: {e}")
+        print(f"Service is down: {e}")
         return 2
 
 if __name__ == "__main__":
     sys.exit(check_health())
 ```
 
-### Shell 健康检查
+### Shell Health Check
 
 ```bash
 #!/bin/bash

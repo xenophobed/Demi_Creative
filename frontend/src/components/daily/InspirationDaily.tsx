@@ -244,29 +244,117 @@ export default function InspirationDaily({
   if (!isAuthenticated) {
     return (
       <div
-        className={`relative overflow-hidden rounded-card ${className}`}
-        style={{ background: "#f4f4f5", color: "#3f3f46" }}
+        className={`relative overflow-hidden rounded-card border border-[#f2d2b7] shadow-[0_12px_28px_rgba(255,158,102,0.18)] ${className}`}
+        style={{
+          background:
+            "linear-gradient(145deg, #fffaf2 0%, #fff3f6 45%, #eef9ff 100%)",
+          color: "#5a3f2d",
+        }}
       >
-        <div className="px-5 py-6 text-center">
-          <span className="text-4xl">🔒</span>
+        <div
+          className="absolute inset-0 pointer-events-none opacity-[0.08]"
+          style={{
+            backgroundImage:
+              "radial-gradient(circle at 12px 12px, rgba(255, 179, 138, 0.35) 2px, transparent 2px)",
+            backgroundSize: "22px 22px",
+          }}
+        />
+        <div className="absolute -top-10 -right-8 h-28 w-28 rounded-full bg-[#ffd9c2] blur-2xl" />
+        <div className="absolute -bottom-12 -left-10 h-32 w-32 rounded-full bg-[#cfeeff] blur-2xl" />
+
+        <div className="relative p-5 sm:p-6">
+          <div className="flex items-center justify-center gap-2">
+            <span className="inline-flex items-center rounded-full border border-[#efc7a7] bg-white/80 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#9b6840]">
+              Kawaii Daily Reward
+            </span>
+          </div>
+
+          <div className="mt-3 flex justify-center gap-2 text-xl">
+            <motion.span
+              animate={{ y: [0, -3, 0], rotate: [0, 8, -8, 0] }}
+              transition={{
+                duration: 3.2,
+                repeat: Infinity,
+                ease: "easeInOut",
+              }}
+            >
+              🐰
+            </motion.span>
+            <motion.span
+              animate={{ y: [0, -3, 0], rotate: [0, -8, 8, 0] }}
+              transition={{
+                duration: 3.2,
+                repeat: Infinity,
+                ease: "easeInOut",
+                delay: 0.4,
+              }}
+            >
+              ⭐
+            </motion.span>
+            <motion.span
+              animate={{ y: [0, -3, 0], rotate: [0, 8, -8, 0] }}
+              transition={{
+                duration: 3.2,
+                repeat: Infinity,
+                ease: "easeInOut",
+                delay: 0.8,
+              }}
+            >
+              🍓
+            </motion.span>
+          </div>
+
           <h3
-            className="mt-2 text-lg font-semibold tracking-wide"
+            className="mt-3 text-center text-2xl sm:text-3xl font-black tracking-wide"
             style={{ fontFamily: serif }}
           >
             Daily Reward Locked
           </h3>
           <p
-            className="mt-1 text-sm text-gray-600"
+            className="mt-1 text-center text-[11px] text-[#8b6a52]"
             style={{ fontFamily: serif }}
           >
-            Please log in first. Only logged-in users can claim daily rewards.
+            Edition {edition} · {dateStr}
           </p>
-          <Link
-            to="/login"
-            className="inline-block mt-3 px-3 py-1.5 rounded-full text-xs font-semibold bg-primary text-white hover:opacity-90 transition-opacity"
-          >
-            Log In
-          </Link>
+
+          <div className="mt-4 rounded-2xl border border-[#efc7a7] bg-white/85 px-4 py-4 text-center shadow-sm">
+            <div className="mx-auto inline-flex h-14 w-14 items-center justify-center rounded-full border-2 border-[#f2c7a2] bg-[#fff5ea] shadow-inner">
+              <span className="text-3xl">🔒</span>
+            </div>
+            <p
+              className="mt-2 text-sm leading-relaxed text-[#775a45]"
+              style={{ fontFamily: serif }}
+            >
+              Please log in first. Only logged-in users can claim daily rewards.
+            </p>
+          </div>
+
+          <div className="mt-3 grid grid-cols-3 gap-2 text-[11px]">
+            <div className="rounded-xl border border-[#f0cfb4] bg-[#fff7ef] py-1.5 text-center text-[#7d5b42]">
+              1 star/day
+            </div>
+            <div className="rounded-xl border border-[#f0cfb4] bg-[#fff7ef] py-1.5 text-center text-[#7d5b42]">
+              Streak bonus
+            </div>
+            <div className="rounded-xl border border-[#f0cfb4] bg-[#fff7ef] py-1.5 text-center text-[#7d5b42]">
+              Profile bonus
+            </div>
+          </div>
+
+          <div className="mt-4 flex justify-center">
+            <motion.div
+              whileHover={{ scale: 1.03, y: -1 }}
+              whileTap={{ scale: 0.98 }}
+            >
+              <Link
+                to="/login"
+                className="inline-flex items-center gap-1.5 rounded-full border border-[#e9b995] bg-gradient-to-r from-[#ffb58b] to-[#ff8f8f] px-4 py-2 text-xs font-semibold text-white shadow-[0_4px_10px_rgba(255,143,143,0.35)] hover:opacity-90 transition-opacity"
+              >
+                <span>✨</span>
+                <span>Log In to Claim</span>
+              </Link>
+            </motion.div>
+          </div>
         </div>
       </div>
     );

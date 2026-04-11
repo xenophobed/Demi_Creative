@@ -1,7 +1,7 @@
 """
 MCP Tools Contract Tests
 
-测试 MCP Tools 的输入输出契约，确保工具符合规范。
+Tests the input/output contracts of MCP Tools, ensuring tools conform to specification.
 """
 
 import pytest
@@ -19,12 +19,12 @@ def _call_tool(tool_ref, args):
 
 
 class TestVisionAnalysisContract:
-    """Vision Analysis MCP Tool 契约测试"""
+    """Vision Analysis MCP Tool contract tests"""
 
     @pytest.fixture
     def sample_drawing_path(self, tmp_path):
-        """创建测试用的儿童画作"""
-        # 创建一个简单的测试图片
+        """Create a test children's drawing"""
+        # Create a simple test image
         img = Image.new('RGB', (400, 300), color='lightblue')
         img_path = tmp_path / "test_drawing.png"
         img.save(img_path)
@@ -32,63 +32,63 @@ class TestVisionAnalysisContract:
 
     @pytest.mark.asyncio
     async def test_analyze_children_drawing_contract(self, sample_drawing_path):
-        """测试 analyze_children_drawing 工具的输入输出契约"""
+        """Test the input/output contract of analyze_children_drawing tool"""
         from backend.src.mcp_servers.vision_analysis_server import analyze_children_drawing
 
-        # 准备输入
+        # Prepare input
         input_data = {
             "image_path": sample_drawing_path,
             "child_age": 7
         }
 
-        # 调用工具
+        # Call tool
         result = await _call_tool(analyze_children_drawing, input_data)
 
-        # 验证输出格式
-        assert "content" in result, "输出必须包含 content 字段"
-        assert isinstance(result["content"], list), "content 必须是列表"
-        assert len(result["content"]) > 0, "content 不能为空"
+        # Verify output format
+        assert "content" in result, "Output must contain content field"
+        assert isinstance(result["content"], list), "content must be a list"
+        assert len(result["content"]) > 0, "content must not be empty"
 
-        # 验证内容格式
+        # Verify content format
         content_item = result["content"][0]
-        assert "type" in content_item, "content 项必须包含 type 字段"
-        assert content_item["type"] == "text", "content 类型必须是 text"
-        assert "text" in content_item, "content 项必须包含 text 字段"
+        assert "type" in content_item, "content item must contain type field"
+        assert content_item["type"] == "text", "content type must be text"
+        assert "text" in content_item, "content item must contain text field"
 
-        # 解析 JSON 响应
+        # Parse JSON response
         data = json.loads(content_item["text"])
 
-        # 验证必需字段存在
-        assert "objects" in data, "输出必须包含 objects 字段"
-        assert "scene" in data, "输出必须包含 scene 字段"
-        assert "mood" in data, "输出必须包含 mood 字段"
-        assert "confidence_score" in data, "输出必须包含 confidence_score 字段"
+        # Verify required fields exist
+        assert "objects" in data, "Output must contain objects field"
+        assert "scene" in data, "Output must contain scene field"
+        assert "mood" in data, "Output must contain mood field"
+        assert "confidence_score" in data, "Output must contain confidence_score field"
 
-        # 验证字段类型
-        assert isinstance(data["objects"], list), "objects 必须是列表"
-        assert isinstance(data["scene"], str), "scene 必须是字符串"
-        assert isinstance(data["mood"], str), "mood 必须是字符串"
-        assert isinstance(data["confidence_score"], (int, float)), "confidence_score 必须是数字"
+        # Verify field types
+        assert isinstance(data["objects"], list), "objects must be a list"
+        assert isinstance(data["scene"], str), "scene must be a string"
+        assert isinstance(data["mood"], str), "mood must be a string"
+        assert isinstance(data["confidence_score"], (int, float)), "confidence_score must be a number"
 
-        # 验证值范围
-        assert 0.0 <= data["confidence_score"] <= 1.0, "confidence_score 必须在 0.0-1.0 之间"
+        # Verify value ranges
+        assert 0.0 <= data["confidence_score"] <= 1.0, "confidence_score must be between 0.0 and 1.0"
 
-        # 验证可选字段存在且类型正确
+        # Verify optional fields exist and have correct types
         if "colors" in data:
-            assert isinstance(data["colors"], list), "colors 必须是列表"
+            assert isinstance(data["colors"], list), "colors must be a list"
 
         if "recurring_characters" in data:
-            assert isinstance(data["recurring_characters"], list), "recurring_characters 必须是列表"
+            assert isinstance(data["recurring_characters"], list), "recurring_characters must be a list"
             for char in data["recurring_characters"]:
-                assert isinstance(char, dict), "每个角色必须是字典"
+                assert isinstance(char, dict), "Each character must be a dict"
                 if "name" in char:
-                    assert isinstance(char["name"], str), "角色名称必须是字符串"
+                    assert isinstance(char["name"], str), "Character name must be a string"
                 if "description" in char:
-                    assert isinstance(char["description"], str), "角色描述必须是字符串"
+                    assert isinstance(char["description"], str), "Character description must be a string"
 
     @pytest.mark.asyncio
     async def test_analyze_children_drawing_age_range(self, sample_drawing_path):
-        """测试不同年龄段的输入"""
+        """Test input for different age groups"""
         from backend.src.mcp_servers.vision_analysis_server import analyze_children_drawing
 
         ages = [3, 5, 7, 9, 12]
@@ -101,12 +101,12 @@ class TestVisionAnalysisContract:
             result = await _call_tool(analyze_children_drawing, input_data)
             data = json.loads(result["content"][0]["text"])
 
-            assert "objects" in data, f"年龄 {age} 的输出必须包含 objects"
-            assert isinstance(data["objects"], list), f"年龄 {age} 的 objects 必须是列表"
+            assert "objects" in data, f"Output for age {age} must contain objects"
+            assert isinstance(data["objects"], list), f"objects for age {age} must be a list"
 
     @pytest.mark.asyncio
     async def test_analyze_children_drawing_invalid_path(self):
-        """测试无效图片路径的错误处理"""
+        """Test error handling for invalid image path"""
         from backend.src.mcp_servers.vision_analysis_server import analyze_children_drawing
 
         input_data = {
@@ -117,21 +117,21 @@ class TestVisionAnalysisContract:
         result = await _call_tool(analyze_children_drawing, input_data)
         data = json.loads(result["content"][0]["text"])
 
-        # 应该返回错误信息
-        assert "error" in data, "无效路径应该返回错误"
+        # Should return an error message
+        assert "error" in data, "Invalid path should return an error"
 
     @pytest.mark.asyncio
     async def test_analyze_children_drawing_required_fields(self, sample_drawing_path):
-        """测试必需字段验证"""
+        """Test required field validation"""
         from backend.src.mcp_servers.vision_analysis_server import analyze_children_drawing
 
-        # 测试缺少 child_age
+        # Test missing child_age
         with pytest.raises(KeyError):
             await _call_tool(analyze_children_drawing, {
                 "image_path": sample_drawing_path
             })
 
-        # 测试缺少 image_path
+        # Test missing image_path
         with pytest.raises(KeyError):
             await _call_tool(analyze_children_drawing, {
                 "child_age": 7
@@ -139,7 +139,7 @@ class TestVisionAnalysisContract:
 
 
 class TestVectorSearchContract:
-    """Vector Search MCP Tool 契约测试"""
+    """Vector Search MCP Tool contract tests"""
 
     @pytest.fixture
     def chroma_tmp_dir(self, tmp_path, monkeypatch):
@@ -151,7 +151,7 @@ class TestVectorSearchContract:
 
     @pytest.mark.asyncio
     async def test_store_drawing_embedding_contract(self, chroma_tmp_dir):
-        """测试 store_drawing_embedding 工具的输入输出契约"""
+        """Test the input/output contract of store_drawing_embedding tool"""
         from backend.src.mcp_servers.vector_search_server import store_drawing_embedding
 
         result = await _call_tool(store_drawing_embedding, {
@@ -165,7 +165,7 @@ class TestVectorSearchContract:
             },
         })
 
-        # 验证 MCP 响应信封格式
+        # Verify MCP response envelope format
         assert "content" in result
         assert isinstance(result["content"], list)
         assert result["content"][0]["type"] == "text"
@@ -177,7 +177,7 @@ class TestVectorSearchContract:
 
     @pytest.mark.asyncio
     async def test_search_similar_drawings_contract(self, chroma_tmp_dir):
-        """测试 search_similar_drawings 工具的输入输出契约"""
+        """Test the input/output contract of search_similar_drawings tool"""
         from backend.src.mcp_servers.vector_search_server import search_similar_drawings
 
         result = await _call_tool(search_similar_drawings, {
@@ -186,7 +186,7 @@ class TestVectorSearchContract:
             "top_k": 3,
         })
 
-        # 验证 MCP 响应信封格式
+        # Verify MCP response envelope format
         assert "content" in result
         assert isinstance(result["content"], list)
         assert result["content"][0]["type"] == "text"
@@ -199,11 +199,11 @@ class TestVectorSearchContract:
 
 
 class TestSafetyCheckContract:
-    """Safety Check MCP Tool 契约测试"""
+    """Safety Check MCP Tool contract tests"""
 
     @pytest.mark.asyncio
     async def test_check_content_safety_contract(self):
-        """测试 check_content_safety 工具的输入输出契约 — uses real Anthropic API"""
+        """Test the input/output contract of check_content_safety tool — uses real Anthropic API"""
         anthropic_key = os.getenv("ANTHROPIC_API_KEY")
         if not anthropic_key:
             pytest.skip("ANTHROPIC_API_KEY not set")
@@ -216,7 +216,7 @@ class TestSafetyCheckContract:
             "target_age": 5,
         })
 
-        # 验证 MCP 响应信封格式
+        # Verify MCP response envelope format
         assert "content" in result
         assert isinstance(result["content"], list)
         assert result["content"][0]["type"] == "text"
@@ -232,11 +232,11 @@ class TestSafetyCheckContract:
 
 
 class TestTTSGenerationContract:
-    """TTS Generation MCP Tool 契约测试"""
+    """TTS Generation MCP Tool contract tests"""
 
     @pytest.mark.asyncio
     async def test_generate_story_audio_contract(self, tmp_path, monkeypatch):
-        """测试 generate_story_audio 工具的输入输出契约 — uses real OpenAI API"""
+        """Test the input/output contract of generate_story_audio tool — uses real OpenAI API"""
         openai_key = os.getenv("OPENAI_API_KEY")
         if not openai_key:
             pytest.skip("OPENAI_API_KEY not set")
@@ -250,7 +250,7 @@ class TestTTSGenerationContract:
             "voice": "nova",
         })
 
-        # 验证 MCP 响应信封格式
+        # Verify MCP response envelope format
         assert "content" in result
         assert isinstance(result["content"], list)
         assert result["content"][0]["type"] == "text"
@@ -262,7 +262,7 @@ class TestTTSGenerationContract:
 
     @pytest.mark.asyncio
     async def test_list_available_voices_contract(self):
-        """测试 list_available_voices 工具的输入输出契约 — no API key needed"""
+        """Test the input/output contract of list_available_voices tool — no API key needed"""
         from backend.src.mcp_servers.tts_generator_server import list_available_voices
 
         result = await _call_tool(list_available_voices, {})

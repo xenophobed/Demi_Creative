@@ -1,141 +1,141 @@
-# Image to Story API (画作转故事)
+# Image to Story API
 
-> 将儿童画作转化为个性化故事的 API 服务
+> API service for transforming children's drawings into personalized stories
 
-## 概述
+## Overview
 
-Image to Story API 允许用户上传儿童画作，AI Agent 会分析画作内容并生成适合儿童年龄的个性化故事。
+The Image to Story API allows users to upload children's drawings. An AI Agent analyzes the drawing content and generates a personalized story appropriate for the child's age group.
 
 **Base URL:** `/api/v1`
 
 ---
 
-## 端点列表
+## Endpoint List
 
-| 方法 | 端点 | 描述 |
-|------|------|------|
-| POST | `/image-to-story` | 上传画作并生成故事 |
-| GET | `/stories/{story_id}` | 获取故事详情 |
-| GET | `/stories` | 列出所有故事 |
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/image-to-story` | Upload a drawing and generate a story |
+| GET | `/stories/{story_id}` | Get story details |
+| GET | `/stories` | List all stories |
 
 ---
 
-## 1. 画作转故事
+## 1. Image to Story
 
 ### `POST /api/v1/image-to-story`
 
-上传儿童画作，AI 生成个性化故事。
+Upload a child's drawing and have AI generate a personalized story.
 
-#### 请求格式
+#### Request Format
 
 **Content-Type:** `multipart/form-data`
 
-| 参数 | 类型 | 必填 | 描述 |
-|------|------|------|------|
-| `image` | File | 是 | 儿童画作图片（PNG/JPG/WEBP，最大10MB） |
-| `child_id` | string | 是 | 儿童唯一标识符 |
-| `age_group` | string | 是 | 年龄组：`3-5`, `6-8`, `9-12` |
-| `interests` | string | 否 | 兴趣标签，用逗号分隔（最多5个） |
-| `voice` | string | 否 | 语音类型，默认 `nova` |
-| `enable_audio` | boolean | 否 | 是否生成语音，默认 `true` |
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `image` | File | Yes | Child's drawing image (PNG/JPG/WEBP, max 10MB) |
+| `child_id` | string | Yes | Child's unique identifier |
+| `age_group` | string | Yes | Age group: `3-5`, `6-8`, `9-12` |
+| `interests` | string | No | Interest tags, comma-separated (max 5) |
+| `voice` | string | No | Voice type, default `nova` |
+| `enable_audio` | boolean | No | Whether to generate audio, default `true` |
 
-#### 语音类型
+#### Voice Types
 
-| 值 | 描述 |
-|------|------|
-| `nova` | 温柔女性 |
-| `shimmer` | 活泼女性 |
-| `alloy` | 中性 |
-| `echo` | 男性 |
-| `fable` | 故事讲述者 |
-| `onyx` | 深沉男性 |
+| Value | Description |
+|-------|-------------|
+| `nova` | Gentle female |
+| `shimmer` | Lively female |
+| `alloy` | Neutral |
+| `echo` | Male |
+| `fable` | Storyteller |
+| `onyx` | Deep male |
 
-#### 请求示例
+#### Request Example
 
 ```bash
 curl -X POST "http://localhost:8000/api/v1/image-to-story" \
   -F "image=@drawing.png" \
   -F "child_id=child_001" \
   -F "age_group=6-8" \
-  -F "interests=动物,冒险,太空" \
+  -F "interests=animals,adventure,space" \
   -F "voice=nova" \
   -F "enable_audio=true"
 ```
 
-#### 响应格式
+#### Response Format
 
-**状态码:** `201 Created`
+**Status Code:** `201 Created`
 
 ```json
 {
   "story_id": "550e8400-e29b-41d4-a716-446655440000",
   "story": {
-    "text": "在一个阳光明媚的早晨，小兔子发现了一片神奇的花园...",
+    "text": "On a bright sunny morning, Little Rabbit discovered a magical garden...",
     "word_count": 285,
     "age_adapted": true
   },
   "audio_url": "/data/audio/550e8400-e29b-41d4-a716-446655440000.mp3",
   "educational_value": {
-    "themes": ["友谊", "勇气"],
-    "concepts": ["颜色", "大自然"],
-    "moral": "帮助朋友是一件快乐的事情"
+    "themes": ["friendship", "courage"],
+    "concepts": ["colors", "nature"],
+    "moral": "Helping friends is a joyful thing to do"
   },
   "characters": [
     {
-      "character_name": "小兔子",
-      "description": "一只可爱的白色小兔子",
+      "character_name": "Little Rabbit",
+      "description": "A cute white little rabbit",
       "appearances": 1
     }
   ],
   "analysis": {
-    "detected_objects": ["兔子", "花园", "太阳"],
-    "emotions": ["快乐", "好奇"],
-    "colors": ["绿色", "粉色", "黄色"]
+    "detected_objects": ["rabbit", "garden", "sun"],
+    "emotions": ["happy", "curious"],
+    "colors": ["green", "pink", "yellow"]
   },
   "safety_score": 0.95,
   "created_at": "2026-01-31T10:30:00"
 }
 ```
 
-#### 错误响应
+#### Error Responses
 
-| 状态码 | 描述 |
-|--------|------|
-| 400 | 请求参数错误（文件格式不支持、兴趣标签过多等） |
-| 413 | 文件大小超过限制（10MB） |
-| 500 | 服务器内部错误 |
+| Status Code | Description |
+|-------------|-------------|
+| 400 | Invalid request parameters (unsupported file format, too many interest tags, etc.) |
+| 413 | File size exceeds limit (10MB) |
+| 500 | Internal server error |
 
 ```json
 {
   "error": "ValidationError",
-  "message": "不支持的文件格式。允许的格式: .jpg, .jpeg, .png, .webp",
+  "message": "Unsupported file format. Allowed formats: .jpg, .jpeg, .png, .webp",
   "timestamp": "2026-01-31T10:30:00"
 }
 ```
 
 ---
 
-## 2. 获取故事详情
+## 2. Get Story Details
 
 ### `GET /api/v1/stories/{story_id}`
 
-根据故事 ID 获取已生成的故事详情。
+Retrieve details of a previously generated story by its ID.
 
-#### 路径参数
+#### Path Parameters
 
-| 参数 | 类型 | 描述 |
-|------|------|------|
-| `story_id` | string | 故事唯一标识符 |
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `story_id` | string | Story unique identifier |
 
-#### 请求示例
+#### Request Example
 
 ```bash
 curl "http://localhost:8000/api/v1/stories/550e8400-e29b-41d4-a716-446655440000"
 ```
 
-#### 响应格式
+#### Response Format
 
-**状态码:** `200 OK`
+**Status Code:** `200 OK`
 
 ```json
 {
@@ -143,15 +143,15 @@ curl "http://localhost:8000/api/v1/stories/550e8400-e29b-41d4-a716-446655440000"
   "child_id": "child_001",
   "age_group": "6-8",
   "story": {
-    "text": "在一个阳光明媚的早晨...",
+    "text": "On a bright sunny morning...",
     "word_count": 285,
     "age_adapted": true
   },
   "audio_url": "/data/audio/550e8400-e29b-41d4-a716-446655440000.mp3",
   "educational_value": {
-    "themes": ["友谊", "勇气"],
-    "concepts": ["颜色", "大自然"],
-    "moral": "帮助朋友是一件快乐的事情"
+    "themes": ["friendship", "courage"],
+    "concepts": ["colors", "nature"],
+    "moral": "Helping friends is a joyful thing to do"
   },
   "characters": [...],
   "analysis": {...},
@@ -162,40 +162,40 @@ curl "http://localhost:8000/api/v1/stories/550e8400-e29b-41d4-a716-446655440000"
 }
 ```
 
-#### 错误响应
+#### Error Responses
 
-| 状态码 | 描述 |
-|--------|------|
-| 404 | 故事不存在 |
+| Status Code | Description |
+|-------------|-------------|
+| 404 | Story not found |
 
 ---
 
-## 3. 列出所有故事
+## 3. List All Stories
 
 ### `GET /api/v1/stories`
 
-获取所有已生成故事的列表。
+Retrieve a list of all generated stories.
 
-#### 查询参数
+#### Query Parameters
 
-| 参数 | 类型 | 必填 | 描述 |
-|------|------|------|------|
-| `child_id` | string | 否 | 按儿童 ID 筛选 |
-| `limit` | integer | 否 | 返回数量限制，默认 20 |
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `child_id` | string | No | Filter by child ID |
+| `limit` | integer | No | Limit number of results, default 20 |
 
-#### 请求示例
+#### Request Example
 
 ```bash
-# 获取所有故事
+# Get all stories
 curl "http://localhost:8000/api/v1/stories"
 
-# 按儿童 ID 筛选
+# Filter by child ID
 curl "http://localhost:8000/api/v1/stories?child_id=child_001&limit=10"
 ```
 
-#### 响应格式
+#### Response Format
 
-**状态码:** `200 OK`
+**Status Code:** `200 OK`
 
 ```json
 {
@@ -221,32 +221,32 @@ curl "http://localhost:8000/api/v1/stories?child_id=child_001&limit=10"
 
 ---
 
-## 年龄适配
+## Age Adaptation
 
-根据年龄组，生成的故事会自动调整：
+Generated stories are automatically adjusted based on the age group:
 
-| 年龄组 | 字数范围 | 句子长度 | 词汇水平 |
-|--------|----------|----------|----------|
-| 3-5岁 | 100-200字 | 5-10字 | 基础日常词汇 |
-| 6-8岁 | 200-400字 | 10-15字 | 小学低年级词汇 |
-| 9-12岁 | 400-800字 | 15-25字 | 小学高年级词汇 |
-
----
-
-## 安全审查
-
-所有生成的故事都会经过安全审查：
-
-- **安全评分范围:** 0.0 - 1.0
-- **通过标准:** >= 0.85
-- **审查内容:**
-  - 过滤暴力、恐怖、不当语言
-  - 确保性别平等、文化多样性
-  - 融入品德教育元素
+| Age Group | Word Count Range | Sentence Length | Vocabulary Level |
+|-----------|-----------------|-----------------|------------------|
+| 3-5 years | 100-200 words | 5-10 words | Basic everyday vocabulary |
+| 6-8 years | 200-400 words | 10-15 words | Lower elementary vocabulary |
+| 9-12 years | 400-800 words | 15-25 words | Upper elementary vocabulary |
 
 ---
 
-## 使用示例
+## Content Safety Review
+
+All generated stories undergo safety review:
+
+- **Safety score range:** 0.0 - 1.0
+- **Passing threshold:** >= 0.85
+- **Review criteria:**
+  - Filter violence, horror, inappropriate language
+  - Ensure gender equality and cultural diversity
+  - Integrate character education elements
+
+---
+
+## Usage Examples
 
 ### Python
 
@@ -262,7 +262,7 @@ files = {
 data = {
     "child_id": "child_001",
     "age_group": "6-8",
-    "interests": "动物,冒险",
+    "interests": "animals,adventure",
     "voice": "fable",
     "enable_audio": "true"
 }
@@ -270,8 +270,8 @@ data = {
 response = requests.post(url, files=files, data=data)
 result = response.json()
 
-print(f"故事标题: {result['story']['text'][:50]}...")
-print(f"教育主题: {result['educational_value']['themes']}")
+print(f"Story preview: {result['story']['text'][:50]}...")
+print(f"Educational themes: {result['educational_value']['themes']}")
 ```
 
 ### JavaScript
@@ -281,7 +281,7 @@ const formData = new FormData();
 formData.append('image', fileInput.files[0]);
 formData.append('child_id', 'child_001');
 formData.append('age_group', '6-8');
-formData.append('interests', '动物,冒险');
+formData.append('interests', 'animals,adventure');
 
 const response = await fetch('http://localhost:8000/api/v1/image-to-story', {
   method: 'POST',
@@ -289,5 +289,5 @@ const response = await fetch('http://localhost:8000/api/v1/image-to-story', {
 });
 
 const result = await response.json();
-console.log('故事:', result.story.text);
+console.log('Story:', result.story.text);
 ```

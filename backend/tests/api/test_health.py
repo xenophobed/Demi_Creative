@@ -1,7 +1,7 @@
 """
 Tests for Health Check API
 
-健康检查 API 测试
+Health check API tests
 """
 
 import pytest
@@ -12,10 +12,10 @@ from backend.src.main import app
 
 @pytest.mark.asyncio
 class TestHealthCheck:
-    """健康检查测试"""
+    """Health check tests"""
 
     async def test_root_endpoint(self):
-        """测试根路径"""
+        """Test root path"""
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             response = await client.get("/")
 
@@ -31,7 +31,7 @@ class TestHealthCheck:
             assert result["version"] == "1.0.0"
 
     async def test_health_endpoint(self):
-        """测试健康检查端点"""
+        """Test health check endpoint"""
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             response = await client.get("/health")
 
@@ -51,7 +51,7 @@ class TestHealthCheck:
             assert services["api"] == "running"
 
     async def test_health_status_values(self):
-        """测试健康状态值"""
+        """Test health status values"""
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             response = await client.get("/health")
 
@@ -75,10 +75,10 @@ class TestHealthCheck:
 
 @pytest.mark.asyncio
 class TestAPIDocumentation:
-    """API 文档测试"""
+    """API documentation tests"""
 
     async def test_openapi_json(self):
-        """测试 OpenAPI JSON 可访问"""
+        """Test OpenAPI JSON is accessible"""
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             response = await client.get("/api/openapi.json")
 
@@ -93,7 +93,7 @@ class TestAPIDocumentation:
             assert openapi_spec["info"]["version"] == "1.0.0"
 
     async def test_swagger_ui_accessible(self):
-        """测试 Swagger UI 可访问"""
+        """Test Swagger UI is accessible"""
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             response = await client.get("/api/docs")
 
@@ -101,7 +101,7 @@ class TestAPIDocumentation:
             assert "text/html" in response.headers["content-type"]
 
     async def test_redoc_accessible(self):
-        """测试 ReDoc 可访问"""
+        """Test ReDoc is accessible"""
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             response = await client.get("/api/redoc")
 

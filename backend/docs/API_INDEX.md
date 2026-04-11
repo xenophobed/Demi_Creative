@@ -1,62 +1,62 @@
 # Creative Agent API Documentation
 
-> 儿童创意工坊 API 文档索引
+> Kids Creative Workshop API Documentation Index
 
-## 概述
+## Overview
 
-Creative Agent API 是一个基于 AI Agent 的创意内容生成平台，为 3-12 岁儿童提供安全、有趣、富有教育意义的内容创作服务。
+The Creative Agent API is an AI Agent-powered creative content generation platform that provides safe, engaging, and educational content creation services for children aged 3-12.
 
-**API 版本:** 1.0.0
+**API Version:** 1.0.0
 **Base URL:** `http://localhost:8000`
 
 ---
 
-## API 文档列表
+## API Documentation Index
 
-| 文档 | 描述 |
-|------|------|
-| [API_IMAGE_TO_STORY.md](API_IMAGE_TO_STORY.md) | 画作转故事 API |
-| [API_INTERACTIVE_STORY.md](API_INTERACTIVE_STORY.md) | 互动故事 API |
-| [API_HEALTH_CHECK.md](API_HEALTH_CHECK.md) | 健康检查 API |
-
----
-
-## 快速参考
-
-### 画作转故事
-
-| 方法 | 端点 | 描述 |
-|------|------|------|
-| POST | `/api/v1/image-to-story` | 上传画作生成故事 |
-| GET | `/api/v1/stories/{story_id}` | 获取故事详情 |
-| GET | `/api/v1/stories` | 列出所有故事 |
-
-### 互动故事
-
-| 方法 | 端点 | 描述 |
-|------|------|------|
-| POST | `/api/v1/story/interactive/start` | 开始互动故事 |
-| POST | `/api/v1/story/interactive/{session_id}/choose` | 选择分支 |
-| GET | `/api/v1/story/interactive/{session_id}/status` | 获取会话状态 |
-
-### 健康检查
-
-| 方法 | 端点 | 描述 |
-|------|------|------|
-| GET | `/` | 快速健康检查 |
-| GET | `/health` | 详细健康检查 |
+| Document | Description |
+|----------|-------------|
+| [API_IMAGE_TO_STORY.md](API_IMAGE_TO_STORY.md) | Image to Story API |
+| [API_INTERACTIVE_STORY.md](API_INTERACTIVE_STORY.md) | Interactive Story API |
+| [API_HEALTH_CHECK.md](API_HEALTH_CHECK.md) | Health Check API |
 
 ---
 
-## 认证
+## Quick Reference
 
-当前版本 API 无需认证。生产环境部署时应添加适当的认证机制。
+### Image to Story
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/v1/image-to-story` | Upload a drawing and generate a story |
+| GET | `/api/v1/stories/{story_id}` | Get story details |
+| GET | `/api/v1/stories` | List all stories |
+
+### Interactive Story
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/v1/story/interactive/start` | Start an interactive story |
+| POST | `/api/v1/story/interactive/{session_id}/choose` | Choose a branch |
+| GET | `/api/v1/story/interactive/{session_id}/status` | Get session status |
+
+### Health Check
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/` | Quick health check |
+| GET | `/health` | Detailed health check |
 
 ---
 
-## 通用响应格式
+## Authentication
 
-### 成功响应
+The current API version does not require authentication. Appropriate authentication mechanisms should be added for production deployments.
+
+---
+
+## Common Response Format
+
+### Success Response
 
 ```json
 {
@@ -66,101 +66,101 @@ Creative Agent API 是一个基于 AI Agent 的创意内容生成平台，为 3-
 }
 ```
 
-### 错误响应
+### Error Response
 
 ```json
 {
   "error": "ErrorType",
-  "message": "错误描述",
+  "message": "Error description",
   "details": [...],
   "timestamp": "2026-01-31T10:30:00"
 }
 ```
 
-### HTTP 状态码
+### HTTP Status Codes
 
-| 状态码 | 描述 |
-|--------|------|
-| 200 | 成功 |
-| 201 | 创建成功 |
-| 400 | 请求参数错误 |
-| 404 | 资源不存在 |
-| 413 | 请求体过大 |
-| 422 | 请求验证失败 |
-| 500 | 服务器内部错误 |
-
----
-
-## 年龄组
-
-所有 API 使用统一的年龄组定义：
-
-| 年龄组 | 描述 | 内容特点 |
-|--------|------|----------|
-| `3-5` | 学龄前儿童 | 简单词汇、短句、具体概念 |
-| `6-8` | 小学低年级 | 基础词汇、简单情节、道德选择 |
-| `9-12` | 小学高年级 | 丰富词汇、复杂情节、深度主题 |
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Success |
+| 201 | Created successfully |
+| 400 | Invalid request parameters |
+| 404 | Resource not found |
+| 413 | Request body too large |
+| 422 | Request validation failed |
+| 500 | Internal server error |
 
 ---
 
-## 语音类型
+## Age Groups
 
-TTS 语音生成支持以下声音类型：
+All APIs use a unified age group definition:
 
-| 类型 | 描述 | 推荐场景 |
-|------|------|----------|
-| `nova` | 温柔女性 | 温馨故事 |
-| `shimmer` | 活泼女性 | 欢快冒险 |
-| `alloy` | 中性 | 通用 |
-| `echo` | 男性 | 冒险故事 |
-| `fable` | 故事讲述者 | 互动故事（默认） |
-| `onyx` | 深沉男性 | 神秘故事 |
+| Age Group | Description | Content Characteristics |
+|-----------|-------------|------------------------|
+| `3-5` | Preschool children | Simple vocabulary, short sentences, concrete concepts |
+| `6-8` | Lower elementary school | Basic vocabulary, simple plots, moral choices |
+| `9-12` | Upper elementary school | Rich vocabulary, complex plots, in-depth themes |
 
 ---
 
-## 安全审查
+## Voice Types
 
-所有生成的内容都会经过安全审查：
+TTS audio generation supports the following voice types:
 
-### 过滤内容
-- 暴力、打斗、血腥
-- 恐怖、惊悚元素
-- 不当语言、歧视
-- 成人话题
-
-### 正向引导
-- 性别平等
-- 文化多样性
-- 品德教育
-- 环保意识
-
-### 安全评分
-- **0.0-0.3**: 严重不合格
-- **0.3-0.7**: 不合格
-- **0.7-0.85**: 基本合格
-- **0.85-1.0**: 优秀（通过）
+| Type | Description | Recommended Use |
+|------|-------------|-----------------|
+| `nova` | Gentle female | Warm stories |
+| `shimmer` | Lively female | Cheerful adventures |
+| `alloy` | Neutral | General purpose |
+| `echo` | Male | Adventure stories |
+| `fable` | Storyteller | Interactive stories (default) |
+| `onyx` | Deep male | Mystery stories |
 
 ---
 
-## 开发工具
+## Content Safety Review
+
+All generated content undergoes safety review:
+
+### Filtered Content
+- Violence, fighting, gore
+- Horror, thriller elements
+- Inappropriate language, discrimination
+- Adult topics
+
+### Positive Guidance
+- Gender equality
+- Cultural diversity
+- Character education
+- Environmental awareness
+
+### Safety Score
+- **0.0-0.3**: Severely non-compliant
+- **0.3-0.7**: Non-compliant
+- **0.7-0.85**: Marginally compliant
+- **0.85-1.0**: Excellent (pass)
+
+---
+
+## Developer Tools
 
 ### Swagger UI
 
-访问 `http://localhost:8000/api/docs` 查看交互式 API 文档。
+Visit `http://localhost:8000/api/docs` for the interactive API documentation.
 
 ### ReDoc
 
-访问 `http://localhost:8000/api/redoc` 查看 ReDoc 风格文档。
+Visit `http://localhost:8000/api/redoc` for ReDoc-style documentation.
 
 ### OpenAPI Schema
 
-访问 `http://localhost:8000/api/openapi.json` 获取 OpenAPI 规范文件。
+Visit `http://localhost:8000/api/openapi.json` to obtain the OpenAPI specification file.
 
 ---
 
-## 快速开始
+## Quick Start
 
-### 1. 启动服务
+### 1. Start the Service
 
 ```bash
 cd backend
@@ -168,7 +168,7 @@ source venv/bin/activate
 uvicorn src.main:app --reload --port 8000
 ```
 
-### 2. 测试画作转故事
+### 2. Test Image to Story
 
 ```bash
 curl -X POST "http://localhost:8000/api/v1/image-to-story" \
@@ -177,15 +177,15 @@ curl -X POST "http://localhost:8000/api/v1/image-to-story" \
   -F "age_group=6-8"
 ```
 
-### 3. 测试互动故事
+### 3. Test Interactive Story
 
 ```bash
-# 开始故事
+# Start a story
 curl -X POST "http://localhost:8000/api/v1/story/interactive/start" \
   -H "Content-Type: application/json" \
-  -d '{"child_id": "child_001", "age_group": "6-8", "interests": ["恐龙"]}'
+  -d '{"child_id": "child_001", "age_group": "6-8", "interests": ["dinosaurs"]}'
 
-# 选择分支
+# Choose a branch
 curl -X POST "http://localhost:8000/api/v1/story/interactive/{session_id}/choose" \
   -H "Content-Type: application/json" \
   -d '{"choice_id": "choice_0_a"}'
@@ -193,18 +193,18 @@ curl -X POST "http://localhost:8000/api/v1/story/interactive/{session_id}/choose
 
 ---
 
-## 环境变量
+## Environment Variables
 
-| 变量名 | 必需 | 描述 |
-|--------|------|------|
-| `ANTHROPIC_API_KEY` | 是 | Anthropic API 密钥 |
-| `OPENAI_API_KEY` | 是 | OpenAI API 密钥（TTS） |
-| `FRONTEND_URL` | 否 | 前端 URL（CORS） |
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `ANTHROPIC_API_KEY` | Yes | Anthropic API key |
+| `OPENAI_API_KEY` | Yes | OpenAI API key (TTS) |
+| `FRONTEND_URL` | No | Frontend URL (CORS) |
 
 ---
 
-## 相关文档
+## Related Documentation
 
-- [PRD.md](../../docs/PRD.md) - 产品需求文档
-- [ARCHITECTURE.md](../../docs/ARCHITECTURE.md) - 技术架构文档
-- [DOMAIN.md](../../docs/DOMAIN.md) - 领域背景文档
+- [PRD.md](../../docs/PRD.md) - Product Requirements Document
+- [ARCHITECTURE.md](../../docs/ARCHITECTURE.md) - Technical Architecture Document
+- [DOMAIN.md](../../docs/DOMAIN.md) - Domain Background Document

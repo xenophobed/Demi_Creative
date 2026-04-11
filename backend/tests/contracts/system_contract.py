@@ -1,19 +1,19 @@
 """
-System Contract Tests - 系统集成契约测试
+System Contract Tests - System integration contract tests
 
-此文件定义了系统级别的契约测试，包括：
-1. API 端点契约测试
-2. Agent 集成契约测试
-3. 外部服务集成契约测试
-4. 性能契约测试
-5. 安全契约测试
-6. 端到端流程契约测试
+This file defines system-level contract tests, including:
+1. API endpoint contract tests
+2. Agent integration contract tests
+3. External service integration contract tests
+4. Performance contract tests
+5. Security contract tests
+6. End-to-end flow contract tests
 
-测试原则：
-1. 测试系统边界和集成点
-2. 确保服务之间的契约稳定
-3. 验证性能和安全要求
-4. 端到端流程验证
+Testing principles:
+1. Test system boundaries and integration points
+2. Ensure stable contracts between services
+3. Verify performance and security requirements
+4. End-to-end flow verification
 """
 
 import pytest
@@ -25,11 +25,11 @@ import time
 
 
 # ============================================================================
-# 1. API 端点契约定义
+# 1. API Endpoint Contract Definitions
 # ============================================================================
 
 class HTTPMethod(str, Enum):
-    """HTTP 方法枚举"""
+    """HTTP method enum"""
     GET = "GET"
     POST = "POST"
     PUT = "PUT"
@@ -38,15 +38,15 @@ class HTTPMethod(str, Enum):
 
 
 class APIEndpointContract(BaseModel):
-    """API 端点契约"""
-    path: str = Field(..., description="API路径")
-    method: HTTPMethod = Field(..., description="HTTP方法")
-    auth_required: bool = Field(..., description="是否需要认证")
-    rate_limit: int = Field(..., description="速率限制（请求/小时）")
-    max_response_time_ms: int = Field(..., description="最大响应时间（毫秒）")
-    request_schema: Optional[str] = Field(None, description="请求模式名称")
-    response_schema: str = Field(..., description="响应模式名称")
-    error_codes: List[str] = Field(..., description="可能的错误代码")
+    """API endpoint contract"""
+    path: str = Field(..., description="API path")
+    method: HTTPMethod = Field(..., description="HTTP method")
+    auth_required: bool = Field(..., description="Whether authentication is required")
+    rate_limit: int = Field(..., description="Rate limit (requests/hour)")
+    max_response_time_ms: int = Field(..., description="Max response time (ms)")
+    request_schema: Optional[str] = Field(None, description="Request schema name")
+    response_schema: str = Field(..., description="Response schema name")
+    error_codes: List[str] = Field(..., description="Possible error codes")
 
     class Config:
         json_schema_extra = {
@@ -64,11 +64,11 @@ class APIEndpointContract(BaseModel):
 
 
 # ============================================================================
-# 2. API 端点契约定义清单
+# 2. API Endpoint Contract Registry
 # ============================================================================
 
 API_ENDPOINTS = {
-    # 认证相关
+    # Authentication
     "auth_register": APIEndpointContract(
         path="/api/v1/auth/register",
         method=HTTPMethod.POST,
@@ -90,7 +90,7 @@ API_ENDPOINTS = {
         error_codes=["INVALID_CREDENTIALS", "ACCOUNT_INACTIVE"]
     ),
 
-    # 用户相关
+    # User
     "user_get_me": APIEndpointContract(
         path="/api/v1/users/me",
         method=HTTPMethod.GET,
@@ -101,7 +101,7 @@ API_ENDPOINTS = {
         error_codes=["UNAUTHORIZED", "USER_NOT_FOUND"]
     ),
 
-    # 内容转换相关
+    # Content conversion
     "convert_image_to_story": APIEndpointContract(
         path="/api/v1/convert/image-to-story",
         method=HTTPMethod.POST,
@@ -123,7 +123,7 @@ API_ENDPOINTS = {
         error_codes=["VALIDATION_ERROR", "NEWS_FETCH_ERROR", "SAFETY_VIOLATION"]
     ),
 
-    # 故事生成相关
+    # Story generation
     "story_generate": APIEndpointContract(
         path="/api/v1/stories/generate",
         method=HTTPMethod.POST,
@@ -155,7 +155,7 @@ API_ENDPOINTS = {
         error_codes=["VALIDATION_ERROR", "SESSION_NOT_FOUND", "INVALID_CHOICE"]
     ),
 
-    # 任务相关
+    # Task
     "task_get": APIEndpointContract(
         path="/api/v1/tasks/{task_id}",
         method=HTTPMethod.GET,
@@ -166,7 +166,7 @@ API_ENDPOINTS = {
         error_codes=["TASK_NOT_FOUND", "UNAUTHORIZED"]
     ),
 
-    # 勋章相关
+    # Medal
     "medal_list": APIEndpointContract(
         path="/api/v1/medals",
         method=HTTPMethod.GET,
@@ -180,17 +180,17 @@ API_ENDPOINTS = {
 
 
 # ============================================================================
-# 3. Agent 集成契约
+# 3. Agent Integration Contracts
 # ============================================================================
 
 class AgentExecutionContract(BaseModel):
-    """Agent 执行契约"""
-    agent_name: str = Field(..., description="Agent名称")
-    max_execution_time_ms: int = Field(..., description="最大执行时间（毫秒）")
-    retry_count: int = Field(default=3, description="重试次数")
-    requires_safety_check: bool = Field(..., description="是否需要安全检查")
-    dependencies: List[str] = Field(default=[], description="依赖的其他Agent")
-    expected_tools: List[str] = Field(..., description="期望使用的工具列表")
+    """Agent execution contract"""
+    agent_name: str = Field(..., description="Agent name")
+    max_execution_time_ms: int = Field(..., description="Max execution time (ms)")
+    retry_count: int = Field(default=3, description="Retry count")
+    requires_safety_check: bool = Field(..., description="Whether safety check is required")
+    dependencies: List[str] = Field(default=[], description="Dependencies on other agents")
+    expected_tools: List[str] = Field(..., description="Expected tool list")
 
     class Config:
         json_schema_extra = {
@@ -234,7 +234,7 @@ AGENT_CONTRACTS = {
         agent_name="SafetyAgent",
         max_execution_time_ms=3000,
         retry_count=3,
-        requires_safety_check=False,  # 自己就是安全检查
+        requires_safety_check=False,  # It IS the safety check
         dependencies=[],
         expected_tools=["content_filter", "sentiment_analysis", "bias_detector", "keyword_check"]
     ),
@@ -250,17 +250,17 @@ AGENT_CONTRACTS = {
 
 
 # ============================================================================
-# 4. 外部服务集成契约
+# 4. External Service Integration Contracts
 # ============================================================================
 
 class ExternalServiceContract(BaseModel):
-    """外部服务契约"""
-    service_name: str = Field(..., description="服务名称")
-    base_url: str = Field(..., description="基础URL")
-    timeout_ms: int = Field(..., description="超时时间（毫秒）")
-    max_retries: int = Field(default=3, description="最大重试次数")
-    circuit_breaker_threshold: int = Field(..., description="熔断器阈值")
-    required_credentials: List[str] = Field(..., description="所需凭证")
+    """External service contract"""
+    service_name: str = Field(..., description="Service name")
+    base_url: str = Field(..., description="Base URL")
+    timeout_ms: int = Field(..., description="Timeout (ms)")
+    max_retries: int = Field(default=3, description="Max retries")
+    circuit_breaker_threshold: int = Field(..., description="Circuit breaker threshold")
+    required_credentials: List[str] = Field(..., description="Required credentials")
 
     class Config:
         json_schema_extra = {
@@ -312,17 +312,17 @@ EXTERNAL_SERVICES = {
 
 
 # ============================================================================
-# 5. 性能契约
+# 5. Performance Contracts
 # ============================================================================
 
 class PerformanceContract(BaseModel):
-    """性能契约"""
-    operation_name: str = Field(..., description="操作名称")
-    max_response_time_p50_ms: int = Field(..., description="P50响应时间（毫秒）")
-    max_response_time_p95_ms: int = Field(..., description="P95响应时间（毫秒）")
-    max_response_time_p99_ms: int = Field(..., description="P99响应时间（毫秒）")
-    min_throughput_rps: int = Field(..., description="最小吞吐量（请求/秒）")
-    max_concurrent_requests: int = Field(..., description="最大并发请求数")
+    """Performance contract"""
+    operation_name: str = Field(..., description="Operation name")
+    max_response_time_p50_ms: int = Field(..., description="P50 response time (ms)")
+    max_response_time_p95_ms: int = Field(..., description="P95 response time (ms)")
+    max_response_time_p99_ms: int = Field(..., description="P99 response time (ms)")
+    min_throughput_rps: int = Field(..., description="Min throughput (requests/sec)")
+    max_concurrent_requests: int = Field(..., description="Max concurrent requests")
 
     class Config:
         json_schema_extra = {
@@ -366,18 +366,18 @@ PERFORMANCE_CONTRACTS = {
 
 
 # ============================================================================
-# 6. 安全契约
+# 6. Security Contracts
 # ============================================================================
 
 class SecurityContract(BaseModel):
-    """安全契约"""
-    endpoint_or_service: str = Field(..., description="端点或服务名称")
-    authentication_method: str = Field(..., description="认证方法")
-    authorization_required: bool = Field(..., description="是否需要授权")
-    rate_limiting: Dict[str, int] = Field(..., description="速率限制")
-    input_validation: List[str] = Field(..., description="输入验证规则")
-    output_sanitization: List[str] = Field(..., description="输出净化规则")
-    encryption_required: bool = Field(..., description="是否需要加密")
+    """Security contract"""
+    endpoint_or_service: str = Field(..., description="Endpoint or service name")
+    authentication_method: str = Field(..., description="Authentication method")
+    authorization_required: bool = Field(..., description="Whether authorization is required")
+    rate_limiting: Dict[str, int] = Field(..., description="Rate limiting")
+    input_validation: List[str] = Field(..., description="Input validation rules")
+    output_sanitization: List[str] = Field(..., description="Output sanitization rules")
+    encryption_required: bool = Field(..., description="Whether encryption is required")
 
     class Config:
         json_schema_extra = {
@@ -416,14 +416,14 @@ SECURITY_CONTRACTS = {
 
 
 # ============================================================================
-# 7. 系统契约测试用例
+# 7. System Contract Test Cases
 # ============================================================================
 
 class TestAPIEndpointContracts:
-    """API 端点契约测试"""
+    """API endpoint contract tests"""
 
     def test_all_endpoints_have_contracts(self):
-        """测试所有端点都有契约定义"""
+        """Test all endpoints have contract definitions"""
         required_endpoints = [
             "auth_register", "auth_login", "user_get_me",
             "convert_image_to_story", "generate_kids_daily_text",
@@ -431,206 +431,206 @@ class TestAPIEndpointContracts:
             "task_get", "medal_list"
         ]
         for endpoint in required_endpoints:
-            assert endpoint in API_ENDPOINTS, f"缺少端点契约: {endpoint}"
+            assert endpoint in API_ENDPOINTS, f"Missing endpoint contract: {endpoint}"
 
     def test_endpoint_response_time_limits(self):
-        """测试端点响应时间限制"""
+        """Test endpoint response time limits"""
         for name, contract in API_ENDPOINTS.items():
-            # 所有端点的最大响应时间应该小于30秒
+            # All endpoints max response time should be under 30 seconds
             assert contract.max_response_time_ms <= 30000, \
-                f"{name} 响应时间过长: {contract.max_response_time_ms}ms"
+                f"{name} response time too long: {contract.max_response_time_ms}ms"
 
     def test_auth_required_for_protected_endpoints(self):
-        """测试受保护端点需要认证"""
+        """Test protected endpoints require authentication"""
         protected_endpoints = [
             "user_get_me", "convert_image_to_story", "generate_kids_daily_text",
             "story_generate", "task_get", "medal_list"
         ]
         for endpoint in protected_endpoints:
             assert API_ENDPOINTS[endpoint].auth_required, \
-                f"{endpoint} 应该需要认证"
+                f"{endpoint} should require authentication"
 
     def test_rate_limits_are_reasonable(self):
-        """测试速率限制合理性"""
+        """Test rate limits are reasonable"""
         for name, contract in API_ENDPOINTS.items():
-            # 速率限制应该在合理范围内
+            # Rate limit should be within reasonable range
             assert 1 <= contract.rate_limit <= 1000, \
-                f"{name} 速率限制不合理: {contract.rate_limit}"
+                f"{name} unreasonable rate limit: {contract.rate_limit}"
 
     def test_error_codes_defined(self):
-        """测试错误代码已定义"""
+        """Test error codes are defined"""
         for name, contract in API_ENDPOINTS.items():
             assert len(contract.error_codes) > 0, \
-                f"{name} 没有定义错误代码"
-            # 所有端点都应该有 VALIDATION_ERROR
+                f"{name} has no error codes defined"
+            # All endpoints should have VALIDATION_ERROR
             if contract.auth_required:
                 assert "UNAUTHORIZED" in contract.error_codes or \
                        any("ERROR" in code for code in contract.error_codes), \
-                       f"{name} 缺少错误代码"
+                       f"{name} missing error codes"
 
 
 class TestAgentIntegrationContracts:
-    """Agent 集成契约测试"""
+    """Agent integration contract tests"""
 
     def test_all_agents_have_contracts(self):
-        """测试所有Agent都有契约定义"""
+        """Test all agents have contract definitions"""
         required_agents = [
             "ImageAnalysisAgent", "InteractiveStoryAgent",
             "NewsConverterAgent", "SafetyAgent", "RewardAgent"
         ]
         for agent in required_agents:
-            assert agent in AGENT_CONTRACTS, f"缺少Agent契约: {agent}"
+            assert agent in AGENT_CONTRACTS, f"Missing agent contract: {agent}"
 
     def test_agent_execution_time_limits(self):
-        """测试Agent执行时间限制"""
+        """Test agent execution time limits"""
         for name, contract in AGENT_CONTRACTS.items():
-            # 所有Agent的执行时间应该小于30秒
+            # All agents' execution time should be under 30 seconds
             assert contract.max_execution_time_ms <= 30000, \
-                f"{name} 执行时间过长: {contract.max_execution_time_ms}ms"
+                f"{name} execution time too long: {contract.max_execution_time_ms}ms"
 
     def test_safety_agent_has_no_dependencies(self):
-        """测试SafetyAgent没有依赖"""
-        # SafetyAgent 是其他Agent的依赖，自己不应该有依赖（避免循环依赖）
+        """Test SafetyAgent has no dependencies"""
+        # SafetyAgent is depended upon by other agents, so it should not have dependencies (avoid circular deps)
         assert len(AGENT_CONTRACTS["SafetyAgent"].dependencies) == 0
 
     def test_agents_requiring_safety_check_depend_on_safety_agent(self):
-        """测试需要安全检查的Agent依赖SafetyAgent"""
+        """Test agents requiring safety check depend on SafetyAgent"""
         for name, contract in AGENT_CONTRACTS.items():
             if contract.requires_safety_check and name != "SafetyAgent":
-                # 应该依赖 SafetyAgent 或者在流程中调用安全检查
-                # 这里我们检查是否明确声明了依赖
-                # 注意：实际实现中可能是隐式调用，这里只是示例
+                # Should depend on SafetyAgent or call safety check in the flow
+                # Here we check if dependency is explicitly declared
+                # Note: actual implementation may use implicit calls, this is just an example
                 pass
 
     def test_agent_tools_are_defined(self):
-        """测试Agent工具已定义"""
+        """Test agent tools are defined"""
         for name, contract in AGENT_CONTRACTS.items():
             assert len(contract.expected_tools) > 0, \
-                f"{name} 没有定义工具"
+                f"{name} has no tools defined"
 
 
 class TestExternalServiceContracts:
-    """外部服务集成契约测试"""
+    """External service integration contract tests"""
 
     def test_all_external_services_have_contracts(self):
-        """测试所有外部服务都有契约定义"""
+        """Test all external services have contract definitions"""
         required_services = ["claude_api", "openai_tts", "pinecone", "s3"]
         for service in required_services:
-            assert service in EXTERNAL_SERVICES, f"缺少服务契约: {service}"
+            assert service in EXTERNAL_SERVICES, f"Missing service contract: {service}"
 
     def test_service_timeout_reasonable(self):
-        """测试服务超时时间合理"""
+        """Test service timeout is reasonable"""
         for name, contract in EXTERNAL_SERVICES.items():
-            # 超时时间应该在合理范围内
+            # Timeout should be within reasonable range
             assert 1000 <= contract.timeout_ms <= 60000, \
-                f"{name} 超时时间不合理: {contract.timeout_ms}ms"
+                f"{name} unreasonable timeout: {contract.timeout_ms}ms"
 
     def test_service_has_credentials_defined(self):
-        """测试服务定义了凭证"""
+        """Test service has credentials defined"""
         for name, contract in EXTERNAL_SERVICES.items():
             assert len(contract.required_credentials) > 0, \
-                f"{name} 没有定义所需凭证"
+                f"{name} has no required credentials defined"
 
     def test_circuit_breaker_threshold_reasonable(self):
-        """测试熔断器阈值合理"""
+        """Test circuit breaker threshold is reasonable"""
         for name, contract in EXTERNAL_SERVICES.items():
-            # 熔断器阈值应该在合理范围内
+            # Circuit breaker threshold should be within reasonable range
             assert 1 <= contract.circuit_breaker_threshold <= 10, \
-                f"{name} 熔断器阈值不合理: {contract.circuit_breaker_threshold}"
+                f"{name} unreasonable circuit breaker threshold: {contract.circuit_breaker_threshold}"
 
 
 class TestPerformanceContracts:
-    """性能契约测试"""
+    """Performance contract tests"""
 
     def test_performance_contracts_defined(self):
-        """测试性能契约已定义"""
+        """Test performance contracts are defined"""
         required_operations = ["image_analysis", "story_generation", "news_conversion"]
         for operation in required_operations:
             assert operation in PERFORMANCE_CONTRACTS, \
-                f"缺少性能契约: {operation}"
+                f"Missing performance contract: {operation}"
 
     def test_response_time_percentiles_order(self):
-        """测试响应时间百分位顺序"""
+        """Test response time percentile ordering"""
         for name, contract in PERFORMANCE_CONTRACTS.items():
             # P50 < P95 < P99
             assert contract.max_response_time_p50_ms < contract.max_response_time_p95_ms, \
-                f"{name} P50应该小于P95"
+                f"{name} P50 should be less than P95"
             assert contract.max_response_time_p95_ms < contract.max_response_time_p99_ms, \
-                f"{name} P95应该小于P99"
+                f"{name} P95 should be less than P99"
 
     def test_throughput_reasonable(self):
-        """测试吞吐量合理"""
+        """Test throughput is reasonable"""
         for name, contract in PERFORMANCE_CONTRACTS.items():
-            # 最小吞吐量应该大于0
+            # Min throughput should be greater than 0
             assert contract.min_throughput_rps > 0, \
-                f"{name} 最小吞吐量必须大于0"
+                f"{name} min throughput must be greater than 0"
 
     def test_concurrent_requests_reasonable(self):
-        """测试并发请求数合理"""
+        """Test concurrent request count is reasonable"""
         for name, contract in PERFORMANCE_CONTRACTS.items():
-            # 最大并发请求数应该在合理范围内
+            # Max concurrent requests should be within reasonable range
             assert 1 <= contract.max_concurrent_requests <= 1000, \
-                f"{name} 最大并发请求数不合理"
+                f"{name} unreasonable max concurrent requests"
 
 
 class TestSecurityContracts:
-    """安全契约测试"""
+    """Security contract tests"""
 
     def test_security_contracts_defined(self):
-        """测试安全契约已定义"""
+        """Test security contracts are defined"""
         required_contracts = ["image_to_story", "user_data"]
         for contract_name in required_contracts:
             assert contract_name in SECURITY_CONTRACTS, \
-                f"缺少安全契约: {contract_name}"
+                f"Missing security contract: {contract_name}"
 
     def test_sensitive_endpoints_require_authentication(self):
-        """测试敏感端点需要认证"""
+        """Test sensitive endpoints require authentication"""
         for name, contract in SECURITY_CONTRACTS.items():
-            # 所有敏感操作都应该需要认证
+            # All sensitive operations should require authentication
             assert contract.authentication_method in ["JWT", "Internal"], \
-                f"{name} 认证方法不明确"
+                f"{name} authentication method unclear"
 
     def test_user_data_requires_encryption(self):
-        """测试用户数据需要加密"""
+        """Test user data requires encryption"""
         user_data_contract = SECURITY_CONTRACTS["user_data"]
         assert user_data_contract.encryption_required, \
-            "用户数据必须加密"
+            "User data must be encrypted"
 
     def test_input_validation_defined(self):
-        """测试输入验证已定义"""
+        """Test input validation is defined"""
         for name, contract in SECURITY_CONTRACTS.items():
             assert len(contract.input_validation) > 0, \
-                f"{name} 没有定义输入验证规则"
+                f"{name} has no input validation rules defined"
 
     def test_output_sanitization_defined(self):
-        """测试输出净化已定义"""
+        """Test output sanitization is defined"""
         for name, contract in SECURITY_CONTRACTS.items():
             assert len(contract.output_sanitization) > 0, \
-                f"{name} 没有定义输出净化规则"
+                f"{name} has no output sanitization rules defined"
 
 
 # ============================================================================
-# 8. 端到端流程契约测试
+# 8. End-to-End Flow Contract Tests
 # ============================================================================
 
 class TestEndToEndFlowContracts:
-    """端到端流程契约测试"""
+    """End-to-end flow contract tests"""
 
     def test_image_to_story_flow(self):
-        """测试画作转故事完整流程契约"""
-        # 定义完整流程的步骤
+        """Test image-to-story complete flow contract"""
+        # Define complete flow steps
         flow_steps = [
-            "1. 用户上传图片 → API Gateway",
-            "2. API Gateway → ImageAnalysisAgent",
-            "3. ImageAnalysisAgent → Vector DB (搜索历史)",
-            "4. ImageAnalysisAgent → InteractiveStoryAgent",
-            "5. InteractiveStoryAgent → SafetyAgent",
-            "6. SafetyAgent → TTS Service",
-            "7. TTS Service → S3 Storage",
-            "8. 返回结果给用户"
+            "1. User uploads image -> API Gateway",
+            "2. API Gateway -> ImageAnalysisAgent",
+            "3. ImageAnalysisAgent -> Vector DB (search history)",
+            "4. ImageAnalysisAgent -> InteractiveStoryAgent",
+            "5. InteractiveStoryAgent -> SafetyAgent",
+            "6. SafetyAgent -> TTS Service",
+            "7. TTS Service -> S3 Storage",
+            "8. Return result to user"
         ]
 
-        # 验证每个步骤涉及的组件都有契约定义
+        # Verify all components in each step have contract definitions
         assert "convert_image_to_story" in API_ENDPOINTS
         assert "ImageAnalysisAgent" in AGENT_CONTRACTS
         assert "InteractiveStoryAgent" in AGENT_CONTRACTS
@@ -638,39 +638,39 @@ class TestEndToEndFlowContracts:
         assert "openai_tts" in EXTERNAL_SERVICES
         assert "s3" in EXTERNAL_SERVICES
 
-        # 验证总执行时间不超过15秒
+        # Verify total execution time does not exceed 15 seconds
         total_max_time = (
             AGENT_CONTRACTS["ImageAnalysisAgent"].max_execution_time_ms +
             AGENT_CONTRACTS["InteractiveStoryAgent"].max_execution_time_ms +
             AGENT_CONTRACTS["SafetyAgent"].max_execution_time_ms
         )
-        assert total_max_time <= 20000, "端到端流程时间过长"
+        assert total_max_time <= 20000, "End-to-end flow time too long"
 
     def test_interactive_story_flow(self):
-        """测试互动故事流程契约"""
-        # 多轮对话流程
+        """Test interactive story flow contract"""
+        # Multi-turn conversation flow
         flow_steps = [
-            "Round 1: 用户请求 → 生成开篇 → 返回选择",
-            "Round 2: 用户选择 → 生成下一段 → 返回选择",
-            "Round 3-5: 重复",
-            "Final: 生成结局 → 颁发勋章"
+            "Round 1: User request -> Generate opening -> Return choices",
+            "Round 2: User chooses -> Generate next segment -> Return choices",
+            "Round 3-5: Repeat",
+            "Final: Generate ending -> Award medal"
         ]
 
-        # 验证相关端点
+        # Verify related endpoints
         assert "story_interactive_start" in API_ENDPOINTS
         assert "story_interactive_choose" in API_ENDPOINTS
 
-        # 验证会话管理（Redis）
-        # 在实际测试中应该验证Redis会话存储
+        # Verify session management (Redis)
+        # In real tests should verify Redis session storage
 
     def test_news_to_kids_flow(self):
-        """测试新闻转换流程契约"""
+        """Test news conversion flow contract"""
         flow_steps = [
-            "1. 用户提交新闻URL → API Gateway",
-            "2. NewsConverterAgent → Web Scraper",
-            "3. NewsConverterAgent → 语言简化",
-            "4. NewsConverterAgent → SafetyAgent",
-            "5. 返回儿童版资讯"
+            "1. User submits news URL -> API Gateway",
+            "2. NewsConverterAgent -> Web Scraper",
+            "3. NewsConverterAgent -> Language simplification",
+            "4. NewsConverterAgent -> SafetyAgent",
+            "5. Return kid-friendly news"
         ]
 
         assert "generate_kids_daily_text" in API_ENDPOINTS
@@ -679,80 +679,80 @@ class TestEndToEndFlowContracts:
 
 
 class TestCircuitBreakerContracts:
-    """熔断器契约测试"""
+    """Circuit breaker contract tests"""
 
     def test_circuit_breaker_triggers_on_failures(self):
-        """测试熔断器在失败时触发"""
-        # 模拟外部服务失败场景
+        """Test circuit breaker triggers on failures"""
+        # Simulate external service failure scenario
         claude_api_contract = EXTERNAL_SERVICES["claude_api"]
 
-        # 连续失败次数达到阈值应该触发熔断器
+        # Consecutive failures reaching threshold should trigger circuit breaker
         failure_count = 0
         threshold = claude_api_contract.circuit_breaker_threshold
 
-        # 在实际实现中，这应该是集成测试
-        # 这里我们只验证契约定义
-        assert threshold == 5, "熔断器阈值应该是5次失败"
+        # In actual implementation, this should be an integration test
+        # Here we only verify the contract definition
+        assert threshold == 5, "Circuit breaker threshold should be 5 failures"
 
     def test_circuit_breaker_recovery(self):
-        """测试熔断器恢复机制"""
-        # 熔断器打开后，应该在一段时间后进入半开状态
-        # 如果请求成功，关闭熔断器；否则继续打开
-        pass  # 这需要在实际集成测试中验证
+        """Test circuit breaker recovery mechanism"""
+        # After circuit breaker opens, it should enter half-open state after some time
+        # If request succeeds, close circuit breaker; otherwise keep open
+        pass  # This needs to be verified in actual integration tests
 
 
 class TestRateLimitingContracts:
-    """速率限制契约测试"""
+    """Rate limiting contract tests"""
 
     def test_rate_limiting_by_role(self):
-        """测试按角色的速率限制"""
-        # 不同角色应该有不同的速率限制
+        """Test rate limiting by role"""
+        # Different roles should have different rate limits
         rate_limits = {
             "child": 100,
             "parent": 200,
             "teacher": 500
         }
 
-        # 验证 API 端点的速率限制
+        # Verify API endpoint rate limits
         for name, contract in API_ENDPOINTS.items():
             if contract.auth_required:
-                # 应该有速率限制定义
+                # Should have rate limit defined
                 assert contract.rate_limit > 0
 
     def test_rate_limiting_prevents_abuse(self):
-        """测试速率限制防止滥用"""
-        # 模拟短时间内大量请求
-        # 在实际实现中，这应该是集成测试
+        """Test rate limiting prevents abuse"""
+        # Simulate many requests in a short time
+        # In actual implementation, this should be an integration test
         pass
 
 
 class TestDataConsistencyContracts:
-    """数据一致性契约测试"""
+    """Data consistency contract tests"""
 
     def test_eventual_consistency_in_vector_db(self):
-        """测试向量数据库的最终一致性"""
-        # 向量数据库写入后，应该在合理时间内可读
-        max_consistency_delay_ms = 5000  # 5秒
+        """Test eventual consistency in vector database"""
+        # After writing to vector database, should be readable within reasonable time
+        max_consistency_delay_ms = 5000  # 5 seconds
 
-        # 在实际实现中验证
+        # Verify in actual implementation
         pass
 
     def test_transaction_rollback_on_failure(self):
-        """测试失败时的事务回滚"""
-        # 如果 Agent 执行失败，数据库操作应该回滚
-        # 例如：创建故事失败，不应该扣减用户配额
+        """Test transaction rollback on failure"""
+        # If agent execution fails, database operations should roll back
+        # Example: creating a story fails, user quota should not be deducted
         pass
 
 
 # ============================================================================
-# 9. 监控和可观测性契约
+# 9. Monitoring and Observability Contracts
 # ============================================================================
 
 class TestMonitoringContracts:
-    """监控契约测试"""
+    """Monitoring contract tests"""
 
     def test_all_operations_have_metrics(self):
-        """测试所有操作都有指标"""
+        """Test all operations have metrics"""
         required_metrics = [
             "api_request_duration_seconds",
             "api_request_total",
@@ -762,18 +762,18 @@ class TestMonitoringContracts:
             "safety_issues_detected_total"
         ]
 
-        # 在实际实现中，应该验证这些指标存在
+        # In actual implementation, should verify these metrics exist
         for metric in required_metrics:
-            pass  # 验证 Prometheus 指标存在
+            pass  # Verify Prometheus metrics exist
 
     def test_structured_logging_format(self):
-        """测试结构化日志格式"""
+        """Test structured logging format"""
         expected_log_fields = [
             "timestamp", "level", "service", "trace_id",
             "user_id", "message", "metadata"
         ]
 
-        # 验证日志格式包含所有必需字段
+        # Verify log format contains all required fields
         pass
 
 

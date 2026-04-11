@@ -1,7 +1,7 @@
 """
 Session Integration Tests
 
-会话管理器集成测试
+Session manager integration tests
 """
 
 import pytest
@@ -12,11 +12,11 @@ from backend.src.services import SessionManager
 
 @pytest.fixture
 def session_manager():
-    """创建测试会话管理器"""
+    """Create a test session manager"""
     manager = SessionManager(sessions_dir="./data/test_sessions")
     yield manager
 
-    # 清理测试会话
+    # Clean up test sessions
     import shutil
     from pathlib import Path
     test_dir = Path("./data/test_sessions")
@@ -25,16 +25,16 @@ def session_manager():
 
 
 class TestSessionManager:
-    """会话管理器测试"""
+    """Session manager tests"""
 
     def test_create_session(self, session_manager):
-        """测试创建会话"""
+        """Test creating a session"""
         session = session_manager.create_session(
             child_id="test_child_001",
-            story_title="测试故事",
+            story_title="Test story",
             age_group="6-8",
-            interests=["动物", "冒险"],
-            theme="森林探险",
+            interests=["animals", "adventure"],
+            theme="Forest exploration",
             voice="fable",
             enable_audio=True,
             total_segments=5
@@ -42,25 +42,25 @@ class TestSessionManager:
 
         assert session.session_id is not None
         assert session.child_id == "test_child_001"
-        assert session.story_title == "测试故事"
+        assert session.story_title == "Test story"
         assert session.age_group == "6-8"
-        assert session.interests == ["动物", "冒险"]
+        assert session.interests == ["animals", "adventure"]
         assert session.status == "active"
         assert session.current_segment == 0
         assert session.total_segments == 5
         assert len(session.choice_history) == 0
 
     def test_get_session(self, session_manager):
-        """测试获取会话"""
-        # 创建会话
+        """Test getting a session"""
+        # Create session
         created_session = session_manager.create_session(
             child_id="test_child_001",
-            story_title="测试故事",
+            story_title="Test story",
             age_group="6-8",
-            interests=["动物"]
+            interests=["animals"]
         )
 
-        # 获取会话
+        # Get session
         retrieved_session = session_manager.get_session(created_session.session_id)
 
         assert retrieved_session is not None
@@ -69,24 +69,24 @@ class TestSessionManager:
         assert retrieved_session.story_title == created_session.story_title
 
     def test_get_nonexistent_session(self, session_manager):
-        """测试获取不存在的会话"""
+        """Test getting a nonexistent session"""
         session = session_manager.get_session("nonexistent_id")
         assert session is None
 
     def test_update_session(self, session_manager):
-        """测试更新会话"""
-        # 创建会话
+        """Test updating a session"""
+        # Create session
         session = session_manager.create_session(
             child_id="test_child_001",
-            story_title="测试故事",
+            story_title="Test story",
             age_group="6-8",
-            interests=["动物"]
+            interests=["animals"]
         )
 
-        # 更新会话
+        # Update session
         segment = {
             "segment_id": 1,
-            "text": "故事第一段",
+            "text": "Story segment one",
             "choices": []
         }
 
@@ -98,66 +98,66 @@ class TestSessionManager:
 
         assert success is True
 
-        # 验证更新
+        # Verify update
         updated_session = session_manager.get_session(session.session_id)
         assert len(updated_session.segments) == 1
         assert updated_session.current_segment == 1
         assert "choice_0_a" in updated_session.choice_history
 
     def test_delete_session(self, session_manager):
-        """测试删除会话"""
-        # 创建会话
+        """Test deleting a session"""
+        # Create session
         session = session_manager.create_session(
             child_id="test_child_001",
-            story_title="测试故事",
+            story_title="Test story",
             age_group="6-8",
-            interests=["动物"]
+            interests=["animals"]
         )
 
-        # 删除会话
+        # Delete session
         success = session_manager.delete_session(session.session_id)
         assert success is True
 
-        # 验证删除
+        # Verify deletion
         retrieved_session = session_manager.get_session(session.session_id)
         assert retrieved_session is None
 
     def test_list_sessions(self, session_manager):
-        """测试列出会话"""
-        # 创建多个会话
+        """Test listing sessions"""
+        # Create multiple sessions
         for i in range(3):
             session_manager.create_session(
                 child_id=f"test_child_{i:03d}",
-                story_title=f"故事 {i}",
+                story_title=f"Story {i}",
                 age_group="6-8",
-                interests=["动物"]
+                interests=["animals"]
             )
 
-        # 列出所有会话
+        # List all sessions
         all_sessions = session_manager.list_sessions()
         assert len(all_sessions) == 3
 
-        # 按儿童ID过滤
+        # Filter by child ID
         child_sessions = session_manager.list_sessions(child_id="test_child_001")
         assert len(child_sessions) == 1
         assert child_sessions[0].child_id == "test_child_001"
 
     def test_list_sessions_by_status(self, session_manager):
-        """测试按状态列出会话"""
-        # 创建活跃会话
+        """Test listing sessions by status"""
+        # Create active session
         active_session = session_manager.create_session(
             child_id="test_child_001",
-            story_title="活跃故事",
+            story_title="Active story",
             age_group="6-8",
-            interests=["动物"]
+            interests=["animals"]
         )
 
-        # 创建已完成会话
+        # Create completed session
         completed_session = session_manager.create_session(
             child_id="test_child_002",
-            story_title="完成故事",
+            story_title="Completed story",
             age_group="6-8",
-            interests=["冒险"]
+            interests=["adventure"]
         )
 
         session_manager.update_session(
@@ -165,7 +165,7 @@ class TestSessionManager:
             status="completed"
         )
 
-        # 按状态过滤
+        # Filter by status
         active_sessions = session_manager.list_sessions(status="active")
         completed_sessions = session_manager.list_sessions(status="completed")
 
@@ -175,16 +175,16 @@ class TestSessionManager:
         assert completed_sessions[0].status == "completed"
 
     def test_session_expiry(self, session_manager):
-        """测试会话过期"""
-        # 创建会话
+        """Test session expiry"""
+        # Create session
         session = session_manager.create_session(
             child_id="test_child_001",
-            story_title="测试故事",
+            story_title="Test story",
             age_group="6-8",
-            interests=["动物"]
+            interests=["animals"]
         )
 
-        # 手动设置过期时间为过去
+        # Manually set expiry time to the past
         from pathlib import Path
         import json
 
@@ -192,29 +192,29 @@ class TestSessionManager:
         with open(session_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
 
-        # 设置为1小时前过期
+        # Set to expired 1 hour ago
         past_time = datetime.now() - timedelta(hours=1)
         data['expires_at'] = past_time.isoformat()
 
         with open(session_path, 'w', encoding='utf-8') as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
 
-        # 获取会话（应该自动标记为过期）
+        # Get session (should be automatically marked as expired)
         expired_session = session_manager.get_session(session.session_id)
 
         assert expired_session.status == "expired"
 
     def test_cleanup_expired_sessions(self, session_manager):
-        """测试清理过期会话"""
-        # 创建会话
+        """Test cleaning up expired sessions"""
+        # Create session
         session = session_manager.create_session(
             child_id="test_child_001",
-            story_title="测试故事",
+            story_title="Test story",
             age_group="6-8",
-            interests=["动物"]
+            interests=["animals"]
         )
 
-        # 设置为8天前过期
+        # Set to expired 8 days ago
         from pathlib import Path
         import json
 
@@ -228,30 +228,30 @@ class TestSessionManager:
         with open(session_path, 'w', encoding='utf-8') as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
 
-        # 清理过期会话
+        # Clean up expired sessions
         cleaned = session_manager.cleanup_expired_sessions()
 
         assert cleaned == 1
 
-        # 验证会话已删除
+        # Verify session has been deleted
         retrieved_session = session_manager.get_session(session.session_id)
         assert retrieved_session is None
 
     def test_update_educational_summary(self, session_manager):
-        """测试更新教育总结"""
-        # 创建会话
+        """Test updating educational summary"""
+        # Create session
         session = session_manager.create_session(
             child_id="test_child_001",
-            story_title="测试故事",
+            story_title="Test story",
             age_group="6-8",
-            interests=["动物"]
+            interests=["animals"]
         )
 
-        # 更新教育总结
+        # Update educational summary
         edu_summary = {
-            "themes": ["勇气", "友谊"],
-            "concepts": ["决策", "合作"],
-            "moral": "团结就是力量"
+            "themes": ["courage", "friendship"],
+            "concepts": ["decision-making", "cooperation"],
+            "moral": "Unity is strength"
         }
 
         success = session_manager.update_session(
@@ -261,37 +261,37 @@ class TestSessionManager:
 
         assert success is True
 
-        # 验证更新
+        # Verify update
         updated_session = session_manager.get_session(session.session_id)
         assert updated_session.educational_summary is not None
-        assert updated_session.educational_summary["themes"] == ["勇气", "友谊"]
-        assert updated_session.educational_summary["moral"] == "团结就是力量"
+        assert updated_session.educational_summary["themes"] == ["courage", "friendship"]
+        assert updated_session.educational_summary["moral"] == "Unity is strength"
 
 
 class TestSessionLifecycle:
-    """会话生命周期测试"""
+    """Session lifecycle tests"""
 
     def test_complete_session_lifecycle(self, session_manager):
-        """测试完整的会话生命周期"""
-        # 1. 创建会话
+        """Test complete session lifecycle"""
+        # 1. Create session
         session = session_manager.create_session(
             child_id="test_child_001",
-            story_title="完整故事",
+            story_title="Full story",
             age_group="6-8",
-            interests=["动物", "冒险"],
+            interests=["animals", "adventure"],
             total_segments=3
         )
 
         assert session.status == "active"
         assert session.current_segment == 0
 
-        # 2. 添加第一段
+        # 2. Add first segment
         segment_1 = {
             "segment_id": 1,
-            "text": "故事开始...",
+            "text": "Story begins...",
             "choices": [
-                {"choice_id": "c1_a", "text": "选项A", "emoji": "🅰️"},
-                {"choice_id": "c1_b", "text": "选项B", "emoji": "🅱️"}
+                {"choice_id": "c1_a", "text": "Option A", "emoji": "🅰️"},
+                {"choice_id": "c1_b", "text": "Option B", "emoji": "🅱️"}
             ]
         }
 
@@ -301,12 +301,12 @@ class TestSessionLifecycle:
             choice_id="c1_a"
         )
 
-        # 3. 添加第二段
+        # 3. Add second segment
         segment_2 = {
             "segment_id": 2,
-            "text": "故事继续...",
+            "text": "Story continues...",
             "choices": [
-                {"choice_id": "c2_a", "text": "选项A", "emoji": "🅰️"}
+                {"choice_id": "c2_a", "text": "Option A", "emoji": "🅰️"}
             ]
         }
 
@@ -316,18 +316,18 @@ class TestSessionLifecycle:
             choice_id="c2_a"
         )
 
-        # 4. 添加结局
+        # 4. Add ending
         ending = {
             "segment_id": 3,
-            "text": "故事结束！",
+            "text": "Story ends!",
             "choices": [],
             "is_ending": True
         }
 
         edu_summary = {
-            "themes": ["勇气"],
-            "concepts": ["决策"],
-            "moral": "勇敢面对挑战"
+            "themes": ["courage"],
+            "concepts": ["decision-making"],
+            "moral": "Bravely face challenges"
         }
 
         session_manager.update_session(
@@ -337,7 +337,7 @@ class TestSessionLifecycle:
             educational_summary=edu_summary
         )
 
-        # 5. 验证最终状态
+        # 5. Verify final state
         final_session = session_manager.get_session(session.session_id)
 
         assert final_session.status == "completed"

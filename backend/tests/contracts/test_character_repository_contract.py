@@ -468,8 +468,8 @@ class TestJsonFields:
         """Issue #289: upsert with visual_features + traits stores both,
         and get_characters returns them deserialized."""
         visual_features = {
-            "features": ["蓝色衣服", "尖耳朵", "长尾巴"],
-            "description_summary": "穿蓝色衣服的小狗",
+            "features": ["blue clothes", "pointy ears", "long tail"],
+            "description_summary": "A puppy wearing blue clothes",
         }
         traits = ["brave", "loyal", "playful"]
 

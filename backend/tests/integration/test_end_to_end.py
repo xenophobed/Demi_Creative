@@ -1,7 +1,7 @@
 """
 End-to-End Tests
 
-端到端测试：模拟完整的用户流程
+End-to-end tests: simulate complete user flows
 Uses agent mock fallback (deterministic results in test env).
 """
 
@@ -53,7 +53,7 @@ def _override_auth():
 
 @pytest.fixture
 def sample_drawing():
-    """创建示例画作"""
+    """Create a sample drawing"""
     img = Image.new('RGB', (400, 300), color='lightblue')
 
     from PIL import ImageDraw
@@ -75,10 +75,10 @@ def sample_drawing():
 
 @pytest.mark.asyncio
 class TestCompleteUserJourney:
-    """完整用户旅程测试 — uses agent mock fallback."""
+    """Complete user journey tests — uses agent mock fallback."""
 
     async def test_first_time_user_flow(self, sample_drawing):
-        """测试首次使用流程: upload drawing, generate story, check response."""
+        """Test first-time user flow: upload drawing, generate story, check response."""
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             files = {
                 "image": ("first_drawing.png", sample_drawing, "image/png")
@@ -86,7 +86,7 @@ class TestCompleteUserJourney:
             data = {
                 "child_id": "e2e_test_child",
                 "age_group": "6-8",
-                "interests": "自然,动物",
+                "interests": "nature,animals",
                 "voice": "nova",
                 "enable_audio": "true"
             }
@@ -109,7 +109,7 @@ class TestCompleteUserJourney:
             assert result["safety_score"] >= 0.7
 
     async def test_recurring_user_flow(self, sample_drawing):
-        """测试重复用户流程: two uploads, verify characters present."""
+        """Test recurring user flow: two uploads, verify characters present."""
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             files_1 = {
                 "image": ("drawing_1.png", sample_drawing, "image/png")
@@ -117,7 +117,7 @@ class TestCompleteUserJourney:
             data_1 = {
                 "child_id": "e2e_test_child",
                 "age_group": "6-8",
-                "interests": "动物"
+                "interests": "animals"
             }
 
             response_1 = await client.post(
@@ -138,13 +138,13 @@ class TestCompleteUserJourney:
             assert "characters" in response_2.json()
 
     async def test_interactive_story_complete_journey(self):
-        """测试互动故事旅程: start session, make choice, verify progression."""
+        """Test interactive story journey: start session, make choice, verify progression."""
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             start_payload = {
                 "child_id": "e2e_test_child",
                 "age_group": "6-8",
-                "interests": ["动物", "冒险"],
-                "theme": "森林探险",
+                "interests": ["animals", "adventure"],
+                "theme": "Forest exploration",
                 "voice": "fable",
                 "enable_audio": True
             }
@@ -176,10 +176,10 @@ class TestCompleteUserJourney:
 
 @pytest.mark.asyncio
 class TestErrorRecovery:
-    """错误恢复测试 — uses agent mock fallback."""
+    """Error recovery tests — uses agent mock fallback."""
 
     async def test_recovery_from_invalid_image(self, sample_drawing):
-        """测试从无效图片错误中恢复"""
+        """Test recovery from invalid image error"""
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             invalid_file = BytesIO(b"not an image")
             files = {
@@ -204,14 +204,14 @@ class TestErrorRecovery:
             assert valid_response.status_code == 201
 
     async def test_recovery_from_expired_session(self):
-        """测试从过期会话中恢复"""
+        """Test recovery from expired session"""
         from backend.src.services.database import session_repo
 
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             start_payload = {
                 "child_id": "e2e_test_child",
                 "age_group": "6-8",
-                "interests": ["动物"]
+                "interests": ["animals"]
             }
 
             start_response = await client.post(
@@ -241,10 +241,10 @@ class TestErrorRecovery:
 
 @pytest.mark.asyncio
 class TestPerformance:
-    """性能测试 — uses agent mock fallback."""
+    """Performance tests — uses agent mock fallback."""
 
     async def test_concurrent_requests(self, sample_drawing):
-        """测试并发请求处理"""
+        """Test concurrent request handling"""
         import asyncio
 
         async def make_request(client, child_id, img_bytes):
@@ -255,7 +255,7 @@ class TestPerformance:
             data = {
                 "child_id": child_id,
                 "age_group": "6-8",
-                "interests": "动物"
+                "interests": "animals"
             }
             return await client.post(
                 "/api/v1/image-to-story", files=files, data=data

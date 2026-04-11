@@ -1,20 +1,20 @@
 #!/bin/bash
 
-# Quick Test Script - API 快速测试脚本
-# 测试 API 接口的核心功能
+# Quick Test Script - API quick test script
+# Tests core functionality of API endpoints
 
 echo "==================================="
-echo "Creative Agent API - 快速测试"
+echo "Creative Agent API - Quick Test"
 echo "==================================="
 echo ""
 
-# 检查是否在正确的目录
+# Check if in the correct directory
 if [ ! -f "backend/src/main.py" ]; then
-    echo "❌ 错误: 请在项目根目录运行此脚本"
+    echo "❌ Error: Please run this script from the project root directory"
     exit 1
 fi
 
-echo "📋 测试 1: 检查文件结构"
+echo "📋 Test 1: Check file structure"
 echo "-----------------------------------"
 
 FILES=(
@@ -31,32 +31,32 @@ for file in "${FILES[@]}"; do
     if [ -f "$file" ]; then
         echo "✅ $file"
     else
-        echo "❌ $file (缺失)"
+        echo "❌ $file (missing)"
         ALL_EXIST=false
     fi
 done
 
 if [ "$ALL_EXIST" = true ]; then
-    echo "✅ 所有必需文件存在"
+    echo "✅ All required files exist"
 else
-    echo "⚠️  部分文件缺失"
+    echo "⚠️  Some files are missing"
     exit 1
 fi
 echo ""
 
-echo "📋 测试 2: 检查 Python 环境"
+echo "📋 Test 2: Check Python environment"
 echo "-----------------------------------"
 
 if command -v python3 &> /dev/null; then
     PYTHON_VERSION=$(python3 --version)
-    echo "✅ Python 已安装: $PYTHON_VERSION"
+    echo "✅ Python installed: $PYTHON_VERSION"
 else
-    echo "❌ Python3 未安装"
+    echo "❌ Python3 not installed"
     exit 1
 fi
 echo ""
 
-echo "📋 测试 3: 检查依赖安装状态"
+echo "📋 Test 3: Check dependency installation status"
 echo "-----------------------------------"
 
 REQUIRED_PACKAGES=("fastapi" "uvicorn" "pydantic" "httpx")
@@ -64,23 +64,23 @@ MISSING_PACKAGES=()
 
 for package in "${REQUIRED_PACKAGES[@]}"; do
     if python3 -c "import $package" 2>/dev/null; then
-        echo "✅ $package 已安装"
+        echo "✅ $package installed"
     else
-        echo "⚠️  $package 未安装"
+        echo "⚠️  $package not installed"
         MISSING_PACKAGES+=("$package")
     fi
 done
 
 if [ ${#MISSING_PACKAGES[@]} -gt 0 ]; then
     echo ""
-    echo "提示: 安装缺失的依赖:"
+    echo "Hint: Install missing dependencies:"
     echo "  cd backend"
     echo "  pip install -r requirements.txt"
     echo ""
 fi
 echo ""
 
-echo "📋 测试 4: 代码语法检查"
+echo "📋 Test 4: Code syntax check"
 echo "-----------------------------------"
 
 SYNTAX_OK=true
@@ -88,19 +88,19 @@ for file in backend/src/**/*.py; do
     if python3 -m py_compile "$file" 2>/dev/null; then
         echo "✅ $(basename $file)"
     else
-        echo "❌ $(basename $file) - 语法错误"
+        echo "❌ $(basename $file) - syntax error"
         SYNTAX_OK=false
     fi
 done
 
 if [ "$SYNTAX_OK" = true ]; then
-    echo "✅ 所有 Python 文件语法正确"
+    echo "✅ All Python files have correct syntax"
 else
-    echo "⚠️  部分文件有语法错误"
+    echo "⚠️  Some files have syntax errors"
 fi
 echo ""
 
-echo "📋 测试 5: 测试文件检查"
+echo "📋 Test 5: Test file check"
 echo "-----------------------------------"
 
 TEST_FILES=(
@@ -117,33 +117,33 @@ for file in "${TEST_FILES[@]}"; do
         echo "✅ $file"
         TEST_COUNT=$((TEST_COUNT + 1))
     else
-        echo "❌ $file (缺失)"
+        echo "❌ $file (missing)"
     fi
 done
 
-echo "✅ 测试文件总数: $TEST_COUNT"
+echo "✅ Total test files: $TEST_COUNT"
 echo ""
 
 echo "==================================="
-echo "测试总结"
+echo "Test Summary"
 echo "==================================="
 
 if [ "$ALL_EXIST" = true ] && [ "$SYNTAX_OK" = true ]; then
-    echo "✅ 基础检查全部通过！"
+    echo "✅ All basic checks passed!"
     echo ""
-    echo "下一步:"
-    echo "1. 安装依赖 (如果还没安装):"
+    echo "Next steps:"
+    echo "1. Install dependencies (if not already installed):"
     echo "   cd backend && pip install -r requirements.txt"
     echo ""
-    echo "2. 启动服务:"
+    echo "2. Start the service:"
     echo "   python3 -m backend.src.main"
     echo ""
-    echo "3. 在另一个终端运行测试:"
+    echo "3. Run tests in another terminal:"
     echo "   pytest tests/api/test_health.py -v"
     echo ""
-    echo "4. 或使用 curl 测试:"
+    echo "4. Or test with curl:"
     echo "   curl http://localhost:8000/health"
 else
-    echo "⚠️  部分检查未通过，请修复后重试"
+    echo "⚠️  Some checks failed, please fix and retry"
     exit 1
 fi
