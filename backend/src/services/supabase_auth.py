@@ -14,15 +14,15 @@ Issue: #318 | Parent Epic: #313
 import os
 import logging
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Any
 
 import jwt
-from jwt import PyJWKClient
+import httpx
 
 logger = logging.getLogger(__name__)
 
-# Cache the JWKS client to avoid fetching keys on every request
-_jwks_client: Optional[PyJWKClient] = None
+# Cache fetched JWKS keys to avoid HTTP calls on every request
+_jwks_keys: Optional[list[dict[str, Any]]] = None
 
 
 @dataclass
@@ -38,19 +38,26 @@ def get_jwt_secret() -> Optional[str]:
     return os.getenv("SUPABASE_JWT_SECRET")
 
 
-def _get_jwks_client() -> Optional[PyJWKClient]:
-    """Return a cached JWKS client for the Supabase project, or None."""
-    global _jwks_client
-    if _jwks_client is not None:
-        return _jwks_client
+def _fetch_jwks_keys() -> Optional[list[dict[str, Any]]]:
+    """Fetch and cache JWKS keys from the Supabase project."""
+    global _jwks_keys
+    if _jwks_keys is not None:
+        return _jwks_keys
 
     supabase_url = os.getenv("SUPABASE_URL")
     if not supabase_url:
         return None
 
     jwks_url = f"{supabase_url.rstrip('/')}/auth/v1/.well-known/jwks.json"
-    _jwks_client = PyJWKClient(jwks_url, cache_keys=True)
-    return _jwks_client
+    try:
+        response = httpx.get(jwks_url, timeout=10)
+        response.raise_for_status()
+        _jwks_keys = response.json().get("keys", [])
+        logger.info("Fetched %d JWKS keys from %s", len(_jwks_keys), jwks_url)
+        return _jwks_keys
+    except Exception as e:
+        logger.warning("Failed to fetch JWKS from %s: %s", jwks_url, e)
+        return None
 
 
 def decode_supabase_token(token: str) -> Optional[SupabaseClaims]:
@@ -69,27 +76,45 @@ def decode_supabase_token(token: str) -> Optional[SupabaseClaims]:
 
 def _decode_with_jwks(token: str) -> Optional[SupabaseClaims]:
     """Decode token using JWKS (ES256)."""
-    client = _get_jwks_client()
-    if not client:
+    keys = _fetch_jwks_keys()
+    if not keys:
+        return None
+
+    # Find the matching key by kid from the token header
+    try:
+        unverified_header = jwt.get_unverified_header(token)
+    except jwt.DecodeError:
+        return None
+
+    kid = unverified_header.get("kid")
+    matching_key = None
+    for key_data in keys:
+        if key_data.get("kid") == kid:
+            matching_key = key_data
+            break
+
+    if not matching_key:
+        logger.warning("No JWKS key found matching kid=%s", kid)
         return None
 
     try:
-        signing_key = client.get_signing_key_from_jwt(token)
+        from jwt.algorithms import ECAlgorithm
+        public_key = ECAlgorithm.from_jwk(matching_key)
         payload = jwt.decode(
             token,
-            signing_key.key,
+            public_key,
             algorithms=["ES256"],
             audience="authenticated",
         )
         return _extract_claims(payload)
     except jwt.ExpiredSignatureError:
-        logger.debug("Supabase token expired (JWKS)")
+        logger.warning("Supabase token expired (JWKS)")
         return None
     except jwt.InvalidTokenError as e:
-        logger.debug("Invalid Supabase token (JWKS): %s", e)
+        logger.warning("Invalid Supabase token (JWKS): %s", e)
         return None
     except Exception as e:
-        logger.debug("JWKS decode error: %s", e)
+        logger.warning("JWKS decode error: %s", e)
         return None
 
 
@@ -108,10 +133,10 @@ def _decode_with_secret(token: str) -> Optional[SupabaseClaims]:
         )
         return _extract_claims(payload)
     except jwt.ExpiredSignatureError:
-        logger.debug("Supabase token expired (HS256)")
+        logger.warning("Supabase token expired (HS256)")
         return None
     except jwt.InvalidTokenError as e:
-        logger.debug("Invalid Supabase token (HS256): %s", e)
+        logger.warning("Invalid Supabase token (HS256): %s", e)
         return None
 
 

@@ -1,4 +1,4 @@
-# Kids Creative Workshop (儿童创意工坊)
+# Kids Creative Workshop
 
 AI-powered creative content platform for children aged 3-12. Children upload drawings and the system generates personalized, age-appropriate stories, interactive branching narratives, and child-friendly news summaries — all with content safety enforcement and TTS audio narration.
 

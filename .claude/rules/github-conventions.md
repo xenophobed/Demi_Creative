@@ -62,7 +62,7 @@ Every issue MUST be assigned to a milestone.
 | #45 | TTS & Audio Pipeline Upgrade     | domain:tts-audio      | 2     |
 | #49 | My Library — Unified Content Library | domain:library     | mvp   |
 | #313 | Production Launch — Supabase + Railway + Vercel | layer:infra | 2 |
-| #346 | Referral-Based Membership (裂变升级会员) | domain:referral | 2 |
+| #346 | Referral-Based Membership | domain:referral | 2 |
 
 Every story/bug body MUST include `**Parent Epic**: #<number>`.
 

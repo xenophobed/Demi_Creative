@@ -24,7 +24,7 @@ Investigate: $ARGUMENTS
 
 ## Project-Specific Context
 
-This is **Kids Creative Workshop** (儿童创意工坊), an AI-powered children's content platform.
+This is **Kids Creative Workshop**, an AI-powered children's content platform.
 
 Key layers to understand when investigating:
 - **FastAPI routes** (`backend/src/api/routes/`) — HTTP entry points
