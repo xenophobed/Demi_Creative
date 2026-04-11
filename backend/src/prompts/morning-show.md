@@ -32,3 +32,4 @@ Return strict JSON with this shape:
 - Include a guest anchor line if guest_character is provided.
 - Keep every line positive and child-safe.
 - Do not include markdown fences or extra keys.
+- Always respond in English.

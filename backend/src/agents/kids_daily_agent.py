@@ -344,7 +344,8 @@ async def _generate_kids_daily_text_live(
         f"- target_age: {target_age}\n"
         '- content_type: "news"\n'
         "If the safety check fails (passed == false), revise the content and re-check. "
-        "Include the safety_score in your output.\n"
+        "Include the safety_score in your output.\n\n"
+        "Always respond in English.\n"
     )
 
     # Add TTS instruction if audio should be generated
@@ -644,7 +645,8 @@ async def _generate_dialogue_with_sdk(
         f"- target_age: {target_age_val}\n"
         '- content_type: "kids_daily_dialogue"\n'
         "If the safety check fails (passed == false), revise the content and re-check. "
-        "Include the safety_score in your output.\n"
+        "Include the safety_score in your output.\n\n"
+        "Always respond in English.\n"
     )
 
     mcp_servers: Dict[str, Any] = {
