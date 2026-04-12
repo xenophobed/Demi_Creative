@@ -307,7 +307,7 @@ async def health_check():
 
     return HealthCheckResponse(
         status=overall_status,
-        version="1.0.0",
+        version="1.1.0",
         timestamp=datetime.now(),
         services=services_status,
     )
