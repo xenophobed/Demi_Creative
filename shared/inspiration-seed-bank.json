@@ -1,0 +1,1380 @@
+{
+  "version": "1.0",
+  "entries": [
+    {
+      "id": "bubble-painting-brazil",
+      "title": "Blow Magical Bubble Art!",
+      "summary": "Mix paint into soapy water and blow bubbles onto paper to create dreamy, colorful circles that overlap and blend. Each bubble print is totally unique!",
+      "source_hint": "A school in Sao Paulo, Brazil",
+      "creative_prompt": "Mix dish soap, water, and washable paint in a cup. Use a straw to blow bubbles until they rise above the rim, then gently press paper on top to capture the prints. Try layering different colors!",
+      "category": "art_project",
+      "illustration_emoji": "🫧🎨",
+      "cta_type": "draw",
+      "cta_route": "/upload",
+      "age_adaptations": {
+        "3-5": {
+          "summary": "Blow bubbles onto paper and watch colorful circle shapes appear like magic!",
+          "creative_prompt": "Ask a grownup to mix paint and soapy water in a cup. Blow gently through a straw to make bubbles, then press paper on top. What colors do you see?"
+        },
+        "6-8": {
+          "summary": "Mix paint into soapy water and blow bubbles onto paper to create dreamy, colorful circles that overlap and blend. Each bubble print is totally unique!",
+          "creative_prompt": "Mix dish soap, water, and washable paint in a cup. Use a straw to blow bubbles until they rise above the rim, then gently press paper on top to capture the prints. Try layering different colors!"
+        },
+        "9-12": {
+          "summary": "Bubble painting uses surface tension to hold pigment in a thin soap film. When the bubble pops on paper, it leaves a perfect circle because the film collapses evenly in all directions.",
+          "creative_prompt": "Experiment with different soap-to-paint ratios and observe how surface tension affects bubble size and print quality. Try comparing how warm vs. cold water changes your results. Document your findings like a scientist!"
+        }
+      }
+    },
+    {
+      "id": "leaf-printing-japan",
+      "title": "Print with Leaves from Nature!",
+      "summary": "Collect interesting leaves, coat them with paint, and press them onto paper to reveal the hidden vein patterns. Build a whole garden scene from your prints!",
+      "source_hint": "A kid in Kyoto, Japan",
+      "creative_prompt": "Find leaves with strong vein patterns. Paint one side with a thin, even coat of color, then press the painted side firmly onto paper. Peel slowly to reveal the detail. Arrange multiple prints into a scene!",
+      "category": "art_project",
+      "illustration_emoji": "🍃🖌️",
+      "cta_type": "draw",
+      "cta_route": "/upload",
+      "age_adaptations": {
+        "3-5": {
+          "summary": "Press painted leaves onto paper to see their pretty shapes and lines appear!",
+          "creative_prompt": "Ask a grownup to help you find big, flat leaves outside. Paint the bumpy side with finger paint, then press it onto paper. Lift it up and see the leaf picture you made!"
+        },
+        "6-8": {
+          "summary": "Collect interesting leaves, coat them with paint, and press them onto paper to reveal the hidden vein patterns. Build a whole garden scene from your prints!",
+          "creative_prompt": "Find leaves with strong vein patterns. Paint one side with a thin, even coat of color, then press the painted side firmly onto paper. Peel slowly to reveal the detail. Arrange multiple prints into a scene!"
+        },
+        "9-12": {
+          "summary": "Leaf veins are a branching transport network that carries water and nutrients, similar to how rivers branch into tributaries. Printing captures this fractal-like structure in beautiful detail.",
+          "creative_prompt": "Collect leaves from different plant families and compare their vein patterns: parallel (monocots) vs. branching (dicots). Create a botanical art journal showing each species, its vein type, and why that structure helps the plant survive."
+        }
+      }
+    },
+    {
+      "id": "sand-art-kenya",
+      "title": "Create Layers of Colored Sand!",
+      "summary": "Layer colored sand in a clear jar or glue it onto paper to make bold, textured designs. The trick is pouring slowly to keep each layer clean and bright.",
+      "source_hint": "A school in Nairobi, Kenya",
+      "creative_prompt": "Color sand by mixing it with crushed chalk or powdered paint. Draw a design with glue on thick paper, then sprinkle different sand colors onto the glue sections. Shake off the extra to reveal your artwork!",
+      "category": "art_project",
+      "illustration_emoji": "🏖️✨",
+      "cta_type": "draw",
+      "cta_route": "/upload",
+      "age_adaptations": {
+        "3-5": {
+          "summary": "Sprinkle colorful sand onto sticky glue to make sparkly pictures!",
+          "creative_prompt": "Ask a grownup to draw a big simple shape with glue on paper. Sprinkle colored sand on the glue, then tip the paper to shake off the extra. Your sandy picture is done!"
+        },
+        "6-8": {
+          "summary": "Layer colored sand in a clear jar or glue it onto paper to make bold, textured designs. The trick is pouring slowly to keep each layer clean and bright.",
+          "creative_prompt": "Color sand by mixing it with crushed chalk or powdered paint. Draw a design with glue on thick paper, then sprinkle different sand colors onto the glue sections. Shake off the extra to reveal your artwork!"
+        },
+        "9-12": {
+          "summary": "Sand art relies on particle size and gravity. In jar sand art, tilting creates diagonal layers because gravity pulls grains to the lowest point, similar to how geological strata form over millions of years.",
+          "creative_prompt": "Build a layered sand jar and experiment with pouring angles to create wave and mountain shapes. Research how real geological layers form through sedimentation and try to recreate a miniature canyon cross-section in your jar."
+        }
+      }
+    },
+    {
+      "id": "origami-animals-south-korea",
+      "title": "Fold Paper into Amazing Animals!",
+      "summary": "Turn a flat square of paper into a 3D animal using only folds -- no glue or tape needed. Start with a crane or frog and watch the paper come alive!",
+      "source_hint": "A kid in Seoul, South Korea",
+      "creative_prompt": "Start with a perfect square of paper. Follow fold lines carefully: a simple dog face needs just 5 folds! Once you master that, try a jumping frog or flapping bird. Draw eyes and details to give your animal personality.",
+      "category": "art_project",
+      "illustration_emoji": "🦢📄",
+      "cta_type": "draw",
+      "cta_route": "/upload",
+      "age_adaptations": {
+        "3-5": {
+          "summary": "Fold paper to make cute animal faces like dogs and cats -- just a few easy folds!",
+          "creative_prompt": "Ask a grownup to help you fold a square paper into a dog face. It only takes a few folds! Then draw a nose, eyes, and a big smile on your paper puppy."
+        },
+        "6-8": {
+          "summary": "Turn a flat square of paper into a 3D animal using only folds -- no glue or tape needed. Start with a crane or frog and watch the paper come alive!",
+          "creative_prompt": "Start with a perfect square of paper. Follow fold lines carefully: a simple dog face needs just 5 folds! Once you master that, try a jumping frog or flapping bird. Draw eyes and details to give your animal personality."
+        },
+        "9-12": {
+          "summary": "Origami is applied geometry: each fold divides angles and creates symmetry. Engineers use origami math to design solar panels that unfold in space and medical stents that expand inside arteries.",
+          "creative_prompt": "Design your own origami animal by combining base folds (kite, fish, bird bases). Research the Miura fold used on satellite solar panels and try folding a sheet that collapses and expands in one motion. Sketch your crease pattern!"
+        }
+      }
+    },
+    {
+      "id": "rangoli-patterns-india",
+      "title": "Design a Stunning Rangoli Pattern!",
+      "summary": "Create a symmetrical floor pattern using colored powder, rice, or chalk, inspired by the rangoli tradition. These radial designs start from a center point and grow outward like a flower.",
+      "source_hint": "A school in Jaipur, India",
+      "creative_prompt": "Start with a dot grid on paper or pavement. Connect dots to form a symmetrical shape radiating from the center. Fill sections with bright colors using chalk, colored pencils, or even sprinkled spices. Aim for perfect symmetry!",
+      "category": "art_project",
+      "illustration_emoji": "🌸🎨",
+      "cta_type": "draw",
+      "cta_route": "/upload",
+      "age_adaptations": {
+        "3-5": {
+          "summary": "Make a beautiful colorful pattern that looks the same on every side, like a flower!",
+          "creative_prompt": "Ask a grownup to draw a big circle on paper and divide it like a pizza. Color each slice with bright colors using crayons. Try to make both sides match!"
+        },
+        "6-8": {
+          "summary": "Create a symmetrical floor pattern using colored powder, rice, or chalk, inspired by the rangoli tradition. These radial designs start from a center point and grow outward like a flower.",
+          "creative_prompt": "Start with a dot grid on paper or pavement. Connect dots to form a symmetrical shape radiating from the center. Fill sections with bright colors using chalk, colored pencils, or even sprinkled spices. Aim for perfect symmetry!"
+        },
+        "9-12": {
+          "summary": "Rangoli patterns use rotational symmetry, where a motif repeats around a center point at equal angles. This is the same math behind snowflakes, gear teeth, and kaleidoscopes.",
+          "creative_prompt": "Design a rangoli using a protractor to place dots at exact angles (try 6-fold or 8-fold symmetry). Calculate the angle of rotation for your pattern. Then research how crystallographers use similar symmetry groups to classify minerals."
+        }
+      }
+    },
+    {
+      "id": "bark-painting-australia",
+      "title": "Paint Stories on Bark!",
+      "summary": "Use dot-painting techniques on bark or brown paper to create earth-toned artworks, inspired by Indigenous Australian art traditions. Every dot pattern tells a story.",
+      "source_hint": "A school in Darwin, Australia",
+      "creative_prompt": "Use brown paper or cardboard as your 'bark' canvas. Dip the end of a cotton bud or pencil eraser into paint and press dots in patterns -- circles, waves, and animal shapes. Use earthy colors: ochre, brown, white, and red.",
+      "category": "art_project",
+      "illustration_emoji": "🌿🟤",
+      "cta_type": "story",
+      "cta_route": "/upload",
+      "age_adaptations": {
+        "3-5": {
+          "summary": "Press dots of paint onto brown paper to make dotty patterns and animal shapes!",
+          "creative_prompt": "Ask a grownup to give you brown paper and some paint. Dip your finger or a cotton bud into paint and press dots to make a circle pattern. Can you make a dotty turtle or snake?"
+        },
+        "6-8": {
+          "summary": "Use dot-painting techniques on bark or brown paper to create earth-toned artworks, inspired by Indigenous Australian art traditions. Every dot pattern tells a story.",
+          "creative_prompt": "Use brown paper or cardboard as your 'bark' canvas. Dip the end of a cotton bud or pencil eraser into paint and press dots in patterns -- circles, waves, and animal shapes. Use earthy colors: ochre, brown, white, and red."
+        },
+        "9-12": {
+          "summary": "Indigenous Australian dot painting is one of the oldest continuous art traditions on Earth, dating back tens of thousands of years. The dot technique creates optical texture and depth, similar to pointillism developed by Seurat in the 1880s.",
+          "creative_prompt": "Create a dot painting that tells a journey story -- map a path with symbols for water, camp, and meeting places. Research how pointillism works: individual dots of pure color blend in the viewer's eye (optical mixing). Experiment with dot spacing to create light and shadow effects."
+        }
+      }
+    },
+    {
+      "id": "yarn-bombing-netherlands",
+      "title": "Wrap the World in Colorful Yarn!",
+      "summary": "Wrap yarn around cardboard shapes, sticks, or even furniture to create cozy, colorful sculptures. Yarn bombing turns everyday objects into art installations!",
+      "source_hint": "A kid in Amsterdam, Netherlands",
+      "creative_prompt": "Cut a shape from thick cardboard -- a star, heart, or letter. Wrap colorful yarn tightly around it, changing colors as you go. Layer different textures and thicknesses. Attach your finished piece to a stick or hang it up!",
+      "category": "art_project",
+      "illustration_emoji": "🧶🌈",
+      "cta_type": "draw",
+      "cta_route": "/upload",
+      "age_adaptations": {
+        "3-5": {
+          "summary": "Wrap colorful yarn around big cardboard shapes to make fuzzy, cozy art!",
+          "creative_prompt": "Ask a grownup to cut a big heart or star from cardboard and make a small notch at the edge. Hook the yarn in the notch and wrap it around and around. Use your favorite colors!"
+        },
+        "6-8": {
+          "summary": "Wrap yarn around cardboard shapes, sticks, or even furniture to create cozy, colorful sculptures. Yarn bombing turns everyday objects into art installations!",
+          "creative_prompt": "Cut a shape from thick cardboard -- a star, heart, or letter. Wrap colorful yarn tightly around it, changing colors as you go. Layer different textures and thicknesses. Attach your finished piece to a stick or hang it up!"
+        },
+        "9-12": {
+          "summary": "Yarn bombing is a form of street art that transforms public spaces. The tension and friction of wrapped yarn creates a self-locking structure -- the same physics that makes woven fabric hold together without glue.",
+          "creative_prompt": "Design a yarn-wrapped sculpture that covers a 3D object (a branch, bottle, or frame). Plan your color gradient in advance. Research how textile engineers calculate thread tension and weave density, then experiment with tight vs. loose wrapping to see how tension changes the final shape."
+        }
+      }
+    },
+    {
+      "id": "paper-marbling-mexico",
+      "title": "Swirl Colors on Water!",
+      "summary": "Drop paint onto water and swirl it into mesmerizing patterns, then lay paper on top to capture the design. No two marbled sheets are ever the same!",
+      "source_hint": "A school in Oaxaca, Mexico",
+      "creative_prompt": "Fill a shallow tray with water. Drop small amounts of acrylic paint or nail polish on the surface. Use a toothpick to swirl the colors into patterns. Gently lay paper on top, wait 3 seconds, then lift to reveal your marbled masterpiece!",
+      "category": "art_project",
+      "illustration_emoji": "🌊🎨",
+      "cta_type": "draw",
+      "cta_route": "/upload",
+      "age_adaptations": {
+        "3-5": {
+          "summary": "Drop paint on water, swirl it around, and lift a magical pattern onto paper!",
+          "creative_prompt": "Ask a grownup to set up a tray of water and drop in some washable paint. Use a stick to swirl the colors gently. Then a grownup can help lay paper on top. Lift it up and see the surprise pattern!"
+        },
+        "6-8": {
+          "summary": "Drop paint onto water and swirl it into mesmerizing patterns, then lay paper on top to capture the design. No two marbled sheets are ever the same!",
+          "creative_prompt": "Fill a shallow tray with water. Drop small amounts of acrylic paint or nail polish on the surface. Use a toothpick to swirl the colors into patterns. Gently lay paper on top, wait 3 seconds, then lift to reveal your marbled masterpiece!"
+        },
+        "9-12": {
+          "summary": "Paper marbling works because of surface tension: paint floats on water because it is less dense, and swirling creates laminar flow patterns. These same fluid dynamics equations describe weather systems and ocean currents.",
+          "creative_prompt": "Experiment with adding dish soap to some paint drops (it breaks surface tension) and compare how treated vs. untreated drops behave. Try adding thickener (cornstarch) to the water to slow the swirling. Research how fluid dynamics and the Navier-Stokes equations describe these flowing patterns."
+        }
+      }
+    },
+    {
+      "id": "mosaic-tiles-ghana",
+      "title": "Build a Mosaic from Tiny Pieces!",
+      "summary": "Cut or tear paper into small pieces and arrange them like tiles to form a larger picture. Mosaics turn fragments into something whole and beautiful!",
+      "source_hint": "A kid in Accra, Ghana",
+      "creative_prompt": "Tear or cut colored paper, old magazines, or fabric scraps into small squares. Sketch a simple outline on cardboard -- an animal, face, or landscape. Glue your 'tiles' inside the outline, leaving tiny gaps between pieces like a real mosaic.",
+      "category": "art_project",
+      "illustration_emoji": "🟦🟨",
+      "cta_type": "draw",
+      "cta_route": "/upload",
+      "age_adaptations": {
+        "3-5": {
+          "summary": "Tear paper into little pieces and stick them together to make a big colorful picture!",
+          "creative_prompt": "Ask a grownup to draw a big animal shape on paper. Tear colored paper into small pieces and glue them inside the shape. Fill it all up to make a colorful mosaic animal!"
+        },
+        "6-8": {
+          "summary": "Cut or tear paper into small pieces and arrange them like tiles to form a larger picture. Mosaics turn fragments into something whole and beautiful!",
+          "creative_prompt": "Tear or cut colored paper, old magazines, or fabric scraps into small squares. Sketch a simple outline on cardboard -- an animal, face, or landscape. Glue your 'tiles' inside the outline, leaving tiny gaps between pieces like a real mosaic."
+        },
+        "9-12": {
+          "summary": "Mosaics are a tiling problem: how do you cover a surface with small pieces while minimizing gaps? Mathematicians call this tessellation, and it connects to pixel displays, where tiny colored squares create images on your screen.",
+          "creative_prompt": "Plan your mosaic on graph paper first, assigning a color to each cell like pixel art. Calculate how many tiles you need for each color. Research how screen resolution works (pixels per inch) and compare your mosaic's 'resolution' to a phone screen. Try using only 4 colors -- can you still make a recognizable image?"
+        }
+      }
+    },
+    {
+      "id": "shadow-puppets-sweden",
+      "title": "Bring Shadow Puppets to Life!",
+      "summary": "Cut out character shapes, attach them to sticks, and perform a shadow play using a lamp and a white sheet. Your flat puppets become living characters on the shadow stage!",
+      "source_hint": "A school in Stockholm, Sweden",
+      "creative_prompt": "Draw characters and scenery on thick paper and cut them out. Tape each piece to a stick or straw. Hang a white sheet, shine a lamp behind it, and hold your puppets between the light and the sheet. Move them to act out a story!",
+      "category": "art_project",
+      "illustration_emoji": "🎭🔦",
+      "cta_type": "story",
+      "cta_route": "/upload",
+      "age_adaptations": {
+        "3-5": {
+          "summary": "Make shadow shapes on a wall using cut-out paper puppets and a flashlight!",
+          "creative_prompt": "Ask a grownup to cut out simple animal shapes from paper and tape them to popsicle sticks. Shine a flashlight at a wall and hold your puppet in front of it. Can you make your shadow animal walk and dance?"
+        },
+        "6-8": {
+          "summary": "Cut out character shapes, attach them to sticks, and perform a shadow play using a lamp and a white sheet. Your flat puppets become living characters on the shadow stage!",
+          "creative_prompt": "Draw characters and scenery on thick paper and cut them out. Tape each piece to a stick or straw. Hang a white sheet, shine a lamp behind it, and hold your puppets between the light and the sheet. Move them to act out a story!"
+        },
+        "9-12": {
+          "summary": "Shadow puppets demonstrate how light travels in straight lines and creates umbra (full shadow) and penumbra (partial shadow). Moving a puppet closer to the light source makes its shadow larger -- the same principle behind solar eclipses.",
+          "creative_prompt": "Build a shadow theater with moving parts: jointed arms, opening mouths, or spinning scenery. Experiment with distance from the light to control shadow size and sharpness. Research how the inverse square law of light intensity affects shadow contrast, and try using colored filters to create tinted shadows."
+        }
+      }
+    },
+    {
+      "id": "ice-painting-canada",
+      "title": "Paint with Frozen Colors!",
+      "summary": "Freeze colored water into ice blocks and slide them across paper as they melt, leaving trails of blended color. The melting creates effects no brush can match!",
+      "source_hint": "A kid in Montreal, Canada",
+      "creative_prompt": "Mix washable paint with water in an ice cube tray. Freeze overnight with popsicle sticks inserted as handles. Pop out your paint cubes and glide them across thick paper. Watch the colors blend and bleed as the ice melts!",
+      "category": "art_project",
+      "illustration_emoji": "🧊🎨",
+      "cta_type": "draw",
+      "cta_route": "/upload",
+      "age_adaptations": {
+        "3-5": {
+          "summary": "Slide frozen paint cubes on paper and watch them leave behind colorful, melty trails!",
+          "creative_prompt": "Ask a grownup to freeze colored water with sticks in an ice cube tray the night before. Hold the stick and slide your ice cube on paper. Wow, the ice draws as it melts! What happens when two colors meet?"
+        },
+        "6-8": {
+          "summary": "Freeze colored water into ice blocks and slide them across paper as they melt, leaving trails of blended color. The melting creates effects no brush can match!",
+          "creative_prompt": "Mix washable paint with water in an ice cube tray. Freeze overnight with popsicle sticks inserted as handles. Pop out your paint cubes and glide them across thick paper. Watch the colors blend and bleed as the ice melts!"
+        },
+        "9-12": {
+          "summary": "Ice painting demonstrates phase change: solid ice absorbs heat energy from the room and transitions to liquid water, carrying dissolved pigment across the paper. The melting rate depends on ambient temperature, surface area, and pressure.",
+          "creative_prompt": "Design a controlled experiment: freeze paint cubes of different sizes and shapes, then time how long each takes to melt completely on paper. Measure the trail length and width. Does adding salt to some cubes change the melting rate or the art effect? Graph your results and explain the thermodynamics."
+        }
+      }
+    },
+    {
+      "id": "cardboard-robot",
+      "title": "Cardboard Robot That Waves Hello",
+      "summary": "A young inventor built a robot out of cardboard boxes and string that can wave its arms when you pull a lever. It even has blinking LED eyes!",
+      "source_hint": "A kid in Tokyo, Japan",
+      "creative_prompt": "Design your own cardboard robot! Draw what it looks like and label the parts that move. Think about how pulling a string could make an arm wave.",
+      "category": "invention",
+      "illustration_emoji": "🤖📦",
+      "cta_type": "draw",
+      "cta_route": "/upload",
+      "age_adaptations": {
+        "3-5": {
+          "summary": "A kid made a fun robot from cardboard boxes! It can wave its arms when you pull a string.",
+          "creative_prompt": "Draw a robot made of boxes! Give it a face and big arms."
+        },
+        "6-8": {
+          "summary": "A young inventor built a robot out of cardboard boxes and string that can wave its arms when you pull a lever. It even has blinking LED eyes!",
+          "creative_prompt": "Design your own cardboard robot! Draw what it looks like and label the parts that move. Think about how pulling a string could make an arm wave."
+        },
+        "9-12": {
+          "summary": "A student engineered a cardboard robot using simple machines — a lever-and-pulley system controls arm movement, and a basic LED circuit with a switch creates blinking eyes. The whole thing runs on two AA batteries.",
+          "creative_prompt": "Design a cardboard robot with at least two moving parts. Sketch the lever and pulley mechanisms that make it move. Bonus: plan an LED circuit for the eyes using a battery and switch."
+        }
+      }
+    },
+    {
+      "id": "solar-powered-fan",
+      "title": "Solar-Powered Fan for Hot Days",
+      "summary": "A student created a small fan powered by a solar panel to keep cool during outdoor recess. It spins faster when the sun is brighter!",
+      "source_hint": "A student in Mumbai, India",
+      "creative_prompt": "Draw your own solar-powered gadget! It could be a fan, a light, or something totally new. Show where the solar panel goes and what it powers.",
+      "category": "invention",
+      "illustration_emoji": "☀️🌀",
+      "cta_type": "draw",
+      "cta_route": "/upload",
+      "age_adaptations": {
+        "3-5": {
+          "summary": "A kid made a little fan that spins using sunshine! The sunnier it is, the faster it goes.",
+          "creative_prompt": "Draw a fan that runs on sunshine! Make the sun big and bright in your picture."
+        },
+        "6-8": {
+          "summary": "A student created a small fan powered by a solar panel to keep cool during outdoor recess. It spins faster when the sun is brighter!",
+          "creative_prompt": "Draw your own solar-powered gadget! It could be a fan, a light, or something totally new. Show where the solar panel goes and what it powers."
+        },
+        "9-12": {
+          "summary": "A student built a portable fan using a small photovoltaic solar panel connected to a DC motor. The fan speed varies with light intensity because more photons hitting the panel generate a higher voltage, spinning the motor faster.",
+          "creative_prompt": "Design a solar-powered device and draw the energy flow: sunlight → solar panel → electrical energy → motor/device. Calculate how many hours of sunlight you'd need to run it during a school day."
+        }
+      }
+    },
+    {
+      "id": "rain-collector",
+      "title": "Clever Rain Collector for the Garden",
+      "summary": "A creative kid designed a rain collector using funnels and bottles that waters the family garden automatically when it rains. No electricity needed!",
+      "source_hint": "A kid in Lagos, Nigeria",
+      "creative_prompt": "Draw a rain-collecting system for a garden! Think about how to catch rainwater from a rooftop and guide it to your plants.",
+      "category": "invention",
+      "illustration_emoji": "🌧️🌱",
+      "cta_type": "draw",
+      "cta_route": "/upload",
+      "age_adaptations": {
+        "3-5": {
+          "summary": "A kid made a way to catch rain in bottles and use it to water flowers! The rain drips right to the plants.",
+          "creative_prompt": "Draw a cup or bucket catching rain from the sky! Add some happy flowers getting water."
+        },
+        "6-8": {
+          "summary": "A creative kid designed a rain collector using funnels and bottles that waters the family garden automatically when it rains. No electricity needed!",
+          "creative_prompt": "Draw a rain-collecting system for a garden! Think about how to catch rainwater from a rooftop and guide it to your plants."
+        },
+        "9-12": {
+          "summary": "A student engineered a passive rainwater harvesting system using gravity. Rooftop funnels channel water through PVC pipes into a storage tank with a filtered outlet. A simple float valve controls flow to drip-irrigation lines in the garden.",
+          "creative_prompt": "Design a rainwater harvesting system with labeled parts: catchment area, filter, storage tank, and distribution pipes. Calculate how many liters you could collect from a 10 square meter roof during a 20mm rainfall."
+        }
+      }
+    },
+    {
+      "id": "automatic-pet-feeder",
+      "title": "Automatic Pet Feeder with a Timer",
+      "summary": "A young tinkerer built an automatic pet feeder from a plastic container and a simple timer so their cat never misses breakfast, even on sleepy mornings!",
+      "source_hint": "A student in Berlin, Germany",
+      "creative_prompt": "Write a story about an inventor kid who builds a gadget to take care of their pet. What does the invention do? Does anything funny go wrong?",
+      "category": "invention",
+      "illustration_emoji": "🐱⏰",
+      "cta_type": "story",
+      "cta_route": "/interactive",
+      "age_adaptations": {
+        "3-5": {
+          "summary": "A kid made a special bowl that gives their cat food at the right time! Now the cat is always happy at breakfast.",
+          "creative_prompt": "Tell a story about a kid who makes a magic food bowl for their pet! What animal is it for?"
+        },
+        "6-8": {
+          "summary": "A young tinkerer built an automatic pet feeder from a plastic container and a simple timer so their cat never misses breakfast, even on sleepy mornings!",
+          "creative_prompt": "Write a story about an inventor kid who builds a gadget to take care of their pet. What does the invention do? Does anything funny go wrong?"
+        },
+        "9-12": {
+          "summary": "A student built a timed pet feeder using a servo motor controlled by a programmable timer circuit. A rotating gate mechanism releases a measured portion of food at set intervals, solving the problem of inconsistent feeding schedules.",
+          "creative_prompt": "Write a story about a young engineer who builds an automated pet care system. Include a technical challenge they have to solve — like portion control or a sensor that detects when the bowl is empty."
+        }
+      }
+    },
+    {
+      "id": "clip-on-book-light",
+      "title": "Clip-On Book Light for Reading Under the Covers",
+      "summary": "A book-loving kid invented a tiny LED light that clips onto any book so they can read at night without waking up their sibling!",
+      "source_hint": "A kid in Auckland, New Zealand",
+      "creative_prompt": "Draw your dream reading invention! Maybe it's a light, a page-turner, or a bookmark that reads aloud. Let your imagination go wild!",
+      "category": "invention",
+      "illustration_emoji": "📖💡",
+      "cta_type": "draw",
+      "cta_route": "/upload",
+      "age_adaptations": {
+        "3-5": {
+          "summary": "A kid made a tiny light that clips on a book so they can read stories at bedtime! It's small and not too bright.",
+          "creative_prompt": "Draw a little light for reading your favorite book at night! Where would you clip it?"
+        },
+        "6-8": {
+          "summary": "A book-loving kid invented a tiny LED light that clips onto any book so they can read at night without waking up their sibling!",
+          "creative_prompt": "Draw your dream reading invention! Maybe it's a light, a page-turner, or a bookmark that reads aloud. Let your imagination go wild!"
+        },
+        "9-12": {
+          "summary": "A student designed a clip-on LED reading light with a focused beam angle to minimize light spill. It uses a low-power LED with a coin cell battery and a 3D-printed adjustable clip, lasting over 40 hours on a single battery.",
+          "creative_prompt": "Design a clip-on book light and think about the engineering: beam angle (focused vs. wide), battery life, and ergonomic clip design. Sketch the circuit and the clip mechanism."
+        }
+      }
+    },
+    {
+      "id": "shoe-tying-helper",
+      "title": "Shoe-Tying Helper for Little Hands",
+      "summary": "A thoughtful kid invented a simple gadget that helps younger children tie their shoes by guiding the laces through colorful loops. No more tripping on untied shoes!",
+      "source_hint": "A student in Bogotá, Colombia",
+      "creative_prompt": "Write a story about a kid who invents something to help younger children with an everyday task. What problem do they solve, and how do other kids react?",
+      "category": "invention",
+      "illustration_emoji": "👟🎀",
+      "cta_type": "story",
+      "cta_route": "/interactive",
+      "age_adaptations": {
+        "3-5": {
+          "summary": "A kid made a fun helper that makes tying shoes easier! It has colorful loops that show you where the laces go.",
+          "creative_prompt": "Tell a story about shoes that can tie themselves! What kind of magic or trick makes it work?"
+        },
+        "6-8": {
+          "summary": "A thoughtful kid invented a simple gadget that helps younger children tie their shoes by guiding the laces through colorful loops. No more tripping on untied shoes!",
+          "creative_prompt": "Write a story about a kid who invents something to help younger children with an everyday task. What problem do they solve, and how do other kids react?"
+        },
+        "9-12": {
+          "summary": "A student designed an ergonomic shoe-tying assist device using color-coded guide loops and a spring-loaded lace tensioner. The design applies principles of user-centered design — observing how small children struggle with fine motor tasks and creating an intuitive solution.",
+          "creative_prompt": "Write a story about a young inventor who uses the design thinking process: observe a problem, brainstorm solutions, prototype, test with users, and improve. What everyday frustration do they tackle?"
+        }
+      }
+    },
+    {
+      "id": "plant-watering-system",
+      "title": "Self-Watering System for Classroom Plants",
+      "summary": "A science-loving kid built a self-watering system using string and water bottles so the classroom plants stay healthy over the weekend!",
+      "source_hint": "A kid in Tel Aviv, Israel",
+      "creative_prompt": "Draw an invention that takes care of plants when nobody is around! Think about how water can move from a bottle to the soil all by itself.",
+      "category": "invention",
+      "illustration_emoji": "🌿💧",
+      "cta_type": "draw",
+      "cta_route": "/upload",
+      "age_adaptations": {
+        "3-5": {
+          "summary": "A kid made a clever trick so plants can drink water by themselves! A string carries water from a bottle to the plant.",
+          "creative_prompt": "Draw a plant that gets water from a bottle all by itself! You can add a smiley face on the happy plant."
+        },
+        "6-8": {
+          "summary": "A science-loving kid built a self-watering system using string and water bottles so the classroom plants stay healthy over the weekend!",
+          "creative_prompt": "Draw an invention that takes care of plants when nobody is around! Think about how water can move from a bottle to the soil all by itself."
+        },
+        "9-12": {
+          "summary": "A student built a capillary-action watering system: cotton string wicks water from a reservoir bottle to plant soil. The rate of water transfer depends on string thickness, soil dryness, and gravity — demonstrating principles of capillary action and fluid dynamics.",
+          "creative_prompt": "Design a self-watering system and explain the science of capillary action. Experiment with variables: string material, reservoir height, and soil type. Predict which setup delivers water most efficiently and why."
+        }
+      }
+    },
+    {
+      "id": "wind-powered-car",
+      "title": "Wind-Powered Racing Car",
+      "summary": "A kid built a small car powered only by wind! Using a sail made from a plastic bag and wheels from bottle caps, it zoomed across the schoolyard.",
+      "source_hint": "A student in Bangkok, Thailand",
+      "creative_prompt": "Draw a vehicle powered by wind, water, or rubber bands — anything except a regular engine! Label the parts that make it move.",
+      "category": "invention",
+      "illustration_emoji": "🏎️💨",
+      "cta_type": "draw",
+      "cta_route": "/upload",
+      "age_adaptations": {
+        "3-5": {
+          "summary": "A kid made a tiny car that moves when the wind blows! It has a sail like a boat and rolls on little wheels.",
+          "creative_prompt": "Draw a car that goes fast using wind! Give it a big sail and round wheels."
+        },
+        "6-8": {
+          "summary": "A kid built a small car powered only by wind! Using a sail made from a plastic bag and wheels from bottle caps, it zoomed across the schoolyard.",
+          "creative_prompt": "Draw a vehicle powered by wind, water, or rubber bands — anything except a regular engine! Label the parts that make it move."
+        },
+        "9-12": {
+          "summary": "A student engineered a wind-powered car using aerodynamic principles. The sail shape affects drag and thrust, axle friction determines efficiency, and the chassis weight impacts acceleration. Adjusting the sail angle changes how much wind force converts to forward motion.",
+          "creative_prompt": "Design a wind-powered car and think about the physics: How does sail area affect speed? What's the trade-off between a larger sail (more force) and more weight/drag? Sketch two designs and predict which would win a race."
+        }
+      }
+    },
+    {
+      "id": "marble-run-machine",
+      "title": "Epic Marble Run Machine",
+      "summary": "A kid built an amazing marble run from cardboard tubes and tape that sends marbles through loops, jumps, and funnels — it took three weeks to perfect!",
+      "source_hint": "A kid in London, UK",
+      "creative_prompt": "Write a story about a kid who builds the most incredible marble run ever. Each day they add something new. What wild features does it end up with?",
+      "category": "invention",
+      "illustration_emoji": "🔮🎢",
+      "cta_type": "story",
+      "cta_route": "/interactive",
+      "age_adaptations": {
+        "3-5": {
+          "summary": "A kid made a cool track for marbles! The marbles roll down, go through tunnels, and land in a cup at the bottom.",
+          "creative_prompt": "Tell a story about a marble that goes on a big adventure rolling down a track! Where does it end up?"
+        },
+        "6-8": {
+          "summary": "A kid built an amazing marble run from cardboard tubes and tape that sends marbles through loops, jumps, and funnels — it took three weeks to perfect!",
+          "creative_prompt": "Write a story about a kid who builds the most incredible marble run ever. Each day they add something new. What wild features does it end up with?"
+        },
+        "9-12": {
+          "summary": "A student engineered a multi-level marble run demonstrating gravitational potential energy conversion to kinetic energy. Loop-the-loops require minimum entry speed (calculated using centripetal force), and jumps need precise angle calculations to land correctly.",
+          "creative_prompt": "Write a story about a young engineer who enters a marble-run competition. They must solve physics challenges: calculating the minimum height for a loop, the right angle for a jump, and how friction affects the final speed. Include the math!"
+        }
+      }
+    },
+    {
+      "id": "braille-label-maker",
+      "title": "Braille Label Maker for the Classroom",
+      "summary": "A caring kid invented a simple tool to press braille dots into sticky labels so a visually impaired classmate can label their supplies independently.",
+      "source_hint": "A student in Houston, USA",
+      "creative_prompt": "Draw an invention that helps someone who has a disability do something more easily. Think about what daily tasks might be tricky and how your invention solves that.",
+      "category": "invention",
+      "illustration_emoji": "⠿🏷️",
+      "cta_type": "draw",
+      "cta_route": "/upload",
+      "age_adaptations": {
+        "3-5": {
+          "summary": "A kid made a special tool that presses bumpy dots onto labels. These dots help a friend who cannot see read the labels by touching them!",
+          "creative_prompt": "Draw something that helps a friend! Maybe it helps them reach high places, hear better, or find things easily."
+        },
+        "6-8": {
+          "summary": "A caring kid invented a simple tool to press braille dots into sticky labels so a visually impaired classmate can label their supplies independently.",
+          "creative_prompt": "Draw an invention that helps someone who has a disability do something more easily. Think about what daily tasks might be tricky and how your invention solves that."
+        },
+        "9-12": {
+          "summary": "A student designed a manual braille embosser using a grid template and a stylus to create standardized 6-dot braille cells on adhesive labels. The tool applies principles of accessible design and follows the Grade 1 Braille encoding standard.",
+          "creative_prompt": "Design an assistive technology device. Research the braille system (a 2x3 grid of dots encoding letters) and sketch a tool that can emboss these patterns accurately. Consider: How do you ensure consistent dot spacing? How might you add a letter guide for sighted users?"
+        }
+      }
+    },
+    {
+      "id": "noise-canceling-pillow-fort",
+      "title": "Noise-Canceling Pillow Fort",
+      "summary": "A kid who loves quiet time designed a pillow fort with extra-thick walls and special flaps that block out noise — the perfect cozy reading nook!",
+      "source_hint": "A kid in Lyon, France",
+      "creative_prompt": "Explore how sound works! Find out why soft materials absorb sound while hard surfaces bounce it back. What's the science behind a quiet space?",
+      "category": "invention",
+      "illustration_emoji": "🏰🔇",
+      "cta_type": "explore",
+      "cta_route": "/news",
+      "age_adaptations": {
+        "3-5": {
+          "summary": "A kid built a super cozy pillow fort that is really quiet inside! Big fluffy pillows keep all the loud sounds out.",
+          "creative_prompt": "Look at the pillows and blankets around you! Stack them up and listen — is it quieter inside? What sounds can you still hear?"
+        },
+        "6-8": {
+          "summary": "A kid who loves quiet time designed a pillow fort with extra-thick walls and special flaps that block out noise — the perfect cozy reading nook!",
+          "creative_prompt": "Explore how sound works! Find out why soft materials absorb sound while hard surfaces bounce it back. What's the science behind a quiet space?"
+        },
+        "9-12": {
+          "summary": "A student applied acoustics principles to design a sound-dampening pillow fort. Soft, dense materials absorb sound waves by converting kinetic energy to heat through friction. Multiple layers with air gaps increase absorption across different frequencies, similar to how professional soundproofing works.",
+          "creative_prompt": "Research sound absorption vs. sound reflection. Why do recording studios use foam panels? Design a pillow fort optimized for noise reduction: consider material density, layer thickness, and air gaps. Test your design by measuring noise levels inside vs. outside."
+        }
+      }
+    },
+    {
+      "id": "shadow-puppet-show",
+      "title": "Shadow Puppet Theater Comes Alive!",
+      "summary": "A group of students in Indonesia created an amazing shadow puppet show using cardboard cutouts and a flashlight. They told a traditional folk tale with dancing shadows on the wall!",
+      "source_hint": "A kid/school in Jakarta, Indonesia",
+      "creative_prompt": "Make your own shadow puppets from cardboard and put on a short show! Use a lamp or flashlight behind a white sheet and act out your favorite story.",
+      "category": "performance",
+      "illustration_emoji": "🎭🔦",
+      "cta_type": "story",
+      "cta_route": "/interactive",
+      "age_adaptations": {
+        "3-5": {
+          "summary": "Kids in Indonesia made shadow shapes on the wall with their hands and cardboard! The shadows danced and told a fun story.",
+          "creative_prompt": "Use your hands to make shadow shapes on the wall with a flashlight. Can you make a bunny? A bird? Tell a little story with your shadows!"
+        },
+        "6-8": {
+          "summary": "A group of students in Indonesia created an amazing shadow puppet show using cardboard cutouts and a flashlight. They told a traditional folk tale with dancing shadows on the wall!",
+          "creative_prompt": "Make your own shadow puppets from cardboard and put on a short show! Use a lamp or flashlight behind a white sheet and act out your favorite story."
+        },
+        "9-12": {
+          "summary": "Students in Indonesia built a full shadow puppet theater inspired by Wayang Kulit, a traditional Indonesian art form. They designed articulated puppets with moving joints and performed a narrative with a clear beginning, conflict, and resolution.",
+          "creative_prompt": "Design articulated shadow puppets with moving parts using split pins. Plan your staging: consider the light source angle for sharp vs. soft shadows. Write a short script with narrative structure — setup, rising action, climax, and resolution — then perform it!"
+        }
+      }
+    },
+    {
+      "id": "body-percussion-band",
+      "title": "No Instruments? No Problem — Body Beats!",
+      "summary": "Students in Spain formed a body percussion band using only claps, snaps, stomps, and pats. They performed a rhythm piece that got the whole school clapping along!",
+      "source_hint": "A kid/school in Barcelona, Spain",
+      "creative_prompt": "Create a body percussion piece using claps, stomps, knee pats, and finger snaps. Layer different sounds together and try to keep a steady beat for 30 seconds!",
+      "category": "performance",
+      "illustration_emoji": "👏🎵",
+      "cta_type": "draw",
+      "cta_route": "/upload",
+      "age_adaptations": {
+        "3-5": {
+          "summary": "Kids in Spain made music using just their bodies — clapping, stomping, and patting their knees. It sounded like a real band!",
+          "creative_prompt": "Clap your hands, stomp your feet, and pat your knees to make a fun beat. Can you do it to your favorite song?"
+        },
+        "6-8": {
+          "summary": "Students in Spain formed a body percussion band using only claps, snaps, stomps, and pats. They performed a rhythm piece that got the whole school clapping along!",
+          "creative_prompt": "Create a body percussion piece using claps, stomps, knee pats, and finger snaps. Layer different sounds together and try to keep a steady beat for 30 seconds!"
+        },
+        "9-12": {
+          "summary": "A student ensemble in Spain performed a complex body percussion arrangement inspired by the MAYUMANA style. They used polyrhythms — multiple rhythm patterns happening at the same time — and practiced syncopation to create an electrifying performance.",
+          "creative_prompt": "Compose a body percussion piece with at least two contrasting rhythm layers (e.g., a steady stomp pattern against a syncopated clap pattern). Experiment with dynamics — start soft and build to a loud finish. Record it and map out the rhythm notation!"
+        }
+      }
+    },
+    {
+      "id": "storytelling-sound-effects",
+      "title": "Storytime Gets Loud and Wild!",
+      "summary": "A student in Scotland told a spooky story while friends made all the sound effects live — rain, thunder, creaking doors, and howling wind using everyday objects!",
+      "source_hint": "A kid/school in Edinburgh, Scotland",
+      "creative_prompt": "Pick a short story and perform it with live sound effects! Use paper for rain, a pot lid for thunder, and your voice for wind. Get friends or family to help with the sounds!",
+      "category": "performance",
+      "illustration_emoji": "📖🔊",
+      "cta_type": "story",
+      "cta_route": "/interactive",
+      "age_adaptations": {
+        "3-5": {
+          "summary": "A kid in Scotland told a story and friends made funny sounds — like rain with crinkly paper and thunder with a big pot! It was so exciting!",
+          "creative_prompt": "Tell a story about a rainy day. Make the sound of rain by tapping your fingers on a table. Can you make thunder sounds too? What other sounds can you add?"
+        },
+        "6-8": {
+          "summary": "A student in Scotland told a spooky story while friends made all the sound effects live — rain, thunder, creaking doors, and howling wind using everyday objects!",
+          "creative_prompt": "Pick a short story and perform it with live sound effects! Use paper for rain, a pot lid for thunder, and your voice for wind. Get friends or family to help with the sounds!"
+        },
+        "9-12": {
+          "summary": "Students in Scotland produced a Foley art performance — the craft of creating sound effects for storytelling, used in film and radio. They timed each effect precisely to match the narrator's pacing and built tension through careful sound design.",
+          "creative_prompt": "Write a 2-minute story and create a full Foley sound design plan. Map each moment to a specific sound effect and the object you will use. Practice the timing so effects land exactly on cue. Think about pacing — how does silence build suspense as much as sound?"
+        }
+      }
+    },
+    {
+      "id": "mime-scene-performance",
+      "title": "The Invisible World of Mime!",
+      "summary": "A student in Italy performed a mime scene pretending to be stuck inside a shrinking box. Without saying a single word, the audience could feel the walls closing in!",
+      "source_hint": "A kid/school in Rome, Italy",
+      "creative_prompt": "Try a mime challenge! Without talking, act out being stuck in a box, walking against strong wind, or pulling a heavy rope. Can people guess what you are doing?",
+      "category": "performance",
+      "illustration_emoji": "🤫🎭",
+      "cta_type": "draw",
+      "cta_route": "/upload",
+      "age_adaptations": {
+        "3-5": {
+          "summary": "A kid in Italy pretended to be inside an invisible box — pushing the walls and ceiling without any real box! Everyone was laughing and guessing.",
+          "creative_prompt": "Pretend you are holding a really big, heavy ball. Now pretend you are eating a giant ice cream cone! Can your family guess what you are doing without you talking?"
+        },
+        "6-8": {
+          "summary": "A student in Italy performed a mime scene pretending to be stuck inside a shrinking box. Without saying a single word, the audience could feel the walls closing in!",
+          "creative_prompt": "Try a mime challenge! Without talking, act out being stuck in a box, walking against strong wind, or pulling a heavy rope. Can people guess what you are doing?"
+        },
+        "9-12": {
+          "summary": "A performer in Italy studied the techniques of classical mime — using fixed-point illusion, muscle isolation, and exaggerated facial expressions to create invisible objects the audience can almost see. The art form requires extreme body control and spatial awareness.",
+          "creative_prompt": "Learn two core mime techniques: the 'wall' (pressing hands against a flat invisible surface) and the 'rope pull' (creating resistance with your body). Practice slow, controlled movements. Then create a 1-minute mime story with a beginning, middle, and twist ending — no words allowed!"
+        }
+      }
+    },
+    {
+      "id": "paper-plate-masks-drama",
+      "title": "Paper Plate Masks Steal the Show!",
+      "summary": "Students in Senegal made colorful character masks from paper plates and performed a short play about animals in the savanna. Each mask had a unique personality!",
+      "source_hint": "A kid/school in Dakar, Senegal",
+      "creative_prompt": "Grab a paper plate and turn it into a character mask — a lion, a wise owl, or a silly monster. Then make up a short scene where your character goes on an adventure!",
+      "category": "performance",
+      "illustration_emoji": "🎨🎭",
+      "cta_type": "story",
+      "cta_route": "/interactive",
+      "age_adaptations": {
+        "3-5": {
+          "summary": "Kids in Senegal colored paper plates to look like animals — a lion, a bird, and a turtle! They held them up and pretended to be the animals talking to each other.",
+          "creative_prompt": "Color a paper plate to look like your favorite animal. Hold it up to your face and pretend to be that animal! What does your animal say? Where does it live?"
+        },
+        "6-8": {
+          "summary": "Students in Senegal made colorful character masks from paper plates and performed a short play about animals in the savanna. Each mask had a unique personality!",
+          "creative_prompt": "Grab a paper plate and turn it into a character mask — a lion, a wise owl, or a silly monster. Then make up a short scene where your character goes on an adventure!"
+        },
+        "9-12": {
+          "summary": "Students in Senegal explored mask theater traditions from West Africa, where masks represent spirits, ancestors, and archetypes. They designed masks with symbolic colors and shapes, then devised an ensemble performance using movement, rhythm, and call-and-response dialogue.",
+          "creative_prompt": "Research one mask tradition (African, Greek, or Commedia dell'Arte). Design a mask that represents a character archetype (the trickster, the hero, the guardian). Write a short ensemble scene where at least three masked characters interact. Consider how wearing a mask changes your voice projection and body language!"
+        }
+      }
+    },
+    {
+      "id": "beatbox-rhythms",
+      "title": "Boom-Tss-Ka: Beatbox Stars!",
+      "summary": "A student in Cuba learned to make drum, hi-hat, and bass sounds using just their mouth. They performed a beatbox rhythm that had everyone bobbing their heads!",
+      "source_hint": "A kid/school in Havana, Cuba",
+      "creative_prompt": "Learn three basic beatbox sounds: 'B' for bass drum, 'T' for hi-hat, and 'K' for snare. Put them together in a pattern like B-T-K-T and repeat. Can you speed it up?",
+      "category": "performance",
+      "illustration_emoji": "🎤🥁",
+      "cta_type": "explore",
+      "cta_route": "/news",
+      "age_adaptations": {
+        "3-5": {
+          "summary": "A kid in Cuba made music with just their mouth! Boom sounds, ticka-ticka sounds, and shhh sounds — it sounded like real drums!",
+          "creative_prompt": "Try making a drum sound by saying 'BOOM!' Now make a quiet 'tss tss' sound. Put them together: BOOM tss BOOM tss. You are making a beat with your mouth!"
+        },
+        "6-8": {
+          "summary": "A student in Cuba learned to make drum, hi-hat, and bass sounds using just their mouth. They performed a beatbox rhythm that had everyone bobbing their heads!",
+          "creative_prompt": "Learn three basic beatbox sounds: 'B' for bass drum, 'T' for hi-hat, and 'K' for snare. Put them together in a pattern like B-T-K-T and repeat. Can you speed it up?"
+        },
+        "9-12": {
+          "summary": "A student in Cuba studied beatboxing as vocal percussion — an art form rooted in hip-hop culture. They learned inward and outward techniques, practiced maintaining a steady BPM (beats per minute), and layered multiple vocal textures to simulate a full drum kit.",
+          "creative_prompt": "Master four beatbox sounds: kick (B), hi-hat (Ts), snare (Pf), and a sustained bass hum. Create an 8-bar loop with a time signature of 4/4. Try adding variations every 4 bars to keep it interesting. Record yourself and listen back — is your tempo consistent?"
+        }
+      }
+    },
+    {
+      "id": "hand-clap-games",
+      "title": "Clap It Out — Rhythm Games Rock!",
+      "summary": "Students in Trinidad created their own hand-clapping game with a catchy rhyme. They got faster and faster until everyone was laughing and tripping over their hands!",
+      "source_hint": "A kid/school in Port of Spain, Trinidad",
+      "creative_prompt": "Make up a hand-clapping game with a partner! Create a rhyme that goes with the claps, and try adding cross-claps and knee-slaps. How fast can you go without messing up?",
+      "category": "performance",
+      "illustration_emoji": "🙌🎶",
+      "cta_type": "draw",
+      "cta_route": "/upload",
+      "age_adaptations": {
+        "3-5": {
+          "summary": "Kids in Trinidad played a clapping game together — clap your hands, clap your friend's hands, clap clap clap! They sang a fun rhyme while clapping.",
+          "creative_prompt": "Find a partner and clap hands together! Clap your own hands, then clap your partner's hands. Try singing 'Pat-a-cake' while you clap. Can you make up your own clapping song?"
+        },
+        "6-8": {
+          "summary": "Students in Trinidad created their own hand-clapping game with a catchy rhyme. They got faster and faster until everyone was laughing and tripping over their hands!",
+          "creative_prompt": "Make up a hand-clapping game with a partner! Create a rhyme that goes with the claps, and try adding cross-claps and knee-slaps. How fast can you go without messing up?"
+        },
+        "9-12": {
+          "summary": "Students in Trinidad explored hand-clap games as a form of oral tradition and rhythmic training. They analyzed the mathematical patterns in clapping sequences — binary rhythms, call-and-response structures, and acceleration curves — then choreographed a group routine with synchronized timing.",
+          "creative_prompt": "Design a 4-person hand-clap routine with at least three distinct patterns that repeat in a cycle. Include tempo changes (start at 80 BPM, accelerate to 120 BPM). Write out the sequence using a simple notation (C = clap, X = cross, K = knee). Can you identify the rhythmic pattern as binary or ternary?"
+        }
+      }
+    },
+    {
+      "id": "dance-freeze-story",
+      "title": "Dance, Freeze, Tell a Story!",
+      "summary": "A class in Brazil played a dance-freeze game where every time the music stopped, they had to freeze as a character from a story. The funniest freeze won a round!",
+      "source_hint": "A kid/school in Rio de Janeiro, Brazil",
+      "creative_prompt": "Play dance-freeze storytelling! Dance when music plays, and when it stops, freeze as a character — a superhero, a scared cat, a robot. After each freeze, say one sentence as that character!",
+      "category": "performance",
+      "illustration_emoji": "💃🧊",
+      "cta_type": "story",
+      "cta_route": "/interactive",
+      "age_adaptations": {
+        "3-5": {
+          "summary": "Kids in Brazil danced and then froze like statues! One froze like a dinosaur, one like a princess, and one like a funny frog. Everyone giggled!",
+          "creative_prompt": "Dance around the room! When someone says 'FREEZE,' stop and be a statue of an animal. Can you be a tall giraffe? A tiny mouse? A hopping bunny?"
+        },
+        "6-8": {
+          "summary": "A class in Brazil played a dance-freeze game where every time the music stopped, they had to freeze as a character from a story. The funniest freeze won a round!",
+          "creative_prompt": "Play dance-freeze storytelling! Dance when music plays, and when it stops, freeze as a character — a superhero, a scared cat, a robot. After each freeze, say one sentence as that character!"
+        },
+        "9-12": {
+          "summary": "Students in Brazil combined improvisational dance with tableau vivant (living picture) techniques. Each freeze became a scene that advanced a group story, requiring spatial awareness, expressive body positioning, and collaborative narrative building — core skills in devised theater.",
+          "creative_prompt": "Organize a dance-freeze performance where each freeze creates a tableau that tells the next chapter of a story. Plan 5 freeze moments that show: introduction, problem, attempt, twist, and resolution. Focus on levels (high, medium, low body positions) and facial expression to convey emotion without words!"
+        }
+      }
+    },
+    {
+      "id": "cup-stacking-rhythm",
+      "title": "Cup Stacking Beats Drop!",
+      "summary": "Students in Turkey created a rhythm performance using plastic cups — flipping, tapping, and passing them in a pattern while singing a song. The whole table became a drum kit!",
+      "source_hint": "A kid/school in Istanbul, Turkey",
+      "creative_prompt": "Grab a plastic cup and try the cup rhythm: tap, tap, clap, grab the cup, tap it on the table, pass it! Repeat until you have a steady pattern. Add a song on top!",
+      "category": "performance",
+      "illustration_emoji": "🥤🎵",
+      "cta_type": "draw",
+      "cta_route": "/upload",
+      "age_adaptations": {
+        "3-5": {
+          "summary": "Kids in Turkey played with cups on a table — tap tap tap! They flipped the cups and made a fun song with the tapping sounds.",
+          "creative_prompt": "Take a plastic cup and tap it gently on the table. Tap-tap-tap! Now flip it over. Tap-tap-tap! Can you make a pattern? Tap the cup, clap your hands, tap the cup again!"
+        },
+        "6-8": {
+          "summary": "Students in Turkey created a rhythm performance using plastic cups — flipping, tapping, and passing them in a pattern while singing a song. The whole table became a drum kit!",
+          "creative_prompt": "Grab a plastic cup and try the cup rhythm: tap, tap, clap, grab the cup, tap it on the table, pass it! Repeat until you have a steady pattern. Add a song on top!"
+        },
+        "9-12": {
+          "summary": "Students in Turkey mastered the cup song rhythm and extended it into a group percussion ensemble. They explored ostinato patterns (short repeated musical phrases), practiced ensemble synchronization, and experimented with canon form — starting the same pattern at staggered intervals to create layered sound.",
+          "creative_prompt": "Learn the classic cup pattern, then create a variation with a different time signature (try 3/4 instead of 4/4). Arrange a group performance in canon — person 1 starts, person 2 joins 4 beats later, person 3 joins 4 beats after that. How does the layering change the overall rhythm? Document your pattern with simple notation!"
+        }
+      }
+    },
+    {
+      "id": "rap-about-animals",
+      "title": "Animal Rap Battle: Bars and Paws!",
+      "summary": "A student in China wrote a short rap about endangered animals — rhyming facts about pandas, snow leopards, and red-crowned cranes over a beat they made by tapping on their desk!",
+      "source_hint": "A kid/school in Beijing, China",
+      "creative_prompt": "Write a 4-line rap about your favorite animal! Make the last words rhyme (like 'cat' and 'hat'). Add a beat by tapping on your desk and perform your animal rap!",
+      "category": "performance",
+      "illustration_emoji": "🎤🐾",
+      "cta_type": "story",
+      "cta_route": "/interactive",
+      "age_adaptations": {
+        "3-5": {
+          "summary": "A kid in China made up a funny song about animals! 'The panda eats bamboo, the bird says coo-coo!' They tapped on the table to make a beat.",
+          "creative_prompt": "Can you sing a tiny song about an animal? Try this: 'I am a cat, I wear a hat!' Now make up your own! Pick an animal and find a word that rhymes."
+        },
+        "6-8": {
+          "summary": "A student in China wrote a short rap about endangered animals — rhyming facts about pandas, snow leopards, and red-crowned cranes over a beat they made by tapping on their desk!",
+          "creative_prompt": "Write a 4-line rap about your favorite animal! Make the last words rhyme (like 'cat' and 'hat'). Add a beat by tapping on your desk and perform your animal rap!"
+        },
+        "9-12": {
+          "summary": "A student in China composed an educational rap about endangered species, using an AABB rhyme scheme and incorporating real conservation facts. They explored flow — how syllable count and stress patterns affect the rhythm of spoken word — and performed with a self-produced beat.",
+          "creative_prompt": "Write an 8-bar rap about an endangered animal using facts from research. Use an AABB or ABAB rhyme scheme. Pay attention to syllable count per line to keep your flow smooth — aim for a consistent 8-10 syllables. Add internal rhymes for extra style. Perform it with confidence and clear enunciation!"
+        }
+      }
+    },
+    {
+      "id": "sock-puppet-theater",
+      "title": "Sock Puppet Theater Opens Tonight!",
+      "summary": "Students in Ireland turned old socks into puppet characters and built a mini stage from a cardboard box. They performed a hilarious adventure about a sock dragon and a brave sock knight!",
+      "source_hint": "A kid/school in Dublin, Ireland",
+      "creative_prompt": "Turn an old sock into a puppet! Add button eyes and yarn hair, then build a stage from a box. Make up a story with at least two sock puppet characters and perform it!",
+      "category": "performance",
+      "illustration_emoji": "🧦🎪",
+      "cta_type": "explore",
+      "cta_route": "/news",
+      "age_adaptations": {
+        "3-5": {
+          "summary": "Kids in Ireland put socks on their hands and made them talk! One sock was a dragon and one was a princess. They played behind a box and it was like a little show!",
+          "creative_prompt": "Put a sock on your hand and make it talk! Open and close your hand to make the mouth move. Give your puppet a name and a silly voice. What does your puppet want to say?"
+        },
+        "6-8": {
+          "summary": "Students in Ireland turned old socks into puppet characters and built a mini stage from a cardboard box. They performed a hilarious adventure about a sock dragon and a brave sock knight!",
+          "creative_prompt": "Turn an old sock into a puppet! Add button eyes and yarn hair, then build a stage from a box. Make up a story with at least two sock puppet characters and perform it!"
+        },
+        "9-12": {
+          "summary": "Students in Ireland studied puppetry as a performing art — exploring character voice differentiation, puppet manipulation techniques, and stage blocking (where puppets move relative to the audience). They wrote a script with dialogue, stage directions, and comedic timing, then performed for a live audience.",
+          "creative_prompt": "Create two sock puppets with distinct character voices and personalities. Build a proscenium stage (a frame the audience views through) from cardboard. Write a 3-minute script with stage directions (enters left, exits right, aside to audience). Practice manipulating the puppet smoothly — the mouth should open on stressed syllables. Perform and ask your audience for feedback on clarity and timing!"
+        }
+      }
+    },
+    {
+      "id": "bottle-cap-mural",
+      "title": "Bottle Cap Rainbow Mural",
+      "summary": "Collect colorful bottle caps and glue them onto a board to create a giant rainbow mural. Sort caps by color and arrange them in arching rows to bring a blank wall to life!",
+      "source_hint": "A kid in Manila, Philippines",
+      "creative_prompt": "Collect at least 5 different colored bottle caps. Sketch your mural design on paper first, then glue the caps onto cardboard in a pattern or picture you love.",
+      "category": "recycling",
+      "illustration_emoji": "🧢🌈",
+      "cta_type": "draw",
+      "cta_route": "/upload",
+      "age_adaptations": {
+        "3-5": {
+          "summary": "Stick colorful bottle caps onto paper to make a pretty rainbow picture! A grownup can help with the glue.",
+          "creative_prompt": "Pick your favorite cap colors and stick them in a line with a grownup's help. Draw the sky around them!"
+        },
+        "6-8": {
+          "summary": "Collect colorful bottle caps and glue them onto a board to create a giant rainbow mural. Sort caps by color and arrange them in arching rows to bring a blank wall to life!",
+          "creative_prompt": "Collect at least 5 different colored bottle caps. Sketch your mural design on paper first, then glue the caps onto cardboard in a pattern or picture you love."
+        },
+        "9-12": {
+          "summary": "Plastic bottle caps are made from polypropylene (#5 plastic), which many recycling centers won't accept because of their small size. By upcycling them into mosaic murals, you divert non-recyclable waste from landfills and oceans.",
+          "creative_prompt": "Design a large-scale mural plan on graph paper. Calculate how many caps you need per square foot, research which plastic types the caps are made from, and write a short caption explaining the environmental impact of your art."
+        }
+      }
+    },
+    {
+      "id": "cardboard-furniture",
+      "title": "Cardboard Chair Challenge",
+      "summary": "Turn old shipping boxes into a miniature chair or table strong enough to hold a stuffed animal. Learn how folding and layering cardboard creates surprising strength!",
+      "source_hint": "A kid in Copenhagen, Denmark",
+      "creative_prompt": "Grab a big cardboard box and cut it into flat pieces. Fold and stack layers to build a small chair. Test it by sitting your heaviest stuffed animal on top!",
+      "category": "recycling",
+      "illustration_emoji": "📦🪑",
+      "cta_type": "draw",
+      "cta_route": "/upload",
+      "age_adaptations": {
+        "3-5": {
+          "summary": "Use big cardboard boxes to build a little chair for your teddy bear! A grownup can do the cutting for you.",
+          "creative_prompt": "Ask a grownup to cut a box into pieces. Stack and fold them together, then decorate your teddy bear's new chair with stickers!"
+        },
+        "6-8": {
+          "summary": "Turn old shipping boxes into a miniature chair or table strong enough to hold a stuffed animal. Learn how folding and layering cardboard creates surprising strength!",
+          "creative_prompt": "Grab a big cardboard box and cut it into flat pieces. Fold and stack layers to build a small chair. Test it by sitting your heaviest stuffed animal on top!"
+        },
+        "9-12": {
+          "summary": "Corrugated cardboard gets its strength from a fluted middle layer that acts like tiny arches. Engineers use this same principle in bridges and buildings. By reusing cardboard instead of discarding it, you save trees and reduce the energy needed to produce new paper products.",
+          "creative_prompt": "Design a cardboard chair that can hold at least 5 kg. Experiment with different folding techniques like triangular supports and cross-bracing. Document which design holds the most weight and explain why the structure works."
+        }
+      }
+    },
+    {
+      "id": "tin-can-planters",
+      "title": "Tin Can Garden Planters",
+      "summary": "Clean out empty tin cans, paint them in fun colors, and fill them with soil to grow herbs or small flowers. Your recycled garden will brighten any windowsill!",
+      "source_hint": "A kid in Santiago, Chile",
+      "creative_prompt": "Wash and dry an empty tin can (make sure there are no sharp edges). Paint it your favorite color, fill it with soil, and plant a seed. Draw your planter and what you hope will grow!",
+      "category": "recycling",
+      "illustration_emoji": "🥫🌱",
+      "cta_type": "draw",
+      "cta_route": "/upload",
+      "age_adaptations": {
+        "3-5": {
+          "summary": "A grownup makes a safe planter from a tin can. You get to paint it and put soil and seeds inside! Watch your plant grow every day.",
+          "creative_prompt": "Paint a can that a grownup has made safe for you. Drop seeds in the soil and draw a picture of what your plant might look like when it grows big!"
+        },
+        "6-8": {
+          "summary": "Clean out empty tin cans, paint them in fun colors, and fill them with soil to grow herbs or small flowers. Your recycled garden will brighten any windowsill!",
+          "creative_prompt": "Wash and dry an empty tin can (make sure there are no sharp edges). Paint it your favorite color, fill it with soil, and plant a seed. Draw your planter and what you hope will grow!"
+        },
+        "9-12": {
+          "summary": "Tin-plated steel cans take up to 50 years to decompose in landfills, but they are infinitely recyclable. By upcycling them into planters, you extend their life and grow plants that absorb CO2, creating a double environmental benefit.",
+          "creative_prompt": "Create a self-watering planter system using two tin cans and a cotton wick. Research which herbs grow best in small containers, track your plant's growth over two weeks, and calculate how much CO2 your plant might absorb in a year."
+        }
+      }
+    },
+    {
+      "id": "newspaper-baskets",
+      "title": "Newspaper Basket Weaving",
+      "summary": "Roll old newspapers into tight tubes and weave them together to make a sturdy basket. It looks amazing and keeps paper out of the trash!",
+      "source_hint": "A kid in Kigali, Rwanda",
+      "creative_prompt": "Roll newspaper pages into thin tubes and flatten them slightly. Weave them over-and-under in a crisscross pattern to form a basket base, then build up the sides. Draw your basket design before you start!",
+      "category": "recycling",
+      "illustration_emoji": "📰🧺",
+      "cta_type": "draw",
+      "cta_route": "/upload",
+      "age_adaptations": {
+        "3-5": {
+          "summary": "Roll up old newspapers with a grownup and weave them into a little basket to hold your treasures!",
+          "creative_prompt": "Ask a grownup to help you roll newspaper into tubes. Weave them together to make a tiny basket, then draw what treasures you will keep inside!"
+        },
+        "6-8": {
+          "summary": "Roll old newspapers into tight tubes and weave them together to make a sturdy basket. It looks amazing and keeps paper out of the trash!",
+          "creative_prompt": "Roll newspaper pages into thin tubes and flatten them slightly. Weave them over-and-under in a crisscross pattern to form a basket base, then build up the sides. Draw your basket design before you start!"
+        },
+        "9-12": {
+          "summary": "Paper manufacturing uses large amounts of water and energy. While newspaper is recyclable, each recycling cycle shortens the cellulose fibers, limiting how many times it can be reprocessed. Upcycling into woven baskets extends paper's useful life without any industrial processing.",
+          "creative_prompt": "Experiment with different rolling tightness and weaving patterns to find the strongest basket design. Research the paper recycling process and write a comparison of the energy cost of recycling vs. upcycling newspaper."
+        }
+      }
+    },
+    {
+      "id": "plastic-bag-weaving",
+      "title": "Plastic Bag Jump Rope",
+      "summary": "Braid old plastic bags together to create a colorful, stretchy jump rope or friendship bracelet. You will be amazed how strong braided plastic becomes!",
+      "source_hint": "A kid in Lisbon, Portugal",
+      "creative_prompt": "Cut plastic bags into long strips. Braid three strips together tightly to make a rope. Keep adding strips until your rope is long enough to jump with. Draw yourself jumping with your recycled rope!",
+      "category": "recycling",
+      "illustration_emoji": "🛍️🪢",
+      "cta_type": "story",
+      "cta_route": "/interactive",
+      "age_adaptations": {
+        "3-5": {
+          "summary": "A grownup cuts plastic bags into strips and you braid them into a colorful bracelet or short rope!",
+          "creative_prompt": "Ask a grownup to cut bags into strips. Twist and braid them together to make a bracelet. What colors did you use? Tell a story about your magical bracelet!"
+        },
+        "6-8": {
+          "summary": "Braid old plastic bags together to create a colorful, stretchy jump rope or friendship bracelet. You will be amazed how strong braided plastic becomes!",
+          "creative_prompt": "Cut plastic bags into long strips. Braid three strips together tightly to make a rope. Keep adding strips until your rope is long enough to jump with. Draw yourself jumping with your recycled rope!"
+        },
+        "9-12": {
+          "summary": "Single-use plastic bags can take up to 1,000 years to decompose and often end up in ocean ecosystems, harming marine life. By braiding them into durable items, you prevent them from entering waterways while exploring how braided structures distribute tension across multiple strands.",
+          "creative_prompt": "Create a braided plastic bag rope and test its tensile strength by hanging weights from it. Compare a 3-strand braid with a 5-strand braid. Write a short story about a community that turns all its plastic waste into useful tools."
+        }
+      }
+    },
+    {
+      "id": "egg-carton-animals",
+      "title": "Egg Carton Animal Parade",
+      "summary": "Cut up egg cartons into cups and transform each one into a different animal — caterpillars, turtles, spiders, and more. Paint them and line them up for an upcycled zoo!",
+      "source_hint": "A kid in Taipei, Taiwan",
+      "creative_prompt": "Cut an egg carton into individual cups. Pick an animal for each cup and paint it to match. Add googly eyes, pipe cleaners, or paper legs. Draw your whole animal parade before building it!",
+      "category": "recycling",
+      "illustration_emoji": "🥚🐛",
+      "cta_type": "draw",
+      "cta_route": "/upload",
+      "age_adaptations": {
+        "3-5": {
+          "summary": "A grownup cuts egg cartons into little cups. You paint them to look like caterpillars, ladybugs, or turtles!",
+          "creative_prompt": "Pick your favorite animal and paint an egg cup to look like it! A grownup will do the cutting. Draw your animal friend and give it a name!"
+        },
+        "6-8": {
+          "summary": "Cut up egg cartons into cups and transform each one into a different animal — caterpillars, turtles, spiders, and more. Paint them and line them up for an upcycled zoo!",
+          "creative_prompt": "Cut an egg carton into individual cups. Pick an animal for each cup and paint it to match. Add googly eyes, pipe cleaners, or paper legs. Draw your whole animal parade before building it!"
+        },
+        "9-12": {
+          "summary": "Molded pulp egg cartons are made from recycled paper fibers and are fully biodegradable, but foam cartons (polystyrene #6) are rarely recycled and persist in the environment for centuries. Upcycling either type into art projects extends their useful life and reduces waste stream volume.",
+          "creative_prompt": "Build a complete ecosystem diorama using egg carton animals, including predators and prey. Research the food chain in a specific habitat and label each animal's role. Write a paragraph about why biodegradable packaging matters for reducing microplastic pollution."
+        }
+      }
+    },
+    {
+      "id": "tshirt-tote-bag",
+      "title": "Old T-Shirt Tote Bag",
+      "summary": "Turn a worn-out t-shirt into a reusable tote bag with just a few cuts — no sewing needed! It is the easiest way to say goodbye to plastic shopping bags.",
+      "source_hint": "A kid in Cairo, Egypt",
+      "creative_prompt": "Find an old t-shirt you no longer wear. Cut off the sleeves and neckline to make handle shapes, then cut fringe along the bottom and tie the strips into knots to close the bag. Draw your finished tote and what you will carry in it!",
+      "category": "recycling",
+      "illustration_emoji": "👕🛒",
+      "cta_type": "draw",
+      "cta_route": "/upload",
+      "age_adaptations": {
+        "3-5": {
+          "summary": "A grownup turns an old t-shirt into a bag just by cutting and tying! You can decorate it with stamps or stickers.",
+          "creative_prompt": "Watch a grownup make a bag from a t-shirt. Then decorate it by pressing paint stamps on it! Draw what you want to carry in your new bag."
+        },
+        "6-8": {
+          "summary": "Turn a worn-out t-shirt into a reusable tote bag with just a few cuts — no sewing needed! It is the easiest way to say goodbye to plastic shopping bags.",
+          "creative_prompt": "Find an old t-shirt you no longer wear. Cut off the sleeves and neckline to make handle shapes, then cut fringe along the bottom and tie the strips into knots to close the bag. Draw your finished tote and what you will carry in it!"
+        },
+        "9-12": {
+          "summary": "The fashion industry produces about 92 million tons of textile waste per year. Cotton t-shirts require roughly 2,700 liters of water to produce. By upcycling old clothing into functional items, you reduce demand for new textile production and keep fabric out of landfills where synthetic fibers can shed microplastics.",
+          "creative_prompt": "Make a no-sew tote bag and test how much weight it can hold. Research the water footprint of cotton vs. polyester clothing. Design a poster campaign encouraging your school to do a t-shirt upcycling drive, including environmental statistics."
+        }
+      }
+    },
+    {
+      "id": "cd-disco-ball",
+      "title": "CD Disco Ball",
+      "summary": "Cut old CDs into small shiny pieces and glue them onto a ball to make your own sparkling disco ball. Hang it up and watch rainbows dance around the room!",
+      "source_hint": "A kid in San Jose, Costa Rica",
+      "creative_prompt": "Ask an adult to cut old CDs into small squares. Glue them onto a foam ball or scrunched-up newspaper ball. Hang your disco ball near a window and draw the rainbow reflections you see!",
+      "category": "recycling",
+      "illustration_emoji": "💿✨",
+      "cta_type": "draw",
+      "cta_route": "/upload",
+      "age_adaptations": {
+        "3-5": {
+          "summary": "A grownup cuts shiny CDs into safe pieces. You stick them onto a ball to make it sparkle like magic!",
+          "creative_prompt": "Stick shiny CD pieces onto a ball with a grownup's help. Hold it near a window and draw the rainbow colors you see dancing on the walls!"
+        },
+        "6-8": {
+          "summary": "Cut old CDs into small shiny pieces and glue them onto a ball to make your own sparkling disco ball. Hang it up and watch rainbows dance around the room!",
+          "creative_prompt": "Ask an adult to cut old CDs into small squares. Glue them onto a foam ball or scrunched-up newspaper ball. Hang your disco ball near a window and draw the rainbow reflections you see!"
+        },
+        "9-12": {
+          "summary": "CDs are made from polycarbonate plastic with a thin aluminum reflective layer. They are almost never accepted in curbside recycling due to their mixed-material composition. The rainbow reflections you see are caused by diffraction — light waves splitting into their component wavelengths as they bounce off the microscopic data grooves on the disc surface.",
+          "creative_prompt": "Build a disco ball and use it to experiment with light diffraction. Observe how the reflected patterns change with different light sources (sunlight, LED, incandescent). Research why CDs are difficult to recycle and propose a local collection solution for e-waste in your community."
+        }
+      }
+    },
+    {
+      "id": "cork-boats",
+      "title": "Cork Sailboat Fleet",
+      "summary": "Bundle wine corks together with rubber bands to build a tiny raft, add a toothpick mast and a paper sail, and race your fleet in a bathtub or puddle!",
+      "source_hint": "A kid in Helsinki, Finland",
+      "creative_prompt": "Gather 3-5 corks and bind them side by side with rubber bands. Poke a toothpick through a small paper triangle for a sail and stick it into the middle cork. Race your boat and draw your winning design!",
+      "category": "recycling",
+      "illustration_emoji": "🍷⛵",
+      "cta_type": "story",
+      "cta_route": "/interactive",
+      "age_adaptations": {
+        "3-5": {
+          "summary": "A grownup helps you stick corks together to make a tiny boat! Float it in the bathtub and watch it sail.",
+          "creative_prompt": "Help a grownup put corks together with rubber bands. Add a paper flag on a stick. Float your boat in water and tell a story about where it is sailing to!"
+        },
+        "6-8": {
+          "summary": "Bundle wine corks together with rubber bands to build a tiny raft, add a toothpick mast and a paper sail, and race your fleet in a bathtub or puddle!",
+          "creative_prompt": "Gather 3-5 corks and bind them side by side with rubber bands. Poke a toothpick through a small paper triangle for a sail and stick it into the middle cork. Race your boat and draw your winning design!"
+        },
+        "9-12": {
+          "summary": "Cork is harvested from the bark of cork oak trees without harming the tree, making it one of the most sustainable materials on Earth. Cork forests in the Mediterranean support high biodiversity and act as carbon sinks. Cork floats because its cells are filled with air — about 50% of its volume is trapped gas, giving it a density lower than water.",
+          "creative_prompt": "Design and test different cork boat shapes for speed and stability. Experiment with sail size and position. Research why cork forests are important for Mediterranean ecosystems and write a short adventure story about a cork boat's journey from a forest in Portugal to the open sea."
+        }
+      }
+    },
+    {
+      "id": "magazine-bead-jewelry",
+      "title": "Magazine Bead Jewelry",
+      "summary": "Roll colorful magazine pages into tight, tapered beads, seal them with glue, and string them into necklaces or bracelets. Every bead is one-of-a-kind!",
+      "source_hint": "A kid in Marrakech, Morocco",
+      "creative_prompt": "Cut long triangles from colorful magazine pages. Roll each triangle tightly around a toothpick starting from the wide end. Seal with a thin layer of white glue, let dry, and string your beads into a bracelet. Draw your jewelry design first!",
+      "category": "recycling",
+      "illustration_emoji": "📖💎",
+      "cta_type": "draw",
+      "cta_route": "/upload",
+      "age_adaptations": {
+        "3-5": {
+          "summary": "A grownup helps you roll colorful paper into tiny beads. String them together to make a beautiful bracelet!",
+          "creative_prompt": "Pick your favorite magazine pictures and a grownup will help you roll them into beads. String them on yarn to make a bracelet. Draw what your bracelet looks like!"
+        },
+        "6-8": {
+          "summary": "Roll colorful magazine pages into tight, tapered beads, seal them with glue, and string them into necklaces or bracelets. Every bead is one-of-a-kind!",
+          "creative_prompt": "Cut long triangles from colorful magazine pages. Roll each triangle tightly around a toothpick starting from the wide end. Seal with a thin layer of white glue, let dry, and string your beads into a bracelet. Draw your jewelry design first!"
+        },
+        "9-12": {
+          "summary": "Glossy magazines use clay-coated paper that is harder to recycle than plain paper because the coating must be removed during processing. By transforming them into paper beads, you skip the energy-intensive de-inking and pulping process entirely. The tapered bead shape comes from rolling a triangle — the geometry of the paper determines the bead's profile.",
+          "creative_prompt": "Experiment with different triangle dimensions to create various bead shapes (long and thin vs. round and fat). Calculate how many beads you can make from one magazine page. Research the chemical process of paper de-inking and compare its environmental cost to upcycling. Design a jewelry line and create a brand story about sustainable fashion."
+        }
+      }
+    },
+    {
+      "id": "milk-carton-birdhouse",
+      "title": "Milk Carton Birdhouse",
+      "summary": "Rinse out an empty milk carton, cut a doorway, paint it like a cozy cottage, and hang it outside for birds to visit. You might even spot a family moving in!",
+      "source_hint": "A kid in Buenos Aires, Argentina",
+      "creative_prompt": "Clean an empty milk or juice carton. Cut a round hole on one side for a bird door and poke a stick below it for a perch. Paint the outside to look like a house and hang it from a tree branch. Draw your birdhouse and the birds you hope will visit!",
+      "category": "recycling",
+      "illustration_emoji": "🥛🐦",
+      "cta_type": "explore",
+      "cta_route": "/news",
+      "age_adaptations": {
+        "3-5": {
+          "summary": "A grownup turns a milk carton into a little house for birds! You can paint it with bright colors and watch for birds to come visit.",
+          "creative_prompt": "A grownup makes a bird door in a clean milk carton. You paint it and help hang it outside. Draw the birds you want to come live in your birdhouse!"
+        },
+        "6-8": {
+          "summary": "Rinse out an empty milk carton, cut a doorway, paint it like a cozy cottage, and hang it outside for birds to visit. You might even spot a family moving in!",
+          "creative_prompt": "Clean an empty milk or juice carton. Cut a round hole on one side for a bird door and poke a stick below it for a perch. Paint the outside to look like a house and hang it from a tree branch. Draw your birdhouse and the birds you hope will visit!"
+        },
+        "9-12": {
+          "summary": "Milk cartons are made from layers of paperboard, polyethylene plastic, and sometimes aluminum foil, making them one of the hardest common packages to recycle because the layers must be separated. By turning them into birdhouses, you create urban wildlife habitat while diverting multi-layer packaging from landfills. The hole size determines which bird species can enter — research your local birds to get it right.",
+          "creative_prompt": "Build a birdhouse and research which local bird species you want to attract. Size the entrance hole correctly for that species. Add drainage holes in the bottom and ventilation near the top. Keep a bird-watching journal for two weeks and explore how urban green spaces support biodiversity in your city."
+        }
+      }
+    },
+    {
+      "id": "volcano-baking-soda",
+      "title": "Build a Fizzing Volcano!",
+      "summary": "Mix baking soda and vinegar inside a clay volcano to create a bubbly eruption. Learn how acids and bases react to produce carbon dioxide gas.",
+      "source_hint": "A kid in Singapore",
+      "creative_prompt": "Build a volcano shape from clay or playdough, add baking soda inside, then pour in vinegar and watch it erupt. Draw the moment of eruption!",
+      "category": "science_craft",
+      "illustration_emoji": "🌋🧪",
+      "cta_type": "draw",
+      "cta_route": "/upload",
+      "age_adaptations": {
+        "3-5": {
+          "summary": "Make a little volcano that fizzes and bubbles! A grownup helps you mix special ingredients.",
+          "creative_prompt": "Ask a grownup to help you put baking soda in a cup. Pour vinegar in and watch the bubbles! Then draw your bubbly volcano."
+        },
+        "6-8": {
+          "summary": "Mix baking soda and vinegar inside a clay volcano to create a bubbly eruption. Learn how acids and bases react to produce carbon dioxide gas.",
+          "creative_prompt": "Build a volcano shape from clay or playdough, add baking soda inside, then pour in vinegar and watch it erupt. Draw the moment of eruption!"
+        },
+        "9-12": {
+          "summary": "When an acid (vinegar/acetic acid) meets a base (sodium bicarbonate), they undergo a neutralization reaction producing CO2 gas, water, and sodium acetate. The rapid gas release simulates a volcanic eruption.",
+          "creative_prompt": "Experiment with different ratios of baking soda to vinegar. Measure how high the fizz goes each time and record your data. Try adding dish soap to trap CO2 in foam. Draw a labeled diagram of the chemical reaction."
+        }
+      }
+    },
+    {
+      "id": "rainbow-milk-experiment",
+      "title": "Paint a Rainbow in Milk!",
+      "summary": "Drop food coloring into milk and touch it with a soapy cotton swab to watch colors swirl into amazing patterns. The secret is surface tension!",
+      "source_hint": "A kid in Iceland",
+      "creative_prompt": "Pour milk onto a plate, add drops of different food coloring, then dip a cotton swab in dish soap and touch the milk. Draw the colorful patterns you see!",
+      "category": "science_craft",
+      "illustration_emoji": "🥛🌈",
+      "cta_type": "draw",
+      "cta_route": "/upload",
+      "age_adaptations": {
+        "3-5": {
+          "summary": "Watch colors dance and swirl in a plate of milk! A grownup helps you with the soap and coloring.",
+          "creative_prompt": "Ask a grownup to set up a plate of milk with color drops. Touch it with a soapy cotton swab and watch the magic! Draw the pretty swirls."
+        },
+        "6-8": {
+          "summary": "Drop food coloring into milk and touch it with a soapy cotton swab to watch colors swirl into amazing patterns. The secret is surface tension!",
+          "creative_prompt": "Pour milk onto a plate, add drops of different food coloring, then dip a cotton swab in dish soap and touch the milk. Draw the colorful patterns you see!"
+        },
+        "9-12": {
+          "summary": "Dish soap breaks the surface tension of milk by disrupting fat molecule bonds. The soap molecules race outward, dragging food coloring along and creating dynamic swirl patterns. Whole milk works best because it has more fat.",
+          "creative_prompt": "Compare results using skim milk, whole milk, and cream. Hypothesize which will create the biggest swirls and why. Photograph your results and draw a diagram showing how soap molecules interact with fat."
+        }
+      }
+    },
+    {
+      "id": "crystal-growing",
+      "title": "Grow Your Own Crystals!",
+      "summary": "Dissolve sugar or salt in hot water and hang a string inside the jar. Over a few days, sparkling crystals form as the water evaporates.",
+      "source_hint": "A kid in Peru",
+      "creative_prompt": "Make a supersaturated sugar solution with a grownup, hang a string in the jar, and check it every day. Draw your crystals as they grow bigger!",
+      "category": "science_craft",
+      "illustration_emoji": "💎✨",
+      "cta_type": "story",
+      "cta_route": "/interactive",
+      "age_adaptations": {
+        "3-5": {
+          "summary": "Watch sparkly crystals slowly grow on a string in a jar of sugar water! A grownup does the hot water part.",
+          "creative_prompt": "Ask a grownup to make sugar water and put a string in a jar. Check every day to see tiny crystals appear! Draw what your crystals look like."
+        },
+        "6-8": {
+          "summary": "Dissolve sugar or salt in hot water and hang a string inside the jar. Over a few days, sparkling crystals form as the water evaporates.",
+          "creative_prompt": "Make a supersaturated sugar solution with a grownup, hang a string in the jar, and check it every day. Draw your crystals as they grow bigger!"
+        },
+        "9-12": {
+          "summary": "A supersaturated solution holds more dissolved solute than normal. As water evaporates, dissolved molecules have nowhere to go and lock into a repeating lattice structure — a crystal. Different solutes produce different crystal shapes based on their molecular geometry.",
+          "creative_prompt": "Try growing crystals from salt, sugar, and alum side by side. Compare their shapes under a magnifying glass. Research why salt forms cubes while alum forms octahedrons, and write a story about a character who discovers a crystal cave."
+        }
+      }
+    },
+    {
+      "id": "static-electricity-butterfly",
+      "title": "Make a Butterfly Fly with Static!",
+      "summary": "Cut a tiny butterfly from tissue paper, rub a balloon on your hair to build static charge, and hold it above the butterfly. Watch it jump up and flutter!",
+      "source_hint": "A kid in South Africa",
+      "creative_prompt": "Cut a small butterfly from tissue paper. Rub a balloon on your hair for 30 seconds, then slowly lower it above the butterfly. Draw the moment the butterfly leaps up!",
+      "category": "science_craft",
+      "illustration_emoji": "🦋⚡",
+      "cta_type": "draw",
+      "cta_route": "/upload",
+      "age_adaptations": {
+        "3-5": {
+          "summary": "Rub a balloon on your hair and use the invisible force to make a tiny paper butterfly jump! It feels like real magic.",
+          "creative_prompt": "Ask a grownup to cut a tiny butterfly from tissue paper. Rub a balloon on your hair and hold it close. Draw your flying butterfly!"
+        },
+        "6-8": {
+          "summary": "Cut a tiny butterfly from tissue paper, rub a balloon on your hair to build static charge, and hold it above the butterfly. Watch it jump up and flutter!",
+          "creative_prompt": "Cut a small butterfly from tissue paper. Rub a balloon on your hair for 30 seconds, then slowly lower it above the butterfly. Draw the moment the butterfly leaps up!"
+        },
+        "9-12": {
+          "summary": "Rubbing a balloon on hair transfers electrons, giving the balloon a negative charge. This induces a positive charge on the nearby tissue paper through electrostatic induction, and opposite charges attract — pulling the paper upward against gravity.",
+          "creative_prompt": "Experiment with different materials to charge the balloon (wool, silk, polyester). Which produces the strongest attraction? Try different paper thicknesses. Draw a diagram showing the electron transfer and explain why some materials work better."
+        }
+      }
+    },
+    {
+      "id": "magnet-maze",
+      "title": "Guide a Ball Through a Magnet Maze!",
+      "summary": "Draw a maze on cardboard, place a metal ball on top, and use a magnet underneath to guide the ball through the path without touching it.",
+      "source_hint": "A kid in Czech Republic",
+      "creative_prompt": "Design and draw a maze on cardboard. Place a small metal ball at the start and use a magnet under the cardboard to move it. Draw your maze design!",
+      "category": "science_craft",
+      "illustration_emoji": "🧲🏁",
+      "cta_type": "draw",
+      "cta_route": "/upload",
+      "age_adaptations": {
+        "3-5": {
+          "summary": "Move a metal ball through a maze using a magic magnet hidden underneath! A grownup helps draw the maze.",
+          "creative_prompt": "Ask a grownup to draw a simple path on cardboard. Put a metal ball on top and move a magnet underneath to push the ball. Draw your maze!"
+        },
+        "6-8": {
+          "summary": "Draw a maze on cardboard, place a metal ball on top, and use a magnet underneath to guide the ball through the path without touching it.",
+          "creative_prompt": "Design and draw a maze on cardboard. Place a small metal ball at the start and use a magnet under the cardboard to move it. Draw your maze design!"
+        },
+        "9-12": {
+          "summary": "Magnets create invisible magnetic fields that pass through non-magnetic materials like cardboard. Ferromagnetic metals (iron, nickel, cobalt) are attracted because the field aligns their internal magnetic domains. The force weakens with distance following the inverse-square law.",
+          "creative_prompt": "Build a multi-level maze and test how many layers of cardboard the magnet can work through. Measure the maximum distance and graph your results. Design an obstacle course with magnetic traps and draw a blueprint."
+        }
+      }
+    },
+    {
+      "id": "water-filter",
+      "title": "Build a Water Filter from Nature!",
+      "summary": "Layer sand, gravel, and cotton in a bottle to make a simple water filter. Pour muddy water through and see it come out cleaner on the other side.",
+      "source_hint": "A kid in Malaysia",
+      "creative_prompt": "Cut a plastic bottle in half, layer cotton, sand, and gravel inside, and pour muddy water through. Write a story about an explorer who needs to clean river water!",
+      "category": "science_craft",
+      "illustration_emoji": "💧🏗️",
+      "cta_type": "story",
+      "cta_route": "/interactive",
+      "age_adaptations": {
+        "3-5": {
+          "summary": "Turn dirty water into cleaner water using sand and cotton! A grownup sets up the bottle and you pour the water.",
+          "creative_prompt": "Watch a grownup put cotton and sand in a bottle. Pour muddy water in the top and see cleaner water drip out! Draw the before and after water."
+        },
+        "6-8": {
+          "summary": "Layer sand, gravel, and cotton in a bottle to make a simple water filter. Pour muddy water through and see it come out cleaner on the other side.",
+          "creative_prompt": "Cut a plastic bottle in half, layer cotton, sand, and gravel inside, and pour muddy water through. Write a story about an explorer who needs to clean river water!"
+        },
+        "9-12": {
+          "summary": "Filtration works by mechanical separation — gravel catches large debris, sand traps fine particles, and cotton acts as a final barrier. Real water treatment plants use these same principles plus activated carbon for chemicals and UV light for bacteria.",
+          "creative_prompt": "Add a layer of crushed activated charcoal to your filter and compare results with and without it. Research why your filter removes particles but not dissolved chemicals or bacteria. Write a story about designing a water system for a remote village."
+        }
+      }
+    },
+    {
+      "id": "sundial",
+      "title": "Tell Time with Sunshine!",
+      "summary": "Stick a pencil into a paper plate and place it in the sun. Mark where the shadow falls each hour to create your own working sundial clock.",
+      "source_hint": "A kid in Norway",
+      "creative_prompt": "Push a pencil through a paper plate, set it in the sun, and mark the shadow every hour. Explore how ancient people told time before clocks existed!",
+      "category": "science_craft",
+      "illustration_emoji": "☀️🕐",
+      "cta_type": "explore",
+      "cta_route": "/news",
+      "age_adaptations": {
+        "3-5": {
+          "summary": "The sun makes shadows that move! Put a stick on a plate and watch the shadow change all day long. A grownup helps you mark the spots.",
+          "creative_prompt": "Ask a grownup to put a pencil in a plate outside. Check the shadow together a few times. Draw where the shadow goes!"
+        },
+        "6-8": {
+          "summary": "Stick a pencil into a paper plate and place it in the sun. Mark where the shadow falls each hour to create your own working sundial clock.",
+          "creative_prompt": "Push a pencil through a paper plate, set it in the sun, and mark the shadow every hour. Explore how ancient people told time before clocks existed!"
+        },
+        "9-12": {
+          "summary": "A sundial works because Earth rotates 360 degrees in 24 hours — about 15 degrees per hour. The shadow moves predictably as the sun's apparent position changes. The angle of the gnomon (the stick) should match your latitude for the most accurate reading.",
+          "creative_prompt": "Research your latitude and tilt your gnomon to match it. Compare your sundial's time to a clock — how accurate is it? Investigate why sundial time differs from clock time (equation of time) and explore the history of timekeeping."
+        }
+      }
+    },
+    {
+      "id": "balloon-rocket",
+      "title": "Launch a Balloon Rocket!",
+      "summary": "Thread a string across the room, tape an inflated balloon to a straw on the string, and let go. The escaping air pushes the balloon forward like a rocket!",
+      "source_hint": "A kid in Jamaica",
+      "creative_prompt": "Set up a string between two chairs, tape a blown-up balloon to a straw on the string, and release. Draw your rocket zooming across the room!",
+      "category": "science_craft",
+      "illustration_emoji": "🎈🚀",
+      "cta_type": "draw",
+      "cta_route": "/upload",
+      "age_adaptations": {
+        "3-5": {
+          "summary": "A balloon zooms across a string like a rocket! A grownup helps set up the string and blow up the balloon.",
+          "creative_prompt": "Ask a grownup to set up the string and balloon. Count down 3-2-1 and let go! Draw your balloon rocket flying across the room."
+        },
+        "6-8": {
+          "summary": "Thread a string across the room, tape an inflated balloon to a straw on the string, and let go. The escaping air pushes the balloon forward like a rocket!",
+          "creative_prompt": "Set up a string between two chairs, tape a blown-up balloon to a straw on the string, and release. Draw your rocket zooming across the room!"
+        },
+        "9-12": {
+          "summary": "This demonstrates Newton's Third Law: for every action, there is an equal and opposite reaction. Air escaping backward (action) pushes the balloon forward (reaction). Real rockets work the same way, expelling exhaust gases to generate thrust.",
+          "creative_prompt": "Test how balloon size affects speed and distance. Try different shaped balloons (round vs long) and predict which goes farther. Calculate the approximate speed using distance and time. Design a two-stage balloon rocket system and draw the engineering blueprint."
+        }
+      }
+    },
+    {
+      "id": "color-changing-flowers",
+      "title": "Make Flowers Change Color!",
+      "summary": "Place white flowers in cups of colored water and wait a day. The petals slowly change color as the stems drink up the dyed water through tiny tubes.",
+      "source_hint": "A kid in Poland",
+      "creative_prompt": "Put white flowers in jars of different colored water. Check them every few hours. Write a story about a garden where flowers magically change colors!",
+      "category": "science_craft",
+      "illustration_emoji": "🌸🎨",
+      "cta_type": "story",
+      "cta_route": "/interactive",
+      "age_adaptations": {
+        "3-5": {
+          "summary": "White flowers can drink colored water and change color! A grownup helps set up the jars and you get to watch the magic happen.",
+          "creative_prompt": "Ask a grownup to put white flowers in cups of colored water. Check them later — the petals change color! Draw your favorite color flower."
+        },
+        "6-8": {
+          "summary": "Place white flowers in cups of colored water and wait a day. The petals slowly change color as the stems drink up the dyed water through tiny tubes.",
+          "creative_prompt": "Put white flowers in jars of different colored water. Check them every few hours. Write a story about a garden where flowers magically change colors!"
+        },
+        "9-12": {
+          "summary": "Plants transport water through xylem — tiny capillary tubes in the stem. Transpiration (water evaporating from leaves and petals) creates negative pressure that pulls water upward, carrying dissolved dye with it. This is the same mechanism that moves water from roots to treetops.",
+          "creative_prompt": "Split a stem down the middle and place each half in a different color. Predict what happens. Time how fast different flowers absorb color and graph your results. Write a story explaining how a botanist uses this principle to solve a mystery."
+        }
+      }
+    },
+    {
+      "id": "density-tower",
+      "title": "Stack Liquids in a Rainbow Tower!",
+      "summary": "Pour honey, dish soap, water, oil, and rubbing alcohol into a tall glass. They stack in layers because each liquid has a different density!",
+      "source_hint": "A kid in Vietnam",
+      "creative_prompt": "Carefully pour different liquids into a tall glass one at a time. Drop small objects in and see where they float. Draw your density tower with all its layers!",
+      "category": "science_craft",
+      "illustration_emoji": "🗼🌈",
+      "cta_type": "draw",
+      "cta_route": "/upload",
+      "age_adaptations": {
+        "3-5": {
+          "summary": "Some liquids are heavier than others! A grownup helps you pour different liquids in a glass and they stack up in layers like a rainbow.",
+          "creative_prompt": "Watch a grownup pour honey, soap, and water into a glass. See how they stack! Drop a grape in and see where it stops. Draw your colorful tower."
+        },
+        "6-8": {
+          "summary": "Pour honey, dish soap, water, oil, and rubbing alcohol into a tall glass. They stack in layers because each liquid has a different density!",
+          "creative_prompt": "Carefully pour different liquids into a tall glass one at a time. Drop small objects in and see where they float. Draw your density tower with all its layers!"
+        },
+        "9-12": {
+          "summary": "Density equals mass divided by volume. Liquids with higher density sink below those with lower density. Honey (~1.4 g/mL) sinks below water (1.0 g/mL), which sinks below oil (~0.9 g/mL). Objects float at the layer matching their own density.",
+          "creative_prompt": "Calculate the density of each liquid by measuring mass and volume. Predict where different small objects will float before dropping them in. Try mixing two layers — do they stay mixed? Research how density differences drive ocean currents and draw an annotated diagram."
+        }
+      }
+    },
+    {
+      "id": "homemade-compass",
+      "title": "Find North with a Homemade Compass!",
+      "summary": "Rub a needle on a magnet, float it on a leaf in water, and watch it spin to point north. You just made a real compass like ancient explorers used!",
+      "source_hint": "A kid in Greece",
+      "creative_prompt": "Magnetize a needle by rubbing it on a magnet, float it on a leaf in a bowl of water, and watch it point north. Explore how ancient sailors navigated the seas!",
+      "category": "science_craft",
+      "illustration_emoji": "🧭🌍",
+      "cta_type": "explore",
+      "cta_route": "/news",
+      "age_adaptations": {
+        "3-5": {
+          "summary": "A tiny needle can find which way is north! A grownup rubs it on a magnet and floats it on water, and it points the way like magic.",
+          "creative_prompt": "Watch a grownup rub a needle on a magnet and put it on a leaf in water. It spins and points north! Draw an explorer using your compass."
+        },
+        "6-8": {
+          "summary": "Rub a needle on a magnet, float it on a leaf in water, and watch it spin to point north. You just made a real compass like ancient explorers used!",
+          "creative_prompt": "Magnetize a needle by rubbing it on a magnet, float it on a leaf in a bowl of water, and watch it point north. Explore how ancient sailors navigated the seas!"
+        },
+        "9-12": {
+          "summary": "Rubbing a needle on a magnet aligns its iron atoms' magnetic domains in one direction, magnetizing it. Earth has a magnetic field generated by its molten iron core. The magnetized needle aligns with this field, pointing toward magnetic north — which is slightly different from true geographic north.",
+          "creative_prompt": "Compare your homemade compass to a real one. Research the difference between magnetic north and true north (magnetic declination) for your location. Investigate how Earth's magnetic poles have shifted over time and explore why some animals can sense magnetic fields for navigation."
+        }
+      }
+    }
+  ]
+}

@@ -380,6 +380,57 @@ class KidsDailyTextResponse(BaseModel):
 
 
 # ============================================================================
+# Inspiration Daily API Models (#405)
+# ============================================================================
+
+
+class InspirationCategory(str, Enum):
+    """Creative project category for Inspiration Daily (PRD §3.10)"""
+    ART_PROJECT = "art_project"
+    INVENTION = "invention"
+    RECYCLING = "recycling"
+    SCIENCE_CRAFT = "science_craft"
+    PERFORMANCE = "performance"
+
+
+class CtaType(str, Enum):
+    """Call-to-action type determining where the child is routed"""
+    DRAW = "draw"
+    STORY = "story"
+    EXPLORE = "explore"
+
+
+class AgeAdaptation(BaseModel):
+    """Age-adapted text variant for an inspiration card"""
+    summary: str = Field(..., description="Age-appropriate summary")
+    creative_prompt: str = Field(..., description="Age-appropriate creative prompt")
+
+
+class InspirationCard(BaseModel):
+    """Single daily inspiration card (PRD §3.10.2)"""
+    id: str = Field(..., description="Stable slug ID, e.g. 'bubble-painting-brazil'")
+    title: str = Field(..., description="Short, exciting headline")
+    summary: str = Field(..., description="1-2 sentence description (default 6-8)")
+    source_hint: str = Field(..., description="Anonymized origin, e.g. 'A school in São Paulo'")
+    creative_prompt: str = Field(..., description="Actionable try-this instruction (default 6-8)")
+    category: InspirationCategory = Field(..., description="Project category")
+    illustration_emoji: str = Field(..., description="Emoji visual representation")
+    cta_type: CtaType = Field(..., description="CTA routing type")
+    cta_route: str = Field(..., description="Target page path, e.g. '/upload'")
+    age_adaptations: Dict[str, AgeAdaptation] = Field(
+        ..., description="Age-adapted variants keyed by '3-5', '6-8', '9-12'"
+    )
+
+
+class InspirationDailyResponse(BaseModel):
+    """Response for GET /api/v1/inspiration-daily"""
+    card: InspirationCard = Field(..., description="Today's inspiration card")
+    age_group: str = Field(..., description="Age group used for adaptation")
+    adapted_summary: str = Field(..., description="Age-adapted summary text")
+    adapted_prompt: str = Field(..., description="Age-adapted creative prompt")
+
+
+# ============================================================================
 # Kids Daily API Models (#44)
 # ============================================================================
 

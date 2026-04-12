@@ -6,15 +6,21 @@ interface InspirationDailyProps {
   className?: string;
   onTear?: () => void;
   isAuthenticated?: boolean;
+  /** When provided, overrides the built-in day-of-year rotation. */
+  content?: DailyContent;
 }
 
-interface DailyContent {
+export interface DailyContent {
   headline: string;
   body: string;
   illustration: string;
   weather: string;
   weatherEmoji: string;
   miniAd: string;
+  /** When set, a "Try This!" CTA button is rendered linking to the matching creation tool. */
+  cta_type?: "draw" | "story" | "explore";
+  cta_route?: "/upload" | "/interactive" | "/news";
+  creative_prompt?: string;
 }
 
 const DAILY_CONTENT: DailyContent[] = [
@@ -232,10 +238,11 @@ export default function InspirationDaily({
   className = "",
   onTear,
   isAuthenticated,
+  content: contentProp,
 }: InspirationDailyProps) {
   const canClaimToday = useDailyTaskStore((s) => s.canClaimToday());
   const canClaim = isAuthenticated && canClaimToday;
-  const content = getDailyContent();
+  const content = contentProp ?? getDailyContent();
   const dateStr = formatDate();
   const edition = getEditionNumber();
 
@@ -496,6 +503,33 @@ export default function InspirationDaily({
               </div>
             </div>
           </div>
+
+          {/* --- CTA button (only when InspirationCard data provides cta_type) --- */}
+          {content.cta_type && content.cta_route && (
+            <div className="mt-3 flex justify-center">
+              <motion.div
+                whileHover={{ scale: 1.05, y: -1 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                <Link
+                  to={content.cta_route}
+                  state={
+                    content.creative_prompt
+                      ? { inspirationPrompt: content.creative_prompt }
+                      : undefined
+                  }
+                  className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-amber-400 via-orange-400 to-pink-400 px-5 py-2 text-sm font-bold text-white shadow-[0_4px_14px_rgba(251,146,60,0.4)] transition-shadow hover:shadow-[0_6px_20px_rgba(251,146,60,0.55)]"
+                >
+                  <span>
+                    {content.cta_type === "draw" && "🎨"}
+                    {content.cta_type === "story" && "📖"}
+                    {content.cta_type === "explore" && "🌍"}
+                  </span>
+                  <span>Try This!</span>
+                </Link>
+              </motion.div>
+            </div>
+          )}
 
           {/* --- Bottom row: weather + mini-ad --- */}
           <div className="mt-2.5">
