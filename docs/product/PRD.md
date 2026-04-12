@@ -1005,6 +1005,7 @@ Month 3: Child has created 20+ stories, forming their own "story universe"
 - 🔲 Advanced memory (character structured storage, story dedup, memory API, privacy compliance)
 - 🔲 TTS & audio pipeline upgrade (ElevenLabs SOTA provider + scene presets + voice picker) — see §3.8
 - 🔲 Channel subscription system (Daily Drop auto-generation)
+- 🔲 Inspiration Daily (creative spark feed with seed bank + AI-augmented content) — see §3.10
 
 ### Cross-Phase — Responsive UI Polish [In Progress]
 
@@ -1133,7 +1134,7 @@ Prevents throwaway accounts that drain quota.
 
 ### 3.9.4 Referral-Based Membership
 
-Replace the unusable "Buy Me a Coffee" widget with a referral-based growth and membership tier system. Since we cannot accept payments, growth is driven by user referrals — users share the platform with friends and earn upgraded quotas.
+A referral-based growth and membership tier system. Growth is driven by user referrals — users share the platform with friends and earn upgraded quotas.
 
 #### Membership Tiers
 
@@ -1175,6 +1176,108 @@ Replace the unusable "Buy Me a Coffee" widget with a referral-based growth and m
 - Paid tiers or payment integration
 - Multi-level / recursive referral rewards
 - Admin dashboard for referral analytics (Phase 3)
+
+---
+
+### 3.10 Inspiration Daily — Creative Spark Feed [Phase 2]
+
+> Replaces the static "fake news" newspaper card with a daily creative inspiration feed. Each day surfaces one real-world creative project, art idea, or young inventor story from around the globe — adapted for the child's age group — with a "Try This!" call-to-action that routes directly into the app's creation tools.
+
+#### 3.10.1 Product Vision
+
+**Core purpose**: Inspire children to create by showing them what other kids and creators are doing worldwide. The daily card answers: *"What cool thing can I try today?"*
+
+**How it differs from Kids Daily (§3.3)**:
+
+| Dimension | Inspiration Daily | Kids Daily |
+|-----------|------------------|------------|
+| Goal | Spark creativity — "I want to try that!" | Inform — "I understand the world" |
+| Content | Creative projects, art ideas, inventions | Current events, news stories |
+| Format | Single card, 10-second read | Full podcast, 2-3 min listen |
+| Output | Routes to creation tools (draw/story) | Self-contained media |
+| Cost | Low (text only) | High (TTS + illustrations + dialogue) |
+
+#### 3.10.2 Daily Inspiration Card
+
+##### Feature Description
+Each day the homepage displays one creative inspiration card featuring a real-world creative project, art technique, invention, or DIY activity sourced from around the world. Content is rewritten by Claude into age-appropriate language with a clear creative prompt.
+
+##### User Scenario
+```
+Child (age 7) opens the app in the morning
+  ↓
+Sees today's Inspiration Card:
+  Title: "Bubble Painting Magic!"
+  Body: "Kids in Brazil discovered you can make amazing art
+         by blowing paint bubbles onto paper!"
+  Prompt: "Try mixing soap, water, and paint — blow bubbles
+           onto paper to make your own bubble art!"
+  ↓
+Taps "Try This!" → routed to /upload with creative context
+  ↓
+Draws their bubble painting → generates a story about it
+```
+
+##### Content Schema (InspirationCard)
+- `title` — short, exciting headline
+- `summary` — 1-2 sentences about the real-world project
+- `source_hint` — anonymized origin (e.g. "A school in São Paulo")
+- `creative_prompt` — actionable "try this" instruction
+- `category` — art_project | invention | recycling | science_craft | performance
+- `age_adaptations` — separate text for 3-5, 6-8, 9-12
+- `illustration_emoji` — visual representation
+- `cta_type` — draw | story | explore
+- `cta_route` — target page path
+
+#### 3.10.3 Content Sourcing Strategy
+
+Three-layer approach:
+
+1. **Seed Bank (launch)**: 50+ hand-curated creative project entries stored in the repo as structured data. Serves as fallback and bootstrap content.
+2. **AI-Augmented Daily (Phase 2)**: Scheduled job queries external sources (Tavily) for topics like "kids creative projects", "children art activities", "young inventors". Claude rewrites the best result into an InspirationCard. Cached in database.
+3. **Editorial Curation (Phase 3)**: Community-submitted projects, RSS from maker/education sites, parent-submitted ideas.
+
+#### 3.10.4 Age Adaptation
+
+Each InspirationCard provides three variants following existing AGE_RULES:
+- **Ages 3-5**: Simple language, basic activities (no sharp tools, no unsupervised steps)
+- **Ages 6-8**: Moderate detail, guided activities with household materials
+- **Ages 9-12**: Full detail, more challenging projects, basic science/engineering concepts
+
+#### 3.10.5 Integration with Creation Flow
+
+The "Try This!" CTA button routes children to creation tools:
+- `cta_type: "draw"` → `/upload` page (draw the inspired project)
+- `cta_type: "story"` → `/interactive` page (create a story about it)
+- `cta_type: "explore"` → `/news` page (learn more via Kids Daily)
+
+Creative prompt text is optionally passed as context to pre-fill theme/interest tags.
+
+#### 3.10.6 Gamification Integration
+
+The existing tear-to-claim-star mechanic (Epic #371) is preserved:
+- Child tears the newspaper card → earns daily star
+- Star claiming is independent of content source
+- Tear animation unchanged
+
+#### Acceptance Criteria
+- [ ] API endpoint `GET /api/v1/inspiration-daily?age_group=6-8` returns today's InspirationCard
+- [ ] Content changes daily (not the same as yesterday)
+- [ ] All content passes safety check (safety_score >= 0.85)
+- [ ] Age adaptation returns appropriate variant for each age group
+- [ ] Fallback to seed bank if live generation fails
+- [ ] "Try This!" CTA routes to correct creation page
+- [ ] Tear-to-claim-star mechanic continues to work
+- [ ] No real children's names in content (anonymized to "a kid in [country]")
+- [ ] No dangerous activities for ages 3-5 (sharp tools, fire, unsupervised)
+- [ ] Cultural diversity: content rotates through different countries/cultures
+
+#### Out of Scope (Phase 2)
+- User-submitted creative projects
+- RSS feed integration
+- Editorial curation dashboard
+- Commenting or rating on inspiration cards
+- Sharing inspiration cards externally
 
 ---
 

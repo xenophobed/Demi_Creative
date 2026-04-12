@@ -457,17 +457,6 @@ function HomePage() {
         </TiltCard>
       </motion.div>
 
-      {/* Footer — support link */}
-      <div className="text-center pt-4 pb-2">
-        <a
-          href="https://buymeacoffee.com/demicreative"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-block text-xs text-gray-400 hover:text-gray-600 transition-colors"
-        >
-          Support this project — Buy Me a Coffee
-        </a>
-      </div>
     </div>
   )
 }
