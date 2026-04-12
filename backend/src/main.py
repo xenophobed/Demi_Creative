@@ -303,7 +303,7 @@ async def health_check():
         for k, s in services_status.items()
         if isinstance(s, str)
     )
-    overall_status = "healthy" if (top_level_ok and mcp_all_ok) else "degraded"
+    overall_status = "healthy" if (top_level_ok and mcp_all_ok) else "degraded"  # v2-healthfix
 
     return HealthCheckResponse(
         status=overall_status,
