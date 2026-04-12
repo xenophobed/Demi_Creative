@@ -17,6 +17,12 @@ const apiClient: AxiosInstance = axios.create({
 // Request interceptor - adds auth token to requests
 apiClient.interceptors.request.use(
   (config) => {
+    // Skip if the caller already provided an explicit Authorization header
+    // (e.g. the SIGNED_IN handler passes the fresh Supabase token directly)
+    if (config.headers.Authorization) {
+      return config
+    }
+
     // Get token from localStorage (persisted by auth store)
     try {
       const authStorage = localStorage.getItem('auth-storage')
@@ -50,8 +56,13 @@ apiClient.interceptors.response.use(
       // Handle different status codes
       switch (error.response.status) {
         case 401:
-          // Only auto-logout for expired tokens, NOT for login failures
-          if (!error.config?.url?.includes('/login')) {
+          // Only auto-logout for expired tokens, NOT for:
+          // - login failures
+          // - email confirmation redirects (URL hash contains access_token)
+          if (
+            !error.config?.url?.includes('/login') &&
+            !window.location.hash.includes('access_token')
+          ) {
             performFullLogout()
           }
           break

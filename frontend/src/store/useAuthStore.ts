@@ -91,7 +91,10 @@ if (isSupabaseEnabled()) {
     const store = useAuthStore.getState()
 
     if (event === 'SIGNED_IN' && session && !store.isAuthenticated) {
-      // User confirmed email and was redirected back — sync to backend
+      // User confirmed email and was redirected back — sync to backend.
+      // Clear any stale token first so the request interceptor doesn't
+      // overwrite our fresh Supabase token with an expired one.
+      useAuthStore.getState().logout()
       useAuthStore.getState().setLoading(true)
       try {
         const response = await apiClient.get<User>('/users/me', {
