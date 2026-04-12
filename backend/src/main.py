@@ -254,6 +254,29 @@ async def root():
     )
 
 
+@app.get("/debug/auth-config")
+async def debug_auth_config():
+    """Temporary debug endpoint — remove after fixing auth."""
+    import jwt as pyjwt
+    import httpx as _httpx
+    supabase_url = os.getenv("SUPABASE_URL", "<unset>")
+    secret_set = bool(os.getenv("SUPABASE_JWT_SECRET"))
+    jwks_result = "not tested"
+    if supabase_url != "<unset>":
+        try:
+            r = _httpx.get(f"{supabase_url.rstrip('/')}/auth/v1/.well-known/jwks.json", timeout=10)
+            keys = r.json().get("keys", [])
+            jwks_result = f"ok, {len(keys)} keys"
+        except Exception as e:
+            jwks_result = f"error: {e}"
+    return {
+        "supabase_url": supabase_url,
+        "jwt_secret_set": secret_set,
+        "jwks_fetch": jwks_result,
+        "pyjwt_version": pyjwt.__version__,
+    }
+
+
 @app.get("/health", response_model=HealthCheckResponse, tags=["Health Check"])
 async def health_check():
     """Health check endpoint"""
