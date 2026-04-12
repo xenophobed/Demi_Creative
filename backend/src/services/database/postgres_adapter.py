@@ -7,8 +7,11 @@ asyncpg implementation of DatabaseAdapter — used for production (Supabase).
 from __future__ import annotations
 
 import re
+import socket
+import ssl
 from contextlib import asynccontextmanager
 from typing import Any, Dict, List, Optional
+from urllib.parse import urlparse, urlunparse
 
 from .adapter import CursorResult
 
@@ -58,12 +61,44 @@ class PostgresAdapter:
         self._max_size = max_size
         self._pool: Optional[asyncpg.Pool] = None
 
+    @staticmethod
+    def _resolve_ipv4_url(database_url: str) -> tuple[str, object]:
+        """Resolve database hostname to IPv4 and return (url, ssl_context).
+
+        Railway doesn't support outbound IPv6. Supabase direct DB hosts
+        may resolve to IPv6 first, causing 'Network is unreachable'.
+        We resolve to IPv4 explicitly and swap the hostname in the URL.
+        SSL with check_hostname=False is needed because the cert won't
+        match the raw IP address.
+        """
+        parsed = urlparse(database_url)
+        hostname = parsed.hostname
+        if not hostname:
+            return database_url, True  # fallback: let asyncpg handle it
+
+        try:
+            addrs = socket.getaddrinfo(hostname, parsed.port or 5432,
+                                       socket.AF_INET, socket.SOCK_STREAM)
+            if addrs:
+                ipv4 = addrs[0][4][0]
+                replaced = parsed._replace(
+                    netloc=parsed.netloc.replace(hostname, ipv4))
+                ctx = ssl.create_default_context()
+                ctx.check_hostname = False
+                ctx.verify_mode = ssl.CERT_NONE
+                return urlunparse(replaced), ctx
+        except socket.gaierror:
+            pass
+        return database_url, True
+
     async def connect(self) -> None:
+        url, ssl_ctx = self._resolve_ipv4_url(self._database_url)
         self._pool = await asyncpg.create_pool(
-            self._database_url,
+            url,
             min_size=self._min_size,
             max_size=self._max_size,
             statement_cache_size=0,
+            ssl=ssl_ctx,
         )
 
     async def disconnect(self) -> None:
