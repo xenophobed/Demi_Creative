@@ -120,15 +120,9 @@ async def get_current_user(authorization: Optional[str] = Header(None)) -> UserD
     # Try Supabase JWT first (if SUPABASE_JWT_SECRET is configured)
     claims = decode_supabase_token(token)
     if claims:
-        try:
-            user = await _get_or_create_supabase_user(claims)
-        except Exception as e:
-            print(f"[AUTH DEBUG] _get_or_create_supabase_user FAILED: {type(e).__name__}: {e}", flush=True)
-            user = None
+        user = await _get_or_create_supabase_user(claims)
         if user:
             return user
-        else:
-            print(f"[AUTH DEBUG] _get_or_create_supabase_user returned None for sub={claims.sub}", flush=True)
 
     # Fall back to legacy custom token validation
     user = await user_service.validate_token(token)
