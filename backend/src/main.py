@@ -299,7 +299,7 @@ async def health_check():
 
     # Determine overall health — ignore nested mcp_servers dict in top-level check
     top_level_ok = all(
-        s in ["running", "configured"]
+        s in ["running", "configured", "disabled"]
         for k, s in services_status.items()
         if isinstance(s, str)
     )
