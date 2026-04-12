@@ -53,10 +53,10 @@ def _fetch_jwks_keys() -> Optional[list[dict[str, Any]]]:
         response = httpx.get(jwks_url, timeout=10)
         response.raise_for_status()
         _jwks_keys = response.json().get("keys", [])
-        logger.info("Fetched %d JWKS keys from %s", len(_jwks_keys), jwks_url)
+        print(f"[AUTH DEBUG] Fetched {len(_jwks_keys)} JWKS keys from {jwks_url}", flush=True)
         return _jwks_keys
     except Exception as e:
-        logger.warning("Failed to fetch JWKS from %s: %s", jwks_url, e)
+        print(f"[AUTH DEBUG] Failed to fetch JWKS from {jwks_url}: {e}", flush=True)
         return None
 
 
@@ -67,22 +67,19 @@ def decode_supabase_token(token: str) -> Optional[SupabaseClaims]:
     Returns SupabaseClaims on success, None if the token is invalid or
     no Supabase auth is configured.
     """
-    logger.info("decode_supabase_token called, SUPABASE_URL=%s, secret_set=%s",
-                os.getenv("SUPABASE_URL", "<unset>"),
-                bool(os.getenv("SUPABASE_JWT_SECRET")))
+    print(f"[AUTH DEBUG] decode_supabase_token called, SUPABASE_URL={os.getenv('SUPABASE_URL', '<unset>')}, secret_set={bool(os.getenv('SUPABASE_JWT_SECRET'))}", flush=True)
     claims = _decode_with_jwks(token)
     if claims:
+        print("[AUTH DEBUG] JWKS decode succeeded", flush=True)
         return claims
 
     claims = _decode_with_secret(token)
     if not claims:
-        # Log unverified header for debugging
         try:
             header = jwt.get_unverified_header(token)
-            logger.warning("Both JWKS and HS256 failed. Token header: alg=%s, typ=%s, kid=%s",
-                           header.get("alg"), header.get("typ"), header.get("kid"))
+            print(f"[AUTH DEBUG] Both JWKS and HS256 failed. Token header: alg={header.get('alg')}, kid={header.get('kid')}", flush=True)
         except Exception:
-            logger.warning("Both JWKS and HS256 failed. Could not read token header.")
+            print("[AUTH DEBUG] Both JWKS and HS256 failed. Could not read token header.", flush=True)
     return claims
 
 
