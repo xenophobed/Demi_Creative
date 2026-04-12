@@ -1,4 +1,4 @@
-"""Supabase JWT token validation.
+"""Supabase JWT token validation (httpx JWKS).
 
 Validates access tokens issued by Supabase Auth. Extracts the user's
 Supabase UID and email from the JWT claims so the backend can look up
