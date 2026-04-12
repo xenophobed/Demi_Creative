@@ -6,7 +6,6 @@ import Card from '@/components/common/Card'
 import { authService } from '@/api/services/authService'
 import { getErrorMessage } from '@/api/client'
 import useAuthStore from '@/store/useAuthStore'
-import supabase from '@/lib/supabase'
 
 type AuthMode = 'login' | 'register'
 
@@ -60,8 +59,10 @@ function LoginPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [confirmationPending, setConfirmationPending] = useState(false)
+  const [emailConfirmation, setEmailConfirmation] = useState(false)
   const [confirmationEmail, setConfirmationEmail] = useState('')
-  const [resending, setResending] = useState(false)
+  const [confirmationNotice, setConfirmationNotice] = useState<string | null>(null)
+  const [isResendingConfirmation, setIsResendingConfirmation] = useState(false)
 
   // Validation
   const validateForm = (): string | null => {
@@ -83,6 +84,7 @@ function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
+    setConfirmationNotice(null)
 
     const validationError = validateForm()
     if (validationError) {
@@ -90,19 +92,22 @@ function LoginPage() {
       return
     }
 
+    const normalizedLoginEmail = username.trim().toLowerCase()
+    const normalizedRegisterEmail = email.trim().toLowerCase()
+
     setIsLoading(true)
 
     try {
       let response
       if (mode === 'login') {
         response = await authService.login({
-          username_or_email: username.trim(),
+          username_or_email: normalizedLoginEmail,
           password,
         })
       } else {
         const result = await authService.register({
           username: username.trim(),
-          email: email.trim().toLowerCase(),
+          email: normalizedRegisterEmail,
           password,
           display_name: displayName.trim() || undefined,
           referral_code: referralCode,
@@ -122,11 +127,42 @@ function LoginPage() {
 
       // Navigate to home
       navigate('/')
-    } catch (err) {
-      const raw = getErrorMessage(err)
-      setError(friendlyAuthError(raw, mode))
+    } catch (err: any) {
+      if (err?.code === 'EMAIL_CONFIRMATION_REQUIRED') {
+        setEmailConfirmation(true)
+        setConfirmationEmail(normalizedRegisterEmail)
+        setConfirmationNotice('账号已创建，请去邮箱点击确认链接后再回来登录。')
+        setError(null)
+      } else {
+        const raw = getErrorMessage(err)
+        if (raw.toLowerCase().includes('email not confirmed')) {
+          setEmailConfirmation(true)
+          setConfirmationEmail(mode === 'login' ? normalizedLoginEmail : normalizedRegisterEmail)
+          setConfirmationNotice('这个账号还没有完成邮箱验证。可以先重发确认邮件。')
+          setError(null)
+        } else {
+          setError(friendlyAuthError(raw, mode))
+        }
+      }
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const handleResendConfirmation = async () => {
+    if (!confirmationEmail) return
+
+    setIsResendingConfirmation(true)
+    setError(null)
+
+    try {
+      await authService.resendConfirmation(confirmationEmail)
+      setConfirmationNotice('确认邮件已重新发送。请检查收件箱、垃圾邮件和推广邮件文件夹。')
+    } catch (err) {
+      const raw = getErrorMessage(err)
+      setError(friendlyAuthError(raw, 'register'))
+    } finally {
+      setIsResendingConfirmation(false)
     }
   }
 
@@ -135,6 +171,9 @@ function LoginPage() {
     setMode(mode === 'login' ? 'register' : 'login')
     setError(null)
     setConfirmationPending(false)
+    setEmailConfirmation(false)
+    setConfirmationEmail('')
+    setConfirmationNotice(null)
     setPassword('')
     setConfirmPassword('')
   }
@@ -217,16 +256,8 @@ function LoginPage() {
                 type="button"
                 variant="secondary"
                 size="md"
-                isLoading={resending}
-                onClick={async () => {
-                  if (!supabase) return
-                  setResending(true)
-                  try {
-                    await supabase.auth.resend({ type: 'signup', email: confirmationEmail })
-                  } finally {
-                    setResending(false)
-                  }
-                }}
+                isLoading={isResendingConfirmation}
+                onClick={handleResendConfirmation}
               >
                 Resend Confirmation Email
               </Button>
@@ -256,6 +287,41 @@ function LoginPage() {
               transition={{ duration: 0.3 }}
               className="space-y-4"
             >
+              {/* Email confirmation success */}
+              <AnimatePresence>
+                {emailConfirmation && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                    className="bg-green-50 border border-green-200 rounded-2xl p-4 text-green-700 text-sm text-center space-y-3"
+                  >
+                    <div className="text-2xl">📬</div>
+                    <p className="font-medium">
+                      {confirmationNotice || 'Account created! Please check your email to verify your account, then come back and sign in.'}
+                    </p>
+                    {confirmationEmail && (
+                      <p className="text-xs break-all text-green-800/80">
+                        {confirmationEmail}
+                      </p>
+                    )}
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={handleResendConfirmation}
+                      isLoading={isResendingConfirmation}
+                      className="w-full"
+                    >
+                      Resend Confirmation Email
+                    </Button>
+                    <p className="text-xs text-green-800/70">
+                      If you still don&apos;t receive it, check spam or try a different email provider.
+                    </p>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
               {/* Error message */}
               <AnimatePresence>
                 {error && (

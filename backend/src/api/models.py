@@ -734,6 +734,8 @@ class UserResponse(BaseModel):
     is_active: bool = Field(..., description="Whether active")
     is_verified: bool = Field(..., description="Whether verified")
     role: str = Field(default="child", description="User role: 'child' or 'parent'")
+    membership_tier: str = Field(default="free", description="Membership tier: 'free' or 'plus'")
+    referral_code: str = Field(default="", description="User's unique referral code")
     created_at: datetime = Field(..., description="Registered at")
     last_login_at: Optional[datetime] = Field(None, description="Last login time")
 

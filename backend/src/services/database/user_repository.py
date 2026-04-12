@@ -12,6 +12,7 @@ from typing import Optional, List, Dict, Any
 from dataclasses import dataclass, field
 
 from .connection import db_manager
+from .sql_compat import ci_equals
 
 
 @dataclass
@@ -148,7 +149,7 @@ class UserRepository:
             UserData or None
         """
         row = await self._db.fetchone(
-            "SELECT * FROM users WHERE username = ? COLLATE NOCASE",
+            f"SELECT * FROM users WHERE {ci_equals('username', self._db.dialect)}",
             (username,)
         )
         return self._row_to_user(row) if row else None
@@ -172,7 +173,7 @@ class UserRepository:
             UserData or None
         """
         row = await self._db.fetchone(
-            "SELECT * FROM users WHERE email = ? COLLATE NOCASE",
+            f"SELECT * FROM users WHERE {ci_equals('email', self._db.dialect)}",
             (email,)
         )
         return self._row_to_user(row) if row else None

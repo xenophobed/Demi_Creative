@@ -107,6 +107,8 @@ def _user_to_response(user: UserData) -> UserResponse:
         is_active=user.is_active,
         is_verified=user.is_verified,
         role=user.role,
+        membership_tier=getattr(user, 'membership_tier', 'free') or 'free',
+        referral_code=getattr(user, 'referral_code', '') or '',
         created_at=datetime.fromisoformat(user.created_at),
         last_login_at=datetime.fromisoformat(user.last_login_at)
         if user.last_login_at

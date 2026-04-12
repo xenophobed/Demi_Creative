@@ -121,6 +121,18 @@ def date_format_sql(column: str, fmt: str, dialect: str) -> str:
     return f"to_char({column}::timestamp, '{pg_fmt}')"
 
 
+def ci_equals(column: str, dialect: str) -> str:
+    """
+    Generate a case-insensitive equality clause for a column.
+
+    SQLite:     column = ? COLLATE NOCASE
+    PostgreSQL: LOWER(column) = LOWER(?)
+    """
+    if dialect == "sqlite":
+        return f"{column} = ? COLLATE NOCASE"
+    return f"LOWER({column}) = LOWER(?)"
+
+
 def insert_or_ignore(table: str, columns: list[str], dialect: str) -> str:
     """
     Generate INSERT OR IGNORE / ON CONFLICT DO NOTHING SQL.

@@ -100,6 +100,23 @@ export const authService = {
   },
 
   /**
+   * Resend Supabase email confirmation.
+   */
+  async resendConfirmation(email: string): Promise<void> {
+    if (!isSupabaseEnabled()) return
+
+    const { error } = await supabase!.auth.resend({
+      type: 'signup',
+      email,
+      options: {
+        emailRedirectTo: window.location.origin,
+      },
+    })
+
+    if (error) throw new Error(error.message)
+  },
+
+  /**
    * Sync Supabase user to backend — calls GET /users/me which auto-creates
    * the local user row via get_current_user dep.
    */
