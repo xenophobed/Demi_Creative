@@ -67,11 +67,23 @@ def decode_supabase_token(token: str) -> Optional[SupabaseClaims]:
     Returns SupabaseClaims on success, None if the token is invalid or
     no Supabase auth is configured.
     """
+    logger.info("decode_supabase_token called, SUPABASE_URL=%s, secret_set=%s",
+                os.getenv("SUPABASE_URL", "<unset>"),
+                bool(os.getenv("SUPABASE_JWT_SECRET")))
     claims = _decode_with_jwks(token)
     if claims:
         return claims
 
-    return _decode_with_secret(token)
+    claims = _decode_with_secret(token)
+    if not claims:
+        # Log unverified header for debugging
+        try:
+            header = jwt.get_unverified_header(token)
+            logger.warning("Both JWKS and HS256 failed. Token header: alg=%s, typ=%s, kid=%s",
+                           header.get("alg"), header.get("typ"), header.get("kid"))
+        except Exception:
+            logger.warning("Both JWKS and HS256 failed. Could not read token header.")
+    return claims
 
 
 def _decode_with_jwks(token: str) -> Optional[SupabaseClaims]:
