@@ -13,6 +13,7 @@ import useDailyTaskStore from '@/store/useDailyTaskStore'
 import { libraryService, type LibraryItem } from '@/api/services/libraryService'
 import { StoryCard } from '@/components/story/StoryDisplay'
 import InspirationDaily from '@/components/daily/InspirationDaily'
+import { fetchDailyInspiration, toDailyContent } from '@/api/services/inspirationService'
 import TearAnimation from '@/components/daily/TearAnimation'
 import StarFlyAnimation from '@/components/daily/StarFlyAnimation'
 import { useNavRef } from '@/contexts/NavRefContext'
@@ -136,6 +137,17 @@ function HomePage() {
     enabled: isAuthenticated,
   })
   const recentItems = libraryData?.items ?? []
+
+  // Fetch daily inspiration from API (falls back to seed bank inside component)
+  const { data: inspirationContent } = useQuery({
+    queryKey: ['inspiration-daily'],
+    queryFn: async () => {
+      const resp = await fetchDailyInspiration('6-8')
+      return resp ? toDailyContent(resp) : null
+    },
+    staleTime: 1000 * 60 * 60, // 1 hour
+    retry: false,
+  })
 
   // Rotating tips
   const [tipIndex, setTipIndex] = useState(0)
@@ -338,7 +350,7 @@ function HomePage() {
           >
             <div ref={newspaperRef}>
               <TearAnimation onTearComplete={handleTearComplete} disabled={!canClaim}>
-                <InspirationDaily />
+                <InspirationDaily content={inspirationContent ?? undefined} />
               </TearAnimation>
             </div>
           </motion.section>
