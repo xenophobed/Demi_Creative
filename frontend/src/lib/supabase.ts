@@ -16,14 +16,7 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undef
 let supabase: SupabaseClient | null = null
 
 if (supabaseUrl && supabaseAnonKey) {
-  supabase = createClient(supabaseUrl, supabaseAnonKey, {
-    auth: {
-      // Disable automatic URL detection on init so the AuthProvider
-      // can set up onAuthStateChange BEFORE the session is exchanged.
-      // AuthProvider calls getSession() + detectSessionFromURL manually.
-      detectSessionInUrl: false,
-    },
-  })
+  supabase = createClient(supabaseUrl, supabaseAnonKey)
 }
 
 export default supabase

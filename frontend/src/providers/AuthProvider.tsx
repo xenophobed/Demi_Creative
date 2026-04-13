@@ -7,43 +7,36 @@ import supabase, { isSupabaseEnabled } from '@/lib/supabase'
 import useAuthStore from '@/store/useAuthStore'
 import { performFullLogout } from '@/utils/logout'
 
-export async function recoverFromFailedBackendSync(error: unknown): Promise<void> {
+// Track whether we arrived via an email confirmation redirect
+const hadCallbackParams = hasAuthCallbackParams()
+
+async function recoverFromFailedBackendSync(error: unknown): Promise<void> {
   if (axios.isAxiosError(error) && error.response?.status === 401) {
     try {
       await supabase?.auth.signOut()
-    } catch (signOutError) {
-      console.error('[auth] Failed to clear invalid Supabase session:', signOutError)
+    } catch {
+      // ignore
     }
-
     performFullLogout()
     return
   }
-
   useAuthStore.getState().setLoading(false)
 }
 
-async function syncSupabaseSession(
-  session: Session,
-  options?: { clearStaleAuth?: boolean; redirectOnSuccess?: boolean }
-): Promise<void> {
-  const { clearStaleAuth = false, redirectOnSuccess = false } = options ?? {}
+async function syncAndRedirect(session: Session): Promise<void> {
   const store = useAuthStore.getState()
-
-  if (clearStaleAuth) {
-    store.logout()
-  }
-
   store.setLoading(true)
 
   try {
     const user = await authService._syncUser(session.access_token)
     useAuthStore.getState().setAuth(user, session.access_token)
 
-    if (redirectOnSuccess && hasAuthCallbackParams()) {
+    // Redirect to home after email confirmation auto-login
+    if (hadCallbackParams) {
       window.location.replace('/')
     }
   } catch (error) {
-    console.error('[auth] Backend sync after SIGNED_IN failed:', error)
+    console.error('[auth] Backend sync failed:', error)
     await recoverFromFailedBackendSync(error)
   }
 }
@@ -53,19 +46,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const client = supabase
     if (!isSupabaseEnabled() || !client) return
 
-    let cancelled = false
-
-    // Set up the listener FIRST so we never miss a SIGNED_IN event
     const {
       data: { subscription },
     } = client.auth.onAuthStateChange((event, session) => {
       const store = useAuthStore.getState()
 
-      if (event === 'SIGNED_IN' && session && store.token !== session.access_token) {
-        void syncSupabaseSession(session, {
-          clearStaleAuth: true,
-          redirectOnSuccess: hasAuthCallbackParams(),
-        })
+      // INITIAL_SESSION fires when the listener is registered.
+      // If Supabase already exchanged the URL code before we mounted,
+      // this is our chance to pick up the session.
+      if (event === 'INITIAL_SESSION' && session) {
+        if (!store.isAuthenticated || store.token !== session.access_token) {
+          void syncAndRedirect(session)
+        }
+        return
+      }
+
+      // SIGNED_IN fires when the URL code exchange completes,
+      // or when the user signs in via login form.
+      if (event === 'SIGNED_IN' && session) {
+        if (store.token !== session.access_token) {
+          void syncAndRedirect(session)
+        }
         return
       }
 
@@ -79,50 +80,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     })
 
-    // Now that the listener is active, initialize the session.
-    // If the URL contains auth callback params (email confirmation redirect),
-    // exchange the code/token — onAuthStateChange will fire SIGNED_IN.
-    const initializeSession = async () => {
-      if (hasAuthCallbackParams()) {
-        // Exchange the code/token from the URL — triggers SIGNED_IN above
-        const { error } = await client.auth.exchangeCodeForSession(
-          new URLSearchParams(window.location.search).get('code') ?? ''
-        )
-        if (error) {
-          // Fallback: try getSession which also detects hash fragments
-          await client.auth.getSession()
-        }
-        return
-      }
-
-      // Normal page load — restore existing session
-      const { data, error } = await client.auth.getSession()
-      if (cancelled) return
-
-      if (error) {
-        console.error('[auth] Failed to restore Supabase session:', error)
-        return
-      }
-
-      const store = useAuthStore.getState()
-      if (!data.session) {
-        if (store.isAuthenticated) {
-          performFullLogout()
-        }
-        return
-      }
-
-      if (!store.isAuthenticated || store.token !== data.session.access_token) {
-        await syncSupabaseSession(data.session, {
-          redirectOnSuccess: false,
-        })
-      }
-    }
-
-    void initializeSession()
-
     return () => {
-      cancelled = true
       subscription.unsubscribe()
     }
   }, [])
