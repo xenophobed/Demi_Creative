@@ -350,7 +350,7 @@ function HomePage() {
           >
             <div ref={newspaperRef}>
               <TearAnimation onTearComplete={handleTearComplete} disabled={!canClaim}>
-                <InspirationDaily content={inspirationContent ?? undefined} />
+                <InspirationDaily content={inspirationContent ?? undefined} isAuthenticated={isAuthenticated} />
               </TearAnimation>
             </div>
           </motion.section>
