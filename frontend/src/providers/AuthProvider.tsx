@@ -10,7 +10,7 @@ import { performFullLogout } from '@/utils/logout'
 // Track whether we arrived via an email confirmation redirect
 const hadCallbackParams = hasAuthCallbackParams()
 
-async function recoverFromFailedBackendSync(error: unknown): Promise<void> {
+export async function recoverFromFailedBackendSync(error: unknown): Promise<void> {
   if (axios.isAxiosError(error) && error.response?.status === 401) {
     try {
       await supabase?.auth.signOut()
