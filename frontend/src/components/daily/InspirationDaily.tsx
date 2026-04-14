@@ -313,13 +313,11 @@ export default function InspirationDaily({
 
           <h3
             className="mt-3 text-center text-2xl sm:text-3xl font-black tracking-wide"
-            style={{ fontFamily: serif }}
           >
             Daily Reward Locked
           </h3>
           <p
             className="mt-1 text-center text-[11px] text-[#8b6a52]"
-            style={{ fontFamily: serif }}
           >
             Edition {edition} · {dateStr}
           </p>
@@ -330,7 +328,6 @@ export default function InspirationDaily({
             </div>
             <p
               className="mt-2 text-sm leading-relaxed text-[#775a45]"
-              style={{ fontFamily: serif }}
             >
               Please log in first. Only logged-in users can claim daily rewards.
             </p>
