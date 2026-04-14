@@ -279,7 +279,12 @@ function MorningShowSubscriptionsPage() {
             {onboardingStep === 0 && (
               <div className="space-y-4">
                 <h2 className="text-2xl font-bold text-gray-800">Welcome to Podcast time!</h2>
-                <p className="text-gray-600">Pick your favorite topics and listen to fun news anytime!</p>
+                <p className="text-gray-600">
+                  Pick your favorite topics and start listening right away!
+                </p>
+                <p className="text-gray-500 text-sm">
+                  随时点击任意频道开始收听
+                </p>
                 <div className="flex gap-2 justify-end">
                   <Button variant="outline" onClick={() => finishOnboarding(true)} isLoading={onboardingBusy}>Skip</Button>
                   <Button onClick={() => setOnboardingStep(1)}>Start Setup</Button>
@@ -315,7 +320,8 @@ function MorningShowSubscriptionsPage() {
             {onboardingStep === 2 && (
               <div className="space-y-4">
                 <h2 className="text-2xl font-bold text-gray-800">You&apos;re all set!</h2>
-                <p className="text-gray-600">Tap any topic on the News page to start listening right away!</p>
+                <p className="text-gray-600">Tap any channel to start listening — episodes are generated on demand!</p>
+                <p className="text-gray-500 text-sm">随时点击任意频道开始收听</p>
                 <div className="flex flex-wrap gap-2">
                   {Array.from(draftTopics).map((topic) => {
                     const card = TOPIC_CARDS.find((item) => item.topic === topic)
@@ -340,7 +346,7 @@ function MorningShowSubscriptionsPage() {
                       if (firstTopic) handleListenNow(firstTopic)
                     }}
                   >
-                    {'Listen Now'}
+                    Listen Now
                   </Button>
                 </div>
               </div>
