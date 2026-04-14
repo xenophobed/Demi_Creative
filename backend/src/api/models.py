@@ -56,6 +56,13 @@ class VoiceType(str, Enum):
     ONYX = "onyx"           # deep male
 
 
+class StoryLengthMode(str, Enum):
+    """Story length mode for interactive stories (#331)"""
+    SHORT = "short"         # 5 choices — Quick Tale / 小故事
+    MEDIUM = "medium"       # 10 choices — Short Story / 短文章
+    UNLIMITED = "unlimited" # No limit — Endless Adventure / 小说
+
+
 class StoryMode(str, Enum):
     """Story mode"""
     LINEAR = "linear"           # linear story
@@ -230,6 +237,10 @@ class InteractiveStoryStartRequest(BaseModel):
         default=True,
         description="Whether to generate audio"
     )
+    story_length: StoryLengthMode = Field(
+        default=StoryLengthMode.SHORT,
+        description="Story length mode: short (5 choices), medium (10), unlimited"
+    )
 
     @field_validator('interests')
     @classmethod
@@ -324,8 +335,12 @@ class SessionResumeResponse(BaseModel):
     age_group: AgeGroup = Field(..., description="Age group")
     segments: List[StorySegment] = Field(..., description="All generated segments")
     choice_history: List[str] = Field(..., description="Choice history")
-    progress: float = Field(..., ge=0.0, le=1.0, description="Completion progress 0-1")
+    progress: float = Field(..., ge=0.0, description="Completion progress 0-1")
     total_segments: int = Field(..., description="Total segments")
+    story_length_mode: StoryLengthMode = Field(
+        default=StoryLengthMode.SHORT,
+        description="Story length mode"
+    )
     educational_summary: Optional[EducationalValue] = Field(None, description="Educational summary")
 
 

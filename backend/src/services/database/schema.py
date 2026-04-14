@@ -72,6 +72,7 @@ CREATE TABLE IF NOT EXISTS sessions (
     total_segments INTEGER DEFAULT 5,
     choice_history TEXT,
     audio_urls TEXT,
+    story_length_mode TEXT DEFAULT 'short',
     status TEXT DEFAULT 'active',
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
@@ -391,6 +392,7 @@ async def init_schema(db: "DatabaseManager") -> None:
     await _migrate_characters_user_id(db)
     await _migrate_add_styled_image_url(db)
     await _migrate_add_referral_columns(db)
+    await _migrate_add_story_length_mode(db)
 
     # Now create all indexes (including user_id indexes) after migration
     for stmt in STORIES_INDEXES.strip().split(";"):
@@ -614,6 +616,17 @@ async def _migrate_add_referral_columns(db: "DatabaseManager") -> None:
         )
         await db.commit()
         print(f"Users referral migration completed (backfilled {len(rows)} users)")
+
+
+async def _migrate_add_story_length_mode(db: "DatabaseManager") -> None:
+    """Migration: Add story_length_mode column to sessions table (#331)."""
+    if not await column_exists(db, "sessions", "story_length_mode"):
+        print("Migrating sessions table: adding story_length_mode column...")
+        await db.execute(
+            "ALTER TABLE sessions ADD COLUMN story_length_mode TEXT DEFAULT 'short'"
+        )
+        await db.commit()
+        print("Sessions story_length_mode migration completed")
 
 
 # ============================================================================

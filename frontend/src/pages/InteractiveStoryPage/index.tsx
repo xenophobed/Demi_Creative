@@ -18,7 +18,7 @@ import QuotaExceededOverlay, {
 import useStreamVisualization from "@/hooks/useStreamVisualization";
 import useAuthStore from "@/store/useAuthStore";
 import useChildStore, { DEFAULT_INTERESTS } from "@/store/useChildStore";
-import type { AgeGroup } from "@/types/api";
+import type { AgeGroup, StoryLengthMode } from "@/types/api";
 import type { AnimationPhase } from "@/types/streaming";
 import LoginPrompt from "@/components/common/LoginPrompt";
 import SuggestedThemes from "@/components/common/SuggestedThemes";
@@ -29,6 +29,17 @@ const AGE_GROUPS: { value: AgeGroup; label: string; emoji: string }[] = [
   { value: "3-5", label: "3-5 yrs", emoji: "🧒" },
   { value: "6-8", label: "6-8 yrs", emoji: "👦" },
   { value: "9-12", label: "9-12 yrs", emoji: "🧑" },
+];
+
+const STORY_LENGTHS: {
+  value: StoryLengthMode;
+  label: string;
+  sublabel: string;
+  emoji: string;
+}[] = [
+  { value: "short", label: "Quick Tale", sublabel: "5 choices", emoji: "📖" },
+  { value: "medium", label: "Short Story", sublabel: "10 choices", emoji: "📚" },
+  { value: "unlimited", label: "Endless Adventure", sublabel: "No limit", emoji: "🌟" },
 ];
 
 function InteractiveStoryPage() {
@@ -47,6 +58,7 @@ function InteractiveStoryPage() {
 
   // Local form state
   const [selectedAge, setSelectedAge] = useState<AgeGroup | null>(null);
+  const [selectedLength, setSelectedLength] = useState<StoryLengthMode>("short");
   const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
   const [theme, setTheme] = useState("");
   const [quotaDismissed, setQuotaDismissed] = useState(false);
@@ -56,6 +68,7 @@ function InteractiveStoryPage() {
     sessionId,
     storyTitle,
     ageGroup: storeAgeGroup,
+    storyLengthMode,
     currentSegment,
     segments,
     choiceHistory,
@@ -67,6 +80,7 @@ function InteractiveStoryPage() {
     streaming,
     startStoryStream,
     makeChoiceStream,
+    endStory,
     resumeSession,
     reset,
   } = useInteractiveStory();
@@ -200,6 +214,7 @@ function InteractiveStoryPage() {
         age_group: selectedAge,
         interests: selectedInterests,
         theme: theme || undefined,
+        story_length: selectedLength,
       });
     } catch {
       // Error is handled by the hook
@@ -219,6 +234,7 @@ function InteractiveStoryPage() {
   const handleReset = () => {
     reset();
     setSelectedAge(null);
+    setSelectedLength("short");
     setSelectedInterests([]);
     setTheme("");
     setSessionExpiredMsg(null);
@@ -238,7 +254,20 @@ function InteractiveStoryPage() {
 
   // Calculate total segments (estimate based on progress)
   const totalSegments =
-    progress > 0 ? Math.round((choiceHistory.length + 1) / progress) : 5;
+    storyLengthMode === "unlimited"
+      ? 0
+      : progress > 0
+        ? Math.round((choiceHistory.length + 1) / progress)
+        : 5;
+
+  // End story handler for unlimited mode
+  const handleEndStory = async () => {
+    try {
+      await endStory();
+    } catch {
+      // Error is handled by the hook
+    }
+  };
 
   const renderStoryTimeline = () => (
     <div className="space-y-4">
@@ -379,6 +408,36 @@ function InteractiveStoryPage() {
             </div>
           </Card>
 
+          {/* Story Length Mode (#331) */}
+          <Card>
+            <h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+              <span>⏱️</span>
+              Story Length
+            </h2>
+            <div className="grid grid-cols-3 gap-3">
+              {STORY_LENGTHS.map((len) => (
+                <motion.button
+                  key={len.value}
+                  className={`
+                    p-4 rounded-xl border-2 text-center transition-colors
+                    ${
+                      selectedLength === len.value
+                        ? "border-primary bg-primary/10"
+                        : "border-gray-200 hover:border-primary/50"
+                    }
+                  `}
+                  onClick={() => setSelectedLength(len.value)}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  <span className="text-2xl block mb-1">{len.emoji}</span>
+                  <span className="text-sm font-medium block">{len.label}</span>
+                  <span className="text-xs text-gray-400">{len.sublabel}</span>
+                </motion.button>
+              ))}
+            </div>
+          </Card>
+
           {/* Interest Tags */}
           <Card>
             <h2 className="text-lg font-bold text-gray-800 mb-2 flex items-center gap-2">
@@ -489,6 +548,7 @@ function InteractiveStoryPage() {
             current={choiceHistory.length}
             total={totalSegments}
             choiceHistory={choiceHistory}
+            storyLengthMode={storyLengthMode}
           />
 
           {/* Story Segment with age-aware content display */}
@@ -515,6 +575,28 @@ function InteractiveStoryPage() {
                   disabled={isLoading}
                 />
               </div>
+            )}
+
+          {/* End Story button for unlimited mode */}
+          {storyLengthMode === "unlimited" &&
+            !currentSegment.is_ending &&
+            !isLoading && (
+              <motion.div
+                className="text-center"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.5 }}
+              >
+                <Button
+                  variant="outline"
+                  size="md"
+                  onClick={handleEndStory}
+                  disabled={isLoading}
+                  leftIcon={<span>🏁</span>}
+                >
+                  End My Story
+                </Button>
+              </motion.div>
             )}
 
           {/* Loading overlay with streaming visualizer */}

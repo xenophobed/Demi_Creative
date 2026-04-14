@@ -63,6 +63,9 @@ export interface ImageToStoryResponse {
   created_at: string;
 }
 
+// Story length mode (#331)
+export type StoryLengthMode = "short" | "medium" | "unlimited";
+
 // Interactive story request
 export interface InteractiveStoryStartRequest {
   child_id: string;
@@ -71,6 +74,7 @@ export interface InteractiveStoryStartRequest {
   theme?: string;
   voice?: VoiceType;
   enable_audio?: boolean;
+  story_length?: StoryLengthMode;
 }
 
 // Story choice
@@ -111,6 +115,7 @@ export interface ChoiceResponse {
   next_segment: StorySegment;
   choice_history: string[];
   progress: number;
+  story_length_mode?: StoryLengthMode;
 }
 
 // Session resume response (full data for restoring story view)
@@ -123,6 +128,7 @@ export interface SessionResumeResponse {
   choice_history: string[];
   progress: number;
   total_segments: number;
+  story_length_mode?: StoryLengthMode;
   educational_summary: EducationalValue | null;
 }
 

@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import type {
   AgeGroup,
+  StoryLengthMode,
   StorySegment,
   EducationalValue,
   InteractiveStoryStartResponse,
@@ -26,6 +27,7 @@ interface InteractiveStoryState {
   sessionId: string | null
   storyTitle: string
   ageGroup: AgeGroup | null
+  storyLengthMode: StoryLengthMode
   currentSegment: StorySegment | null
   segments: StorySegment[]
   choiceHistory: string[]
@@ -42,6 +44,7 @@ interface InteractiveStoryState {
   restoreSession: (response: SessionResumeResponse) => void
   complete: (summary: EducationalValue) => void
   setAgeGroup: (ageGroup: AgeGroup) => void
+  setStoryLengthMode: (mode: StoryLengthMode) => void
   reset: () => void
 
   // Streaming actions
@@ -63,6 +66,7 @@ const initialState = {
   sessionId: null,
   storyTitle: '',
   ageGroup: null as AgeGroup | null,
+  storyLengthMode: 'short' as StoryLengthMode,
   currentSegment: null,
   segments: [],
   choiceHistory: [],
@@ -108,6 +112,7 @@ const useInteractiveStoryStore = create<InteractiveStoryState>()(
           sessionId: response.session_id,
           storyTitle: response.story_title,
           ageGroup: response.age_group,
+          storyLengthMode: response.story_length_mode || 'short',
           currentSegment: lastSegment,
           segments: response.segments,
           choiceHistory: response.choice_history,
@@ -128,6 +133,10 @@ const useInteractiveStoryStore = create<InteractiveStoryState>()(
 
       setAgeGroup: (ageGroup) => {
         set({ ageGroup })
+      },
+
+      setStoryLengthMode: (mode) => {
+        set({ storyLengthMode: mode })
       },
 
       reset: () => {
@@ -183,6 +192,7 @@ const useInteractiveStoryStore = create<InteractiveStoryState>()(
         sessionId: state.sessionId,
         storyTitle: state.storyTitle,
         ageGroup: state.ageGroup,
+        storyLengthMode: state.storyLengthMode,
         currentSegment: state.currentSegment,
         segments: state.segments,
         choiceHistory: state.choiceHistory,

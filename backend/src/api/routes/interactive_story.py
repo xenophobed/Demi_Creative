@@ -42,8 +42,10 @@ from ...agents.interactive_story_agent import (
     generate_story_opening_stream,
     generate_next_segment,
     generate_next_segment_stream,
-    AGE_CONFIG
+    AGE_CONFIG,
+    get_total_segments,
 )
+from ..models import StoryLengthMode
 from ...utils.audio_strategy import get_audio_strategy
 from ...utils.text import count_words
 
@@ -135,10 +137,12 @@ async def start_interactive_story(
             user_id=user.user_id,
         )
 
-        # 2. Create session (determine total segments based on age group)
-        age_config = AGE_CONFIG.get(request.age_group.value, AGE_CONFIG["6-8"])
-        total_segments = age_config["total_segments"]
+        # 2. Create session (determine total segments from story length mode)
+        total_segments = get_total_segments(
+            request.story_length.value, request.age_group.value
+        )
 
+        # Unlimited mode gets extended session expiry (7 days vs 24 hours)
         session = await session_repo.create_session(
             child_id=request.child_id,
             story_title=opening_data["title"],
@@ -149,6 +153,7 @@ async def start_interactive_story(
             enable_audio=request.enable_audio,
             total_segments=total_segments,
             user_id=user.user_id,
+            story_length_mode=request.story_length.value,
         )
         await usage_repo.increment(user.user_id, "interactive_story")  # quota tracking (#314)
 
@@ -342,8 +347,9 @@ async def start_interactive_story_stream(
                         break
 
                     # Create session
-                    age_config = AGE_CONFIG.get(request.age_group.value, AGE_CONFIG["6-8"])
-                    total_segments = age_config["total_segments"]
+                    total_segments = get_total_segments(
+                        request.story_length.value, request.age_group.value
+                    )
 
                     session = await session_repo.create_session(
                         child_id=request.child_id,
@@ -355,6 +361,7 @@ async def start_interactive_story_stream(
                         enable_audio=request.enable_audio,
                         total_segments=total_segments,
                         user_id=user.user_id,
+                        story_length_mode=request.story_length.value,
                     )
                     await usage_repo.increment(user.user_id, "interactive_story")  # quota tracking (#314)
 
@@ -509,7 +516,8 @@ async def choose_story_branch_stream(
                     "age_group": session.age_group,
                     "interests": session.interests,
                     "theme": session.theme,
-                    "story_title": session.story_title
+                    "story_title": session.story_title,
+                    "story_length_mode": session.story_length_mode,
                 },
                 enable_audio=session.enable_audio,
                 voice=session.voice
@@ -639,7 +647,11 @@ async def choose_story_branch_stream(
                             "optional_content_type": audio_strategy.optional_content_type
                         },
                         "choice_history": updated_session.choice_history,
-                        "progress": updated_session.current_segment / updated_session.total_segments,
+                        "progress": (
+                            updated_session.current_segment / updated_session.total_segments
+                            if updated_session.total_segments > 0 else 0.0
+                        ),
+                        "story_length_mode": updated_session.story_length_mode,
                         "educational_summary": next_data.get("educational_summary")
                     }
                     yield f"event: result\ndata: {json.dumps(response_data, ensure_ascii=False)}\n\n"
@@ -711,7 +723,8 @@ async def choose_story_branch(
                 "age_group": session.age_group,
                 "interests": session.interests,
                 "theme": session.theme,
-                "story_title": session.story_title
+                "story_title": session.story_title,
+                "story_length_mode": session.story_length_mode,
             },
             enable_audio=session.enable_audio,
             voice=session.voice
@@ -849,6 +862,121 @@ async def choose_story_branch(
         )
 
 
+@router.post(
+    "/{session_id}/end/stream",
+    summary="End story gracefully (streaming)",
+    description="Trigger a graceful ending for an unlimited-mode story with SSE streaming",
+)
+async def end_story_stream(
+    http_request: Request,
+    session_id: str = PathParam(..., description="Session ID"),
+    user: UserData = Depends(get_current_user),
+):
+    """
+    End an unlimited-mode interactive story with streaming.
+    Generates a final segment that wraps up the story with a satisfying conclusion.
+    """
+    session = await get_session_for_owner(session_id, user.user_id)
+
+    if session.status != "active":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Session state is {session.status}, cannot end"
+        )
+
+    async def event_generator() -> AsyncGenerator[str, None]:
+        audio_strategy = get_audio_strategy(session.age_group)
+        client_disconnected = False
+
+        try:
+            # Generate final segment with force_ending=True
+            async for event in generate_next_segment_stream(
+                session_id=session_id,
+                choice_id="__end_story__",
+                session_data={
+                    "segments": session.segments,
+                    "choice_history": session.choice_history,
+                    "age_group": session.age_group,
+                    "interests": session.interests,
+                    "theme": session.theme,
+                    "story_title": session.story_title,
+                    "story_length_mode": session.story_length_mode,
+                    "force_ending": True,
+                },
+                enable_audio=session.enable_audio,
+                voice=session.voice
+            ):
+                if await http_request.is_disconnected():
+                    client_disconnected = True
+                    break
+
+                event_type = event.get("type", "message")
+                event_data = event.get("data", {})
+
+                if event_type == "result":
+                    next_data = event_data
+                    segment_data = next_data.get("segment", {})
+
+                    if await http_request.is_disconnected():
+                        client_disconnected = True
+                        break
+
+                    audio_url = None
+                    if next_data.get("audio_path"):
+                        audio_filename = Path(next_data["audio_path"]).name
+                        audio_url = f"/data/audio/{audio_filename}"
+
+                    await session_repo.update_session(
+                        session_id=session_id,
+                        segment=segment_data,
+                        choice_id="__end_story__",
+                        status="completed",
+                        educational_summary=next_data.get("educational_summary"),
+                        audio_url=audio_url,
+                        segment_id=segment_data.get("segment_id", 0)
+                    )
+
+                    updated_session = await session_repo.get_session(session_id)
+                    response_data = {
+                        "session_id": session_id,
+                        "next_segment": {
+                            "segment_id": segment_data.get("segment_id", 0),
+                            "text": segment_data.get("text", ""),
+                            "audio_url": audio_url,
+                            "choices": [],
+                            "is_ending": True,
+                            "primary_mode": audio_strategy.primary_mode,
+                            "optional_content_available": audio_strategy.optional_content_available,
+                            "optional_content_type": audio_strategy.optional_content_type
+                        },
+                        "choice_history": updated_session.choice_history,
+                        "progress": 1.0,
+                        "story_length_mode": updated_session.story_length_mode,
+                        "educational_summary": next_data.get("educational_summary")
+                    }
+                    yield f"event: result\ndata: {json.dumps(response_data, ensure_ascii=False)}\n\n"
+
+                else:
+                    yield f"event: {event_type}\ndata: {json.dumps(event_data, ensure_ascii=False)}\n\n"
+
+        except Exception as e:
+            error_data = {"error": str(e), "message": "Failed to end story"}
+            yield f"event: error\ndata: {json.dumps(error_data, ensure_ascii=False)}\n\n"
+
+        if client_disconnected:
+            logger.info("End story streaming aborted due to client disconnect")
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        }
+    )
+
+
 @router.get(
     "/{session_id}/resume",
     response_model=SessionResumeResponse,
@@ -912,6 +1040,7 @@ async def resume_session(
             choice_history=session.choice_history,
             progress=progress,
             total_segments=session.total_segments,
+            story_length_mode=StoryLengthMode(session.story_length_mode),
             educational_summary=educational_summary,
         )
 

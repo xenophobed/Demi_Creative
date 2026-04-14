@@ -34,6 +34,7 @@ class SessionData:
     user_id: Optional[str] = None  # Owner's user ID
     audio_urls: Optional[Dict[int, str]] = None
     educational_summary: Optional[Dict[str, Any]] = None
+    story_length_mode: str = "short"  # short | medium | unlimited (#331)
 
     def __post_init__(self):
         if self.audio_urls is None:
@@ -57,7 +58,8 @@ class SessionRepository:
         voice: str = "fable",
         enable_audio: bool = True,
         total_segments: int = 5,
-        user_id: Optional[str] = None  # New: owner's user ID
+        user_id: Optional[str] = None,
+        story_length_mode: str = "short",
     ) -> SessionData:
         """
         Create a new interactive story session.
@@ -80,20 +82,22 @@ class SessionRepository:
 
         session_id = str(uuid.uuid4())
         now = datetime.now()
-        expires_at = now + timedelta(hours=self.default_expiry_hours)
+        # Unlimited mode gets 7-day expiry instead of 24 hours (#331)
+        expiry_hours = 168 if story_length_mode == "unlimited" else self.default_expiry_hours
+        expires_at = now + timedelta(hours=expiry_hours)
 
         await self._db.execute(
             """
             INSERT INTO sessions (
                 session_id, user_id, child_id, story_title, age_group, interests,
                 theme, voice, enable_audio, current_segment, total_segments,
-                choice_history, audio_urls, status, created_at, updated_at,
-                expires_at, educational_summary
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                story_length_mode, choice_history, audio_urls, status,
+                created_at, updated_at, expires_at, educational_summary
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 session_id,
-                user_id,  # New: user_id
+                user_id,
                 child_id,
                 story_title,
                 age_group,
@@ -103,6 +107,7 @@ class SessionRepository:
                 1 if enable_audio else 0,
                 0,
                 total_segments,
+                story_length_mode,
                 json.dumps([], ensure_ascii=False),
                 json.dumps({}, ensure_ascii=False),
                 "active",
@@ -133,7 +138,8 @@ class SessionRepository:
             expires_at=expires_at.isoformat(),
             user_id=user_id,
             audio_urls={},
-            educational_summary=None
+            educational_summary=None,
+            story_length_mode=story_length_mode,
         )
 
     async def get_session(self, session_id: str) -> Optional[SessionData]:
@@ -481,9 +487,10 @@ class SessionRepository:
             created_at=row['created_at'],
             updated_at=row['updated_at'],
             expires_at=row['expires_at'],
-            user_id=row.get('user_id'),  # Owner's user ID
+            user_id=row.get('user_id'),
             audio_urls=audio_urls,
-            educational_summary=educational_summary
+            educational_summary=educational_summary,
+            story_length_mode=row.get('story_length_mode', 'short'),
         )
 
 
