@@ -21,6 +21,7 @@ from ..models import AgeGroup, EmotionType, TTSProviderEnum
 from ...services.database import session_repo, story_repo
 from ...services.user_service import UserData
 from ...services.tts_service import generate_story_audio_file
+from ...services.storage_adapter import storage
 from ...mcp_servers.tts_generator_server import (
     OPENAI_VOICES,
     MINIMAX_VOICES,
@@ -174,17 +175,18 @@ async def preview_voice(
     client_ip = request.client.host if request.client else "unknown"
     _check_preview_rate(client_ip)
 
-    # Check cache
+    # Check cache — try storage adapter first (works for both local and Supabase)
+    cache_filename = f"previews/{provider}_{voice_id}.mp3"
     preview_dir = Path("./data/audio/previews")
     preview_dir.mkdir(parents=True, exist_ok=True)
-    cache_filename = f"{provider}_{voice_id}.mp3"
-    cache_path = preview_dir / cache_filename
+    local_cache_path = preview_dir / f"{provider}_{voice_id}.mp3"
 
-    if cache_path.exists() and cache_path.stat().st_size > 0:
+    if local_cache_path.exists() and local_cache_path.stat().st_size > 0:
+        audio_url = await storage.get_url("audio", cache_filename)
         return VoicePreviewResponse(
             voice_id=voice_id,
             provider=provider,
-            audio_url=f"/data/audio/previews/{cache_filename}",
+            audio_url=audio_url,
             cached=True,
         )
 
@@ -203,14 +205,19 @@ async def preview_voice(
                 detail=f"Preview generation failed: {result.get('error', 'unknown error')}",
             )
 
-        # Move generated file to cache location
+        # Move generated file to local cache
         generated_path = Path(result["audio_path"])
-        generated_path.rename(cache_path)
+        generated_path.rename(local_cache_path)
+
+        # Upload to storage backend (Supabase in prod, no-op for local)
+        audio_url = await storage.upload(
+            "audio", cache_filename, local_cache_path.read_bytes(), "audio/mpeg"
+        )
 
         return VoicePreviewResponse(
             voice_id=voice_id,
             provider=provider,
-            audio_url=f"/data/audio/previews/{cache_filename}",
+            audio_url=audio_url,
             cached=False,
         )
 

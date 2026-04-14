@@ -87,9 +87,13 @@ def validate_story_length(story_text: str, age_group: str) -> dict:
 
 
 from ..mcp_servers import (
+    analyze_children_drawing,
+    check_content_safety,
+    generate_story_audio,
     image_style_server,
     safety_server,
     search_similar_stories,
+    transform_art_style,
     tts_server,
     vector_server,
     vision_server,
@@ -173,6 +177,22 @@ def _runtime_unavailable_reason() -> Optional[str]:
             "requirements.txt (not requirements_minimal.txt)."
         )
     return None
+
+
+def _cli_available() -> bool:
+    """Check if the Claude Code CLI binary is available (required by ClaudeSDKClient)."""
+    import shutil
+    if shutil.which("claude"):
+        return True
+    # Check bundled path
+    try:
+        import claude_agent_sdk
+        bundled = Path(claude_agent_sdk.__file__).parent / "_bundled" / "claude"
+        if bundled.exists() and bundled.is_file():
+            return True
+    except Exception:
+        pass
+    return False
 
 
 def _mock_image_to_story_result(
@@ -314,6 +334,28 @@ async def image_to_story(
     runtime_issue = _runtime_unavailable_reason()
     if runtime_issue:
         raise RuntimeError(runtime_issue)
+
+    # Fall back to direct API pipeline when Claude CLI is not installed
+    if not _cli_available():
+        logger.info("Claude CLI not found — using direct API pipeline (non-streaming)")
+        result = {}
+        async for event in _direct_stream_image_to_story(
+            image_path=image_path,
+            child_id=child_id,
+            child_age=child_age,
+            interests=interests,
+            enable_audio=enable_audio,
+            voice=voice,
+            art_theme=art_theme,
+            user_id=user_id,
+            provider=provider,
+        ):
+            if event.get("type") == "result":
+                result = event.get("data", {})
+            elif event.get("type") == "error":
+                raise RuntimeError(event["data"].get("message", "Story generation failed"))
+        return result
+
     # Validate input
     if not Path(image_path).exists():
         raise FileNotFoundError(f"Image file not found: {image_path}")
@@ -523,6 +565,204 @@ After the story is created, use the `mcp__tts-generation__generate_story_audio` 
     return result_data
 
 
+# ============================================================================
+# Direct API fallback (when Claude CLI is not available, e.g. Railway)
+# ============================================================================
+
+
+async def _direct_stream_image_to_story(
+    image_path: str,
+    child_id: str,
+    child_age: int,
+    interests: list[str] = None,
+    enable_audio: bool = True,
+    voice: str = None,
+    art_theme: str = None,
+    user_id: str = "",
+    provider: str = None,
+) -> AsyncGenerator[Dict[str, Any], None]:
+    """Direct API pipeline — bypasses Claude Agent SDK, calls MCP tools directly.
+
+    Used in production (Railway) where the Claude Code CLI binary is not installed.
+    Replicates the same SSE event sequence as the SDK-based streaming path.
+    """
+    from anthropic import AsyncAnthropic
+
+    interests_str = ", ".join(interests) if interests else "not specified"
+    age_group = _get_age_group_from_age(child_age)
+    min_words, max_words = _get_story_length_range(age_group)
+    audio_config = _get_audio_config(age_group)
+    audio_mode = audio_config["audio_mode"]
+    should_generate_audio = enable_audio and audio_mode in ["audio_first", "simultaneous"]
+    actual_voice = voice or audio_config["voice"]
+    audio_speed = audio_config["speed"]
+
+    yield {"type": "status", "data": {"status": "started", "message": "Analyzing drawing..."}}
+
+    # Step 1: Vision analysis
+    yield {"type": "tool_use", "data": {"tool": "mcp__vision-analysis__analyze_children_drawing", "message": "Analyzing drawing..."}}
+
+    analysis_result = await analyze_children_drawing({"image_path": image_path, "child_age": child_age})
+    analysis_text = analysis_result.get("content", [{}])[0].get("text", "{}")
+    try:
+        analysis_data = json.loads(analysis_text)
+    except json.JSONDecodeError:
+        analysis_data = {"objects": [], "scene": "unknown", "mood": "unknown", "confidence_score": 0.0}
+
+    yield {"type": "tool_result", "data": {"status": "completed"}}
+
+    if analysis_data.get("error"):
+        yield {"type": "error", "data": {"error": "VisionError", "message": f"Drawing analysis failed: {analysis_data['error']}"}}
+        return
+
+    # Step 2: Story memory + dedup
+    stream_memory_section = ""
+    try:
+        stream_memory_section = await get_story_memory_prompt(child_id, user_id=user_id)
+    except Exception:
+        pass
+
+    stream_dedup_nudge = ""
+    try:
+        stream_dedup_nudge = await _search_story_dedup(child_id, interests_str)
+    except Exception:
+        pass
+
+    # Step 3: Generate story via Anthropic API
+    yield {"type": "tool_use", "data": {"tool": "story_generation", "message": "Creating your story..."}}
+
+    story_prompt = f"""You are a children's story writer. Based on the following drawing analysis, create a warm, educational story.
+
+Drawing Analysis:
+{json.dumps(analysis_data, indent=2, ensure_ascii=False)}
+
+Child age: {child_age} years old
+Interests: {interests_str}
+{stream_memory_section}{stream_dedup_nudge}
+Requirements:
+- Story length: approximately {min_words}-{max_words} words
+- Language appropriate for a {child_age}-year-old child
+- Include themes, concepts, and a moral lesson
+- Always respond in English
+
+Return your response as JSON:
+{{
+  "story": "the story text",
+  "themes": ["theme1", "theme2"],
+  "concepts": ["concept1", "concept2"],
+  "moral": "the moral lesson",
+  "characters": [{{"name": "...", "description": "...", "appearances": 1}}]
+}}"""
+
+    client = AsyncAnthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+    try:
+        import anyio
+        with anyio.fail_after(120):
+            response = await client.messages.create(
+                model=get_claude_agent_model(),
+                max_tokens=2048,
+                messages=[{"role": "user", "content": story_prompt}],
+            )
+    except Exception as e:
+        yield {"type": "error", "data": {"error": "StoryGenerationError", "message": f"Story generation failed: {str(e)}"}}
+        return
+
+    response_text = response.content[0].text
+    try:
+        if "```json" in response_text:
+            json_start = response_text.find("```json") + 7
+            json_end = response_text.find("```", json_start)
+            response_text = response_text[json_start:json_end].strip()
+        elif "```" in response_text:
+            json_start = response_text.find("```") + 3
+            json_end = response_text.find("```", json_start)
+            response_text = response_text[json_start:json_end].strip()
+        story_data = json.loads(response_text)
+    except json.JSONDecodeError:
+        story_data = {
+            "story": response_text,
+            "themes": [],
+            "concepts": [],
+            "moral": None,
+            "characters": [],
+        }
+
+    yield {"type": "tool_result", "data": {"status": "completed"}}
+
+    # Step 4: Safety check
+    yield {"type": "tool_use", "data": {"tool": "mcp__safety-check__check_content_safety", "message": "Checking content safety..."}}
+
+    safety_result = await check_content_safety({
+        "content_text": story_data.get("story", ""),
+        "content_type": "story",
+        "target_age": child_age,
+    })
+    safety_text = safety_result.get("content", [{}])[0].get("text", "{}")
+    try:
+        safety_data = json.loads(safety_text)
+    except json.JSONDecodeError:
+        safety_data = {"safety_score": 0.9, "passed": True}
+
+    yield {"type": "tool_result", "data": {"status": "completed"}}
+
+    # Step 5: Art style transfer (if requested)
+    styled_image_path = None
+    if art_theme and art_theme != "none":
+        yield {"type": "tool_use", "data": {"tool": "mcp__image-style__transform_art_style", "message": "Applying art style..."}}
+        try:
+            style_result = await transform_art_style({
+                "image_path": image_path,
+                "theme": art_theme,
+                "child_age": child_age,
+                "session_id": child_id,
+            })
+            style_text = style_result.get("content", [{}])[0].get("text", "{}")
+            style_data = json.loads(style_text)
+            styled_image_path = style_data.get("styled_image_path")
+        except Exception:
+            pass
+        yield {"type": "tool_result", "data": {"status": "completed"}}
+
+    # Step 6: Audio generation (if enabled)
+    audio_path = None
+    if should_generate_audio:
+        yield {"type": "tool_use", "data": {"tool": "mcp__tts-generation__generate_story_audio", "message": "Generating audio..."}}
+        try:
+            audio_result = await generate_story_audio({
+                "story_text": story_data.get("story", ""),
+                "voice": actual_voice,
+                "speed": audio_speed,
+                "child_age": child_age,
+                "provider": provider or "openai",
+            })
+            audio_text = audio_result.get("content", [{}])[0].get("text", "{}")
+            audio_data = json.loads(audio_text)
+            audio_path = audio_data.get("audio_path")
+            if audio_path:
+                yield {"type": "audio_generated", "data": {"audio_path": audio_path, "message": "Audio generation complete"}}
+        except Exception:
+            logger.warning("Audio generation failed in direct pipeline", exc_info=True)
+        yield {"type": "tool_result", "data": {"status": "completed"}}
+
+    # Build result
+    result_data = {
+        "story": story_data.get("story", ""),
+        "themes": story_data.get("themes", []),
+        "concepts": story_data.get("concepts", []),
+        "moral": story_data.get("moral"),
+        "characters": story_data.get("characters", []),
+        "analysis": analysis_data,
+        "safety_score": safety_data.get("safety_score", 0.9),
+    }
+    if audio_path:
+        result_data["audio_path"] = audio_path
+    if styled_image_path:
+        result_data["styled_image_path"] = styled_image_path
+
+    yield {"type": "result", "data": result_data}
+    yield {"type": "complete", "data": {"status": "completed", "message": "Story creation complete!"}}
+
+
 async def stream_image_to_story(
     image_path: str,
     child_id: str,
@@ -570,6 +810,24 @@ async def stream_image_to_story(
             "data": {"error": "RuntimeError", "message": runtime_issue},
         }
         return
+
+    # Fall back to direct API pipeline when Claude CLI is not installed (e.g. Railway)
+    if not _cli_available():
+        logger.info("Claude CLI not found — using direct API pipeline for story generation")
+        async for event in _direct_stream_image_to_story(
+            image_path=image_path,
+            child_id=child_id,
+            child_age=child_age,
+            interests=interests,
+            enable_audio=enable_audio,
+            voice=voice,
+            art_theme=art_theme,
+            user_id=user_id,
+            provider=provider,
+        ):
+            yield event
+        return
+
     # Validate input
     if not Path(image_path).exists():
         yield {

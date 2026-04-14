@@ -246,26 +246,27 @@ Notes:
 Always respond in English."""
 
     try:
-        response = await client.messages.create(
-            model=get_vision_model(),
-            max_tokens=1024,
-            messages=[
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "image",
-                            "source": {
-                                "type": "base64",
-                                "media_type": media_type,
-                                "data": image_data,
+        with anyio.fail_after(60):
+            response = await client.messages.create(
+                model=get_vision_model(),
+                max_tokens=1024,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "image",
+                                "source": {
+                                    "type": "base64",
+                                    "media_type": media_type,
+                                    "data": image_data,
+                                },
                             },
-                        },
-                        {"type": "text", "text": prompt},
-                    ],
-                }
-            ],
-        )
+                            {"type": "text", "text": prompt},
+                        ],
+                    }
+                ],
+            )
 
         # Extract response text
         response_text = response.content[0].text
