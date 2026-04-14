@@ -25,31 +25,10 @@ import type {
   MorningShowOnDemandRequest,
 } from "@/types/api";
 import { consumeSSEStream } from "../utils/sseStream";
+import { getFreshAuthHeaders } from "../authUtils";
 
 // API base URL
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api/v1";
-
-/**
- * Get auth token from localStorage for raw fetch() calls.
- * The axios client handles this via interceptors, but SSE streams use raw fetch.
- */
-function getAuthToken(): string | null {
-  try {
-    const authStorage = localStorage.getItem("auth-storage");
-    if (authStorage) {
-      const { state } = JSON.parse(authStorage);
-      return state?.token || null;
-    }
-  } catch {
-    // Ignore parsing errors
-  }
-  return null;
-}
-
-function getAuthHeaders(): Record<string, string> {
-  const token = getAuthToken();
-  return token ? { Authorization: `Bearer ${token}` } : {};
-}
 
 /**
  * Story service API
@@ -148,7 +127,7 @@ export const storyService = {
 
     const response = await fetch(`${API_BASE_URL}/image-to-story/stream`, {
       method: "POST",
-      headers: getAuthHeaders(),
+      headers: await getFreshAuthHeaders(),
       body: formData,
       signal,
     });
@@ -294,7 +273,7 @@ export const storyService = {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          ...getAuthHeaders(),
+          ...(await getFreshAuthHeaders()),
         },
         body: JSON.stringify(params),
         signal,
@@ -345,7 +324,7 @@ export const storyService = {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        ...getAuthHeaders(),
+        ...(await getFreshAuthHeaders()),
       },
       body: JSON.stringify(params),
     });
@@ -394,7 +373,7 @@ export const storyService = {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        ...getAuthHeaders(),
+        ...(await getFreshAuthHeaders()),
       },
       body: JSON.stringify(params),
     });
@@ -489,7 +468,7 @@ export const storyService = {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          ...getAuthHeaders(),
+          ...(await getFreshAuthHeaders()),
         },
         body: JSON.stringify(params),
         signal,
@@ -543,7 +522,7 @@ export const storyService = {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          ...getAuthHeaders(),
+          ...(await getFreshAuthHeaders()),
         },
         body: JSON.stringify(choice),
         signal,
@@ -571,7 +550,7 @@ export const storyService = {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          ...getAuthHeaders(),
+          ...(await getFreshAuthHeaders()),
         },
         signal,
       },

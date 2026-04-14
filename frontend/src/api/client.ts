@@ -15,9 +15,9 @@ const apiClient: AxiosInstance = axios.create({
   },
 })
 
-// Request interceptor - adds auth token to requests
+// Request interceptor - adds auth token to requests (async: may refresh expired token)
 apiClient.interceptors.request.use(
-  (config) => {
+  async (config) => {
     return applyStoredAuthHeader(config)
   },
   (error) => {
