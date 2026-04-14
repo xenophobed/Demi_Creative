@@ -189,6 +189,31 @@ AGE_CONFIG = {
     },
 }
 
+# Story length mode segment counts (#331)
+# Maps (story_length_mode) -> total_segments.  None = unlimited.
+STORY_LENGTH_SEGMENTS = {
+    "short": 5,
+    "medium": 10,
+    "unlimited": None,
+}
+
+# Soft caps for unlimited mode by age group (#331)
+UNLIMITED_SOFT_CAP = {
+    "3-5": 15,
+    "6-8": 30,
+    "9-12": 50,
+}
+
+
+def get_total_segments(story_length_mode: str, age_group: str) -> int:
+    """Return total_segments for a given mode. For unlimited, uses the soft cap."""
+    segments = STORY_LENGTH_SEGMENTS.get(story_length_mode)
+    if segments is not None:
+        return segments
+    # Unlimited mode: use soft cap as total_segments for progress display,
+    # but actual ending is controlled by the /end endpoint or soft-cap prompt.
+    return UNLIMITED_SOFT_CAP.get(age_group, 50)
+
 
 # ============================================================================
 # Prompt Construction Helpers (#72, #73)
@@ -345,6 +370,7 @@ def _build_next_segment_prompt(
 - Theme: {theme}
 - Current segment: Segment {segment_count + 1} (of {total_segments} total)
 - Is this the ending: {"yes" if is_final_segment else "no"}
+- Pacing: {"Wrap up quickly — short story mode" if total_segments <= 5 else "Medium pace — develop the plot steadily" if total_segments <= 10 else "Long adventure — take your time, build rich worlds"}
 
 **Previous Story Content**:
 {story_context if story_context else "This is the beginning of the story"}
@@ -1250,11 +1276,21 @@ async def generate_next_segment_stream(
     interests = session_data.get("interests", ["adventure"])
     theme = session_data.get("theme", "adventure story")
     story_title = session_data.get("story_title", "A mysterious adventure")
+    story_length_mode = session_data.get("story_length_mode", "short")
+    force_ending = session_data.get("force_ending", False)
 
     config = AGE_CONFIG.get(age_group, AGE_CONFIG["6-8"])
     segment_count = len(segments)
-    total_segments = config["total_segments"]
-    is_final_segment = segment_count >= total_segments - 1
+    total_segments = get_total_segments(story_length_mode, age_group)
+
+    # Determine if this is the final segment
+    if force_ending:
+        is_final_segment = True
+    elif story_length_mode == "unlimited":
+        # In unlimited mode, never auto-end (soft cap triggers a gentle prompt instead)
+        is_final_segment = False
+    else:
+        is_final_segment = segment_count >= total_segments - 1
 
     if _should_use_mock():
         yield {
@@ -1530,13 +1566,20 @@ async def generate_next_segment(
     interests = session_data.get("interests", ["adventure"])
     theme = session_data.get("theme", "adventure story")
     story_title = session_data.get("story_title", "A mysterious adventure")
+    story_length_mode = session_data.get("story_length_mode", "short")
+    force_ending = session_data.get("force_ending", False)
 
     config = AGE_CONFIG.get(age_group, AGE_CONFIG["6-8"])
     segment_count = len(segments)
-    total_segments = config["total_segments"]
+    total_segments = get_total_segments(story_length_mode, age_group)
 
     # Determine if this should be the ending
-    is_final_segment = segment_count >= total_segments - 1
+    if force_ending:
+        is_final_segment = True
+    elif story_length_mode == "unlimited":
+        is_final_segment = False
+    else:
+        is_final_segment = segment_count >= total_segments - 1
 
     if _should_use_mock():
         return _mock_next_segment(segment_count, is_final_segment)

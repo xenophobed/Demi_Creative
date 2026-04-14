@@ -4,6 +4,7 @@ import useInteractiveStoryStore from "@/store/useInteractiveStoryStore";
 import { interactiveStoryGenerationManager } from "@/services/interactiveStoryGenerationManager";
 import type {
   AgeGroup,
+  StoryLengthMode,
   InteractiveStoryStartRequest,
   StorySegment,
   EducationalValue,
@@ -22,6 +23,7 @@ interface UseInteractiveStoryReturn {
   sessionId: string | null;
   storyTitle: string;
   ageGroup: AgeGroup | null;
+  storyLengthMode: StoryLengthMode;
   currentSegment: StorySegment | null;
   segments: StorySegment[];
   choiceHistory: string[];
@@ -39,6 +41,7 @@ interface UseInteractiveStoryReturn {
   startStoryStream: (params: InteractiveStoryStartRequest) => Promise<void>;
   makeChoice: (choiceId: string) => Promise<void>;
   makeChoiceStream: (choiceId: string) => Promise<void>;
+  endStory: () => Promise<void>;
   resumeSession: (sessionId: string) => Promise<void>;
   reset: () => void;
 }
@@ -51,6 +54,7 @@ export function useInteractiveStory(): UseInteractiveStoryReturn {
     sessionId,
     storyTitle,
     ageGroup,
+    storyLengthMode,
     currentSegment,
     segments,
     choiceHistory,
@@ -187,6 +191,29 @@ export function useInteractiveStory(): UseInteractiveStoryReturn {
     [sessionId],
   );
 
+  const endStory = useCallback(
+    async () => {
+      if (!sessionId) {
+        setError("Session not found");
+        return;
+      }
+
+      setError(null);
+
+      try {
+        await interactiveStoryGenerationManager.endStory(sessionId);
+      } catch (err) {
+        const message =
+          err instanceof Error
+            ? err.message
+            : "Failed to end story, please try again";
+        setError(message);
+        throw err;
+      }
+    },
+    [sessionId],
+  );
+
   const resumeSession = useCallback(
     async (resumeSessionId: string) => {
       setIsLoading(true);
@@ -216,6 +243,7 @@ export function useInteractiveStory(): UseInteractiveStoryReturn {
     sessionId,
     storyTitle,
     ageGroup,
+    storyLengthMode,
     currentSegment,
     segments,
     choiceHistory,
@@ -229,6 +257,7 @@ export function useInteractiveStory(): UseInteractiveStoryReturn {
     startStoryStream,
     makeChoice,
     makeChoiceStream,
+    endStory,
     resumeSession,
     reset,
   };

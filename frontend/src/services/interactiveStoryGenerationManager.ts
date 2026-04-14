@@ -167,6 +167,70 @@ export const interactiveStoryGenerationManager = {
     }
   },
 
+  async endStory(sessionId: string): Promise<void> {
+    const store = useInteractiveStoryStore.getState()
+
+    if (store.streaming.isStreaming) {
+      return
+    }
+
+    if (abortController) {
+      abortController.abort()
+    }
+    abortController = new AbortController()
+
+    store.startStreaming()
+
+    const callbacks: StreamCallbacks = {
+      onStatus: (data) => {
+        useInteractiveStoryStore.getState().updateStreamStatus(data)
+      },
+      onThinking: (data) => {
+        useInteractiveStoryStore.getState().updateThinking(data)
+      },
+      onToolUse: (data) => {
+        useInteractiveStoryStore.getState().updateStreamStatus({
+          status: 'processing',
+          message: data.message,
+        })
+      },
+      onResult: (data) => {
+        const response = data as ChoiceResponse
+        const s = useInteractiveStoryStore.getState()
+        s.addSegment(response)
+
+        const extendedResponse = response as ChoiceResponse & {
+          educational_summary?: EducationalValue
+        }
+        s.complete(
+          extendedResponse.educational_summary || {
+            themes: [],
+            concepts: [],
+            moral: undefined,
+          }
+        )
+      },
+      onComplete: () => {
+        useInteractiveStoryStore.getState().stopStreaming()
+      },
+      onError: () => {
+        useInteractiveStoryStore.getState().stopStreaming()
+      },
+    }
+
+    try {
+      await storyService.endStoryStream(sessionId, callbacks, abortController.signal)
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        return
+      }
+      useInteractiveStoryStore.getState().stopStreaming()
+      throw err
+    } finally {
+      abortController = null
+    }
+  },
+
   cancelGeneration() {
     if (abortController) {
       abortController.abort()

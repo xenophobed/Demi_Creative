@@ -1,9 +1,11 @@
 import { motion } from 'framer-motion'
+import type { StoryLengthMode } from '@/types/api'
 
 interface ProgressIndicatorProps {
   current: number
   total: number
   choiceHistory: string[]
+  storyLengthMode?: StoryLengthMode
   className?: string
 }
 
@@ -11,10 +13,17 @@ function ProgressIndicator({
   current,
   total,
   choiceHistory,
+  storyLengthMode = 'short',
   className = '',
 }: ProgressIndicatorProps) {
-  // Calculate progress percentage (0-100)
-  const progressPercent = total > 0 ? Math.round((current / total) * 100) : 0
+  const isUnlimited = storyLengthMode === 'unlimited'
+
+  // For unlimited mode, show chapter count instead of percentage
+  const progressPercent = isUnlimited
+    ? 0
+    : total > 0
+      ? Math.round((current / total) * 100)
+      : 0
 
   return (
     <div className={`space-y-2 ${className}`}>
@@ -24,22 +33,24 @@ function ProgressIndicator({
           Chapter {current + 1}
         </span>
         <span className="text-gray-400">
-          {progressPercent}%
+          {isUnlimited ? '∞ Endless Adventure' : `${progressPercent}%`}
         </span>
       </div>
 
-      {/* Progress bar */}
-      <div className="h-3 bg-gray-200 rounded-full overflow-hidden">
-        <motion.div
-          className="h-full bg-gradient-to-r from-primary via-secondary to-accent rounded-full"
-          initial={{ width: 0 }}
-          animate={{ width: `${progressPercent}%` }}
-          transition={{ duration: 0.5, ease: 'easeOut' }}
-        />
-      </div>
+      {/* Progress bar — hidden for unlimited mode */}
+      {!isUnlimited && (
+        <div className="h-3 bg-gray-200 rounded-full overflow-hidden">
+          <motion.div
+            className="h-full bg-gradient-to-r from-primary via-secondary to-accent rounded-full"
+            initial={{ width: 0 }}
+            animate={{ width: `${progressPercent}%` }}
+            transition={{ duration: 0.5, ease: 'easeOut' }}
+          />
+        </div>
+      )}
 
-      {/* Segment dots */}
-      {total <= 10 && total > 0 && (
+      {/* Segment dots (short/medium modes only, max 10 dots) */}
+      {!isUnlimited && total <= 10 && total > 0 && (
         <div className="flex justify-center gap-2 pt-1">
           {Array.from({ length: total }).map((_, index) => (
             <motion.div

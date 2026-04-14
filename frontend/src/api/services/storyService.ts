@@ -558,6 +558,33 @@ export const storyService = {
   },
 
   /**
+   * End an unlimited-mode interactive story (streaming) (#331)
+   */
+  async endStoryStream(
+    sessionId: string,
+    callbacks: StreamCallbacks,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    const response = await fetch(
+      `${API_BASE_URL}/story/interactive/${sessionId}/end/stream`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...getAuthHeaders(),
+        },
+        signal,
+      },
+    );
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    await consumeSSEStream(response, callbacks);
+  },
+
+  /**
    * Generate audio on-demand for an interactive story segment (9-12 age group)
    */
   async generateAudioOnDemand(

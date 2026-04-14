@@ -458,3 +458,122 @@ class TestSaveInteractiveStory:
                 f"/api/v1/story/interactive/{session_id}/save"
             )
             assert resp.status_code == 400
+
+
+# ============================================================================
+# Story Length Mode (#331)
+# ============================================================================
+
+@pytest.mark.asyncio
+class TestStoryLengthMode:
+    """Story length mode tests (#331)."""
+
+    async def test_start_story_with_short_mode(self):
+        """Short mode defaults and is accepted."""
+        async with _client() as client:
+            payload = {
+                "child_id": "test_child_001",
+                "age_group": "6-8",
+                "interests": ["animals"],
+                "story_length": "short",
+            }
+            resp = await client.post("/api/v1/story/interactive/start", json=payload)
+            assert resp.status_code == 201
+            result = resp.json()
+            assert "session_id" in result
+
+    async def test_start_story_with_medium_mode(self):
+        """Medium mode is accepted."""
+        async with _client() as client:
+            payload = {
+                "child_id": "test_child_001",
+                "age_group": "9-12",
+                "interests": ["science"],
+                "story_length": "medium",
+            }
+            resp = await client.post("/api/v1/story/interactive/start", json=payload)
+            assert resp.status_code == 201
+
+    async def test_start_story_with_unlimited_mode(self):
+        """Unlimited mode is accepted."""
+        async with _client() as client:
+            payload = {
+                "child_id": "test_child_001",
+                "age_group": "9-12",
+                "interests": ["adventure"],
+                "story_length": "unlimited",
+            }
+            resp = await client.post("/api/v1/story/interactive/start", json=payload)
+            assert resp.status_code == 201
+
+    async def test_start_story_invalid_length_mode(self):
+        """Invalid story_length is rejected."""
+        async with _client() as client:
+            payload = {
+                "child_id": "test_child_001",
+                "age_group": "6-8",
+                "interests": ["animals"],
+                "story_length": "extra_long",
+            }
+            resp = await client.post("/api/v1/story/interactive/start", json=payload)
+            assert resp.status_code == 422
+
+    async def test_default_story_length_is_short(self):
+        """Omitting story_length defaults to short."""
+        async with _client() as client:
+            payload = {
+                "child_id": "test_child_001",
+                "age_group": "6-8",
+                "interests": ["animals"],
+            }
+            resp = await client.post("/api/v1/story/interactive/start", json=payload)
+            assert resp.status_code == 201
+
+            # Resume to check the mode
+            session_id = resp.json()["session_id"]
+            resume_resp = await client.get(
+                f"/api/v1/story/interactive/{session_id}/resume"
+            )
+            assert resume_resp.status_code == 200
+            assert resume_resp.json()["story_length_mode"] == "short"
+
+    async def test_resume_includes_story_length_mode(self):
+        """Resume response includes story_length_mode."""
+        async with _client() as client:
+            payload = {
+                "child_id": "test_child_001",
+                "age_group": "9-12",
+                "interests": ["robots"],
+                "story_length": "unlimited",
+            }
+            resp = await client.post("/api/v1/story/interactive/start", json=payload)
+            assert resp.status_code == 201
+
+            session_id = resp.json()["session_id"]
+            resume_resp = await client.get(
+                f"/api/v1/story/interactive/{session_id}/resume"
+            )
+            assert resume_resp.status_code == 200
+            assert resume_resp.json()["story_length_mode"] == "unlimited"
+
+    async def test_end_story_endpoint(self):
+        """POST /end/stream is callable on an active session."""
+        async with _client() as client:
+            # Start an unlimited session
+            payload = {
+                "child_id": "test_child_001",
+                "age_group": "6-8",
+                "interests": ["adventure"],
+                "story_length": "unlimited",
+            }
+            resp = await client.post("/api/v1/story/interactive/start", json=payload)
+            assert resp.status_code == 201
+            session_id = resp.json()["session_id"]
+
+            # End the story via streaming endpoint (returns SSE)
+            end_resp = await client.post(
+                f"/api/v1/story/interactive/{session_id}/end/stream"
+            )
+            assert end_resp.status_code == 200
+            # SSE response should contain event data
+            assert len(end_resp.text) > 0
