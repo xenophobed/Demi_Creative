@@ -370,18 +370,19 @@ export default function InspirationDaily({
         muted ? "opacity-60" : ""
       } ${className}`}
       style={{
-        background: muted ? "#eae7e1" : "#FDF8F0",
+        background: muted
+          ? "#eae7e1"
+          : "linear-gradient(145deg, #fff7ed 0%, #fff1f5 40%, #eef4ff 100%)",
         color: muted ? "#999" : "#2a2a2a",
       }}
     >
-      {/* Subtle paper grain */}
+      {/* Decorative blurred blobs */}
       {!muted && (
-        <div
-          className="absolute inset-0 pointer-events-none opacity-[0.035]"
-          style={{
-            backgroundImage: `url("data:image/svg+xml,%3Csvg width='200' height='200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)'/%3E%3C/svg%3E")`,
-          }}
-        />
+        <>
+          <div className="absolute -top-10 -right-8 h-32 w-32 rounded-full bg-[#ffd6b8] blur-3xl opacity-40" />
+          <div className="absolute -bottom-10 -left-10 h-28 w-28 rounded-full bg-[#c7e0ff] blur-3xl opacity-40" />
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-24 w-24 rounded-full bg-[#ffe0f0] blur-3xl opacity-30" />
+        </>
       )}
 
       {/* =========== MASTHEAD — tear zone =========== */}
@@ -390,17 +391,21 @@ export default function InspirationDaily({
         onClick={canClaim ? onTear : undefined}
         style={canClaim ? { cursor: "grab" } : undefined}
       >
-        {/* Thick top rule */}
-        <div className={`h-[3px] ${muted ? "bg-gray-300" : "bg-gray-900"}`} />
+        {/* Gradient top accent bar */}
         <div
-          className={`h-[1px] mt-[2px] mx-3 ${muted ? "bg-gray-200" : "bg-gray-900/40"}`}
+          className="h-[3px]"
+          style={{
+            background: muted
+              ? "#d1d5db"
+              : "linear-gradient(90deg, #f9a8d4, #fbbf24, #a78bfa, #34d399)",
+          }}
         />
 
-        <div className="px-4 pt-2 pb-1 text-center">
+        <div className="px-4 pt-3 pb-1 text-center">
           {/* Date row */}
           <div
-            className="flex items-center justify-between"
-            style={{ fontSize: 9, fontFamily: serif }}
+            className="flex items-center justify-between text-[9px] tracking-wide"
+            style={{ fontFamily: serif, opacity: 0.5 }}
           >
             <span>Edition {edition}</span>
             <span>{dateStr}</span>
@@ -409,40 +414,35 @@ export default function InspirationDaily({
 
           {/* Thin rule */}
           <div
-            className={`border-t my-1.5 ${muted ? "border-gray-200" : "border-gray-900/20"}`}
+            className={`border-t my-1.5 ${muted ? "border-gray-200" : "border-gray-900/10"}`}
           />
 
           {/* Nameplate */}
           <h3
-            className="text-3xl sm:text-4xl font-black tracking-[0.4em] leading-none py-1"
+            className="text-2xl sm:text-3xl font-black tracking-[0.3em] leading-none py-1"
             style={{ fontFamily: serif }}
           >
             Inspiration Daily
           </h3>
 
-          {/* English subtitle */}
+          {/* Subtitle */}
           <p
-            className="text-[8px] sm:text-[9px] tracking-[0.35em] uppercase mt-0.5"
-            style={{ opacity: muted ? 0.4 : 0.35, fontFamily: serif }}
+            className="text-[8px] sm:text-[9px] tracking-[0.35em] uppercase mt-0.5 opacity-35"
+            style={{ fontFamily: serif }}
           >
-            The Inspiration Daily · For Young Creators
+            For Young Creators
           </p>
 
-          {/* Double rule */}
-          <div className="mt-2 mb-1">
-            <div
-              className={`border-t-[2.5px] ${muted ? "border-gray-300" : "border-gray-900"}`}
-            />
-            <div
-              className={`border-t mt-[2px] ${muted ? "border-gray-200" : "border-gray-900/50"}`}
-            />
-          </div>
+          {/* Thin rule */}
+          <div
+            className={`border-t mt-2 mb-1 ${muted ? "border-gray-200" : "border-gray-900/10"}`}
+          />
         </div>
 
         {/* Tear hint */}
         {canClaim && (
           <div className="relative h-6 flex items-center px-4">
-            <div className="flex-1 border-t-2 border-dashed border-primary/25" />
+            <div className="flex-1 border-t-2 border-dashed border-primary/20" />
             <motion.span
               className="absolute right-4 flex items-center gap-1 text-[10px] text-primary/50"
               animate={{ x: [0, 6, 0] }}
@@ -456,52 +456,53 @@ export default function InspirationDaily({
 
       {/* =========== CONTENT AREA =========== */}
       {canClaim ? (
-        <div className="px-4 pb-3">
-          {/* --- Headline banner --- */}
-          <div className="flex gap-3 items-start">
-            {/* Main headline + body */}
-            <div className="flex-1 min-w-0">
-              <h4
-                className="text-lg sm:text-xl font-bold leading-tight"
-                style={{ fontFamily: serif }}
+        <div className="relative px-4 pb-4">
+          {/* --- Hero illustration --- */}
+          <div className="flex justify-center py-3">
+            <div className="relative">
+              {/* Glow behind emoji */}
+              <div
+                className="absolute inset-0 rounded-full blur-2xl opacity-40"
+                style={{
+                  background:
+                    "radial-gradient(circle, #fbbf24 0%, #f472b6 50%, transparent 70%)",
+                  transform: "scale(2.5)",
+                }}
+              />
+              <motion.span
+                className="relative text-6xl sm:text-7xl block"
+                animate={{ y: [0, -6, 0], scale: [1, 1.05, 1] }}
+                transition={{
+                  duration: 3,
+                  repeat: Infinity,
+                  ease: "easeInOut",
+                }}
               >
-                {content.headline}
-              </h4>
-              <div className={`border-t my-1.5 border-gray-900/10`} />
-              <p
-                className="text-xs sm:text-sm leading-relaxed text-gray-700"
-                style={{ fontFamily: serif, textAlign: "justify" }}
-              >
-                <span
-                  className="text-2xl font-bold float-left mr-1 leading-[1] text-primary/80"
-                  style={{ fontFamily: serif }}
-                >
-                  {content.body[0]}
-                </span>
-                {content.body.slice(1)}
-              </p>
-            </div>
-
-            {/* Illustration column with vertical rule */}
-            <div className="flex-shrink-0 flex items-stretch">
-              <div className={`w-px self-stretch bg-gray-900/10 mr-2.5`} />
-              <div className="flex flex-col items-center justify-center w-14 sm:w-16">
-                <motion.span
-                  className="text-4xl sm:text-5xl block"
-                  animate={{ y: [0, -3, 0] }}
-                  transition={{
-                    duration: 3,
-                    repeat: Infinity,
-                    ease: "easeInOut",
-                  }}
-                >
-                  {content.illustration}
-                </motion.span>
-              </div>
+                {content.illustration}
+              </motion.span>
             </div>
           </div>
 
-          {/* --- CTA button (only when InspirationCard data provides cta_type) --- */}
+          {/* --- Headline --- */}
+          <h4 className="text-xl sm:text-2xl font-extrabold leading-snug text-center text-gray-800">
+            {content.headline}
+          </h4>
+
+          {/* --- Body text --- */}
+          <p className="mt-2 text-xs sm:text-sm leading-relaxed text-gray-600 text-center">
+            {content.body}
+          </p>
+
+          {/* --- Creative prompt callout --- */}
+          {content.creative_prompt && (
+            <div className="mt-3 rounded-2xl border-2 border-dashed border-amber-300/60 bg-amber-50/60 px-4 py-3 text-center">
+              <span className="text-sm font-semibold text-amber-700">
+                💡 {content.creative_prompt}
+              </span>
+            </div>
+          )}
+
+          {/* --- CTA button --- */}
           {content.cta_type && content.cta_route && (
             <div className="mt-3 flex justify-center">
               <motion.div
@@ -529,53 +530,43 @@ export default function InspirationDaily({
           )}
 
           {/* --- Bottom row: weather + mini-ad --- */}
-          <div className="mt-2.5">
-            <div className={`border-t border-gray-900/10 mb-2`} />
-            <div
-              className="flex items-center justify-between text-[10px]"
-              style={{ fontFamily: serif }}
-            >
-              {/* Weather box */}
+          <div className="mt-3 pt-2 border-t border-gray-900/5">
+            <div className="flex items-center justify-between text-[10px] text-gray-400">
               <div className="flex items-center gap-1">
                 <span>{content.weatherEmoji}</span>
-                <span className="text-gray-500">
-                  Today's weather: {content.weather}
-                </span>
+                <span>{content.weather}</span>
               </div>
-
-              {/* Vertical divider */}
-              <div className="w-px h-3 bg-gray-900/10 mx-2" />
-
-              {/* Mini classified ad */}
-              <div className="text-gray-400 truncate">{content.miniAd}</div>
+              <div className="truncate">{content.miniAd}</div>
             </div>
           </div>
         </div>
       ) : (
         /* Claimed state */
-        <div className="text-center px-4 py-5">
-          <span className="text-3xl">📰</span>
-          <p
-            className="text-sm text-gray-400 mt-2 font-semibold"
-            style={{ fontFamily: serif }}
+        <div className="text-center px-4 py-6">
+          <motion.span
+            className="text-4xl block"
+            animate={{ rotate: [0, 5, -5, 0] }}
+            transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
           >
-            Today's paper read
+            ✅
+          </motion.span>
+          <p className="text-sm text-gray-500 mt-2 font-semibold">
+            Today's inspiration collected!
           </p>
-          <p
-            className="text-[11px] text-gray-400 mt-0.5"
-            style={{ fontFamily: serif }}
-          >
-            Stay tuned for tomorrow's edition
+          <p className="text-[11px] text-gray-400 mt-1">
+            Come back tomorrow for a new spark ✨
           </p>
         </div>
       )}
 
-      {/* Bottom rules */}
+      {/* Bottom gradient accent bar */}
       <div
-        className={`h-px mx-3 ${muted ? "bg-gray-200" : "bg-gray-900/30"}`}
-      />
-      <div
-        className={`h-[2.5px] mt-[2px] ${muted ? "bg-gray-300" : "bg-gray-900"}`}
+        className="h-[3px]"
+        style={{
+          background: muted
+            ? "#d1d5db"
+            : "linear-gradient(90deg, #34d399, #a78bfa, #fbbf24, #f9a8d4)",
+        }}
       />
     </div>
   );
