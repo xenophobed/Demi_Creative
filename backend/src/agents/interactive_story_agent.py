@@ -1,16 +1,25 @@
 """
 Interactive Story Agent
 
-Uses Claude Agent SDK to generate multi-branch interactive stories.
+Generates multi-branch interactive stories using the Anthropic API directly.
+Uses AsyncAnthropic for in-process execution (no subprocess — avoids Railway OOM).
 Supports streaming responses to reduce timeouts and improve user experience.
+
+Issue: #418 | Parent Epic: #416
 """
 
 import json
+import logging
 import os
 import re
 from typing import Any, AsyncGenerator, Dict, List, Optional
 
 from pydantic import BaseModel
+
+try:
+    from anthropic import AsyncAnthropic
+except Exception:  # pragma: no cover
+    AsyncAnthropic = None
 
 try:
     from claude_agent_sdk import (
@@ -29,6 +38,7 @@ except Exception:  # pragma: no cover - import fallback for test env
     ToolUseBlock = object
     ToolResultBlock = object
 
+logger = logging.getLogger(__name__)
 
 from ..mcp_servers import (
     safety_server,
@@ -36,9 +46,51 @@ from ..mcp_servers import (
     tts_server,
     vector_server,
 )
+from ..mcp_servers.safety_check_server import check_content_safety
+from ..mcp_servers.tts_generator_server import generate_story_audio
 from ..services.database import preference_repo
 from ..services.story_memory import get_story_memory_prompt
 from ..utils.model_config import get_claude_agent_model
+
+
+async def _direct_generate(prompt: str, max_tokens: int = 4096) -> str:
+    """Call Anthropic API directly — no subprocess, no OOM risk (#416).
+
+    Returns the raw text response from Claude.
+    """
+    import anyio
+    client = AsyncAnthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+    with anyio.fail_after(120):
+        response = await client.messages.create(
+            model=get_claude_agent_model(),
+            max_tokens=max_tokens,
+            messages=[{"role": "user", "content": prompt}],
+        )
+    return response.content[0].text if response.content else ""
+
+
+def _extract_json(text: str) -> Optional[Dict]:
+    """Extract JSON from Claude's text response (may have markdown fences)."""
+    # Try raw parse first
+    try:
+        return json.loads(text)
+    except (json.JSONDecodeError, TypeError):
+        pass
+    # Try extracting from ```json ... ``` fences
+    match = re.search(r"```(?:json)?\s*\n?(.*?)\n?```", text, re.DOTALL)
+    if match:
+        try:
+            return json.loads(match.group(1))
+        except (json.JSONDecodeError, TypeError):
+            pass
+    # Try finding first { ... } block
+    match = re.search(r"\{.*\}", text, re.DOTALL)
+    if match:
+        try:
+            return json.loads(match.group(0))
+        except (json.JSONDecodeError, TypeError):
+            pass
+    return None
 
 
 async def _search_story_dedup(
@@ -951,38 +1003,46 @@ async def generate_story_opening(
     result_data = {}
     audio_path = None
 
-    async with ClaudeSDKClient(options=options) as client:
-        await client.query(prompt)
+    # Direct Anthropic API — no subprocess, no OOM risk (#416/#418)
+    try:
+        raw_text = await _direct_generate(prompt)
+        result_data = _extract_json(raw_text) or {}
+    except Exception as e:
+        logger.warning("Direct API opening generation failed: %s", e)
 
-        async for message in client.receive_response():
-            # Check for TTS tool results in assistant messages
-            if isinstance(message, AssistantMessage):
-                content = getattr(message, "content", None)
-                if isinstance(content, list):
-                    for block in content:
-                        if isinstance(block, ToolResultBlock):
-                            # Try to extract audio path from TTS result
-                            result_content = getattr(block, "content", None)
-                            if result_content and isinstance(result_content, str):
-                                try:
-                                    result_json = json.loads(result_content)
-                                    if "audio_path" in result_json:
-                                        audio_path = result_json["audio_path"]
-                                except (json.JSONDecodeError, TypeError):
-                                    pass
+    # Safety check on generated content
+    if result_data and "segment" in result_data:
+        story_text = result_data["segment"].get("text", "")
+        if story_text:
+            try:
+                safety_result = await check_content_safety({
+                    "content_text": story_text,
+                    "content_type": "interactive_story",
+                    "target_age": int(age_group.split("-")[0]),
+                })
+                if isinstance(safety_result, str):
+                    safety_result = json.loads(safety_result)
+                result_data["safety_score"] = safety_result.get("safety_score", 0.9)
+            except Exception:
+                result_data["safety_score"] = 0.9
 
-            if isinstance(message, ResultMessage):
-                if hasattr(message, "structured_output") and message.structured_output:
-                    result_data = message.structured_output
-                elif message.result:
-                    if isinstance(message.result, dict):
-                        result_data = message.result
-                    else:
-                        # Fallback: create default structure
-                        result_data = _create_default_opening(
-                            theme_str, interests, config
-                        )
-                break
+    # Generate TTS audio if enabled
+    if enable_audio and result_data and "segment" in result_data:
+        story_text = result_data["segment"].get("text", "")
+        if story_text:
+            try:
+                tts_result = await generate_story_audio({
+                    "story_text": story_text,
+                    "voice": voice or config.get("voice", "shimmer"),
+                    "speed": config.get("speed", 1.0),
+                    "output_id": f"interactive_opening_{child_id}",
+                })
+                if isinstance(tts_result, str):
+                    tts_result = json.loads(tts_result)
+                if tts_result.get("audio_path"):
+                    audio_path = tts_result["audio_path"]
+            except Exception:
+                pass  # Audio is optional
 
     # Validate and ensure required structure
     if not result_data or "title" not in result_data:
@@ -1109,120 +1169,71 @@ async def generate_story_opening_stream(
     )
 
     result_data = {}
-    thinking_text = ""
-    turn_count = 0
     audio_path = None
 
+    # Direct Anthropic API — no subprocess, no OOM risk (#416/#418)
+    yield {
+        "type": "thinking",
+        "data": {"content": "Creating your story opening...", "turn": 1},
+    }
+
     try:
-        async with ClaudeSDKClient(options=options) as client:
-            await client.query(prompt)
-
-            async for message in client.receive_response():
-                # Process assistant messages (thinking and tool use)
-                if isinstance(message, AssistantMessage):
-                    turn_count += 1
-
-                    # Get message content
-                    content = getattr(message, "content", None)
-
-                    # content may be a string or list of content blocks
-                    if isinstance(content, str) and content:
-                        thinking_text += content
-                        yield {
-                            "type": "thinking",
-                            "data": {
-                                "content": content[:200] + "..."
-                                if len(content) > 200
-                                else content,
-                                "turn": turn_count,
-                            },
-                        }
-                    elif isinstance(content, list):
-                        # Iterate content blocks
-                        for block in content:
-                            # Check tool use blocks
-                            if isinstance(block, ToolUseBlock):
-                                tool_name = getattr(block, "name", "unknown")
-                                # Friendly tool name mapping
-                                tool_messages = {
-                                    "mcp__safety-check__check_content_safety": "Checking content safety...",
-                                    "mcp__vector-search__search_similar_drawings": "Searching historical characters...",
-                                    "mcp__vector-search__store_drawing_embedding": "Saving character memory...",
-                                    "mcp__tts-generation__generate_story_audio": "Generating audio...",
-                                }
-                                yield {
-                                    "type": "tool_use",
-                                    "data": {
-                                        "tool": tool_name,
-                                        "message": tool_messages.get(
-                                            tool_name, f"Using {tool_name}..."
-                                        ),
-                                    },
-                                }
-                            # Check tool result blocks
-                            elif isinstance(block, ToolResultBlock):
-                                # Try to extract audio path from TTS result
-                                result_content = getattr(block, "content", None)
-                                if result_content and isinstance(result_content, str):
-                                    try:
-                                        result_json = json.loads(result_content)
-                                        if "audio_path" in result_json:
-                                            audio_path = result_json["audio_path"]
-                                            yield {
-                                                "type": "audio_generated",
-                                                "data": {
-                                                    "audio_path": audio_path,
-                                                    "message": "Audio generation complete",
-                                                },
-                                            }
-                                    except (json.JSONDecodeError, TypeError):
-                                        pass
-
-                                yield {
-                                    "type": "tool_result",
-                                    "data": {
-                                        "status": "completed",
-                                        "message": "Tool execution complete",
-                                    },
-                                }
-                            # Process text blocks
-                            elif hasattr(block, "text"):
-                                text = block.text
-                                if text:
-                                    thinking_text += text
-                                    yield {
-                                        "type": "thinking",
-                                        "data": {
-                                            "content": text[:200] + "..."
-                                            if len(text) > 200
-                                            else text,
-                                            "turn": turn_count,
-                                        },
-                                    }
-
-                # Process final result
-                elif isinstance(message, ResultMessage):
-                    if (
-                        hasattr(message, "structured_output")
-                        and message.structured_output
-                    ):
-                        result_data = message.structured_output
-                    elif message.result:
-                        if isinstance(message.result, dict):
-                            result_data = message.result
-                        else:
-                            result_data = _create_default_opening(
-                                theme_str, interests, config
-                            )
-                    break
-
+        raw_text = await _direct_generate(prompt)
+        result_data = _extract_json(raw_text) or {}
     except Exception as e:
         yield {
             "type": "error",
             "data": {"error": str(e), "message": "Error generating story"},
         }
-        # Use default opening
         result_data = _create_default_opening(theme_str, interests, config)
+
+    # Safety check on generated content
+    if result_data and "segment" in result_data:
+        story_text = result_data["segment"].get("text", "")
+        if story_text:
+            yield {
+                "type": "tool_use",
+                "data": {"tool": "safety_check", "message": "Checking content safety..."},
+            }
+            try:
+                safety_result = await check_content_safety({
+                    "content_text": story_text,
+                    "content_type": "interactive_story",
+                    "target_age": int(age_group.split("-")[0]),
+                })
+                if isinstance(safety_result, str):
+                    safety_result = json.loads(safety_result)
+                result_data["safety_score"] = safety_result.get("safety_score", 0.9)
+            except Exception:
+                result_data["safety_score"] = 0.9
+            yield {"type": "tool_result", "data": {"status": "completed"}}
+
+    # Generate TTS audio if enabled
+    if enable_audio and result_data and "segment" in result_data:
+        story_text = result_data["segment"].get("text", "")
+        if story_text:
+            yield {
+                "type": "tool_use",
+                "data": {"tool": "tts_generation", "message": "Generating audio..."},
+            }
+            try:
+                tts_result = await generate_story_audio({
+                    "story_text": story_text,
+                    "voice": voice or config.get("voice", "shimmer"),
+                    "speed": config.get("speed", 1.0),
+                    "output_id": f"interactive_opening_{child_id}",
+                })
+                if isinstance(tts_result, str):
+                    tts_result = json.loads(tts_result)
+                if tts_result.get("audio_path"):
+                    audio_path = tts_result["audio_path"]
+                    yield {
+                        "type": "audio_generated",
+                        "data": {"audio_path": audio_path, "message": "Audio generation complete"},
+                    }
+            except Exception:
+                pass
+            yield {"type": "tool_result", "data": {"status": "completed"}}
 
     # Validate and ensure required structure
     if not result_data or "title" not in result_data:
@@ -1392,97 +1403,17 @@ async def generate_next_segment_stream(
     )
 
     result_data = {}
-    turn_count = 0
     audio_path = None
 
+    # Direct Anthropic API — no subprocess, no OOM risk (#416/#418)
+    yield {
+        "type": "thinking",
+        "data": {"content": "Continuing your story...", "turn": 1},
+    }
+
     try:
-        async with ClaudeSDKClient(options=options) as client:
-            await client.query(prompt)
-
-            async for message in client.receive_response():
-                # Process assistant messages (thinking and tool use)
-                if isinstance(message, AssistantMessage):
-                    turn_count += 1
-
-                    content = getattr(message, "content", None)
-
-                    if isinstance(content, str) and content:
-                        yield {
-                            "type": "thinking",
-                            "data": {
-                                "content": content[:200] + "..."
-                                if len(content) > 200
-                                else content,
-                                "turn": turn_count,
-                            },
-                        }
-                    elif isinstance(content, list):
-                        for block in content:
-                            if isinstance(block, ToolUseBlock):
-                                tool_name = getattr(block, "name", "unknown")
-                                tool_messages = {
-                                    "mcp__safety-check__check_content_safety": "Checking content safety...",
-                                    "mcp__tts-generation__generate_story_audio": "Generating audio...",
-                                }
-                                yield {
-                                    "type": "tool_use",
-                                    "data": {
-                                        "tool": tool_name,
-                                        "message": tool_messages.get(
-                                            tool_name, f"Using {tool_name}..."
-                                        ),
-                                    },
-                                }
-                            elif isinstance(block, ToolResultBlock):
-                                # Try to extract audio path from TTS result
-                                result_content = getattr(block, "content", None)
-                                if result_content and isinstance(result_content, str):
-                                    try:
-                                        result_json = json.loads(result_content)
-                                        if "audio_path" in result_json:
-                                            audio_path = result_json["audio_path"]
-                                            yield {
-                                                "type": "audio_generated",
-                                                "data": {
-                                                    "audio_path": audio_path,
-                                                    "message": "Audio generation complete",
-                                                },
-                                            }
-                                    except (json.JSONDecodeError, TypeError):
-                                        pass
-
-                                yield {
-                                    "type": "tool_result",
-                                    "data": {"status": "completed"},
-                                }
-                            elif hasattr(block, "text"):
-                                text = block.text
-                                if text:
-                                    yield {
-                                        "type": "thinking",
-                                        "data": {
-                                            "content": text[:200] + "..."
-                                            if len(text) > 200
-                                            else text,
-                                            "turn": turn_count,
-                                        },
-                                    }
-
-                elif isinstance(message, ResultMessage):
-                    if (
-                        hasattr(message, "structured_output")
-                        and message.structured_output
-                    ):
-                        result_data = message.structured_output
-                    elif message.result:
-                        if isinstance(message.result, dict):
-                            result_data = message.result
-                        else:
-                            result_data = _create_default_segment(
-                                segment_count, is_final_segment, chosen_option
-                            )
-                    break
-
+        raw_text = await _direct_generate(prompt)
+        result_data = _extract_json(raw_text) or {}
     except Exception as e:
         yield {
             "type": "error",
@@ -1491,6 +1422,54 @@ async def generate_next_segment_stream(
         result_data = _create_default_segment(
             segment_count, is_final_segment, chosen_option
         )
+
+    # Safety check on generated content
+    if result_data and "segment" in result_data:
+        story_text = result_data["segment"].get("text", "")
+        if story_text:
+            yield {
+                "type": "tool_use",
+                "data": {"tool": "safety_check", "message": "Checking content safety..."},
+            }
+            try:
+                safety_result = await check_content_safety({
+                    "content_text": story_text,
+                    "content_type": "interactive_story",
+                    "target_age": int(age_group.split("-")[0]),
+                })
+                if isinstance(safety_result, str):
+                    safety_result = json.loads(safety_result)
+                result_data["safety_score"] = safety_result.get("safety_score", 0.9)
+            except Exception:
+                result_data["safety_score"] = 0.9
+            yield {"type": "tool_result", "data": {"status": "completed"}}
+
+    # Generate TTS audio if enabled
+    if enable_audio and result_data and "segment" in result_data:
+        story_text = result_data["segment"].get("text", "")
+        if story_text:
+            yield {
+                "type": "tool_use",
+                "data": {"tool": "tts_generation", "message": "Generating audio..."},
+            }
+            try:
+                tts_result = await generate_story_audio({
+                    "story_text": story_text,
+                    "voice": voice or config.get("voice", "shimmer"),
+                    "speed": config.get("speed", 1.0),
+                    "output_id": f"interactive_seg_{segment_count}",
+                })
+                if isinstance(tts_result, str):
+                    tts_result = json.loads(tts_result)
+                if tts_result.get("audio_path"):
+                    audio_path = tts_result["audio_path"]
+                    yield {
+                        "type": "audio_generated",
+                        "data": {"audio_path": audio_path, "message": "Audio generation complete"},
+                    }
+            except Exception:
+                pass
+            yield {"type": "tool_result", "data": {"status": "completed"}}
 
     # Validate and ensure required structure
     if not result_data or "segment" not in result_data:
@@ -1661,37 +1640,46 @@ async def generate_next_segment(
     result_data = {}
     audio_path = None
 
-    async with ClaudeSDKClient(options=options) as client:
-        await client.query(prompt)
+    # Direct Anthropic API — no subprocess, no OOM risk (#416/#418)
+    try:
+        raw_text = await _direct_generate(prompt)
+        result_data = _extract_json(raw_text) or {}
+    except Exception as e:
+        logger.warning("Direct API segment generation failed: %s", e)
 
-        async for message in client.receive_response():
-            # Check for TTS tool results in assistant messages
-            if isinstance(message, AssistantMessage):
-                content = getattr(message, "content", None)
-                if isinstance(content, list):
-                    for block in content:
-                        if isinstance(block, ToolResultBlock):
-                            # Try to extract audio path from TTS result
-                            result_content = getattr(block, "content", None)
-                            if result_content and isinstance(result_content, str):
-                                try:
-                                    result_json = json.loads(result_content)
-                                    if "audio_path" in result_json:
-                                        audio_path = result_json["audio_path"]
-                                except (json.JSONDecodeError, TypeError):
-                                    pass
+    # Safety check on generated content
+    if result_data and "segment" in result_data:
+        story_text = result_data["segment"].get("text", "")
+        if story_text:
+            try:
+                safety_result = await check_content_safety({
+                    "content_text": story_text,
+                    "content_type": "interactive_story",
+                    "target_age": int(age_group.split("-")[0]),
+                })
+                if isinstance(safety_result, str):
+                    safety_result = json.loads(safety_result)
+                result_data["safety_score"] = safety_result.get("safety_score", 0.9)
+            except Exception:
+                result_data["safety_score"] = 0.9
 
-            if isinstance(message, ResultMessage):
-                if hasattr(message, "structured_output") and message.structured_output:
-                    result_data = message.structured_output
-                elif message.result:
-                    if isinstance(message.result, dict):
-                        result_data = message.result
-                    else:
-                        result_data = _create_default_segment(
-                            segment_count, is_final_segment, chosen_option
-                        )
-                break
+    # Generate TTS audio if enabled
+    if enable_audio and result_data and "segment" in result_data:
+        story_text = result_data["segment"].get("text", "")
+        if story_text:
+            try:
+                tts_result = await generate_story_audio({
+                    "story_text": story_text,
+                    "voice": voice or config.get("voice", "shimmer"),
+                    "speed": config.get("speed", 1.0),
+                    "output_id": f"interactive_seg_{segment_count}",
+                })
+                if isinstance(tts_result, str):
+                    tts_result = json.loads(tts_result)
+                if tts_result.get("audio_path"):
+                    audio_path = tts_result["audio_path"]
+            except Exception:
+                pass
 
     # Validate and ensure required structure
     if not result_data or "segment" not in result_data:

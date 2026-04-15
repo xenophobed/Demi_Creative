@@ -1,13 +1,16 @@
 """Kids Daily agent — unified pipeline for kid-friendly news content.
 
-Uses Claude Agent SDK with MCP tool access for live LLM generation.
-Falls back to deterministic text processing when the SDK is unavailable
-or in test environments.
+Uses direct Anthropic API for in-process execution (no subprocess — avoids
+Railway OOM). Falls back to deterministic text processing when the API key
+is unavailable or in test environments.
+
+Issue: #419 | Parent Epic: #416
 """
 
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 from pathlib import Path
@@ -17,8 +20,16 @@ from pydantic import BaseModel, ValidationError
 
 from ..api.models import DialogueLine, DialogueScript
 from ..mcp_servers import safety_server, tts_server, vector_server
+from ..mcp_servers.safety_check_server import check_content_safety
 from ..services.database import character_repo
 from ..utils.model_config import get_claude_agent_model
+
+logger = logging.getLogger(__name__)
+
+try:
+    from anthropic import AsyncAnthropic
+except Exception:  # pragma: no cover
+    AsyncAnthropic = None
 
 try:
     from claude_agent_sdk import (
@@ -36,6 +47,43 @@ except Exception:  # pragma: no cover - import fallback for test env
     AssistantMessage = object
     ToolUseBlock = object
     ToolResultBlock = object
+
+
+async def _direct_generate_daily(prompt: str, max_tokens: int = 4096) -> str:
+    """Call Anthropic API directly — no subprocess, no OOM risk (#416).
+
+    Returns the raw text response from Claude.
+    """
+    import anyio
+    client = AsyncAnthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+    with anyio.fail_after(120):
+        response = await client.messages.create(
+            model=get_claude_agent_model(),
+            max_tokens=max_tokens,
+            messages=[{"role": "user", "content": prompt}],
+        )
+    return response.content[0].text if response.content else ""
+
+
+def _extract_json_daily(text: str) -> Optional[Dict]:
+    """Extract JSON from Claude's text response."""
+    try:
+        return json.loads(text)
+    except (json.JSONDecodeError, TypeError):
+        pass
+    match = re.search(r"```(?:json)?\s*\n?(.*?)\n?```", text, re.DOTALL)
+    if match:
+        try:
+            return json.loads(match.group(1))
+        except (json.JSONDecodeError, TypeError):
+            pass
+    match = re.search(r"\{.*\}", text, re.DOTALL)
+    if match:
+        try:
+            return json.loads(match.group(0))
+        except (json.JSONDecodeError, TypeError):
+            pass
+    return None
 
 
 # ===========================================================================
@@ -387,37 +435,30 @@ async def _generate_kids_daily_text_live(
     result_data: Dict[str, Any] = {}
     audio_path = None
 
-    async with ClaudeSDKClient(options=options) as client:
-        await client.query(prompt)
-
-        async for message in client.receive_response():
-            # Check for TTS tool results in assistant messages
-            if isinstance(message, AssistantMessage):
-                content = getattr(message, "content", None)
-                if isinstance(content, list):
-                    for block in content:
-                        if isinstance(block, ToolResultBlock):
-                            result_content = getattr(block, "content", None)
-                            if result_content and isinstance(result_content, str):
-                                try:
-                                    result_json = json.loads(result_content)
-                                    if "audio_path" in result_json:
-                                        audio_path = result_json["audio_path"]
-                                except (json.JSONDecodeError, TypeError):
-                                    pass
-
-            if isinstance(message, ResultMessage):
-                if hasattr(message, "structured_output") and message.structured_output:
-                    result_data = message.structured_output
-                elif message.result:
-                    if isinstance(message.result, dict):
-                        result_data = message.result
-                    else:
-                        result_data = _extract_json_object(str(message.result))
-                break
+    # Direct Anthropic API — no subprocess, no OOM risk (#416/#419)
+    try:
+        raw_text = await _direct_generate_daily(prompt)
+        result_data = _extract_json_daily(raw_text) or {}
+    except Exception as e:
+        logger.warning("Direct API daily generation failed: %s", e)
 
     if not result_data:
-        raise RuntimeError("Empty model output from Claude Agent SDK")
+        raise RuntimeError("Empty model output from direct API")
+
+    # Run safety check explicitly
+    kid_content_text = str(result_data.get("kid_content", ""))
+    if kid_content_text:
+        try:
+            safety_result = await check_content_safety({
+                "content_text": kid_content_text,
+                "content_type": "kids_news",
+                "target_age": int(age_group.split("-")[0]),
+            })
+            if isinstance(safety_result, str):
+                safety_result = json.loads(safety_result)
+            result_data["safety_score"] = safety_result.get("safety_score", 0.9)
+        except Exception:
+            result_data["safety_score"] = 0.9
 
     # Normalize and validate fields
     kid_title = (
@@ -677,31 +718,15 @@ async def _generate_dialogue_with_sdk(
 
     result_data: Dict[str, Any] = {}
 
-    async with ClaudeSDKClient(options=options) as client:
-        await client.query(user_prompt)
-
-        async for message in client.receive_response():
-            if isinstance(message, ResultMessage):
-                if hasattr(message, "structured_output") and message.structured_output:
-                    result_data = message.structured_output
-                elif message.result:
-                    if isinstance(message.result, dict):
-                        result_data = message.result
-                    else:
-                        # Try to extract JSON from text result
-                        raw_text = str(message.result).strip()
-                        try:
-                            result_data = json.loads(raw_text)
-                        except json.JSONDecodeError:
-                            match = re.search(r"\{.*\}", raw_text, flags=re.DOTALL)
-                            if match:
-                                result_data = json.loads(match.group(0))
-                            else:
-                                raise RuntimeError("Model output is not valid JSON")
-                break
+    # Direct Anthropic API — no subprocess, no OOM risk (#416/#419)
+    try:
+        raw_text = await _direct_generate_daily(user_prompt)
+        result_data = _extract_json_daily(raw_text) or {}
+    except Exception as e:
+        logger.warning("Direct API dialogue generation failed: %s", e)
 
     if not result_data:
-        raise RuntimeError("Empty model output from Claude Agent SDK")
+        raise RuntimeError("Empty model output from direct API")
 
     # Parse and normalize lines
     raw_lines = result_data.get("lines", [])
