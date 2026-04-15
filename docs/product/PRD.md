@@ -1171,6 +1171,16 @@ A referral-based growth and membership tier system. Growth is driven by user ref
 - [ ] QuotaExceededOverlay includes "share to get more" CTA
 - [ ] No child personal information exposed in share links
 
+#### Known Gaps (Supabase Auth Path)
+
+The referral feature was built and tested against the legacy auth path. With Supabase Auth enabled in production, three gaps prevent referrals from working:
+
+1. **Registration drops referral code**: `authService.register()` does not pass `referral_code` to `supabase.auth.signUp()` metadata. The code is captured from `?ref=` but never reaches the backend.
+2. **Auto-create ignores referral**: `_get_or_create_supabase_user()` in `deps.py` creates the local user row with `referred_by=None` and does not create a referral record.
+3. **Qualification never triggers**: `qualify_and_maybe_upgrade()` exists in `user_service.py` but no code path calls it. No Supabase webhook handles email verification events.
+
+**Fix**: Pass `referral_code` in Supabase signUp metadata → read it in `_get_or_create_supabase_user` → create referral record → qualify inline when `email_confirmed=True`.
+
 #### Out of Scope
 
 - Paid tiers or payment integration
