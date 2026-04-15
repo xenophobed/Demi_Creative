@@ -74,6 +74,7 @@ export const authService = {
           data: {
             display_name: data.display_name || data.username,
             username: data.username,
+            ...(data.referral_code ? { referral_code: data.referral_code } : {}),
           },
         },
       })
