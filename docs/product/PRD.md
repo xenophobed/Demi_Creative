@@ -1281,6 +1281,38 @@ The existing tear-to-claim-star mechanic (Epic #371) is preserved:
 
 ---
 
+## 3.11 Agent SDK Modernization [Phase 2 — Reliability]
+
+Goal: replace the Claude Agent SDK subprocess-based execution with direct Anthropic API calls so all three agents work reliably in production (Railway) without OOM kills.
+
+### 3.11.1 Problem
+The `claude_agent_sdk` package spawns a separate process (the Claude CLI binary) for each agent call. This doubles memory usage on Railway's container, causing exit code -9 (OOM kill) on every generation request in production.
+
+### 3.11.2 Solution
+Switch all agents from `ClaudeSDKClient` to direct `anthropic.AsyncAnthropic()` API calls with manual tool orchestration. The `image_to_story_agent` already has a working direct-API fallback (`_direct_stream_image_to_story`); the pattern needs to be applied to `interactive_story_agent` and `kids_daily_agent`.
+
+### 3.11.3 Stories
+1. **Image-to-Story**: Make direct API the primary path, remove SDK subprocess dependency
+2. **Interactive Story**: Port to direct API with multi-turn tool loop
+3. **Kids Daily**: Port to direct API with dialogue generation
+4. **Shared Base Module**: Extract common agent boilerplate (import guards, mock fallback, tool orchestration loop, response parsing)
+5. **Safety Enforcement**: Ensure programmatic safety check runs post-generation even without SDK hooks
+
+### 3.11.4 Acceptance Criteria
+- [ ] All three agents generate content successfully on Railway (no exit code -9)
+- [ ] Streaming SSE events work identically to current behavior
+- [ ] Safety check runs on every generated output
+- [ ] Mock fallback continues to work for tests
+- [ ] No `claude_agent_sdk` subprocess spawned in production
+- [ ] Existing API tests pass without modification
+
+#### Out of Scope
+- SDK hooks (PreToolUse) — deferred until SDK stabilizes post-1.0
+- Session management via SDK — handled by our own session_repository
+- Removing `claude_agent_sdk` from requirements.txt (keep for future re-evaluation)
+
+---
+
 ## 8. Risks & Limitations
 
 ### Product Risks
