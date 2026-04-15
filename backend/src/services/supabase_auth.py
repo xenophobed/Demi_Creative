@@ -31,6 +31,7 @@ class SupabaseClaims:
     sub: str          # Supabase user ID (UUID)
     email: str
     email_confirmed: bool
+    referral_code: Optional[str] = None  # From signUp metadata (#424)
 
 
 def get_jwt_secret() -> Optional[str]:
@@ -151,8 +152,11 @@ def _extract_claims(payload: dict) -> Optional[SupabaseClaims]:
     email_confirmed = payload.get("email_confirmed_at") is not None or \
         user_meta.get("email_verified", False)
 
+    referral_code = user_meta.get("referral_code")
+
     return SupabaseClaims(
         sub=sub,
         email=email,
         email_confirmed=email_confirmed,
+        referral_code=referral_code,
     )

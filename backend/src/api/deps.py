@@ -12,6 +12,7 @@ from fastapi import Depends, Header, HTTPException, status
 
 from ..services.database import (
     db_manager,
+    referral_repo,
     session_repo,
     story_repo,
     usage_repo,
@@ -184,6 +185,32 @@ async def _get_or_create_supabase_user(claims) -> Optional[UserData]:
         ),
     )
     await db_manager.commit()
+
+    # Handle referral if a referral_code was passed during registration (#424)
+    if getattr(claims, "referral_code", None):
+        try:
+            referrer = await user_repo.get_by_referral_code(claims.referral_code)
+            if referrer and referrer.user_id != claims.sub:
+                await referral_repo.create_referral(
+                    referrer_user_id=referrer.user_id,
+                    referred_user_id=claims.sub,
+                    referral_code=claims.referral_code,
+                )
+                # Update referred_by on the new user
+                await db_manager.execute(
+                    "UPDATE users SET referred_by = ? WHERE user_id = ?",
+                    (claims.referral_code, claims.sub),
+                )
+                await db_manager.commit()
+
+                # Qualify immediately if email is confirmed (#425)
+                if claims.email_confirmed:
+                    await referral_repo.qualify_referral(claims.sub)
+                    from ..services.user_service import user_service
+                    await user_service.qualify_and_maybe_upgrade(referrer.user_id)
+        except Exception:
+            pass  # Referral is non-critical — don't block user creation
+
     return await user_repo.get_by_id(claims.sub)
 
 
