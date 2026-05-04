@@ -832,6 +832,12 @@ class UpsertAgentRequest(BaseModel):
     child_id: str = Field(..., min_length=1, description="Child profile this agent is bound to")
 
 
+class CompleteOnboardingRequest(BaseModel):
+    """POST /me/onboarding/complete body — gates onboarding completion behind parent consent (#440)."""
+    parent_consent: bool = Field(..., description="True iff a parent has granted consent for the child's buddy persona to be shown publicly when sharing")
+    child_id: str = Field(..., min_length=1, description="Child profile being onboarded")
+
+
 class ReferralStatusResponse(BaseModel):
     """Referral progress and membership tier status (PRD §3.9.4)"""
     referral_code: str = Field(..., description="User's unique referral code")
