@@ -922,6 +922,22 @@ class ListHubPostsResponse(BaseModel):
     next_cursor: Optional[HubPostCursor] = None
 
 
+# ---------------------------------------------------------------------------
+# Admin Hub moderation (#456)
+# ---------------------------------------------------------------------------
+
+
+class RemoveHubPostRequest(BaseModel):
+    reason: Optional[str] = Field(None, max_length=200, description="Free-text moderation reason captured on hub_posts.removed_reason")
+
+
+class RemoveHubPostResponse(BaseModel):
+    post_id: str
+    removed_at: str
+    removed_reason: Optional[str] = None
+    already_removed: bool = False
+
+
 class ReferralStatusResponse(BaseModel):
     """Referral progress and membership tier status (PRD §3.9.4)"""
     referral_code: str = Field(..., description="User's unique referral code")
