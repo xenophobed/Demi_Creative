@@ -33,6 +33,11 @@ class UserData:
     created_at: str = ""
     updated_at: str = ""
     last_login_at: Optional[str] = None
+    # Onboarding fields (#438)
+    nickname: Optional[str] = None
+    onboarded_at: Optional[str] = None
+    parent_consent_at: Optional[str] = None
+    default_child_id: Optional[str] = None
 
 
 @dataclass
@@ -262,6 +267,60 @@ class UserRepository:
         cursor = await self._db.execute(
             "UPDATE users SET last_login_at = ?, updated_at = ? WHERE user_id = ?",
             (now, now, user_id)
+        )
+        await self._db.commit()
+        return cursor.rowcount > 0
+
+    async def update_onboarding_fields(
+        self,
+        user_id: str,
+        *,
+        nickname: Optional[str] = None,
+        onboarded_at: Optional[str] = None,
+        parent_consent_at: Optional[str] = None,
+        default_child_id: Optional[str] = None,
+    ) -> bool:
+        """
+        Partial update of onboarding fields on the users row (#438).
+
+        Only non-None arguments are written. Returns True if at least one row
+        was updated. Returns False if no fields were supplied (no-op) or the
+        user_id did not match any row.
+
+        Args:
+            user_id: User ID to update.
+            nickname: Friendly name shown in UI.
+            onboarded_at: ISO timestamp when onboarding finished.
+            parent_consent_at: ISO timestamp when parent granted consent.
+            default_child_id: Active child profile bound to the agent persona.
+        """
+        updates: List[str] = []
+        params: List[Any] = []
+
+        if nickname is not None:
+            updates.append("nickname = ?")
+            params.append(nickname)
+        if onboarded_at is not None:
+            updates.append("onboarded_at = ?")
+            params.append(onboarded_at)
+        if parent_consent_at is not None:
+            updates.append("parent_consent_at = ?")
+            params.append(parent_consent_at)
+        if default_child_id is not None:
+            updates.append("default_child_id = ?")
+            params.append(default_child_id)
+
+        if not updates:
+            return False
+
+        now = datetime.now().isoformat()
+        updates.append("updated_at = ?")
+        params.append(now)
+        params.append(user_id)
+
+        cursor = await self._db.execute(
+            f"UPDATE users SET {', '.join(updates)} WHERE user_id = ?",
+            tuple(params),
         )
         await self._db.commit()
         return cursor.rowcount > 0
@@ -514,7 +573,11 @@ class UserRepository:
             referred_by=row.get('referred_by'),
             created_at=row['created_at'],
             updated_at=row['updated_at'],
-            last_login_at=row.get('last_login_at')
+            last_login_at=row.get('last_login_at'),
+            nickname=row.get('nickname'),
+            onboarded_at=row.get('onboarded_at'),
+            parent_consent_at=row.get('parent_consent_at'),
+            default_child_id=row.get('default_child_id'),
         )
 
     def _story_row_to_dict(self, row: dict) -> Dict[str, Any]:
