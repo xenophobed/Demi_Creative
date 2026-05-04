@@ -335,27 +335,42 @@ async def image_to_story(
     if runtime_issue:
         raise RuntimeError(runtime_issue)
 
-    # Fall back to direct API pipeline when Claude CLI is not installed
-    if not _cli_available():
-        logger.info("Claude CLI not found — using direct API pipeline (non-streaming)")
-        result = {}
-        async for event in _direct_stream_image_to_story(
-            image_path=image_path,
-            child_id=child_id,
-            child_age=child_age,
-            interests=interests,
-            enable_audio=enable_audio,
-            voice=voice,
-            art_theme=art_theme,
-            user_id=user_id,
-            provider=provider,
-        ):
-            if event.get("type") == "result":
-                result = event.get("data", {})
-            elif event.get("type") == "error":
-                raise RuntimeError(event["data"].get("message", "Story generation failed"))
-        return result
+    # Direct Anthropic API pipeline — no subprocess, no OOM risk (#417)
+    logger.info("Using direct API pipeline for image-to-story (non-streaming)")
+    result = {}
+    async for event in _direct_stream_image_to_story(
+        image_path=image_path,
+        child_id=child_id,
+        child_age=child_age,
+        interests=interests,
+        enable_audio=enable_audio,
+        voice=voice,
+        art_theme=art_theme,
+        user_id=user_id,
+        provider=provider,
+    ):
+        if event.get("type") == "result":
+            result = event.get("data", {})
+        elif event.get("type") == "error":
+            raise RuntimeError(event["data"].get("message", "Story generation failed"))
+    return result
 
+
+# ---------------------------------------------------------------------------
+# Legacy SDK path (non-streaming) — kept for reference but no longer called.
+# The ClaudeSDKClient subprocess approach caused OOM kills on Railway (#416).
+# ---------------------------------------------------------------------------
+def _legacy_sdk_note():
+    """Marker: code below this point was the ClaudeSDKClient non-streaming path.
+    It is retained in the file for reference but is never executed.
+    The direct API path above is the active code path."""
+    pass  # pragma: no cover
+
+
+async def _legacy_image_to_story_sdk(  # pragma: no cover
+    image_path, child_id, child_age, interests, enable_audio, voice, art_theme, user_id, provider,
+):
+    """Legacy SDK path — not called in production. See _direct_stream_image_to_story instead."""
     # Validate input
     if not Path(image_path).exists():
         raise FileNotFoundError(f"Image file not found: {image_path}")
@@ -811,23 +826,30 @@ async def stream_image_to_story(
         }
         return
 
-    # Fall back to direct API pipeline when Claude CLI is not installed (e.g. Railway)
-    if not _cli_available():
-        logger.info("Claude CLI not found — using direct API pipeline for story generation")
-        async for event in _direct_stream_image_to_story(
-            image_path=image_path,
-            child_id=child_id,
-            child_age=child_age,
-            interests=interests,
-            enable_audio=enable_audio,
-            voice=voice,
-            art_theme=art_theme,
-            user_id=user_id,
-            provider=provider,
-        ):
-            yield event
-        return
+    # Direct Anthropic API pipeline — no subprocess, no OOM risk (#417)
+    logger.info("Using direct API pipeline for image-to-story (streaming)")
+    async for event in _direct_stream_image_to_story(
+        image_path=image_path,
+        child_id=child_id,
+        child_age=child_age,
+        interests=interests,
+        enable_audio=enable_audio,
+        voice=voice,
+        art_theme=art_theme,
+        user_id=user_id,
+        provider=provider,
+    ):
+        yield event
+    return
 
+
+# ---------------------------------------------------------------------------
+# Legacy SDK path (streaming) — retained for reference, never called (#416).
+# ---------------------------------------------------------------------------
+async def _legacy_stream_image_to_story_sdk(  # pragma: no cover
+    image_path, child_id, child_age, interests, enable_audio, voice, art_theme, user_id, provider,
+):
+    """Legacy SDK streaming path — not called. See _direct_stream_image_to_story instead."""
     # Validate input
     if not Path(image_path).exists():
         yield {

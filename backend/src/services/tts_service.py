@@ -327,7 +327,8 @@ def _select_provider(provider: Optional[str]) -> TTSProvider:
 
 def get_audio_output_path() -> str:
     """Get the audio output directory."""
-    audio_dir = os.getenv("AUDIO_OUTPUT_PATH", "./data/audio")
+    from ..paths import AUDIO_DIR
+    audio_dir = os.getenv("AUDIO_OUTPUT_PATH", str(AUDIO_DIR))
     Path(audio_dir).mkdir(parents=True, exist_ok=True)
     return audio_dir
 

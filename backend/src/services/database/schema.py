@@ -282,6 +282,114 @@ CREATE INDEX IF NOT EXISTS idx_referrals_referrer ON referrals(referrer_user_id)
 CREATE INDEX IF NOT EXISTS idx_referrals_code ON referrals(referral_code);
 """
 
+# ============================================================================
+# User Agents Table (#438) — foundation for Epic #436 (My Agent persona)
+# ============================================================================
+
+USER_AGENTS_TABLE = """
+CREATE TABLE IF NOT EXISTS user_agents (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    agent_id TEXT NOT NULL UNIQUE,
+    user_id TEXT NOT NULL,
+    child_id TEXT NOT NULL,
+    agent_name TEXT NOT NULL,
+    agent_avatar_id TEXT NOT NULL,
+    agent_title TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    UNIQUE(user_id, child_id),
+    FOREIGN KEY(user_id) REFERENCES users(user_id) ON DELETE CASCADE
+);
+"""
+
+USER_AGENTS_INDEXES = """
+CREATE INDEX IF NOT EXISTS idx_user_agents_user ON user_agents(user_id);
+"""
+
+
+# ============================================================================
+# Hub Tables (#446) — foundation for Epic #437 (Content Hub)
+# Tables use the `hub_` prefix to namespace clearly and avoid SQL keyword
+# collisions (e.g. `groups` is a SQL reserved word in some dialects).
+# ============================================================================
+
+HUB_GROUPS_TABLE = """
+CREATE TABLE IF NOT EXISTS hub_groups (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    group_id TEXT NOT NULL UNIQUE,
+    slug TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL,
+    description TEXT,
+    theme TEXT,
+    visibility TEXT NOT NULL CHECK (visibility IN ('public','private')),
+    invite_token TEXT,
+    created_by_user_id TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    member_count INTEGER NOT NULL DEFAULT 0,
+    FOREIGN KEY(created_by_user_id) REFERENCES users(user_id)
+);
+"""
+
+HUB_GROUPS_INDEXES = """
+CREATE INDEX IF NOT EXISTS idx_hub_groups_visibility_created ON hub_groups(visibility, created_at DESC);
+"""
+
+HUB_GROUP_MEMBERSHIPS_TABLE = """
+CREATE TABLE IF NOT EXISTS hub_group_memberships (
+    group_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    child_id TEXT NOT NULL,
+    role TEXT NOT NULL CHECK (role IN ('owner','member')),
+    joined_at TEXT NOT NULL,
+    PRIMARY KEY(group_id, user_id, child_id),
+    FOREIGN KEY(group_id) REFERENCES hub_groups(group_id) ON DELETE CASCADE
+);
+"""
+
+HUB_GROUP_MEMBERSHIPS_INDEXES = """
+CREATE INDEX IF NOT EXISTS idx_hub_group_memberships_user ON hub_group_memberships(user_id, child_id);
+"""
+
+HUB_POSTS_TABLE = """
+CREATE TABLE IF NOT EXISTS hub_posts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    post_id TEXT NOT NULL UNIQUE,
+    group_id TEXT NOT NULL,
+    author_user_id TEXT NOT NULL,
+    author_child_id TEXT NOT NULL,
+    author_agent_id TEXT NOT NULL,
+    agent_name_snapshot TEXT NOT NULL,
+    agent_avatar_id_snapshot TEXT NOT NULL,
+    agent_title_snapshot TEXT NOT NULL,
+    source_artifact_type TEXT NOT NULL CHECK (source_artifact_type IN ('art_story','interactive_story')),
+    source_id TEXT NOT NULL,
+    caption TEXT,
+    safety_score REAL NOT NULL,
+    created_at TEXT NOT NULL,
+    removed_at TEXT,
+    removed_reason TEXT,
+    FOREIGN KEY(group_id) REFERENCES hub_groups(group_id),
+    FOREIGN KEY(author_agent_id) REFERENCES user_agents(agent_id)
+);
+"""
+
+HUB_POSTS_INDEXES = """
+CREATE INDEX IF NOT EXISTS idx_hub_posts_group_created ON hub_posts(group_id, created_at DESC);
+"""
+
+HUB_POST_REACTIONS_TABLE = """
+CREATE TABLE IF NOT EXISTS hub_post_reactions (
+    post_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    reaction_type TEXT NOT NULL CHECK (reaction_type IN ('heart','star','wow')),
+    created_at TEXT NOT NULL,
+    PRIMARY KEY(post_id, user_id, reaction_type),
+    FOREIGN KEY(post_id) REFERENCES hub_posts(post_id) ON DELETE CASCADE
+);
+"""
+
+HUB_POST_REACTIONS_INDEXES = ""
+
 
 # ============================================================================
 # Schema Initialization
@@ -393,6 +501,12 @@ async def init_schema(db: "DatabaseManager") -> None:
     await _migrate_add_styled_image_url(db)
     await _migrate_add_referral_columns(db)
     await _migrate_add_story_length_mode(db)
+    await _migrate_add_onboarding_columns(db)
+    await _migrate_create_user_agents_table(db)
+    await _migrate_create_hub_groups_table(db)
+    await _migrate_create_hub_group_memberships_table(db)
+    await _migrate_create_hub_posts_table(db)
+    await _migrate_create_hub_post_reactions_table(db)
 
     # Now create all indexes (including user_id indexes) after migration
     for stmt in STORIES_INDEXES.strip().split(";"):
@@ -627,6 +741,113 @@ async def _migrate_add_story_length_mode(db: "DatabaseManager") -> None:
         )
         await db.commit()
         print("Sessions story_length_mode migration completed")
+
+
+async def _migrate_add_onboarding_columns(db: "DatabaseManager") -> None:
+    """Migration: Add onboarding columns to users table (#438).
+
+    Adds nullable columns that capture onboarding state and parent identity:
+    - nickname: friendly name shown in UI
+    - onboarded_at: timestamp the user finished onboarding
+    - parent_consent_at: timestamp the parent granted consent
+    - default_child_id: the active child profile to bind agent persona to
+
+    All columns are NULLABLE to keep this migration non-destructive — existing
+    rows are unaffected and stay valid.
+    """
+    columns = [
+        ("nickname", "ALTER TABLE users ADD COLUMN nickname TEXT"),
+        ("onboarded_at", "ALTER TABLE users ADD COLUMN onboarded_at TEXT"),
+        ("parent_consent_at", "ALTER TABLE users ADD COLUMN parent_consent_at TEXT"),
+        ("default_child_id", "ALTER TABLE users ADD COLUMN default_child_id TEXT"),
+    ]
+    added = False
+    for column_name, ddl in columns:
+        if not await column_exists(db, "users", column_name):
+            if not added:
+                print("Migrating users table: adding onboarding columns (#438)...")
+                added = True
+            await db.execute(ddl)
+    if added:
+        await db.commit()
+        print("Users onboarding migration completed")
+
+
+async def _migrate_create_user_agents_table(db: "DatabaseManager") -> None:
+    """Migration: Create user_agents table + indexes (#438).
+
+    Foundation for Epic #436 (My Agent — personalized buddy persona). Uses
+    CREATE TABLE IF NOT EXISTS so the migration is idempotent across reruns.
+    """
+    await db.execute(translate_ddl(USER_AGENTS_TABLE, db.dialect))
+    for stmt in USER_AGENTS_INDEXES.strip().split(";"):
+        if stmt.strip():
+            try:
+                await db.execute(stmt)
+            except Exception:
+                pass
+    await db.commit()
+
+
+async def _migrate_create_hub_groups_table(db: "DatabaseManager") -> None:
+    """Migration: Create hub_groups table + indexes (#446).
+
+    Foundation for Epic #437 (Content Hub). Uses CREATE TABLE IF NOT EXISTS
+    so the migration is idempotent across reruns.
+    """
+    await db.execute(translate_ddl(HUB_GROUPS_TABLE, db.dialect))
+    for stmt in HUB_GROUPS_INDEXES.strip().split(";"):
+        if stmt.strip():
+            try:
+                await db.execute(stmt)
+            except Exception:
+                pass
+    await db.commit()
+
+
+async def _migrate_create_hub_group_memberships_table(db: "DatabaseManager") -> None:
+    """Migration: Create hub_group_memberships table + indexes (#446)."""
+    await db.execute(translate_ddl(HUB_GROUP_MEMBERSHIPS_TABLE, db.dialect))
+    for stmt in HUB_GROUP_MEMBERSHIPS_INDEXES.strip().split(";"):
+        if stmt.strip():
+            try:
+                await db.execute(stmt)
+            except Exception:
+                pass
+    await db.commit()
+
+
+async def _migrate_create_hub_posts_table(db: "DatabaseManager") -> None:
+    """Migration: Create hub_posts table + indexes (#446).
+
+    Stores per-post agent persona snapshots so feed reads never need to
+    join `users` — preserves the COPPA invariant in #450.
+    """
+    await db.execute(translate_ddl(HUB_POSTS_TABLE, db.dialect))
+    for stmt in HUB_POSTS_INDEXES.strip().split(";"):
+        if stmt.strip():
+            try:
+                await db.execute(stmt)
+            except Exception:
+                pass
+    await db.commit()
+
+
+async def _migrate_create_hub_post_reactions_table(db: "DatabaseManager") -> None:
+    """Migration: Create hub_post_reactions table (#446).
+
+    No additional indexes — the composite primary key
+    (post_id, user_id, reaction_type) covers all access patterns.
+    """
+    await db.execute(translate_ddl(HUB_POST_REACTIONS_TABLE, db.dialect))
+    if HUB_POST_REACTIONS_INDEXES.strip():
+        for stmt in HUB_POST_REACTIONS_INDEXES.strip().split(";"):
+            if stmt.strip():
+                try:
+                    await db.execute(stmt)
+                except Exception:
+                    pass
+    await db.commit()
 
 
 # ============================================================================

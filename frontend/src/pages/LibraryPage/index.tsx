@@ -25,6 +25,9 @@ import type {
   LibraryItemType,
   LibrarySortOrder,
 } from "@/api/services/libraryService";
+import { useAgent } from "@/hooks/useAgent";
+import AgentBylineChip from "@/components/common/AgentBylineChip";
+import type { Agent } from "@/types/agent";
 import { useLibraryPreferences } from "@/hooks/useLibraryPreferences";
 import MiniPlayer from "@/components/common/MiniPlayer";
 import { getAgeLayoutConfig } from "@/config/ageConfig";
@@ -357,6 +360,7 @@ function LibraryCard({
   showFavorite,
   onFavoriteToggled,
   showWordCount = true,
+  agent,
 }: {
   item: LibraryItem;
   onClick: () => void;
@@ -364,6 +368,7 @@ function LibraryCard({
   showFavorite: boolean;
   onFavoriteToggled?: () => void;
   showWordCount?: boolean;
+  agent?: Agent | null;
 }) {
   const [imgError, setImgError] = useState(false);
   const imgSrc = (item as any).thumbnail_url || item.image_url;
@@ -467,6 +472,9 @@ function LibraryCard({
               <h3 className="text-base font-bold text-gray-800 line-clamp-2">
                 {item.title}
               </h3>
+              {agent && (
+                <AgentBylineChip agent={agent} className="mt-1" />
+              )}
             </div>
             <div className="flex items-center gap-1.5 flex-shrink-0">
               {showFavorite && (
@@ -567,6 +575,7 @@ function ListRow({
   showFavorite,
   onFavoriteToggled,
   showWordCount = true,
+  agent,
 }: {
   item: LibraryItem;
   onClick: () => void;
@@ -574,6 +583,7 @@ function ListRow({
   showFavorite: boolean;
   onFavoriteToggled?: () => void;
   showWordCount?: boolean;
+  agent?: Agent | null;
 }) {
   const [imgError, setImgError] = useState(false);
   const imgSrc = (item as any).thumbnail_url || item.image_url;
@@ -665,6 +675,9 @@ function ListRow({
                 <h4 className="text-base font-semibold text-gray-800 line-clamp-2">
                   {item.title}
                 </h4>
+                {agent && (
+                  <AgentBylineChip agent={agent} className="mt-1" />
+                )}
               </div>
               <div className="flex items-center gap-1.5 flex-shrink-0">
                 {showFavorite && (
@@ -754,8 +767,16 @@ function LibraryPage() {
   const { storyHistory, clearHistory, setCurrentStory, removeStory } =
     useStoryStore();
   const { isAuthenticated, user } = useAuthStore();
-  const { currentChild } = useChildStore();
+  const { currentChild, defaultChildId } = useChildStore();
   const { viewMode, toggleViewMode } = useLibraryPreferences();
+  const childIdForAgent = currentChild?.child_id ?? defaultChildId;
+  // Buddy byline (#445) — fetched once for the page; passed into
+  // LibraryCard / ListRow so a single agent lookup decorates every card.
+  // Disabled when unauthenticated (the hook already guards on a missing
+  // child id, but we double-guard here to avoid an extra request).
+  const { data: pageAgent } = useAgent(
+    isAuthenticated ? childIdForAgent : undefined,
+  );
   const ageLayout = getAgeLayoutConfig(currentChild?.age_group);
   const isParent = user?.role === "parent";
   const canShowGrowthTimeline = ageLayout.showGrowthTimeline || isParent;
@@ -859,15 +880,11 @@ function LibraryPage() {
       navigate(`/interactive?session=${item.id}`);
     } else if (
       item.type === "morning-show" ||
-      (item.type === "kids-daily" && !!item.duration_seconds)
-    ) {
-      navigate(`/morning-show/${item.id}`);
-    } else if (
       item.type === "news" ||
       item.type === "kids-news" ||
       item.type === "kids-daily"
     ) {
-      navigate(`/news/${item.id}`);
+      navigate(`/kids-daily/${item.id}`);
     }
   };
 
@@ -1106,6 +1123,7 @@ function LibraryPage() {
                         showFavorite={isAuthenticated}
                         onFavoriteToggled={handleFavoriteToggled}
                         showWordCount={ageLayout.showWordCount}
+                        agent={pageAgent}
                       />
                     ) : (
                       <LibraryCard
@@ -1115,6 +1133,7 @@ function LibraryPage() {
                         showFavorite={isAuthenticated}
                         onFavoriteToggled={handleFavoriteToggled}
                         showWordCount={ageLayout.showWordCount}
+                        agent={pageAgent}
                       />
                     )}
                   </motion.div>
@@ -1189,9 +1208,9 @@ function LibraryPage() {
                   },
                   "kids-news": {
                     icon: "📰",
-                    message: "No news stories yet — explore kids news!",
-                    cta: "Read Kids News",
-                    route: "/news",
+                    message: "No news stories yet — explore Kids Daily!",
+                    cta: "Open Kids Daily",
+                    route: "/kids-daily",
                   },
                 };
                 const emptyState =

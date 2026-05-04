@@ -19,7 +19,7 @@ export interface DailyContent {
   miniAd: string;
   /** When set, a "Try This!" CTA button is rendered linking to the matching creation tool. */
   cta_type?: "draw" | "story" | "explore";
-  cta_route?: "/upload" | "/interactive" | "/news";
+  cta_route?: "/upload" | "/interactive" | "/kids-daily";
   creative_prompt?: string;
 }
 

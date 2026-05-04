@@ -31,6 +31,8 @@ Every issue gets **one label from each required category**.
 - `domain:video` — Phase 3 video / dynamic picture book
 - `domain:referral` — PRD §3.9.4 — Referral-based membership tiers
 - `domain:inspiration` — PRD §3.10 — Daily creative inspiration for kids
+- `domain:my-agent` — PRD §3.11 — Per-user creative buddy agent persona
+- `domain:content-hub` — PRD §3.12 — Group-based community sharing
 
 ### Priority (required)
 - `P0:critical` — Blocks launch or breaks safety — fix NOW
@@ -65,6 +67,8 @@ Every issue MUST be assigned to a milestone.
 | #313 | Production Launch — Supabase + Railway + Vercel | layer:infra | 2 |
 | #346 | Referral-Based Membership | domain:referral | 2 |
 | #405 | Inspiration Daily — Creative Spark Feed | domain:inspiration | 2 |
+| #436 | My Agent — Personal Creative Buddy with Onboarding & Customization | domain:my-agent | 2 |
+| #437 | Content Hub — Group-Based Community Sharing with Buddy Bylines | domain:content-hub | 2 |
 
 Every story/bug body MUST include `**Parent Epic**: #<number>`.
 

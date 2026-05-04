@@ -22,6 +22,23 @@ from .subscription_repository import (
 from .usage_repository import UsageRepository, usage_repo
 from .referral_repository import ReferralRepository, referral_repo
 from .vector_repository import VectorRepository, vector_repo
+from .agent_repository import AgentRepository, AgentData, agent_repo
+from .group_repository import (
+    GroupRepository,
+    group_repo,
+    GroupData,
+    MembershipData,
+)
+from .hub_post_repository import (
+    HubPostRepository,
+    hub_post_repo,
+    HubPostData,
+)
+from .hub_reaction_repository import (
+    HubReactionRepository,
+    hub_reaction_repo,
+    ReactionData,
+)
 
 __all__ = [
     "CursorResult",
@@ -54,4 +71,17 @@ __all__ = [
     "referral_repo",
     "VectorRepository",
     "vector_repo",
+    "AgentRepository",
+    "AgentData",
+    "agent_repo",
+    "GroupRepository",
+    "group_repo",
+    "GroupData",
+    "MembershipData",
+    "HubPostRepository",
+    "hub_post_repo",
+    "HubPostData",
+    "HubReactionRepository",
+    "hub_reaction_repo",
+    "ReactionData",
 ]

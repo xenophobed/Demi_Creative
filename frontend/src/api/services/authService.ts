@@ -28,6 +28,7 @@ import type {
 } from '@/types/auth'
 
 const AUTH_BASE = '/users'
+const pendingUserSyncs = new Map<string, Promise<User>>()
 
 export const authService = {
   /**
@@ -73,6 +74,7 @@ export const authService = {
           data: {
             display_name: data.display_name || data.username,
             username: data.username,
+            ...(data.referral_code ? { referral_code: data.referral_code } : {}),
           },
         },
       })
@@ -121,10 +123,22 @@ export const authService = {
    * the local user row via get_current_user dep.
    */
   async _syncUser(accessToken: string): Promise<User> {
-    const response = await apiClient.get<User>(`${AUTH_BASE}/me`, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    })
-    return response.data
+    const pendingSync = pendingUserSyncs.get(accessToken)
+    if (pendingSync) {
+      return pendingSync
+    }
+
+    const syncPromise = apiClient
+      .get<User>(`${AUTH_BASE}/me`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      })
+      .then((response) => response.data)
+      .finally(() => {
+        pendingUserSyncs.delete(accessToken)
+      })
+
+    pendingUserSyncs.set(accessToken, syncPromise)
+    return syncPromise
   },
 
   /**

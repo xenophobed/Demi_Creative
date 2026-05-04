@@ -28,8 +28,8 @@ function getItemRoute(item: LibraryItem): string {
   switch (item.type) {
     case 'art-story': return `/story/${item.id}`
     case 'interactive': return `/interactive?session=${item.id}`
-    case 'morning-show': return `/morning-show/${item.id}`
-    default: return `/news/${item.id}`
+    case 'morning-show': return `/kids-daily/${item.id}`
+    default: return `/kids-daily/${item.id}`
   }
 }
 
@@ -327,9 +327,9 @@ function HomePage() {
                   description="Choose your path"
                 />
                 <FeatureTile
-                  to="/news"
+                  to="/kids-daily"
                   icon="📰"
-                  label="Kids News"
+                  label="Kids Daily"
                   accentColor="accent"
                   description="World made simple"
                 />

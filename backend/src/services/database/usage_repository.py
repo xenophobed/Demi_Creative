@@ -21,7 +21,7 @@ class UsageRepository:
         """Return total generation count for user_id today (UTC date)."""
         today = date.today().isoformat()
         row = await self._db.fetchone(
-            "SELECT COALESCE(SUM(count), 0) as total FROM daily_usage WHERE user_id = ? AND usage_date = ?",
+            "SELECT COALESCE(SUM(daily_usage.count), 0) as total FROM daily_usage WHERE user_id = ? AND usage_date = ?",
             (user_id, today),
         )
         if row is None:
@@ -40,7 +40,7 @@ class UsageRepository:
             INSERT INTO daily_usage (user_id, usage_date, feature, count)
             VALUES (?, ?, ?, 1)
             ON CONFLICT(user_id, usage_date, feature)
-            DO UPDATE SET count = count + 1
+            DO UPDATE SET count = daily_usage.count + 1
             """,
             (user_id, today, feature),
         )

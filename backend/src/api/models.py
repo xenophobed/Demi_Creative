@@ -804,6 +804,161 @@ class UserResponse(BaseModel):
     referral_code: str = Field(default="", description="User's unique referral code")
     created_at: datetime = Field(..., description="Registered at")
     last_login_at: Optional[datetime] = Field(None, description="Last login time")
+    # Onboarding + agent fields (#439, depends on #438 schema)
+    has_agent: bool = Field(default=False, description="Whether the user has a configured agent persona")
+    onboarded_at: Optional[datetime] = Field(None, description="When onboarding finished")
+    nickname: Optional[str] = Field(None, description="Friendly name shown in UI")
+    default_child_id: Optional[str] = Field(None, description="Active child profile bound to the agent")
+    parent_consent_at: Optional[datetime] = Field(None, description="When parent granted consent")
+
+
+class AgentResponse(BaseModel):
+    """Agent persona info (PRD §3.11.3)."""
+    agent_id: str = Field(..., description="Stable surrogate ID of the agent persona")
+    user_id: str = Field(..., description="Owner user ID")
+    child_id: str = Field(..., description="Child profile this agent is bound to")
+    agent_name: str = Field(..., description="Agent display name")
+    agent_avatar_id: str = Field(..., description="Avatar identifier (e.g. 'emoji:🦊')")
+    agent_title: str = Field(..., description="Agent title (curated or free-text)")
+    created_at: datetime = Field(..., description="When the agent was first created")
+    updated_at: datetime = Field(..., description="When the agent was last updated")
+
+
+class UpsertAgentRequest(BaseModel):
+    """PUT /me/agent body — create-or-update an agent persona."""
+    agent_name: str = Field(..., min_length=1, max_length=32, description="Agent display name")
+    agent_avatar_id: str = Field(..., min_length=1, description="Avatar identifier from the whitelist")
+    agent_title: str = Field(..., min_length=1, max_length=32, description="Agent title")
+    child_id: str = Field(..., min_length=1, description="Child profile this agent is bound to")
+
+
+class CompleteOnboardingRequest(BaseModel):
+    """POST /me/onboarding/complete body — gates onboarding completion behind parent consent (#440)."""
+    parent_consent: bool = Field(..., description="True iff a parent has granted consent for the child's buddy persona to be shown publicly when sharing")
+    child_id: str = Field(..., min_length=1, description="Child profile being onboarded")
+
+
+# ---------------------------------------------------------------------------
+# Content Hub — groups (#448)
+# ---------------------------------------------------------------------------
+
+
+class CreateGroupRequest(BaseModel):
+    """POST /hub/groups body."""
+    name: str = Field(..., min_length=1, max_length=80, description="Group display name")
+    visibility: str = Field(..., description="public | private")
+    description: Optional[str] = Field(None, max_length=500)
+    theme: Optional[str] = Field(None, max_length=50, description="Optional theme tag, e.g. 'fantasy'")
+
+
+class GroupResponse(BaseModel):
+    """Group payload returned to clients.
+
+    invite_token is intentionally Optional — it is included ONLY in the
+    create-response (to the owner) or in get-by-id when the caller IS
+    the group's owner. List/get responses to non-owners must scrub it.
+    """
+    group_id: str
+    slug: str
+    name: str
+    description: Optional[str] = None
+    theme: Optional[str] = None
+    visibility: str
+    invite_token: Optional[str] = None
+    created_at: str
+    member_count: int
+
+
+class ListGroupsResponse(BaseModel):
+    """GET /hub/groups response."""
+    items: List[GroupResponse]
+    total: int
+
+
+class JoinGroupResponse(BaseModel):
+    """POST /hub/groups/{id}/join response."""
+    group_id: str
+    role: str
+    joined_at: str
+
+
+# ---------------------------------------------------------------------------
+# Content Hub — posts (#449)
+# ---------------------------------------------------------------------------
+
+
+class CreatePostRequest(BaseModel):
+    """POST /hub/groups/{id}/posts body."""
+    source_artifact_type: str = Field(..., description="art_story | interactive_story")
+    source_id: str = Field(..., min_length=1, description="ID of the source story / session")
+    caption: Optional[str] = Field(None, max_length=280, description="Optional caption shown above the story")
+
+
+class HubPostResponse(BaseModel):
+    """COPPA-safe post payload — projects ONLY hub_posts columns.
+
+    The fields below are deliberately the persona snapshot (not a JOIN
+    against users / user_agents). Adding any users-table column here
+    will break the contract test in #450.
+    """
+    post_id: str
+    group_id: str
+    agent_name: str
+    agent_avatar_id: str
+    agent_title: str
+    source_artifact_type: str
+    source_id: str
+    caption: Optional[str] = None
+    created_at: str
+
+
+class HubPostCursor(BaseModel):
+    cursor_created_at: str
+    cursor_post_id: str
+
+
+class ListHubPostsResponse(BaseModel):
+    items: List[HubPostResponse]
+    next_cursor: Optional[HubPostCursor] = None
+
+
+# ---------------------------------------------------------------------------
+# Admin Hub moderation (#456)
+# ---------------------------------------------------------------------------
+
+
+class RemoveHubPostRequest(BaseModel):
+    reason: Optional[str] = Field(None, max_length=200, description="Free-text moderation reason captured on hub_posts.removed_reason")
+
+
+class RemoveHubPostResponse(BaseModel):
+    post_id: str
+    removed_at: str
+    removed_reason: Optional[str] = None
+    already_removed: bool = False
+
+
+# ---------------------------------------------------------------------------
+# Content Hub — reactions (#454)
+# ---------------------------------------------------------------------------
+
+
+class ReactionToggleRequest(BaseModel):
+    reaction_type: str = Field(..., description="heart | star | wow")
+
+
+class ReactionToggleResponse(BaseModel):
+    post_id: str
+    reaction_type: str
+    active: bool = Field(..., description="True = was inserted; False = was removed")
+    counts: Dict[str, int]
+    viewer_reactions: List[str]
+
+
+class HubReactionResponse(BaseModel):
+    post_id: str
+    counts: Dict[str, int]
+    viewer_reactions: List[str]
 
 
 class ReferralStatusResponse(BaseModel):

@@ -31,6 +31,7 @@ from ..models import (
 )
 from ..deps import get_current_user, get_session_for_owner, check_generation_quota
 from ...services.database import session_repo, story_repo, preference_repo, character_repo, db_manager, usage_repo
+from ...services.tts_service import generate_story_audio_file
 from ...services.user_service import UserData
 from ...services.provenance_tracker import ProvenanceTracker
 from ...services.models.artifact_models import (
@@ -58,6 +59,61 @@ router = APIRouter(
 )
 
 _AGE_MAP = {"3-5": 4, "6-8": 7, "9-12": 11}
+
+
+async def _ensure_segment_audio(
+    segment_data: dict,
+    *,
+    enable_audio: bool,
+    voice: str,
+    age_group: str,
+    existing_audio_path: str | None,
+) -> str | None:
+    """Return an /data/audio/* URL for the segment.
+
+    Order of preference:
+    1. Use the agent-supplied audio_path if present.
+    2. Fallback: generate audio server-side from the segment text. Some
+       agent runs skip the TTS tool call even when enable_audio is true,
+       which would otherwise leave the segment silent in the player.
+    Returns None if audio is disabled, the segment has no text, or TTS fails.
+    """
+    if existing_audio_path:
+        return f"/data/audio/{Path(existing_audio_path).name}"
+    if not enable_audio:
+        return None
+    text = (segment_data or {}).get("text", "").strip()
+    if not text:
+        return None
+    age_int = _AGE_MAP.get(age_group, 7)
+    try:
+        result = await generate_story_audio_file(
+            text=text,
+            voice=voice or "fable",
+            child_age=age_int,
+        )
+    except Exception:
+        logger.warning("TTS fallback failed for segment", exc_info=True)
+        return None
+    if not result.get("success") or not result.get("audio_path"):
+        logger.warning("TTS fallback returned no audio_path: %s", result.get("error"))
+        return None
+    return f"/data/audio/{Path(result['audio_path']).name}"
+
+
+def _coerce_str_list(value) -> list[str]:
+    """Tolerantly coerce stored themes/concepts into a list[str].
+
+    Older session writes occasionally stored themes/concepts as a single
+    comma-joined string; resume must not crash on them.
+    """
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return [str(v).strip() for v in value if str(v).strip()]
+    if isinstance(value, str):
+        return [part.strip() for part in value.split(",") if part.strip()]
+    return [str(value)]
 
 
 async def _check_story_safety(text: str, age_group: str) -> float:
@@ -160,11 +216,14 @@ async def start_interactive_story(
         # 3. Save opening segment
         segment_data = opening_data["segment"]
 
-        # Handle audio URL from agent result
-        audio_url = None
-        if opening_data.get("audio_path"):
-            audio_filename = Path(opening_data["audio_path"]).name
-            audio_url = f"/data/audio/{audio_filename}"
+        # Handle audio URL from agent result, with fallback if missing.
+        audio_url = await _ensure_segment_audio(
+            segment_data,
+            enable_audio=request.enable_audio,
+            voice=request.voice.value,
+            age_group=request.age_group.value,
+            existing_audio_path=opening_data.get("audio_path"),
+        )
 
         await session_repo.update_session(
             session_id=session.session_id,
@@ -368,11 +427,14 @@ async def start_interactive_story_stream(
                     # Save opening segment
                     segment_data = opening_data.get("segment", {})
 
-                    # Handle audio URL from agent result
-                    audio_url = None
-                    if opening_data.get("audio_path"):
-                        audio_filename = Path(opening_data["audio_path"]).name
-                        audio_url = f"/data/audio/{audio_filename}"
+                    # Handle audio URL from agent result, with fallback if missing.
+                    audio_url = await _ensure_segment_audio(
+                        segment_data,
+                        enable_audio=request.enable_audio,
+                        voice=request.voice.value,
+                        age_group=request.age_group.value,
+                        existing_audio_path=opening_data.get("audio_path"),
+                    )
 
                     await session_repo.update_session(
                         session_id=session.session_id,
@@ -542,11 +604,14 @@ async def choose_story_branch_stream(
                         client_disconnected = True
                         break
 
-                    # Handle audio URL from agent result
-                    audio_url = None
-                    if next_data.get("audio_path"):
-                        audio_filename = Path(next_data["audio_path"]).name
-                        audio_url = f"/data/audio/{audio_filename}"
+                    # Handle audio URL from agent result, with fallback if missing.
+                    audio_url = await _ensure_segment_audio(
+                        segment_data,
+                        enable_audio=bool(session.enable_audio),
+                        voice=session.voice or "fable",
+                        age_group=session.age_group,
+                        existing_audio_path=next_data.get("audio_path"),
+                    )
 
                     # Update session
                     await session_repo.update_session(
@@ -734,11 +799,14 @@ async def choose_story_branch(
         segment_data = next_data["segment"]
         is_ending = next_data.get("is_ending", False)
 
-        # Handle audio URL from agent result
-        audio_url = None
-        if next_data.get("audio_path"):
-            audio_filename = Path(next_data["audio_path"]).name
-            audio_url = f"/data/audio/{audio_filename}"
+        # Handle audio URL from agent result, with fallback if missing.
+        audio_url = await _ensure_segment_audio(
+            segment_data,
+            enable_audio=bool(session.enable_audio),
+            voice=session.voice or "fable",
+            age_group=session.age_group,
+            existing_audio_path=next_data.get("audio_path"),
+        )
 
         await session_repo.update_session(
             session_id=session_id,
@@ -921,10 +989,13 @@ async def end_story_stream(
                         client_disconnected = True
                         break
 
-                    audio_url = None
-                    if next_data.get("audio_path"):
-                        audio_filename = Path(next_data["audio_path"]).name
-                        audio_url = f"/data/audio/{audio_filename}"
+                    audio_url = await _ensure_segment_audio(
+                        segment_data,
+                        enable_audio=bool(session.enable_audio),
+                        voice=session.voice or "fable",
+                        age_group=session.age_group,
+                        existing_audio_path=next_data.get("audio_path"),
+                    )
 
                     await session_repo.update_session(
                         session_id=session_id,
@@ -1024,7 +1095,12 @@ async def resume_session(
 
         educational_summary = None
         if session.educational_summary:
-            educational_summary = EducationalValue(**session.educational_summary)
+            edu_data = session.educational_summary
+            educational_summary = EducationalValue(
+                themes=_coerce_str_list(edu_data.get("themes")),
+                concepts=_coerce_str_list(edu_data.get("concepts")),
+                moral=edu_data.get("moral"),
+            )
 
         progress = (
             session.current_segment / session.total_segments
@@ -1074,7 +1150,12 @@ async def get_session_status(
         # Build response
         educational_summary = None
         if session.educational_summary:
-            educational_summary = EducationalValue(**session.educational_summary)
+            edu_data = session.educational_summary
+            educational_summary = EducationalValue(
+                themes=_coerce_str_list(edu_data.get("themes")),
+                concepts=_coerce_str_list(edu_data.get("concepts")),
+                moral=edu_data.get("moral"),
+            )
 
         response = SessionStatusResponse(
             session_id=session.session_id,

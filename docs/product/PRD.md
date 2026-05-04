@@ -1176,6 +1176,16 @@ A referral-based growth and membership tier system. Growth is driven by user ref
 - [ ] QuotaExceededOverlay includes "share to get more" CTA
 - [ ] No child personal information exposed in share links
 
+#### Known Gaps (Supabase Auth Path)
+
+The referral feature was built and tested against the legacy auth path. With Supabase Auth enabled in production, three gaps prevent referrals from working:
+
+1. **Registration drops referral code**: `authService.register()` does not pass `referral_code` to `supabase.auth.signUp()` metadata. The code is captured from `?ref=` but never reaches the backend.
+2. **Auto-create ignores referral**: `_get_or_create_supabase_user()` in `deps.py` creates the local user row with `referred_by=None` and does not create a referral record.
+3. **Qualification never triggers**: `qualify_and_maybe_upgrade()` exists in `user_service.py` but no code path calls it. No Supabase webhook handles email verification events.
+
+**Fix**: Pass `referral_code` in Supabase signUp metadata → read it in `_get_or_create_supabase_user` → create referral record → qualify inline when `email_confirmed=True`.
+
 #### Out of Scope
 
 - Paid tiers or payment integration
@@ -1523,6 +1533,38 @@ This means a hub post can be served entirely without ever loading the user recor
 - Trending / ranking algorithms (recency-only in v1)
 - Image upload as buddy avatar
 - Report-then-auto-hide moderation flow (v2)
+
+---
+
+## 3.13 Agent SDK Modernization [Phase 2 — Reliability]
+
+Goal: replace the Claude Agent SDK subprocess-based execution with direct Anthropic API calls so all three agents work reliably in production (Railway) without OOM kills.
+
+### 3.13.1 Problem
+The `claude_agent_sdk` package spawns a separate process (the Claude CLI binary) for each agent call. This doubles memory usage on Railway's container, causing exit code -9 (OOM kill) on every generation request in production.
+
+### 3.13.2 Solution
+Switch all agents from `ClaudeSDKClient` to direct `anthropic.AsyncAnthropic()` API calls with manual tool orchestration. The `image_to_story_agent` already has a working direct-API fallback (`_direct_stream_image_to_story`); the pattern needs to be applied to `interactive_story_agent` and `kids_daily_agent`.
+
+### 3.13.3 Stories
+1. **Image-to-Story**: Make direct API the primary path, remove SDK subprocess dependency
+2. **Interactive Story**: Port to direct API with multi-turn tool loop
+3. **Kids Daily**: Port to direct API with dialogue generation
+4. **Shared Base Module**: Extract common agent boilerplate (import guards, mock fallback, tool orchestration loop, response parsing)
+5. **Safety Enforcement**: Ensure programmatic safety check runs post-generation even without SDK hooks
+
+### 3.13.4 Acceptance Criteria
+- [ ] All three agents generate content successfully on Railway (no exit code -9)
+- [ ] Streaming SSE events work identically to current behavior
+- [ ] Safety check runs on every generated output
+- [ ] Mock fallback continues to work for tests
+- [ ] No `claude_agent_sdk` subprocess spawned in production
+- [ ] Existing API tests pass without modification
+
+#### Out of Scope
+- SDK hooks (PreToolUse) — deferred until SDK stabilizes post-1.0
+- Session management via SDK — handled by our own session_repository
+- Removing `claude_agent_sdk` from requirements.txt (keep for future re-evaluation)
 
 ---
 

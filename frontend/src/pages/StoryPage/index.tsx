@@ -12,6 +12,7 @@ import useStoryStore from "@/store/useStoryStore";
 import useChildStore from "@/store/useChildStore";
 import storyService from "@/api/services/storyService";
 import { resolveMediaUrl } from "@/utils/mediaUrl";
+import ShareToHubModal from "@/components/hub/ShareToHubModal";
 
 function deriveStoryTitleFromText(storyText: string | undefined): string {
   if (!storyText) return "Your Story";
@@ -53,6 +54,8 @@ function StoryPage() {
 
   // Show banner only when navigating directly from the upload/generation flow
   const [showBanner, setShowBanner] = useState(false);
+  // Share-to-Content-Hub modal (#453)
+  const [shareOpen, setShareOpen] = useState(false);
 
   useEffect(() => {
     if (justGenerated) {
@@ -264,15 +267,32 @@ function StoryPage() {
         </Button>
       </motion.div>
 
-      {/* Share prompt */}
-      <motion.p
-        className="share-prompt"
+      {/* Share prompt + Share to Content Hub CTA (#453) */}
+      <motion.div
+        className="share-prompt flex flex-col items-center gap-3"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.5 }}
       >
-        Love this story? Share it with your family!
-      </motion.p>
+        <p>Love this story? Share it with your family!</p>
+        {storyId && (
+          <button
+            type="button"
+            className="rounded-md bg-violet-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-violet-700"
+            onClick={() => setShareOpen(true)}
+          >
+            🌐 Share to Content Hub
+          </button>
+        )}
+      </motion.div>
+
+      {storyId && (
+        <ShareToHubModal
+          open={shareOpen}
+          onClose={() => setShareOpen(false)}
+          source={{ artifact_type: "art_story", source_id: storyId }}
+        />
+      )}
     </motion.div>
   );
 }

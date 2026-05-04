@@ -122,10 +122,11 @@ railway variables delete KEY
 | `SUPABASE_SERVICE_ROLE_KEY` | Service role JWT | Set |
 | `SUPABASE_JWT_SECRET` | JWT signing secret | Set |
 | `SECRET_KEY` | Server secret (random hex) | Set |
-| `ANTHROPIC_API_KEY` | Claude API key | **Placeholder — add real key** |
-| `OPENAI_API_KEY` | OpenAI TTS key | **Placeholder — add real key** |
-| `ELEVENLABS_API_KEY` | ElevenLabs TTS key | Not set (optional) |
-| `TAVILY_API_KEY` | Web search for Daily Drop | Not set (optional) |
+| `ANTHROPIC_API_KEY` | Claude API key | Set |
+| `OPENAI_API_KEY` | OpenAI TTS key | Set |
+| `DATABASE_URL` | PostgreSQL connection string (Supabase pooler) | Set |
+| `REPLICATE_API_TOKEN` | Replicate API token (voice cloning) | Set |
+| `TAVILY_API_KEY` | Web search for Daily Drop | Set |
 | `DAILY_DROP_ENABLED` | `0` = disabled, `1` = enabled | Set to `0` |
 | `ALLOWED_ORIGINS` | Comma-separated frontend URLs | Set |
 
