@@ -10,10 +10,11 @@ Aggregates the sub-routers under one importable `hub` module so:
 
 from fastapi import APIRouter
 
-from . import groups, posts
+from . import groups, posts, reactions
 
 router = APIRouter()
 router.include_router(groups.router)
 router.include_router(posts.router)
+router.include_router(reactions.router)
 
 __all__ = ["router"]
