@@ -349,6 +349,7 @@ from .api.routes import (
     kids_daily,
     library,
     memory,
+    onboarding,
     subscriptions,
     usage,
     users,
@@ -363,6 +364,7 @@ app.include_router(video.router)
 app.include_router(voice.router)
 app.include_router(users.router)
 app.include_router(agents.router)
+app.include_router(onboarding.router)
 app.include_router(kids_daily.router)
 app.include_router(inspiration_daily.router)
 app.include_router(subscriptions.router)
