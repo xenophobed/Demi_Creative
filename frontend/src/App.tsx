@@ -17,6 +17,7 @@ const MorningShowPage = lazy(() => import("./pages/MorningShowPage"));
 const NewsDetailPage = lazy(() => import("./pages/NewsDetailPage"));
 const MyAgentPage = lazy(() => import("./pages/MyAgentPage"));
 const ContentHubPage = lazy(() => import("./pages/ContentHubPage"));
+const GroupPage = lazy(() => import("./pages/GroupPage"));
 
 function App() {
   return (
@@ -51,6 +52,7 @@ function App() {
             <Route path="profile" element={<ProfilePage />} />
             <Route path="my-agent" element={<MyAgentPage />} />
             <Route path="content-hub" element={<ContentHubPage />} />
+            <Route path="content-hub/:slug" element={<GroupPage />} />
           </Route>
         </Routes>
       </Suspense>
