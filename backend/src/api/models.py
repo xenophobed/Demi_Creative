@@ -804,6 +804,32 @@ class UserResponse(BaseModel):
     referral_code: str = Field(default="", description="User's unique referral code")
     created_at: datetime = Field(..., description="Registered at")
     last_login_at: Optional[datetime] = Field(None, description="Last login time")
+    # Onboarding + agent fields (#439, depends on #438 schema)
+    has_agent: bool = Field(default=False, description="Whether the user has a configured agent persona")
+    onboarded_at: Optional[datetime] = Field(None, description="When onboarding finished")
+    nickname: Optional[str] = Field(None, description="Friendly name shown in UI")
+    default_child_id: Optional[str] = Field(None, description="Active child profile bound to the agent")
+    parent_consent_at: Optional[datetime] = Field(None, description="When parent granted consent")
+
+
+class AgentResponse(BaseModel):
+    """Agent persona info (PRD §3.11.3)."""
+    agent_id: str = Field(..., description="Stable surrogate ID of the agent persona")
+    user_id: str = Field(..., description="Owner user ID")
+    child_id: str = Field(..., description="Child profile this agent is bound to")
+    agent_name: str = Field(..., description="Agent display name")
+    agent_avatar_id: str = Field(..., description="Avatar identifier (e.g. 'emoji:🦊')")
+    agent_title: str = Field(..., description="Agent title (curated or free-text)")
+    created_at: datetime = Field(..., description="When the agent was first created")
+    updated_at: datetime = Field(..., description="When the agent was last updated")
+
+
+class UpsertAgentRequest(BaseModel):
+    """PUT /me/agent body — create-or-update an agent persona."""
+    agent_name: str = Field(..., min_length=1, max_length=32, description="Agent display name")
+    agent_avatar_id: str = Field(..., min_length=1, description="Avatar identifier from the whitelist")
+    agent_title: str = Field(..., min_length=1, max_length=32, description="Agent title")
+    child_id: str = Field(..., min_length=1, description="Child profile this agent is bound to")
 
 
 class ReferralStatusResponse(BaseModel):
