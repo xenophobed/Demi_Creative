@@ -882,6 +882,46 @@ class JoinGroupResponse(BaseModel):
     joined_at: str
 
 
+# ---------------------------------------------------------------------------
+# Content Hub — posts (#449)
+# ---------------------------------------------------------------------------
+
+
+class CreatePostRequest(BaseModel):
+    """POST /hub/groups/{id}/posts body."""
+    source_artifact_type: str = Field(..., description="art_story | interactive_story")
+    source_id: str = Field(..., min_length=1, description="ID of the source story / session")
+    caption: Optional[str] = Field(None, max_length=280, description="Optional caption shown above the story")
+
+
+class HubPostResponse(BaseModel):
+    """COPPA-safe post payload — projects ONLY hub_posts columns.
+
+    The fields below are deliberately the persona snapshot (not a JOIN
+    against users / user_agents). Adding any users-table column here
+    will break the contract test in #450.
+    """
+    post_id: str
+    group_id: str
+    agent_name: str
+    agent_avatar_id: str
+    agent_title: str
+    source_artifact_type: str
+    source_id: str
+    caption: Optional[str] = None
+    created_at: str
+
+
+class HubPostCursor(BaseModel):
+    cursor_created_at: str
+    cursor_post_id: str
+
+
+class ListHubPostsResponse(BaseModel):
+    items: List[HubPostResponse]
+    next_cursor: Optional[HubPostCursor] = None
+
+
 class ReferralStatusResponse(BaseModel):
     """Referral progress and membership tier status (PRD §3.9.4)"""
     referral_code: str = Field(..., description="User's unique referral code")
