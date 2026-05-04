@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { shouldRedirectToOnboarding } from "./requireOnboarded";
 
-describe("shouldRedirectToOnboarding", () => {
+describe("shouldRedirectToOnboarding (soft gate per PRD §3.11.2)", () => {
   it("does NOT redirect anonymous users", () => {
     expect(
       shouldRedirectToOnboarding({
         isAuthenticated: false,
         onboardedAt: null,
-        pathname: "/library",
+        pathname: "/content-hub",
       }),
     ).toBe(false);
   });
@@ -17,19 +17,48 @@ describe("shouldRedirectToOnboarding", () => {
       shouldRedirectToOnboarding({
         isAuthenticated: true,
         onboardedAt: "2026-01-01T00:00:00",
-        pathname: "/library",
+        pathname: "/content-hub",
       }),
     ).toBe(false);
   });
 
-  it("redirects authenticated, not-yet-onboarded users on a guarded path", () => {
+  it("redirects only when an authenticated, not-yet-onboarded user hits Content Hub", () => {
     expect(
       shouldRedirectToOnboarding({
         isAuthenticated: true,
         onboardedAt: null,
-        pathname: "/library",
+        pathname: "/content-hub",
       }),
     ).toBe(true);
+    expect(
+      shouldRedirectToOnboarding({
+        isAuthenticated: true,
+        onboardedAt: null,
+        pathname: "/content-hub/dragons",
+      }),
+    ).toBe(true);
+  });
+
+  it("does NOT redirect on Library, Upload, Story, Interactive, Profile, Kids Daily, Home", () => {
+    const openPaths = [
+      "/library",
+      "/upload",
+      "/story/abc",
+      "/interactive",
+      "/profile",
+      "/kids-daily",
+      "/kids-daily/episode-1",
+      "/",
+    ];
+    for (const p of openPaths) {
+      expect(
+        shouldRedirectToOnboarding({
+          isAuthenticated: true,
+          onboardedAt: null,
+          pathname: p,
+        }),
+      ).toBe(false);
+    }
   });
 
   it("does NOT redirect when already on /my-agent (avoids loops)", () => {
@@ -42,7 +71,7 @@ describe("shouldRedirectToOnboarding", () => {
     ).toBe(false);
   });
 
-  it("does NOT redirect on /login or /register so the user can sign in / out", () => {
+  it("does NOT redirect on /login or /register", () => {
     expect(
       shouldRedirectToOnboarding({
         isAuthenticated: true,
@@ -64,7 +93,7 @@ describe("shouldRedirectToOnboarding", () => {
       shouldRedirectToOnboarding({
         isAuthenticated: true,
         onboardedAt: undefined,
-        pathname: "/upload",
+        pathname: "/content-hub",
       }),
     ).toBe(true);
   });

@@ -19,6 +19,8 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { hubService } from "@/api/services/hubService";
+import useAuthStore from "@/store/useAuthStore";
+import SignInPrompt from "@/components/common/SignInPrompt";
 import type {
   CreateGroupPayload,
   Group,
@@ -32,12 +34,15 @@ const HUB_GROUPS_KEY = ["hub-groups"] as const;
 export default function ContentHubPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const onboardedAt = useAuthStore((s) => s.user?.onboarded_at);
   const [createOpen, setCreateOpen] = useState(false);
   const [joinError, setJoinError] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery<ListGroupsResponse>({
     queryKey: HUB_GROUPS_KEY,
     queryFn: () => hubService.listGroups(),
+    enabled: isAuthenticated,
   });
 
   const createMutation = useMutation({
@@ -82,6 +87,26 @@ export default function ContentHubPage() {
   const items = data?.items ?? [];
   const myGroups = items.filter((g) => g.visibility === "private");
   const publicGroups = items.filter((g) => g.visibility === "public");
+  const canCreate = isAuthenticated && Boolean(onboardedAt);
+
+  if (!isAuthenticated) {
+    return (
+      <div className="mx-auto flex max-w-4xl flex-col gap-6 px-4 py-8">
+        <header>
+          <h1 className="text-2xl font-semibold text-gray-900">Content Hub</h1>
+          <p className="text-sm text-gray-600">
+            Browse stories from other kids and start groups around the themes
+            you love.
+          </p>
+        </header>
+        <SignInPrompt
+          icon="🌐"
+          title="Sign in to join the Hub"
+          description="The Hub is where kids share stories with each other. Sign in to browse public groups, post your own creations under your buddy's name, and react to others'."
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-6 px-4 py-8">
@@ -94,13 +119,26 @@ export default function ContentHubPage() {
             animal — never your real name.
           </p>
         </div>
-        <button
-          type="button"
-          className="shrink-0 rounded-md bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700"
-          onClick={() => setCreateOpen(true)}
-        >
-          + New group
-        </button>
+        {canCreate ? (
+          <button
+            type="button"
+            className="shrink-0 rounded-md bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700"
+            onClick={() => setCreateOpen(true)}
+          >
+            + New group
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="shrink-0 rounded-md border border-violet-300 bg-white px-4 py-2 text-sm font-medium text-violet-700 hover:bg-violet-50"
+            onClick={() =>
+              navigate(`/my-agent?return=${encodeURIComponent("/content-hub")}`)
+            }
+            title="Meet your buddy first to create a group"
+          >
+            Meet buddy → New group
+          </button>
+        )}
       </header>
 
       {joinError && (
@@ -117,14 +155,22 @@ export default function ContentHubPage() {
             No groups yet — be the first!
           </p>
           <p className="mt-1 text-sm text-gray-500">
-            Create a group around a theme you love and invite friends.
+            {canCreate
+              ? "Create a group around a theme you love and invite friends."
+              : "Meet your buddy first, then come back to start your own group."}
           </p>
           <button
             type="button"
             className="mt-4 rounded-md bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700"
-            onClick={() => setCreateOpen(true)}
+            onClick={() =>
+              canCreate
+                ? setCreateOpen(true)
+                : navigate(
+                    `/my-agent?return=${encodeURIComponent("/content-hub")}`,
+                  )
+            }
           >
-            Create the first group
+            {canCreate ? "Create the first group" : "Meet your buddy first"}
           </button>
         </div>
       )}
