@@ -838,6 +838,50 @@ class CompleteOnboardingRequest(BaseModel):
     child_id: str = Field(..., min_length=1, description="Child profile being onboarded")
 
 
+# ---------------------------------------------------------------------------
+# Content Hub — groups (#448)
+# ---------------------------------------------------------------------------
+
+
+class CreateGroupRequest(BaseModel):
+    """POST /hub/groups body."""
+    name: str = Field(..., min_length=1, max_length=80, description="Group display name")
+    visibility: str = Field(..., description="public | private")
+    description: Optional[str] = Field(None, max_length=500)
+    theme: Optional[str] = Field(None, max_length=50, description="Optional theme tag, e.g. 'fantasy'")
+
+
+class GroupResponse(BaseModel):
+    """Group payload returned to clients.
+
+    invite_token is intentionally Optional — it is included ONLY in the
+    create-response (to the owner) or in get-by-id when the caller IS
+    the group's owner. List/get responses to non-owners must scrub it.
+    """
+    group_id: str
+    slug: str
+    name: str
+    description: Optional[str] = None
+    theme: Optional[str] = None
+    visibility: str
+    invite_token: Optional[str] = None
+    created_at: str
+    member_count: int
+
+
+class ListGroupsResponse(BaseModel):
+    """GET /hub/groups response."""
+    items: List[GroupResponse]
+    total: int
+
+
+class JoinGroupResponse(BaseModel):
+    """POST /hub/groups/{id}/join response."""
+    group_id: str
+    role: str
+    joined_at: str
+
+
 class ReferralStatusResponse(BaseModel):
     """Referral progress and membership tier status (PRD §3.9.4)"""
     referral_code: str = Field(..., description="User's unique referral code")
