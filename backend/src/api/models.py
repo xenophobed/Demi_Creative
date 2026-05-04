@@ -938,6 +938,29 @@ class RemoveHubPostResponse(BaseModel):
     already_removed: bool = False
 
 
+# ---------------------------------------------------------------------------
+# Content Hub — reactions (#454)
+# ---------------------------------------------------------------------------
+
+
+class ReactionToggleRequest(BaseModel):
+    reaction_type: str = Field(..., description="heart | star | wow")
+
+
+class ReactionToggleResponse(BaseModel):
+    post_id: str
+    reaction_type: str
+    active: bool = Field(..., description="True = was inserted; False = was removed")
+    counts: Dict[str, int]
+    viewer_reactions: List[str]
+
+
+class HubReactionResponse(BaseModel):
+    post_id: str
+    counts: Dict[str, int]
+    viewer_reactions: List[str]
+
+
 class ReferralStatusResponse(BaseModel):
     """Referral progress and membership tier status (PRD §3.9.4)"""
     referral_code: str = Field(..., description="User's unique referral code")
