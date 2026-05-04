@@ -8,6 +8,10 @@ import EducationalTags from "@/components/story/EducationalTags";
 import StorySegmentDisplay from "@/components/interactive/StorySegmentDisplay";
 import ChoiceButtons from "@/components/interactive/ChoiceButtons";
 import ProgressIndicator from "@/components/interactive/ProgressIndicator";
+import ChapterRail, {
+  choiceMetaAt,
+} from "@/components/interactive/ChapterRail";
+import { useChapterScroll } from "@/hooks/useChapterScroll";
 import { StreamingVisualizer } from "@/components/streaming/StreamingVisualizer";
 import { PerspectiveContainer } from "@/components/depth/PerspectiveContainer";
 import { storyService } from "@/api/services/storyService";
@@ -88,6 +92,27 @@ function InteractiveStoryPage() {
   // On-demand audio state (for 9-12 age group)
   const [onDemandAudioUrl, setOnDemandAudioUrl] = useState<string | null>(null);
   const [isAudioGenerating, setIsAudioGenerating] = useState(false);
+
+  // Chapter rail — observes which segment is in viewport and exposes scrollTo.
+  const {
+    containerRef: chapterContainerRef,
+    activeIndex: observedChapterIndex,
+    scrollProgressMV,
+    scrollTo: rawScrollToChapter,
+    setActiveIndex: setObservedChapterIndex,
+  } = useChapterScroll(segments.length);
+
+  // Optimistic active index — flips immediately on click so the traveler
+  // emoji can fly to the target *before* smooth-scroll arrives. The
+  // observer keeps things consistent on natural scroll.
+  const activeChapterIndex = observedChapterIndex;
+  const scrollToChapter = useCallback(
+    (index: number) => {
+      setObservedChapterIndex(index);
+      rawScrollToChapter(index);
+    },
+    [rawScrollToChapter, setObservedChapterIndex],
+  );
 
   // Use storeAgeGroup during play, selectedAge during setup
   const activeAgeGroup = storeAgeGroup || selectedAge;
@@ -270,7 +295,7 @@ function InteractiveStoryPage() {
   };
 
   const renderStoryTimeline = () => (
-    <div className="space-y-4">
+    <div ref={chapterContainerRef} className="space-y-4">
       {segments.map((segment, index) => {
         const selectedChoiceId = choiceHistory[index];
         const segmentChoices = Array.isArray(segment.choices)
@@ -285,7 +310,11 @@ function InteractiveStoryPage() {
         const selectedChoiceEmoji = matchedChoice?.emoji || "✅";
 
         return (
-          <div key={`${segment.segment_id}-${index}`} className="space-y-3">
+          <div
+            key={`${segment.segment_id}-${index}`}
+            data-chapter-index={index}
+            className="space-y-3 scroll-mt-24"
+          >
             <PerspectiveContainer enableTilt={false}>
               <StorySegmentDisplay
                 segment={segment}
@@ -316,8 +345,38 @@ function InteractiveStoryPage() {
     </div>
   );
 
+  const showChapterRail =
+    (pageState === "playing" || pageState === "completed") &&
+    segments.length >= 2;
+  // For the breadcrumb pill, show the choice that led TO the active chapter
+  // (i.e. the choice made at the previous chapter), since the active chapter
+  // itself has no choice yet.
+  const arrivingChoice =
+    activeChapterIndex > 0
+      ? choiceMetaAt(
+          segments[activeChapterIndex - 1],
+          choiceHistory[activeChapterIndex - 1],
+        )
+      : null;
+  const lockedAfterIndex =
+    storyLengthMode === "unlimited" && pageState === "playing"
+      ? segments.length
+      : null;
+
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
+    <div className="lg:flex lg:gap-6 lg:items-start max-w-screen-xl mx-auto">
+      {showChapterRail && (
+        <ChapterRail
+          segments={segments}
+          choiceHistory={choiceHistory}
+          activeIndex={activeChapterIndex}
+          lockedAfterIndex={lockedAfterIndex}
+          onJump={scrollToChapter}
+          scrollProgress={scrollProgressMV}
+        />
+      )}
+
+      <div className="flex-1 max-w-2xl mx-auto w-full space-y-6">
       {/* Header */}
       <motion.div
         className="text-center"
@@ -337,6 +396,26 @@ function InteractiveStoryPage() {
         <p className="text-gray-600 mt-1">
           Choose your adventure, create unique story endings
         </p>
+
+        {showChapterRail && (
+          <motion.div
+            className="mt-3 inline-flex lg:hidden items-center gap-2 rounded-full bg-primary/10 border border-primary/25 px-3 py-1 text-xs"
+            key={activeChapterIndex}
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+          >
+            <span className="font-semibold text-primary">
+              Chapter {activeChapterIndex + 1} of {segments.length}
+            </span>
+            {arrivingChoice ? (
+              <span className="text-gray-600 truncate max-w-[18rem]">
+                · arrived via {arrivingChoice.emoji} {arrivingChoice.text}
+              </span>
+            ) : (
+              <span className="text-gray-500">· beginning of story</span>
+            )}
+          </motion.div>
+        )}
       </motion.div>
 
       {/* Quota exceeded overlay */}
@@ -693,6 +772,7 @@ function InteractiveStoryPage() {
           </div>
         </motion.div>
       )}
+      </div>
     </div>
   );
 }

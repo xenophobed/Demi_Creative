@@ -248,6 +248,7 @@ Summarizes educational highlights: courage, spirit of scientific exploration
 - 🔲 **Linear Mode**: Add one-click full story generation mode, suitable for bedtime reading
 - 🔲 **Story Map Visualization**: Display the choice branch tree, letting children see their adventure path
 - 🔲 **Cross-Session Story Universe**: Reference characters and events from previous sessions ("Remember Lightning the puppy's adventure last time?")
+- 🔲 **Chapter Progress Rail Redesign**: Replace the fully-expanded chapter sidebar with a dot-based progress rail. Only the active chapter shows full details (chapter number, arrived-via choice, ending badge); other chapters render as bare dots that scale and fade by proximity to the current scroll position, driven by a continuous `scrollProgress` signal. Mobile pill row mirrors the same logic horizontally. Reduces visual noise on long stories (15-30+ segments in `unlimited` mode) and gives readers a calm, focused-but-alive sense of pacing. Respects `prefers-reduced-motion`.
 
 #### Known Technical Debt
 - Opening and continuation prompts are duplicated between regular/streaming functions; should be extracted into shared functions
@@ -529,6 +530,8 @@ Performs automatic safety review on all generated content to ensure compliance w
 
 ### 3.5 Memory Management System [In Progress]
 
+> Cross-reference: §3.11 My Agent introduces the buddy persona that the memory system addresses the child with ("Remember when *you and Sparkle* met the dragon?"). Treat the buddy as the second-person voice anchor for any future memory-recall surface.
+
 #### Feature Description
 Remembers each child's creation history and preferences to enable content continuity. Dual-layer storage architecture: SQLite manages structured data (character profiles, preference counts), ChromaDB manages semantic search (drawing similarity, story deduplication).
 
@@ -611,6 +614,8 @@ Remembers each child's creation history and preferences to enable content contin
 ---
 
 ### 3.6 My Library [Not Started]
+
+> Cross-reference: §3.12 Content Hub provides the *public* sharing surface; My Library remains private. Library cards now display the child's buddy byline (§3.11) alongside the title, so children see consistent authorship between their library and any public posts they make.
 
 #### Feature Description
 A unified content library where children can browse, search, bookmark, and revisit all creative outputs: art stories, interactive narratives, and kids news. The library adapts its display by age group, functioning like a "personal magic bookshelf" that grows with the child's creations.
@@ -1278,6 +1283,246 @@ The existing tear-to-claim-star mechanic (Epic #371) is preserved:
 - Editorial curation dashboard
 - Commenting or rating on inspiration cards
 - Sharing inspiration cards externally
+
+---
+
+### 3.11 My Agent — Personal Creative Buddy [Phase 2]
+
+> Each child has a customized AI companion ("creative buddy") that serves as their personal creative assistant and as the public byline whenever they share work in Content Hub (§3.12). The buddy is the privacy primitive: real names, usernames, and emails are never shown publicly — only the buddy the child crafted.
+
+#### 3.11.1 Product Vision
+
+**Core purpose**: Give every child a stable, customized creative companion that grows with them. The buddy answers: *"Who's making this with me, and who do I show up as when I share?"*
+
+**Why this exists**:
+- Children's creative work is most engaging when it has a *narrator* and a *who*. A buddy gives both.
+- Public sharing of children's content normally leaks PII (real name, username, email). The buddy persona is a structural privacy layer — no PII is ever joined to public reads.
+- The buddy is a natural anchor for future Memory features (§3.5): "Remember when you and Sparkle the Brave Lion went to the moon?"
+
+#### 3.11.2 First-Login Onboarding
+
+After successful login or registration, a returning user with `onboarded_at = NULL` is redirected to `/my-agent`, where an onboarding modal opens automatically.
+
+The flow has these steps:
+
+1. **Greeting** — the buddy introduces itself: *"Hi! I'm your creative buddy. I'm going to help you make stories together. Want to give me a name?"*
+2. **Name + nickname** — the child names the buddy, optionally enters their own nickname for in-app display.
+3. **Avatar** — the child picks one of the 20 animal emojis from the existing avatar set (shared with `/profile`).
+4. **Title** — the child picks from a curated list of 20 buddy titles (e.g. "Story Wizard", "Brave Lion"); free-text titles are allowed for ages 9–12 only and must pass safety check.
+5. **Parent-consent gate** — before completion, the parent confirms they're OK with the buddy being shown publicly when stories are shared.
+
+`POST /api/v1/me/onboarding/complete` requires both an agent and parent consent before flipping `users.onboarded_at`.
+
+##### Age-Gated Onboarding Variants
+
+| Ages 3–5 | Ages 6–8 | Ages 9–12 |
+|---|---|---|
+| Avatar-only step. Buddy name auto-suggested ("Sunny", "Bubbles") with a shuffle button. No title step. | Full flow: name (with 3 suggestions), avatar, title from curated dropdown only. Free-text title disabled. | Full flow with free-text title and an optional "tell me about you" nickname step. |
+
+##### Parent-Consent Copy
+
+```
+Title:    Meet your child's creative buddy
+Body:     This buddy is the name and animal your child picks to show on
+          stories they share publicly in Content Hub. We never show your
+          child's real name, email, or username — only the buddy.
+
+          You can change the buddy any time from "My Agent". Past stories
+          keep the buddy that posted them, so your child's creative timeline
+          stays consistent.
+
+          Note: We re-check the buddy's name and title for safety every
+          time it's edited.
+
+Buttons:  [I'm a parent and I'm OK with this]   [Not now]
+```
+
+The "Not now" path lets the child use the rest of the app but blocks Content Hub posting until consent is given.
+
+#### 3.11.3 Customization Fields
+
+Stored in `user_agents` keyed on `(user_id, child_id)` (one buddy per child profile in v1; schema designed to allow many later).
+
+| Field | Source | Validation |
+|---|---|---|
+| `agent_name` | Free text | `check_content_safety` ≥ 0.85, server-side PII regex, max 32 chars |
+| `agent_avatar_id` | Whitelist (20 animal emojis) | Must match server-mirrored list |
+| `agent_title` | Curated dropdown OR free text (9–12 only) | If free, `check_content_safety` ≥ 0.85, max 32 chars |
+| `nickname` | Free text on user, optional | `check_content_safety` ≥ 0.85, no emails/phone numbers |
+
+##### Curated Title List (v1)
+
+```
+Story Wizard          Brave Lion          Galaxy Explorer
+Dragon Friend         Magic Painter       Forest Guardian
+Ocean Adventurer      Star Dreamer        Dance Captain
+Inventor              Riddle Master       Cloud Surfer
+Tiny Hero             Silly Scientist     Music Maker
+Treasure Hunter       Kindness Knight     Robot Buddy
+Time Traveler         Sunshine Maker
+```
+
+20 titles to match the 20-emoji avatar set (1:1 visual symmetry, easy first pick).
+
+#### 3.11.4 Editing the Buddy
+
+`PUT /api/v1/me/agent` is upsert-style. Edits re-run safety checks. **Edits never rewrite history** — buddy snapshots persisted on prior `hub_posts` rows are immutable. This means a child can rename their buddy freely, and existing posts keep the byline they were published under.
+
+#### 3.11.5 Buddy as Byline
+
+When a story is shared to Content Hub (§3.12), the server attaches the buddy persona snapshot to the post row. The hub feed reads the snapshot fields, not the user table. This is the COPPA invariant — enforced by contract test, not convention.
+
+#### 3.11.6 Where the Buddy Appears
+
+- `/my-agent` — view + edit
+- `/library` — buddy byline shown on user's own story cards ("By Sparkle the Brave Lion")
+- `/content-hub/*` — buddy byline shown on every public post
+- (Future, §3.5) — buddy is the second-person voice the memory system addresses the child with
+
+#### Acceptance Criteria
+- [ ] First-login user is redirected to `/my-agent` and the onboarding modal auto-opens
+- [ ] `users.onboarded_at` is non-null only after both an agent exists AND `parent_consent_at` is set
+- [ ] `PUT /me/agent` rejects names with `check_content_safety` score < 0.85
+- [ ] `agent_avatar_id` is rejected unless it matches the server-side whitelist
+- [ ] Editing the buddy does not mutate prior `hub_posts.agent_*_snapshot` rows (locked by contract test)
+- [ ] `GET /api/v1/me` returns `has_agent: bool` and `onboarded_at: string | null` so the frontend can drive the route gate without a second request
+- [ ] Each child profile on the same account has its own buddy (per-child, not per-user — see closed bug #200 for the precedent)
+- [ ] Age-gated onboarding variants render the correct steps for the active child's age group
+
+#### Out of Scope (Phase 2)
+- Multiple buddies per child profile (table designed to allow this in v3)
+- Buddy deletion / reset (only edit in v1 — deletion deferred until snapshot policy is finalized)
+- Buddy memory of past stories (Memory §3.5 will plug in here)
+- Buddy voice / TTS persona (deferred — current TTS uses fixed voices)
+- Custom buddy avatars (image upload) — closed whitelist only in v1
+
+---
+
+### 3.12 Content Hub — Group-Based Community Sharing [Phase 2]
+
+> A Reddit-Lite community where children share their stories to **public** themed groups (anyone can join) or **private** groups (one creator per theme, others join by invite link). Stories are posted under the child's buddy persona (§3.11), never under their human identity. No free-text comments — reactions only.
+
+#### 3.12.1 Product Vision
+
+**Core purpose**: Let children see what other kids are creating and feel part of a creative community, without exposing PII. The hub answers: *"What are other kids making, and how can I show them mine?"*
+
+**Why groups, not a global feed**:
+- A global feed has weak signal — every theme competes for the same surface, and children can't tell whether a post is "for them".
+- Groups give natural taxonomy ("Dragons", "Space Adventures", "My Cousin's Club") and let children opt into the contexts they care about.
+- Public + private split lets a child make a club for their friends without exposing the room to strangers.
+
+**How it differs from My Library (§3.6)**:
+
+| Dimension | My Library | Content Hub |
+|---|---|---|
+| Audience | Private (your stories only) | Public/private groups |
+| Identity | None shown (it's yours) | Buddy persona byline |
+| Reactions | None | ❤️ 🌟 🤩 toggle, no comments |
+| Discoverability | Personal | Group feeds, group directory |
+| PII exposure | Server-trusted | Structurally zero |
+
+#### 3.12.2 Group Model
+
+Two visibilities:
+
+- **Public** — anyone (with completed onboarding) can join with one click; post visibility = anyone authenticated.
+- **Private** — created by any user, others join via a one-time/multi-use invite token. Owner can post + invite; members can post + view.
+
+Groups have: `name`, `slug`, `description`, `theme`, `visibility`, `created_by_user_id`, `member_count`. Slugs are server-generated from the name with a numeric suffix on collision.
+
+#### 3.12.3 Posting Flow
+
+The "Share to Content Hub" CTA replaces the current static "Share with your family!" line on `StoryPage` and the end-of-story screen of `InteractiveStoryPage`.
+
+```
+User completes a story
+  ↓
+Tap "Share to Content Hub"
+  ↓
+[Onboarding gate: if !onboarded_at → redirect to /my-agent with return-to]
+  ↓
+Group picker modal: shows joined groups + "Create new group"
+  ↓
+Pick a group, optionally add caption (safety-checked)
+  ↓
+POST /api/v1/hub/groups/{id}/posts { source_artifact_type, source_id, caption? }
+  Server attaches: author_user_id, author_child_id, author_agent_id,
+                   agent_name_snapshot, agent_avatar_id_snapshot,
+                   agent_title_snapshot, safety_score
+  ↓
+Post appears in group feed under buddy byline
+```
+
+Client request body NEVER contains the snapshot fields — server-attached only.
+
+#### 3.12.4 Reading the Feed
+
+`GET /api/v1/hub/groups/{id}/posts` returns paginated posts ordered by recency. Each post returns:
+
+```ts
+interface HubPost {
+  post_id: string
+  group_id: string
+  source_artifact_type: 'art_story' | 'interactive_story'
+  source_id: string
+  caption: string | null
+  byline: {
+    agent_id: string
+    agent_name: string
+    agent_avatar_id: string
+    agent_title: string
+  }
+  reaction_counts: { heart: number; star: number; wow: number }
+  viewer_reactions: ('heart' | 'star' | 'wow')[]
+  created_at: string
+}
+```
+
+**The COPPA invariant**: this response shape contains no `user_id`, `username`, `email`, `display_name`, or `avatar_url`. Locked by JSON-schema contract test.
+
+#### 3.12.5 Reactions
+
+Three preset reactions: ❤️ (heart), 🌟 (star), 🤩 (wow). One row per `(post, user, reaction_type)`. Toggling off deletes the row. Counts visible; no global leaderboards (intentional — see §3.6 design philosophy on no-leaderboards).
+
+No free-text comments in v1. The lower bar for moderation is what makes the v1 surface shippable.
+
+#### 3.12.6 Moderation
+
+- Post insert calls `check_content_safety` on caption (if any). Source artifacts have already passed safety at generation time.
+- Buddy name + title were already safety-checked at agent creation/edit.
+- Admin endpoint (piggybacks on `admin_artifacts`) can soft-delete a post (`removed_at`, `removed_reason`) — the post stops appearing in feeds but the row stays for audit.
+- v2: report-then-auto-hide threshold, full moderation queue UI.
+
+#### 3.12.7 Privacy Architecture
+
+The buddy snapshot is the privacy mechanism. Three rules:
+
+1. **Never join `users` for hub reads.** Repository and route code reads from snapshot fields only.
+2. **Snapshot at write time.** The server pulls the current buddy state and writes it onto the post row. Subsequent buddy edits never propagate.
+3. **Test the invariant.** A JSON-schema contract test asserts that no hub response contains any `users` table column.
+
+This means a hub post can be served entirely without ever loading the user record — the user table can be considered "internal-only" for hub-read purposes.
+
+#### Acceptance Criteria
+- [ ] `POST /api/v1/hub/groups/{id}/posts` returns 412 with code `AGENT_REQUIRED` when `onboarded_at IS NULL`
+- [ ] Posts written by the server include all four snapshot fields (`author_agent_id` + name + avatar + title) — never null
+- [ ] Editing a buddy after publishing leaves prior post snapshots unchanged
+- [ ] `GET /api/v1/hub/groups/{id}/posts` response contains no `user_id`, `username`, `email`, `display_name`, `avatar_url` fields (contract test)
+- [ ] Public groups: `POST /groups/{id}/join` succeeds for any authenticated, onboarded user
+- [ ] Private groups: `POST /groups/{id}/join?invite=<token>` succeeds only when token matches the row's `invite_token`
+- [ ] Caption text passes `check_content_safety` ≥ 0.85 before insert; failures return 400 with the rejection reason
+- [ ] Reactions are idempotent — second `POST /posts/{id}/reactions` with the same type toggles off
+- [ ] Soft-deleted posts (`removed_at IS NOT NULL`) do not appear in `GET /posts`
+
+#### Out of Scope (Phase 2)
+- Free-text comments
+- Cross-group global feed
+- Followable buddies / friend graph
+- Direct messages
+- Notification system
+- Trending / ranking algorithms (recency-only in v1)
+- Image upload as buddy avatar
+- Report-then-auto-hide moderation flow (v2)
 
 ---
 
