@@ -350,12 +350,15 @@ function ChapterRail({
   // otherwise we snap to integer activeIndex.
   const olFallbackMV = useMotionValue(activeIndex);
   const olInputMV: MotionValue<number> = scrollProgress ?? olFallbackMV;
+  // Half-row offset so the active row's CENTER (not its top) lands on the
+  // viewport midline. Without this, item 0 renders 14px below center.
   const desktopOlOffset = useTransform(
     olInputMV,
-    (v: number) => -v * DESKTOP_ROW_PITCH,
+    (v: number) => -v * DESKTOP_ROW_PITCH - DESKTOP_ROW_PITCH / 2,
   );
   const desktopOlOffsetSpring = useSpring(desktopOlOffset, DOT_SPRING);
-  const staticOlOffset = -activeIndex * DESKTOP_ROW_PITCH;
+  const staticOlOffset =
+    -activeIndex * DESKTOP_ROW_PITCH - DESKTOP_ROW_PITCH / 2;
 
   // --- Mobile centering: scrollIntoView the active button on change ---
   const mobileButtonRefs = useRef<Map<number, HTMLButtonElement>>(new Map());
@@ -433,9 +436,9 @@ function ChapterRail({
       {/* Desktop side rail — single expanded card on the active row, dots elsewhere. */}
       <aside
         aria-label="Story chapters"
-        className="hidden lg:flex flex-col shrink-0 lg:w-60 lg:sticky lg:top-24 lg:self-start lg:max-h-[calc(100vh-7rem)]"
+        className="hidden lg:flex flex-col shrink-0 lg:w-60 lg:sticky lg:top-24 lg:self-start lg:h-[calc(100vh-7rem)]"
       >
-        <div className="rounded-2xl bg-white/80 backdrop-blur-md border border-gray-200/80 shadow-sm overflow-hidden flex flex-col max-h-full">
+        <div className="rounded-2xl bg-white/80 backdrop-blur-md border border-gray-200/80 shadow-sm overflow-hidden flex flex-col h-full">
           <header className="px-4 py-3 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-primary/8 to-transparent">
             <span className="text-xs font-semibold uppercase tracking-wider text-gray-700">
               📖 Chapters
