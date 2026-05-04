@@ -20,8 +20,11 @@ import { useEffect, useMemo, useState } from "react";
 import { AxiosError } from "axios";
 import { ANIMAL_EMOJIS } from "@/lib/avatars";
 import useChildStore from "@/store/useChildStore";
+import useAuthStore from "@/store/useAuthStore";
 import { useAgent, useUpsertAgent } from "@/hooks/useAgent";
 import AgentTitlePicker from "./AgentTitlePicker";
+import OnboardingModal from "./OnboardingModal";
+import { shouldAutoOpenOnboarding } from "./onboardingState";
 import type { AgentErrorDetail } from "@/types/agent";
 
 const MAX_NAME = 32;
@@ -57,6 +60,25 @@ export default function MyAgentPage() {
 
   const { data: existing, isLoading } = useAgent(childId);
   const upsert = useUpsertAgent();
+
+  // First-login modal: auto-opens when authenticated user has not yet
+  // completed onboarding (#443). The modal walks through name/avatar/title
+  // + parent consent and calls POST /me/onboarding/complete on submit.
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const onboardedAt = useAuthStore((s) => s.user?.onboarded_at);
+  const [modalOpen, setModalOpen] = useState(false);
+  useEffect(() => {
+    if (isLoading) return;
+    if (
+      shouldAutoOpenOnboarding({
+        isAuthenticated,
+        onboardedAt,
+        hasExistingAgent: existing != null,
+      })
+    ) {
+      setModalOpen(true);
+    }
+  }, [isAuthenticated, onboardedAt, existing, isLoading]);
 
   const [name, setName] = useState("");
   const [avatarId, setAvatarId] = useState<string>(
@@ -144,6 +166,12 @@ export default function MyAgentPage() {
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-6 px-4 py-8">
+      <OnboardingModal
+        open={modalOpen}
+        childId={childId}
+        ageGroup={ageGroup}
+        onClose={() => setModalOpen(false)}
+      />
       <header className="flex flex-col gap-1">
         <h1 className="text-2xl font-semibold text-gray-900">{childGreeting}</h1>
         <p className="text-sm text-gray-600">
