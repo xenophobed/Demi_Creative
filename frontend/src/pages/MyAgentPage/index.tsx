@@ -25,6 +25,7 @@ import { useAgent, useUpsertAgent } from "@/hooks/useAgent";
 import AgentTitlePicker from "./AgentTitlePicker";
 import OnboardingModal from "./OnboardingModal";
 import { shouldAutoOpenOnboarding } from "./onboardingState";
+import SignInPrompt from "@/components/common/SignInPrompt";
 import type { AgentErrorDetail } from "@/types/agent";
 
 const MAX_NAME = 32;
@@ -58,14 +59,17 @@ export default function MyAgentPage() {
   const childId = currentChild?.child_id ?? defaultChildId;
   const ageGroup = currentChild?.age_group;
 
-  const { data: existing, isLoading } = useAgent(childId);
-  const upsert = useUpsertAgent();
-
   // First-login modal: auto-opens when authenticated user has not yet
   // completed onboarding (#443). The modal walks through name/avatar/title
   // + parent consent and calls POST /me/onboarding/complete on submit.
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const onboardedAt = useAuthStore((s) => s.user?.onboarded_at);
+
+  // Guard: useAgent is gated on isAuthenticated, but we also short-circuit
+  // the page tree entirely so guests see a clean sign-in prompt instead of
+  // a half-rendered editor that can't possibly save.
+  const { data: existing, isLoading } = useAgent(childId);
+  const upsert = useUpsertAgent();
   const [modalOpen, setModalOpen] = useState(false);
   useEffect(() => {
     if (isLoading) return;
@@ -163,6 +167,27 @@ export default function MyAgentPage() {
       }
     }
   };
+
+  if (!isAuthenticated) {
+    return (
+      <div className="mx-auto flex max-w-3xl flex-col gap-6 px-4 py-8">
+        <header className="flex flex-col gap-1">
+          <h1 className="text-2xl font-semibold text-gray-900">
+            Meet your creative buddy
+          </h1>
+          <p className="text-sm text-gray-600">
+            Your buddy is the name and animal we'll show whenever you share a
+            story to Content Hub. Sign in to set yours up.
+          </p>
+        </header>
+        <SignInPrompt
+          icon="🦊"
+          title="Sign in to meet your buddy"
+          description="Once you sign in, we'll walk you through naming your creative buddy and picking its animal — takes under a minute."
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-6 px-4 py-8">
