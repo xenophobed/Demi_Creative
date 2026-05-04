@@ -96,8 +96,14 @@ def _user_to_public_response(user: UserData) -> PublicUserResponse:
     )
 
 
-def _user_to_response(user: UserData) -> UserResponse:
-    """Convert UserData to UserResponse"""
+def _user_to_response(user: UserData, *, has_agent: bool = False) -> UserResponse:
+    """Convert UserData to UserResponse.
+
+    The optional ``has_agent`` flag is computed by the caller because it
+    requires an extra DB lookup against ``user_agents``; we keep the helper
+    sync so register/login/update flows stay simple, and only the read
+    paths that care (``GET /me``) pay for the lookup.
+    """
     return UserResponse(
         user_id=user.user_id,
         username=user.username,
@@ -112,6 +118,15 @@ def _user_to_response(user: UserData) -> UserResponse:
         created_at=datetime.fromisoformat(user.created_at),
         last_login_at=datetime.fromisoformat(user.last_login_at)
         if user.last_login_at
+        else None,
+        has_agent=has_agent,
+        onboarded_at=datetime.fromisoformat(user.onboarded_at)
+        if getattr(user, 'onboarded_at', None)
+        else None,
+        nickname=getattr(user, 'nickname', None),
+        default_child_id=getattr(user, 'default_child_id', None),
+        parent_consent_at=datetime.fromisoformat(user.parent_consent_at)
+        if getattr(user, 'parent_consent_at', None)
         else None,
     )
 
@@ -251,8 +266,20 @@ async def logout(authorization: Optional[str] = Header(None)):
     description="Get information about the currently logged-in user",
 )
 async def get_me(user: UserData = Depends(get_current_user)):
-    """Get current user info"""
-    return _user_to_response(user)
+    """Get current user info.
+
+    Looks up whether the user has a configured agent persona for their
+    ``default_child_id`` (PRD §3.11) so the frontend can decide whether
+    to route into onboarding or the main app. The lookup is per-request;
+    we'll denormalize later if profiling shows it matters.
+    """
+    has_agent = False
+    if user.default_child_id:
+        from ...services.database import agent_repo
+
+        agent = await agent_repo.get_agent(user.user_id, user.default_child_id)
+        has_agent = agent is not None
+    return _user_to_response(user, has_agent=has_agent)
 
 
 @router.put(
