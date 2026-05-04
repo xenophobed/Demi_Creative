@@ -1,5 +1,7 @@
+import { useEffect } from 'react'
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
+import { shouldRedirectToOnboarding } from './requireOnboarded'
 import { AnimatedBackground } from '@/components/depth/AnimatedBackground'
 import { ConfettiController } from '@/components/effects/Confetti'
 import GenerationStatusBar from '@/components/layout/GenerationStatusBar'
@@ -27,6 +29,31 @@ function PageContainerInner() {
   const totalStars = useDailyTaskStore((s) => s.totalStars)
 
   useGenerationNavigator()
+
+  // RequireOnboarded gate (#444): when an authenticated user has not yet
+  // finished onboarding (no users.onboarded_at), funnel them to /my-agent
+  // so they meet their buddy and parent grants consent before the rest
+  // of the app is available. The gate predicate is extracted to
+  // requireOnboarded.ts so it's unit-testable.
+  useEffect(() => {
+    if (
+      !shouldRedirectToOnboarding({
+        isAuthenticated,
+        onboardedAt: user?.onboarded_at,
+        pathname: location.pathname,
+      })
+    ) {
+      return
+    }
+    const ret = encodeURIComponent(location.pathname + location.search)
+    navigate(`/my-agent?return=${ret}`, { replace: true })
+  }, [
+    isAuthenticated,
+    user?.onboarded_at,
+    location.pathname,
+    location.search,
+    navigate,
+  ])
 
   const handleLogout = async () => {
     try {
@@ -66,6 +93,7 @@ function PageContainerInner() {
             {/* Navigation links */}
             <div className="flex items-center gap-4">
               <NavLink to="/library" icon="📚" label="My Library" />
+              <NavLink to="/my-agent" icon="🦊" label="My Agent" />
 
               {/* Auth section */}
               {isAuthenticated ? (
