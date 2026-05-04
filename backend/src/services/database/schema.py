@@ -282,6 +282,30 @@ CREATE INDEX IF NOT EXISTS idx_referrals_referrer ON referrals(referrer_user_id)
 CREATE INDEX IF NOT EXISTS idx_referrals_code ON referrals(referral_code);
 """
 
+# ============================================================================
+# User Agents Table (#438) — foundation for Epic #436 (My Agent persona)
+# ============================================================================
+
+USER_AGENTS_TABLE = """
+CREATE TABLE IF NOT EXISTS user_agents (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    agent_id TEXT NOT NULL UNIQUE,
+    user_id TEXT NOT NULL,
+    child_id TEXT NOT NULL,
+    agent_name TEXT NOT NULL,
+    agent_avatar_id TEXT NOT NULL,
+    agent_title TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    UNIQUE(user_id, child_id),
+    FOREIGN KEY(user_id) REFERENCES users(user_id) ON DELETE CASCADE
+);
+"""
+
+USER_AGENTS_INDEXES = """
+CREATE INDEX IF NOT EXISTS idx_user_agents_user ON user_agents(user_id);
+"""
+
 
 # ============================================================================
 # Schema Initialization
@@ -393,6 +417,8 @@ async def init_schema(db: "DatabaseManager") -> None:
     await _migrate_add_styled_image_url(db)
     await _migrate_add_referral_columns(db)
     await _migrate_add_story_length_mode(db)
+    await _migrate_add_onboarding_columns(db)
+    await _migrate_create_user_agents_table(db)
 
     # Now create all indexes (including user_id indexes) after migration
     for stmt in STORIES_INDEXES.strip().split(";"):
@@ -627,6 +653,52 @@ async def _migrate_add_story_length_mode(db: "DatabaseManager") -> None:
         )
         await db.commit()
         print("Sessions story_length_mode migration completed")
+
+
+async def _migrate_add_onboarding_columns(db: "DatabaseManager") -> None:
+    """Migration: Add onboarding columns to users table (#438).
+
+    Adds nullable columns that capture onboarding state and parent identity:
+    - nickname: friendly name shown in UI
+    - onboarded_at: timestamp the user finished onboarding
+    - parent_consent_at: timestamp the parent granted consent
+    - default_child_id: the active child profile to bind agent persona to
+
+    All columns are NULLABLE to keep this migration non-destructive — existing
+    rows are unaffected and stay valid.
+    """
+    columns = [
+        ("nickname", "ALTER TABLE users ADD COLUMN nickname TEXT"),
+        ("onboarded_at", "ALTER TABLE users ADD COLUMN onboarded_at TEXT"),
+        ("parent_consent_at", "ALTER TABLE users ADD COLUMN parent_consent_at TEXT"),
+        ("default_child_id", "ALTER TABLE users ADD COLUMN default_child_id TEXT"),
+    ]
+    added = False
+    for column_name, ddl in columns:
+        if not await column_exists(db, "users", column_name):
+            if not added:
+                print("Migrating users table: adding onboarding columns (#438)...")
+                added = True
+            await db.execute(ddl)
+    if added:
+        await db.commit()
+        print("Users onboarding migration completed")
+
+
+async def _migrate_create_user_agents_table(db: "DatabaseManager") -> None:
+    """Migration: Create user_agents table + indexes (#438).
+
+    Foundation for Epic #436 (My Agent — personalized buddy persona). Uses
+    CREATE TABLE IF NOT EXISTS so the migration is idempotent across reruns.
+    """
+    await db.execute(translate_ddl(USER_AGENTS_TABLE, db.dialect))
+    for stmt in USER_AGENTS_INDEXES.strip().split(";"):
+        if stmt.strip():
+            try:
+                await db.execute(stmt)
+            except Exception:
+                pass
+    await db.commit()
 
 
 # ============================================================================
