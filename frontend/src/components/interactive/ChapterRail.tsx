@@ -186,11 +186,9 @@ function DesktopDot({
   const colorClass =
     state === "done"
       ? "bg-primary"
-      : state === "upcoming"
+      : state === "locked"
         ? "bg-gray-300"
-        : state === "locked"
-          ? "bg-gray-200"
-          : "bg-primary"; // active dot is hidden behind expanded card but keep a color
+        : "bg-primary/70"; // upcoming uses a softer primary so the rail reads as one family
 
   return (
     <button
@@ -198,7 +196,7 @@ function DesktopDot({
       disabled={disabled}
       onClick={() => !disabled && onJump(index)}
       aria-label={ariaLabel}
-      className={`group/node mx-auto flex items-center justify-center rounded-full transition-colors ${
+      className={`group/node mx-auto flex items-center justify-center rounded-full ${
         disabled ? "cursor-not-allowed" : "cursor-pointer hover:scale-110"
       } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2`}
       style={{ width: 24, height: 24 }} /* hit-box stays generous */
@@ -273,11 +271,9 @@ function MobileDot({
   const colorClass =
     state === "done"
       ? "bg-primary"
-      : state === "upcoming"
+      : state === "locked"
         ? "bg-gray-300"
-        : state === "locked"
-          ? "bg-gray-200"
-          : "bg-primary";
+        : "bg-primary/70";
 
   return (
     <button
@@ -286,7 +282,7 @@ function MobileDot({
       disabled={disabled}
       onClick={() => !disabled && onJump(index)}
       aria-label={ariaLabel}
-      className={`shrink-0 inline-flex items-center justify-center rounded-full transition-colors ${
+      className={`shrink-0 inline-flex items-center justify-center rounded-full ${
         disabled ? "cursor-not-allowed" : "cursor-pointer"
       } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2`}
       style={{ width: 24, height: 24 }}
@@ -436,25 +432,16 @@ function ChapterRail({
       {/* Desktop side rail — single expanded card on the active row, dots elsewhere. */}
       <aside
         aria-label="Story chapters"
-        className="hidden lg:flex flex-col shrink-0 lg:w-60 lg:sticky lg:top-24 lg:self-start lg:h-[calc(100vh-7rem)]"
+        className="hidden lg:flex flex-col shrink-0 lg:w-48 lg:sticky lg:top-24 lg:self-start lg:h-[calc(100vh-7rem)]"
       >
-        <div className="rounded-2xl bg-white/80 backdrop-blur-md border border-gray-200/80 shadow-sm overflow-hidden flex flex-col h-full">
-          <header className="px-4 py-3 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-primary/8 to-transparent">
-            <span className="text-xs font-semibold uppercase tracking-wider text-gray-700">
-              📖 Chapters
-            </span>
-            <span className="text-xs text-gray-500">
-              {activeIndex + 1} / {segments.length}
-            </span>
-          </header>
-
+        <div className="flex flex-col h-full">
           {/* Vertical viewport. The inner <ol> translates so the active row
               sits at the centerline — visually the rail "scrolls" past. */}
           <div className="relative flex-1 overflow-hidden">
             {/* Center guideline (subtle) so the active card has an anchor. */}
             <div
               aria-hidden
-              className="pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2 h-px bg-gradient-to-r from-transparent via-primary/15 to-transparent"
+              className="pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2 h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent"
             />
             <motion.ol
               className="absolute left-0 right-0 top-1/2 flex flex-col items-stretch px-3"
@@ -497,7 +484,7 @@ function ChapterRail({
                               : { opacity: 0, scale: 0.96 }
                           }
                           transition={{ duration: 0.2 }}
-                          className="relative w-full rounded-xl border border-primary/30 bg-primary/5 px-3 py-2 shadow-sm"
+                          className="relative w-full px-3 py-2"
                         >
                           <span
                             className="absolute -left-1 top-1/2 -translate-y-1/2 inline-flex h-5 w-5 items-center justify-center"
@@ -543,7 +530,7 @@ function ChapterRail({
         aria-label="Story chapters"
         className="lg:hidden sticky top-2 z-20 -mx-2"
       >
-        <div className="flex items-center gap-2 overflow-x-auto px-2 py-2 bg-white/85 backdrop-blur rounded-xl border border-gray-200/80">
+        <div className="flex items-center gap-2 overflow-x-auto px-2 py-2">
           {segments.map((segment, index) => {
             const state = nodeState(index, activeIndex, lockedAfterIndex);
             const isActive = state === "active";
@@ -568,7 +555,7 @@ function ChapterRail({
                     }
                   }}
                   aria-current="step"
-                  className="shrink-0 inline-flex items-center rounded-full border border-primary/30 bg-primary/5 px-3 py-1.5 shadow-sm"
+                  className="shrink-0 inline-flex items-center px-2 py-1"
                 >
                   <AnimatePresence mode="wait" initial={false}>
                     <motion.div
