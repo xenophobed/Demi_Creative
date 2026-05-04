@@ -20,6 +20,7 @@ import useAuthStore from "@/store/useAuthStore";
 import useChildStore, { DEFAULT_INTERESTS } from "@/store/useChildStore";
 import type { AgeGroup, StoryLengthMode } from "@/types/api";
 import type { AnimationPhase } from "@/types/streaming";
+import ShareToHubModal from "@/components/hub/ShareToHubModal";
 import LoginPrompt from "@/components/common/LoginPrompt";
 import SuggestedThemes from "@/components/common/SuggestedThemes";
 
@@ -110,6 +111,9 @@ function InteractiveStoryPage() {
   const [saveStatus, setSaveStatus] = useState<
     "idle" | "saving" | "saved" | "error"
   >("idle");
+
+  // Share-to-Content-Hub modal (#453)
+  const [shareOpen, setShareOpen] = useState(false);
 
   // Resume only when URL contains ?session=
   const [isResuming, setIsResuming] = useState(false);
@@ -691,7 +695,32 @@ function InteractiveStoryPage() {
               Back to Home
             </Button>
           </div>
+
+          {/* Share-to-Content-Hub CTA (#453) */}
+          {sessionId && (
+            <div className="flex justify-center pt-2">
+              <Button
+                variant="primary"
+                size="lg"
+                onClick={() => setShareOpen(true)}
+                leftIcon={<span>🌐</span>}
+              >
+                Share to Content Hub
+              </Button>
+            </div>
+          )}
         </motion.div>
+      )}
+
+      {sessionId && (
+        <ShareToHubModal
+          open={shareOpen}
+          onClose={() => setShareOpen(false)}
+          source={{
+            artifact_type: "interactive_story",
+            source_id: sessionId,
+          }}
+        />
       )}
     </div>
   );
