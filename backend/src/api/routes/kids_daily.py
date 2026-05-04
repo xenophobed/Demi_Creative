@@ -328,6 +328,27 @@ def _story_analysis_to_episode(story: Dict[str, Any]) -> KidsDailyEpisode:
 
     dialogue_script = DialogueScript(**analysis.get("dialogue_script", {"lines": [], "total_duration": 0.0}))
     illustrations = [EpisodeIllustration(**item) for item in analysis.get("illustrations", [])]
+    audio_urls = _sanitize_audio_urls(analysis.get("audio_urls", {}))
+    kid_content = story.get("story", {}).get("text", "")
+
+    # Legacy fallback: text-only conversions stored a single top-level audio_url
+    # and no dialogue script. Synthesize a one-line dialogue so the unified
+    # Kids Daily player can render and play them.
+    if not dialogue_script.lines and story.get("audio_url"):
+        legacy_audio = story["audio_url"]
+        if not audio_urls:
+            audio_urls = {"0": legacy_audio}
+        dialogue_script = DialogueScript(
+            lines=[{
+                "role": "fun_expert",
+                "text": kid_content or analysis.get("kid_title", ""),
+                "display_name": "Duo",
+                "timestamp_start": 0.0,
+                "timestamp_end": float(analysis.get("duration_seconds") or 30.0),
+            }],
+            total_duration=float(analysis.get("duration_seconds") or 30.0),
+            guest_character=analysis.get("guest_character", "Professor Owl"),
+        )
 
     category = analysis.get("category", "general")
 
@@ -337,13 +358,13 @@ def _story_analysis_to_episode(story: Dict[str, Any]) -> KidsDailyEpisode:
         age_group=story.get("age_group", "6-8"),
         category=category,
         kid_title=analysis.get("kid_title", "Kids Daily"),
-        kid_content=story.get("story", {}).get("text", ""),
+        kid_content=kid_content,
         why_care=analysis.get("why_care", ""),
         key_concepts=key_concepts,
         interactive_questions=questions,
         dialogue_script=dialogue_script,
         illustrations=illustrations,
-        audio_urls=_sanitize_audio_urls(analysis.get("audio_urls", {})),
+        audio_urls=audio_urls,
         duration_seconds=int(analysis.get("duration_seconds", 0) or 0),
         is_played=bool(analysis.get("is_played", False)),
         is_new=bool(analysis.get("is_new", True)),

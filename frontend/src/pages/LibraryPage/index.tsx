@@ -880,15 +880,11 @@ function LibraryPage() {
       navigate(`/interactive?session=${item.id}`);
     } else if (
       item.type === "morning-show" ||
-      (item.type === "kids-daily" && !!item.duration_seconds)
-    ) {
-      navigate(`/morning-show/${item.id}`);
-    } else if (
       item.type === "news" ||
       item.type === "kids-news" ||
       item.type === "kids-daily"
     ) {
-      navigate(`/news/${item.id}`);
+      navigate(`/kids-daily/${item.id}`);
     }
   };
 
@@ -1212,9 +1208,9 @@ function LibraryPage() {
                   },
                   "kids-news": {
                     icon: "📰",
-                    message: "No news stories yet — explore kids news!",
-                    cta: "Read Kids News",
-                    route: "/news",
+                    message: "No news stories yet — explore Kids Daily!",
+                    cta: "Open Kids Daily",
+                    route: "/kids-daily",
                   },
                 };
                 const emptyState =

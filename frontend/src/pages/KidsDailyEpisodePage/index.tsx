@@ -24,7 +24,7 @@ function formatDuration(seconds?: number | null): string {
   return `${mins} min`;
 }
 
-function MorningShowPage() {
+function KidsDailyEpisodePage() {
   const navigate = useNavigate();
   const { episodeId } = useParams<{ episodeId: string }>();
   const { currentChild, defaultChildId } = useChildStore();
@@ -45,7 +45,7 @@ function MorningShowPage() {
     isLoading,
     error,
   } = useQuery({
-    queryKey: ["morning-show-episode", episodeId],
+    queryKey: ["kids-daily-episode", episodeId],
     queryFn: () => storyService.getMorningShowEpisode(episodeId || ""),
     enabled: !!episodeId,
   });
@@ -235,7 +235,7 @@ function MorningShowPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Link to="/news">
+          <Link to="/kids-daily">
             <Button variant="outline" size="sm">
               Manage Topics
             </Button>
@@ -442,4 +442,4 @@ function MorningShowPage() {
   );
 }
 
-export default MorningShowPage;
+export default KidsDailyEpisodePage;

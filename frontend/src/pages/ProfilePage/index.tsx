@@ -469,7 +469,7 @@ function ProfilePage() {
               Manage topic channels for Kids Daily episodes.
             </p>
           </div>
-          <Button size="sm" variant="outline" onClick={() => navigate("/news")}>
+          <Button size="sm" variant="outline" onClick={() => navigate("/kids-daily")}>
             Manage Channels
           </Button>
         </Card>

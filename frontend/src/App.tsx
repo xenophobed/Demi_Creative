@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route, Navigate, useParams } from "react-router-dom";
 import { Suspense, lazy } from "react";
 import PageContainer from "./components/layout/PageContainer";
 import Loading from "./components/common/Loading";
@@ -12,12 +12,19 @@ const LibraryPage = lazy(() => import("./pages/LibraryPage"));
 const InteractiveStoryPage = lazy(() => import("./pages/InteractiveStoryPage"));
 const LoginPage = lazy(() => import("./pages/LoginPage"));
 const ProfilePage = lazy(() => import("./pages/ProfilePage"));
-const NewsPage = lazy(() => import("./pages/NewsPage"));
-const MorningShowPage = lazy(() => import("./pages/MorningShowPage"));
-const NewsDetailPage = lazy(() => import("./pages/NewsDetailPage"));
 const MyAgentPage = lazy(() => import("./pages/MyAgentPage"));
 const ContentHubPage = lazy(() => import("./pages/ContentHubPage"));
 const GroupPage = lazy(() => import("./pages/GroupPage"));
+const KidsDailyPage = lazy(() => import("./pages/KidsDailyPage"));
+const KidsDailyEpisodePage = lazy(
+  () => import("./pages/KidsDailyEpisodePage"),
+);
+
+function RedirectKidsDailyEpisode({ paramName }: { paramName: string }) {
+  const params = useParams();
+  const id = params[paramName];
+  return <Navigate to={`/kids-daily/${id ?? ""}`} replace />;
+}
 
 function App() {
   return (
@@ -39,16 +46,36 @@ function App() {
             />
             <Route path="library" element={<LibraryPage />} />
             <Route path="interactive" element={<InteractiveStoryPage />} />
-            <Route path="news" element={<NewsPage />} />
-            <Route path="news/:conversionId" element={<NewsDetailPage />} />
+
+            {/* Kids Daily — canonical routes */}
+            <Route path="kids-daily" element={<KidsDailyPage />} />
+            <Route
+              path="kids-daily/:episodeId"
+              element={<KidsDailyEpisodePage />}
+            />
+
+            {/* Legacy URL redirects — preserve old bookmarks */}
+            <Route
+              path="news"
+              element={<Navigate to="/kids-daily" replace />}
+            />
+            <Route
+              path="news/:conversionId"
+              element={<RedirectKidsDailyEpisode paramName="conversionId" />}
+            />
+            <Route
+              path="morning-show"
+              element={<Navigate to="/kids-daily" replace />}
+            />
             <Route
               path="morning-show/subscriptions"
-              element={<Navigate to="/news" replace />}
+              element={<Navigate to="/kids-daily" replace />}
             />
             <Route
               path="morning-show/:episodeId"
-              element={<MorningShowPage />}
+              element={<RedirectKidsDailyEpisode paramName="episodeId" />}
             />
+
             <Route path="profile" element={<ProfilePage />} />
             <Route path="my-agent" element={<MyAgentPage />} />
             <Route path="content-hub" element={<ContentHubPage />} />

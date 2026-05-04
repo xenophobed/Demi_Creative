@@ -284,7 +284,7 @@ function SubscribeSuccessBurst() {
   );
 }
 
-function NewsPage() {
+function KidsDailyPage() {
   const { isAuthenticated } = useAuthStore();
   const { currentChild, defaultChildId } = useChildStore();
   const navigate = useNavigate();
@@ -311,7 +311,7 @@ function NewsPage() {
   const abortRef = useRef<AbortController | null>(null);
 
   const { data: subsData } = useQuery({
-    queryKey: ["morning-show-subscriptions", childId],
+    queryKey: ["kids-daily-subscriptions", childId],
     queryFn: () => storyService.getSubscriptions(childId),
     enabled: !!childId && isAuthenticated,
   });
@@ -331,7 +331,7 @@ function NewsPage() {
         setJustSubscribed(topic);
         setTimeout(() => setJustSubscribed(null), 1000);
         await queryClient.invalidateQueries({
-          queryKey: ["morning-show-subscriptions", childId],
+          queryKey: ["kids-daily-subscriptions", childId],
         });
       } catch (err) {
         setError(
@@ -352,7 +352,7 @@ function NewsPage() {
       try {
         await storyService.unsubscribeTopic(childId, topic);
         await queryClient.invalidateQueries({
-          queryKey: ["morning-show-subscriptions", childId],
+          queryKey: ["kids-daily-subscriptions", childId],
         });
       } catch (err) {
         setError(
@@ -379,7 +379,7 @@ function NewsPage() {
           { child_id: childId, category: topic, age_group: ageGroup },
           controller.signal,
         );
-        navigate(`/morning-show/${result.episode.episode_id}`);
+        navigate(`/kids-daily/${result.episode.episode_id}`);
       } catch (err: unknown) {
         if (controller.signal.aborted) return; // user cancelled — do nothing
 
@@ -682,4 +682,4 @@ function NewsPage() {
   );
 }
 
-export default NewsPage;
+export default KidsDailyPage;
