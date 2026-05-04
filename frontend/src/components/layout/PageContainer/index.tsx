@@ -94,6 +94,7 @@ function PageContainerInner() {
             <div className="flex items-center gap-4">
               <NavLink to="/library" icon="📚" label="My Library" />
               <NavLink to="/my-agent" icon="🦊" label="My Agent" />
+              <NavLink to="/content-hub" icon="🌐" label="Content Hub" />
 
               {/* Auth section */}
               {isAuthenticated ? (
