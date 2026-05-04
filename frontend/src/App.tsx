@@ -15,6 +15,7 @@ const ProfilePage = lazy(() => import("./pages/ProfilePage"));
 const NewsPage = lazy(() => import("./pages/NewsPage"));
 const MorningShowPage = lazy(() => import("./pages/MorningShowPage"));
 const NewsDetailPage = lazy(() => import("./pages/NewsDetailPage"));
+const MyAgentPage = lazy(() => import("./pages/MyAgentPage"));
 
 function App() {
   return (
@@ -47,6 +48,7 @@ function App() {
               element={<MorningShowPage />}
             />
             <Route path="profile" element={<ProfilePage />} />
+            <Route path="my-agent" element={<MyAgentPage />} />
           </Route>
         </Routes>
       </Suspense>
