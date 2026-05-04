@@ -343,6 +343,7 @@ from .api.routes import (
     agents,
     artifacts,
     audio,
+    hub,
     image_to_story,
     inspiration_daily,
     interactive_story,
@@ -365,6 +366,7 @@ app.include_router(voice.router)
 app.include_router(users.router)
 app.include_router(agents.router)
 app.include_router(onboarding.router)
+app.include_router(hub.router)
 app.include_router(kids_daily.router)
 app.include_router(inspiration_daily.router)
 app.include_router(subscriptions.router)
