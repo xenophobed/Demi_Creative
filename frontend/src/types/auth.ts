@@ -31,6 +31,12 @@ export interface User {
   last_login_at: string | null
   membership_tier: 'free' | 'plus'
   referral_code: string
+  // Agent persona / onboarding (#438/#439/#440/#455)
+  has_agent?: boolean
+  onboarded_at?: string | null
+  parent_consent_at?: string | null
+  nickname?: string | null
+  default_child_id?: string | null
 }
 
 // Referral status returned from API

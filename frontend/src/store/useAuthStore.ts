@@ -11,6 +11,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { User } from '@/types/auth'
+import useChildStore from './useChildStore'
 
 interface AuthState {
   // State
@@ -44,11 +45,17 @@ const useAuthStore = create<AuthState>()(
           isAuthenticated: true,
           isLoading: false,
         })
+        // Hydrate child store from server-side default_child_id so the
+        // buddy persona binds to the same child profile across devices
+        // (#455). No-op when the field is null/undefined or already
+        // matches the local value.
+        useChildStore.getState().setDefaultChildId(user.default_child_id)
       },
 
       // Update user profile
       setUser: (user) => {
         set({ user })
+        useChildStore.getState().setDefaultChildId(user.default_child_id)
       },
 
       // Set loading state

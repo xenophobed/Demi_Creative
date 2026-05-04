@@ -17,6 +17,10 @@ interface ChildState {
   addInterest: (interest: string) => void
   removeInterest: (interest: string) => void
   clearChild: () => void
+  // Hydrate defaultChildId from a server-side source (e.g. user.default_child_id
+  // returned by GET /me). Only applied when the incoming id differs — never
+  // clobbers an existing localStorage value with a null/undefined input. (#455)
+  setDefaultChildId: (childId: string | null | undefined) => void
 }
 
 // Generate simple unique ID
@@ -107,6 +111,12 @@ const useChildStore = create<ChildState>()(
         currentChild: null,
         defaultChildId: generateChildId(),
       }),
+
+      setDefaultChildId: (childId) => {
+        if (!childId) return
+        if (get().defaultChildId === childId) return
+        set({ defaultChildId: childId })
+      },
     }),
     {
       name: 'child-storage',

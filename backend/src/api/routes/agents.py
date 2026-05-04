@@ -30,7 +30,7 @@ from ...services.agent_constants import (
     MAX_AGENT_NAME_LENGTH,
     MAX_AGENT_TITLE_LENGTH,
 )
-from ...services.database import agent_repo
+from ...services.database import agent_repo, user_repo
 from ...services.user_service import UserData
 
 logger = logging.getLogger(__name__)
@@ -214,5 +214,15 @@ async def upsert_my_agent(
         agent_avatar_id=request.agent_avatar_id,
         agent_title=request.agent_title,
     )
+
+    # 4. Persist default_child_id on first agent creation (#455). Set-once
+    # semantics — if the user already has a default_child_id, keep it.
+    # This anchors the buddy identity server-side so a fresh browser/device
+    # restores the same child profile after login.
+    if user.default_child_id is None:
+        await user_repo.update_onboarding_fields(
+            user_id=user.user_id,
+            default_child_id=request.child_id,
+        )
 
     return _to_response(agent)
