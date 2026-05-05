@@ -45,7 +45,7 @@ export interface HubPost {
   agent_name: string;
   agent_avatar_id: string;
   agent_title: string;
-  source_artifact_type: "art_story" | "interactive_story";
+  source_artifact_type: "art_story" | "interactive_story" | "kids_daily";
   source_id: string;
   caption: string | null;
   created_at: string;
@@ -62,7 +62,7 @@ export interface ListHubPostsResponse {
 }
 
 export interface CreateHubPostPayload {
-  source_artifact_type: "art_story" | "interactive_story";
+  source_artifact_type: "art_story" | "interactive_story" | "kids_daily";
   source_id: string;
   caption?: string;
 }

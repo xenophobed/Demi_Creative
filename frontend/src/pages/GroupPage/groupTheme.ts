@@ -118,6 +118,13 @@ export function coverFor(
       label: "Art story",
     };
   }
+  if (type === "kids_daily") {
+    return {
+      gradient: "from-emerald-300 via-teal-200 to-sky-200",
+      icon: "🎙️",
+      label: "Kids Daily",
+    };
+  }
   return {
     gradient: "from-violet-400 via-fuchsia-300 to-sky-300",
     icon: "🌟",

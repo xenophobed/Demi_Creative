@@ -462,14 +462,18 @@ function KidsDailyPage() {
                     </div>
 
                     {/* Row 4: Listen Now button */}
+                    {/* Pink-faded uniform color across all topics, slightly
+                        bigger (h-14 + text-lg) per user request. The
+                        per-topic theme.listenBtn is no longer used so the
+                        button reads as a consistent CTA. */}
                     <div className="mt-auto">
                       <motion.button
-                        className={`h-12 w-full flex items-center justify-center gap-2 rounded-2xl text-base font-bold border transition-colors ${
+                        className={`h-14 w-full flex items-center justify-center gap-2 rounded-2xl text-lg font-bold border transition-all shadow-md hover:shadow-lg ${
                           isGenerating
                             ? "bg-white/70 text-gray-500 border-white cursor-wait"
                             : isRateLimited
                               ? "bg-amber-300 text-amber-900 border-amber-200 cursor-not-allowed"
-                              : `${theme.listenBtn} ${theme.listenBtnHover} text-white border-transparent`
+                              : "bg-gradient-to-r from-rose-300 via-pink-300 to-rose-300 hover:from-rose-400 hover:via-pink-400 hover:to-rose-400 text-white border-transparent"
                         }`}
                         disabled={generatingTopic !== null || isRateLimited}
                         onClick={() => handleListenNow(item.topic)}

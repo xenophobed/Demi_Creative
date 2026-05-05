@@ -7,6 +7,7 @@ import Button from "@/components/common/Button";
 import { storyService } from "@/api/services/storyService";
 import useChildStore from "@/store/useChildStore";
 import { resolveMediaUrl } from "@/utils/mediaUrl";
+import ShareToHubModal from "@/components/hub/ShareToHubModal";
 
 const ROLE_META = {
   curious_kid: { label: "Curious Kid", emoji: "🧒" },
@@ -34,6 +35,7 @@ function KidsDailyEpisodePage() {
   const [playbackRate, setPlaybackRate] = useState(1);
   const [lineElapsed, setLineElapsed] = useState(0);
   const [hasStarted, setHasStarted] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const startTrackedRef = useRef(false);
@@ -385,6 +387,15 @@ function KidsDailyEpisodePage() {
             <p className="text-sm text-gray-600 leading-relaxed">
               {episode.kid_content}
             </p>
+            {episodeId && (
+              <button
+                type="button"
+                className="mt-4 w-full rounded-2xl bg-gradient-to-r from-rose-300 via-pink-300 to-rose-300 hover:from-rose-400 hover:via-pink-400 hover:to-rose-400 px-5 py-3 text-base font-bold text-white shadow-md hover:shadow-lg transition-all"
+                onClick={() => setShareOpen(true)}
+              >
+                🌐 Share to Content Hub
+              </button>
+            )}
           </Card>
 
           {episode.why_care && (
@@ -438,6 +449,17 @@ function KidsDailyEpisodePage() {
           )}
         </aside>
       </div>
+
+      {episodeId && (
+        <ShareToHubModal
+          open={shareOpen}
+          onClose={() => setShareOpen(false)}
+          source={{
+            artifact_type: "kids_daily",
+            source_id: episodeId,
+          }}
+        />
+      )}
     </div>
   );
 }

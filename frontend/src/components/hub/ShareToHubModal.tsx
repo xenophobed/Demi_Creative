@@ -30,7 +30,7 @@ interface Props {
   open: boolean;
   onClose: () => void;
   source: {
-    artifact_type: "art_story" | "interactive_story";
+    artifact_type: "art_story" | "interactive_story" | "kids_daily";
     source_id: string;
   };
   /** Optional success callback — receives the new post_id. */

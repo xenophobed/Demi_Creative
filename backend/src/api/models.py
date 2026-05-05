@@ -889,7 +889,7 @@ class JoinGroupResponse(BaseModel):
 
 class CreatePostRequest(BaseModel):
     """POST /hub/groups/{id}/posts body."""
-    source_artifact_type: str = Field(..., description="art_story | interactive_story")
+    source_artifact_type: str = Field(..., description="art_story | interactive_story | kids_daily")
     source_id: str = Field(..., min_length=1, description="ID of the source story / session")
     caption: Optional[str] = Field(None, max_length=280, description="Optional caption shown above the story")
 

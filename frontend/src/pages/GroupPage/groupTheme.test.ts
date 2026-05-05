@@ -49,4 +49,9 @@ describe("coverFor", () => {
     expect(c.icon).toBe("🌟");
     expect(c.label).toBe("Interactive story");
   });
+  it("kids_daily uses the podcast emerald-teal gradient", () => {
+    const c = coverFor("kids_daily");
+    expect(c.icon).toBe("🎙️");
+    expect(c.label).toBe("Kids Daily");
+  });
 });

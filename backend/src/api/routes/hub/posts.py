@@ -160,7 +160,11 @@ async def create_post(
         )
     await _ensure_member(group_id, user, child_id)
 
-    if body.source_artifact_type not in ("art_story", "interactive_story"):
+    if body.source_artifact_type not in (
+        "art_story",
+        "interactive_story",
+        "kids_daily",
+    ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={"code": "INVALID_SOURCE_TYPE"},
