@@ -247,6 +247,23 @@ class TestGetGroup:
         assert r.status_code == 404
         assert r.json()["detail"]["code"] == "GROUP_NOT_FOUND"
 
+    @pytest.mark.asyncio
+    async def test_get_by_slug_returns_same_group_as_by_id(self, client):
+        r1 = await client.post(
+            "/api/v1/hub/groups",
+            json={"name": "SlugLookup", "visibility": "public"},
+        )
+        assert r1.status_code == 201, r1.text
+        gid = r1.json()["group_id"]
+        slug = r1.json()["slug"]
+        assert slug == "sluglookup"
+
+        r_by_id = await client.get(f"/api/v1/hub/groups/{gid}")
+        r_by_slug = await client.get(f"/api/v1/hub/groups/{slug}")
+        assert r_by_id.status_code == 200, r_by_id.text
+        assert r_by_slug.status_code == 200, r_by_slug.text
+        assert r_by_id.json()["group_id"] == r_by_slug.json()["group_id"]
+
 
 # ---------------------------------------------------------------------------
 # Join
