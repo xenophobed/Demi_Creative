@@ -127,7 +127,7 @@ export function coverFor(
   }
   return {
     gradient: "from-violet-400 via-fuchsia-300 to-sky-300",
-    icon: "🌟",
+    icon: "🎭",
     label: "Interactive story",
   };
 }

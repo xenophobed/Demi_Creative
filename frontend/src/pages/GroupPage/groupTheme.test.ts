@@ -46,7 +46,7 @@ describe("coverFor", () => {
   });
   it("interactive_story uses the playful violet gradient", () => {
     const c = coverFor("interactive_story");
-    expect(c.icon).toBe("🌟");
+    expect(c.icon).toBe("🎭");
     expect(c.label).toBe("Interactive story");
   });
   it("kids_daily uses the podcast emerald-teal gradient", () => {
