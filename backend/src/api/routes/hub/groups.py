@@ -136,15 +136,25 @@ async def create_group(
 
 
 @router.get(
-    "/{group_id}",
+    "/{ident}",
     response_model=GroupResponse,
-    summary="Get a group by id",
+    summary="Get a group by id or slug",
 )
 async def get_group(
-    group_id: str,
+    ident: str,
     user: UserData = Depends(get_current_user),
 ):
-    group = await group_repo.get_by_id(group_id)
+    """Look up a group by either its UUID hex id OR its kebab-case slug.
+
+    The frontend GroupPage routes by slug (/content-hub/:slug), so the
+    by-slug path is what matters in practice. The id path is kept so
+    consumers that already have the id (e.g. server-side tests or the
+    create-response payload) can use it directly without an extra hop.
+    """
+    group = await group_repo.get_by_id(ident)
+    if group is None:
+        # Fall through: maybe the caller passed a slug.
+        group = await group_repo.get_by_slug(ident)
     if group is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
