@@ -57,9 +57,13 @@ async def _run_caption_safety(text: str) -> float:
 
     We treat the youngest tier as the target age so the strictest filter
     applies — captions are read by all child age groups.
+
+    Note: ``check_content_safety`` is decorated with the SDK's ``@tool``
+    which wraps it in an ``SdkMcpTool`` registration object that is NOT
+    itself callable. The raw async handler lives at ``.handler``.
     """
     try:
-        result = await check_content_safety({
+        result = await check_content_safety.handler({
             "content_text": text,
             "content_type": "hub_caption",
             "target_age": _AGENT_SAFETY_TARGET_AGE,

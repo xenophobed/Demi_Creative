@@ -223,7 +223,7 @@ class TestCreateGates:
         gid = await _create_public_group(client)
         # No _seed_buddy(_OWNER) call.
         with patch(
-            "backend.src.api.routes.hub.posts.check_content_safety",
+            "backend.src.api.routes.hub.posts.check_content_safety.handler",
             new=AsyncMock(return_value=_safety(0.99)),
         ):
             r = await client.post(
@@ -272,7 +272,7 @@ class TestCaptionSafety:
         await _seed_buddy(_OWNER)
         gid = await _create_public_group(client)
         with patch(
-            "backend.src.api.routes.hub.posts.check_content_safety",
+            "backend.src.api.routes.hub.posts.check_content_safety.handler",
             new=AsyncMock(return_value=_safety(0.5)),
         ):
             r = await client.post(
@@ -291,7 +291,7 @@ class TestCaptionSafety:
         await _seed_buddy(_OWNER)
         gid = await _create_public_group(client)
         with patch(
-            "backend.src.api.routes.hub.posts.check_content_safety",
+            "backend.src.api.routes.hub.posts.check_content_safety.handler",
             new=AsyncMock(side_effect=Exception("mcp down")),
         ):
             r = await client.post(
@@ -312,7 +312,7 @@ class TestCaptionSafety:
         # Patch raises on call; should not be called when caption is None.
         mock = AsyncMock(side_effect=Exception("should not be called"))
         with patch(
-            "backend.src.api.routes.hub.posts.check_content_safety",
+            "backend.src.api.routes.hub.posts.check_content_safety.handler",
             new=mock,
         ):
             r = await client.post(
@@ -334,7 +334,7 @@ class TestHappyPath:
         await _seed_buddy(_OWNER)
         gid = await _create_public_group(client)
         with patch(
-            "backend.src.api.routes.hub.posts.check_content_safety",
+            "backend.src.api.routes.hub.posts.check_content_safety.handler",
             new=AsyncMock(return_value=_safety(0.95)),
         ):
             r = await client.post(
@@ -372,7 +372,7 @@ class TestHappyPath:
         await _seed_buddy(_OWNER)
         gid = await _create_public_group(client)
         with patch(
-            "backend.src.api.routes.hub.posts.check_content_safety",
+            "backend.src.api.routes.hub.posts.check_content_safety.handler",
             new=AsyncMock(return_value=_safety(0.99)),
         ):
             await client.post(
@@ -410,7 +410,7 @@ class TestPrivateGroupReadAccess:
         assert r1.status_code == 201, r1.text
         gid = r1.json()["group_id"]
         with patch(
-            "backend.src.api.routes.hub.posts.check_content_safety",
+            "backend.src.api.routes.hub.posts.check_content_safety.handler",
             new=AsyncMock(return_value=_safety(0.99)),
         ):
             await client.post(
@@ -436,7 +436,7 @@ class TestPagination:
         await _seed_buddy(_OWNER)
         gid = await _create_public_group(client)
         with patch(
-            "backend.src.api.routes.hub.posts.check_content_safety",
+            "backend.src.api.routes.hub.posts.check_content_safety.handler",
             new=AsyncMock(return_value=_safety(0.99)),
         ):
             for i in range(3):

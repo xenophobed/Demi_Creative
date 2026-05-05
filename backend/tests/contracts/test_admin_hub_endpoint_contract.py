@@ -178,7 +178,7 @@ async def _create_post(client: AsyncClient) -> str:
     assert r1.status_code == 201, r1.text
     gid = r1.json()["group_id"]
     with patch(
-        "backend.src.api.routes.hub.posts.check_content_safety",
+        "backend.src.api.routes.hub.posts.check_content_safety.handler",
         new=AsyncMock(return_value=_safety(0.99)),
     ):
         r2 = await client.post(

@@ -132,7 +132,7 @@ class TestSetsOnFirstPut:
         assert before.default_child_id is None
 
         with patch(
-            "backend.src.api.routes.agents.check_content_safety",
+            "backend.src.api.routes.agents.check_content_safety.handler",
             new=AsyncMock(return_value=_safety_response(0.99)),
         ):
             r = await client.put("/api/v1/me/agent", json=_valid_body("child_first"))
@@ -154,7 +154,7 @@ class TestNeverOverwrites:
     ):
         # Pre-set default_child_id to child-A by the first PUT.
         with patch(
-            "backend.src.api.routes.agents.check_content_safety",
+            "backend.src.api.routes.agents.check_content_safety.handler",
             new=AsyncMock(return_value=_safety_response(0.99)),
         ):
             r1 = await client.put("/api/v1/me/agent", json=_valid_body("child-A"))
@@ -165,7 +165,7 @@ class TestNeverOverwrites:
 
         # Now PUT a SECOND agent for a DIFFERENT child profile.
         with patch(
-            "backend.src.api.routes.agents.check_content_safety",
+            "backend.src.api.routes.agents.check_content_safety.handler",
             new=AsyncMock(return_value=_safety_response(0.99)),
         ):
             r2 = await client.put("/api/v1/me/agent", json=_valid_body("child-B"))

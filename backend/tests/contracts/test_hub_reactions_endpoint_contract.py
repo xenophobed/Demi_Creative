@@ -166,7 +166,7 @@ async def _make_public_post(client: AsyncClient) -> str:
     )
     gid = r1.json()["group_id"]
     with patch(
-        "backend.src.api.routes.hub.posts.check_content_safety",
+        "backend.src.api.routes.hub.posts.check_content_safety.handler",
         new=AsyncMock(return_value=_safety(0.99)),
     ):
         r2 = await client.post(
@@ -246,7 +246,7 @@ class TestVisibilityGate:
         )
         gid = r1.json()["group_id"]
         with patch(
-            "backend.src.api.routes.hub.posts.check_content_safety",
+            "backend.src.api.routes.hub.posts.check_content_safety.handler",
             new=AsyncMock(return_value=_safety(0.99)),
         ):
             r2 = await client.post(
