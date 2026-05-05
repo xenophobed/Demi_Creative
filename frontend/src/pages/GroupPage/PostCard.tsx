@@ -28,6 +28,9 @@ function destinationFor(post: HubPost): string {
   if (post.source_artifact_type === "art_story") {
     return `/story/${post.source_id}`;
   }
+  if (post.source_artifact_type === "kids_daily") {
+    return `/kids-daily/${encodeURIComponent(post.source_id)}`;
+  }
   return `/interactive?session=${encodeURIComponent(post.source_id)}`;
 }
 
@@ -89,7 +92,9 @@ export default function PostCard({ post }: Props) {
             className={
               post.source_artifact_type === "art_story"
                 ? "rounded-full bg-rose-100 px-2 py-0.5 font-semibold text-rose-700"
-                : "rounded-full bg-violet-100 px-2 py-0.5 font-semibold text-violet-700"
+                : post.source_artifact_type === "kids_daily"
+                  ? "rounded-full bg-emerald-100 px-2 py-0.5 font-semibold text-emerald-700"
+                  : "rounded-full bg-violet-100 px-2 py-0.5 font-semibold text-violet-700"
             }
           >
             {cover.label}

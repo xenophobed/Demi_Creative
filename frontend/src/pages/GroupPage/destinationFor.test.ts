@@ -10,6 +10,9 @@ function destinationFor(post: HubPost): string {
   if (post.source_artifact_type === "art_story") {
     return `/story/${post.source_id}`;
   }
+  if (post.source_artifact_type === "kids_daily") {
+    return `/kids-daily/${encodeURIComponent(post.source_id)}`;
+  }
   return `/interactive?session=${encodeURIComponent(post.source_id)}`;
 }
 
@@ -40,5 +43,14 @@ describe("destinationFor", () => {
       source_id: "session/with/slashes",
     });
     expect(r).toBe("/interactive?session=session%2Fwith%2Fslashes");
+  });
+
+  it("kids_daily -> /kids-daily/{episodeId}", () => {
+    const r = destinationFor({
+      ...base,
+      source_artifact_type: "kids_daily",
+      source_id: "episode-42",
+    });
+    expect(r).toBe("/kids-daily/episode-42");
   });
 });

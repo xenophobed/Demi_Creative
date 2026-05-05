@@ -34,7 +34,7 @@ class HubPostData:
     agent_name_snapshot: str
     agent_avatar_id_snapshot: str
     agent_title_snapshot: str
-    source_artifact_type: str  # 'art_story' | 'interactive_story'
+    source_artifact_type: str  # 'art_story' | 'interactive_story' | 'kids_daily'
     source_id: str
     caption: Optional[str]
     safety_score: float
@@ -98,9 +98,13 @@ class HubPostRepository:
                 to HTTP 412.
             ValueError: bad source_artifact_type.
         """
-        if source_artifact_type not in ("art_story", "interactive_story"):
+        if source_artifact_type not in (
+            "art_story",
+            "interactive_story",
+            "kids_daily",
+        ):
             raise ValueError(
-                "source_artifact_type must be 'art_story' or 'interactive_story'"
+                "source_artifact_type must be 'art_story', 'interactive_story', or 'kids_daily'"
             )
 
         agent_repo = self._resolve_agent_repo()

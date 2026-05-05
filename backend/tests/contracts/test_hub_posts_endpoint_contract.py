@@ -260,6 +260,26 @@ class TestCreateGates:
         assert r.status_code == 400
         assert r.json()["detail"]["code"] == "INVALID_SOURCE_TYPE"
 
+    @pytest.mark.asyncio
+    async def test_kids_daily_source_type_accepted(self, client):
+        """Per user request: Kids Daily episodes can be shared to the Hub."""
+        await _seed_buddy(_OWNER)
+        gid = await _create_public_group(client)
+        with patch(
+            "backend.src.api.routes.hub.posts.check_content_safety.handler",
+            new=AsyncMock(return_value=_safety(0.99)),
+        ):
+            r = await client.post(
+                f"/api/v1/hub/groups/{gid}/posts",
+                json={
+                    "source_artifact_type": "kids_daily",
+                    "source_id": "ep-1",
+                    "caption": "Loved this episode!",
+                },
+            )
+        assert r.status_code == 201, r.text
+        assert r.json()["source_artifact_type"] == "kids_daily"
+
 
 # ---------------------------------------------------------------------------
 # Caption safety

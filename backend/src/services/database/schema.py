@@ -361,7 +361,7 @@ CREATE TABLE IF NOT EXISTS hub_posts (
     agent_name_snapshot TEXT NOT NULL,
     agent_avatar_id_snapshot TEXT NOT NULL,
     agent_title_snapshot TEXT NOT NULL,
-    source_artifact_type TEXT NOT NULL CHECK (source_artifact_type IN ('art_story','interactive_story')),
+    source_artifact_type TEXT NOT NULL CHECK (source_artifact_type IN ('art_story','interactive_story','kids_daily')),
     source_id TEXT NOT NULL,
     caption TEXT,
     safety_score REAL NOT NULL,
@@ -507,6 +507,7 @@ async def init_schema(db: "DatabaseManager") -> None:
     await _migrate_create_hub_group_memberships_table(db)
     await _migrate_create_hub_posts_table(db)
     await _migrate_create_hub_post_reactions_table(db)
+    await _migrate_hub_posts_allow_kids_daily(db)
 
     # Now create all indexes (including user_id indexes) after migration
     for stmt in STORIES_INDEXES.strip().split(";"):
@@ -848,6 +849,80 @@ async def _migrate_create_hub_post_reactions_table(db: "DatabaseManager") -> Non
                 except Exception:
                     pass
     await db.commit()
+
+
+async def _migrate_hub_posts_allow_kids_daily(db: "DatabaseManager") -> None:
+    """Extend the hub_posts.source_artifact_type CHECK to include 'kids_daily'.
+
+    SQLite cannot modify a CHECK in place — we have to rebuild the table
+    when the existing CHECK is the older two-value form. The function is
+    idempotent: it inspects sqlite_master.sql and skips when the CHECK
+    already includes 'kids_daily'. Postgres path uses ALTER CONSTRAINT
+    via translate_ddl-equivalent direct SQL.
+    """
+    if db.dialect == "sqlite":
+        row = await db.fetchone(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='hub_posts'"
+        )
+        sql = (row["sql"] if row else "") or ""
+        if "kids_daily" in sql or not sql:
+            return  # already migrated, or table doesn't exist (fresh install ran the new constant)
+        # Rebuild: copy rows into a new table with the expanded CHECK,
+        # drop the old one, rename. Indexes are recreated because they
+        # also drop with the table.
+        print("Migrating hub_posts CHECK to allow kids_daily...")
+        await db.execute(
+            """
+            CREATE TABLE hub_posts__new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                post_id TEXT NOT NULL UNIQUE,
+                group_id TEXT NOT NULL,
+                author_user_id TEXT NOT NULL,
+                author_child_id TEXT NOT NULL,
+                author_agent_id TEXT NOT NULL,
+                agent_name_snapshot TEXT NOT NULL,
+                agent_avatar_id_snapshot TEXT NOT NULL,
+                agent_title_snapshot TEXT NOT NULL,
+                source_artifact_type TEXT NOT NULL CHECK (source_artifact_type IN ('art_story','interactive_story','kids_daily')),
+                source_id TEXT NOT NULL,
+                caption TEXT,
+                safety_score REAL NOT NULL,
+                created_at TEXT NOT NULL,
+                removed_at TEXT,
+                removed_reason TEXT,
+                FOREIGN KEY(group_id) REFERENCES hub_groups(group_id),
+                FOREIGN KEY(author_agent_id) REFERENCES user_agents(agent_id)
+            )
+            """
+        )
+        await db.execute(
+            "INSERT INTO hub_posts__new SELECT * FROM hub_posts"
+        )
+        await db.execute("DROP TABLE hub_posts")
+        await db.execute("ALTER TABLE hub_posts__new RENAME TO hub_posts")
+        await db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_hub_posts_group_created ON hub_posts(group_id, created_at DESC)"
+        )
+        await db.commit()
+        print("hub_posts CHECK migration completed")
+    else:
+        # Postgres: drop the constraint by name and re-add. Postgres
+        # auto-generates constraint names as <table>_<col>_check — but
+        # we wrap in try/except so a name mismatch (older migration
+        # wrote a different name) doesn't blow up startup.
+        try:
+            await db.execute(
+                "ALTER TABLE hub_posts DROP CONSTRAINT IF EXISTS hub_posts_source_artifact_type_check"
+            )
+            await db.execute(
+                "ALTER TABLE hub_posts ADD CONSTRAINT hub_posts_source_artifact_type_check "
+                "CHECK (source_artifact_type IN ('art_story','interactive_story','kids_daily'))"
+            )
+            await db.commit()
+        except Exception:
+            # Idempotent: if we can't drop/add (e.g. constraint already
+            # has the new shape), continue silently.
+            pass
 
 
 # ============================================================================
