@@ -792,17 +792,16 @@ function InteractiveStoryPage() {
             </Button>
           </div>
 
-          {/* Share-to-Content-Hub CTA (#453) */}
+          {/* Share-to-Content-Hub CTA (#453) — pink-faded shared style */}
           {sessionId && (
             <div className="flex justify-center pt-2">
-              <Button
-                variant="primary"
-                size="lg"
+              <button
+                type="button"
+                className="rounded-2xl bg-gradient-to-r from-rose-300 via-pink-300 to-rose-300 hover:from-rose-400 hover:via-pink-400 hover:to-rose-400 px-6 py-3 text-base font-bold text-white shadow-md hover:shadow-lg transition-all"
                 onClick={() => setShareOpen(true)}
-                leftIcon={<span>🌐</span>}
               >
-                Share to Content Hub
-              </Button>
+                🌐 Share to Content Hub
+              </button>
             </div>
           )}
         </motion.div>
