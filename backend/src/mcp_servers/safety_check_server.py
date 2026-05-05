@@ -5,10 +5,13 @@ Provides tools for checking content safety and ensuring age-appropriateness.
 """
 
 import json
+import logging
 import os
 from typing import Any, Dict, List
 
 from ..utils.model_config import get_safety_model
+
+logger = logging.getLogger(__name__)
 
 try:
     from anthropic import Anthropic
@@ -81,6 +84,56 @@ async def check_content_safety(args: Dict[str, Any]) -> Dict[str, Any]:
     content_text = args["content_text"]
     content_type = args.get("content_type", "story")
     target_age = args["target_age"]
+
+    # ------------------------------------------------------------------
+    # Dev-only escape hatch (SAFETY_MOCK=1).
+    #
+    # Returns a passing stub WITHOUT calling the Anthropic API. Lets a
+    # developer iterate UI/UX flows when their API key has run out of
+    # credits or the safety MCP is otherwise unavailable. Strictly
+    # opt-in:
+    #   - Only fires when SAFETY_MOCK=1 is set explicitly
+    #   - Refuses to fire when ENVIRONMENT=production
+    #   - Logs a loud WARNING on every call so this can never silently
+    #     slip into production logs unnoticed
+    #
+    # CLAUDE.md says the safety check is non-negotiable for production.
+    # This bypass exists ONLY for local UX iteration.
+    # ------------------------------------------------------------------
+    if os.getenv("SAFETY_MOCK") == "1" and os.getenv("ENVIRONMENT") != "production":
+        logger.warning(
+            "SAFETY_MOCK=1 — bypassing real safety check for content_type=%s "
+            "target_age=%s. THIS MUST NEVER FIRE IN PRODUCTION.",
+            content_type,
+            target_age,
+        )
+        mock_payload = {
+            "safety_score": 0.99,
+            "is_safe": True,
+            "passed": True,
+            "issues": [],
+            "positive_aspects": ["dev-mock"],
+            "suggestions": [],
+            "age_appropriateness": {
+                "is_appropriate": True,
+                "reasoning": "SAFETY_MOCK=1 dev bypass — no real safety review performed",
+            },
+            "value_guidance": {
+                "gender_equality": "n/a",
+                "cultural_diversity": "n/a",
+                "moral_education": "n/a",
+                "inclusivity": "n/a",
+            },
+            "dev_mock": True,
+        }
+        return {
+            "content": [
+                {
+                    "type": "text",
+                    "text": json.dumps(mock_payload, ensure_ascii=False, indent=2),
+                }
+            ]
+        }
 
     # Determine check focus based on age
     age_context = ""
