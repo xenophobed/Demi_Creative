@@ -278,7 +278,7 @@ function StoryPage() {
         {storyId && (
           <button
             type="button"
-            className="rounded-md bg-violet-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-violet-700"
+            className="rounded-2xl bg-gradient-to-r from-rose-300 via-pink-300 to-rose-300 hover:from-rose-400 hover:via-pink-400 hover:to-rose-400 px-6 py-3 text-base font-bold text-white shadow-md hover:shadow-lg transition-all"
             onClick={() => setShareOpen(true)}
           >
             🌐 Share to Content Hub
