@@ -57,9 +57,16 @@ async def _run_safety_check(text: str) -> float:
     the MCP server is unreachable or returned an error envelope so the
     caller can fail closed (HTTP 503) — we never silently let unchecked
     text through.
+
+    Note: ``check_content_safety`` is decorated with the SDK's ``@tool``,
+    which wraps it in an ``SdkMcpTool`` registration object that is NOT
+    itself callable. The raw async handler lives at ``.handler``. Without
+    this we'd get ``TypeError: 'SdkMcpTool' object is not callable``,
+    which the outer ``except Exception`` catches and surfaces to the
+    user as ``Our safety checker is taking a break.`` (HTTP 503).
     """
     try:
-        result = await check_content_safety({
+        result = await check_content_safety.handler({
             "content_text": text,
             "content_type": "agent_persona",
             "target_age": _AGENT_SAFETY_TARGET_AGE,

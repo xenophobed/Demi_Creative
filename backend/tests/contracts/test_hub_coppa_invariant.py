@@ -210,7 +210,7 @@ async def test_get_group_posts_response_contains_no_user_pii(client) -> None:
     group_id = r1.json()["group_id"]
 
     with patch(
-        "backend.src.api.routes.hub.posts.check_content_safety",
+        "backend.src.api.routes.hub.posts.check_content_safety.handler",
         new=AsyncMock(return_value=_safety_response(0.99)),
     ):
         r2 = await client.post(

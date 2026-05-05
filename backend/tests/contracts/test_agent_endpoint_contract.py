@@ -158,7 +158,7 @@ class TestAvatarWhitelist:
         body = _valid_body(agent_avatar_id="emoji:🦖")
         # Even though we hit the avatar branch first, mock safety to be safe.
         with patch(
-            "backend.src.api.routes.agents.check_content_safety",
+            "backend.src.api.routes.agents.check_content_safety.handler",
             new=AsyncMock(return_value=_safety_response(0.99)),
         ):
             r = await client.put("/api/v1/me/agent", json=body)
@@ -169,7 +169,7 @@ class TestAvatarWhitelist:
     async def test_accepts_avatar_in_whitelist(self, client):
         body = _valid_body(agent_avatar_id="emoji:🐶")
         with patch(
-            "backend.src.api.routes.agents.check_content_safety",
+            "backend.src.api.routes.agents.check_content_safety.handler",
             new=AsyncMock(return_value=_safety_response(0.99)),
         ):
             r = await client.put("/api/v1/me/agent", json=body)
@@ -189,7 +189,7 @@ class TestNameSafety:
         # Mock returns safety_score below 0.85 -> route must reject.
         body = _valid_body(agent_name="something_unsafe")
         with patch(
-            "backend.src.api.routes.agents.check_content_safety",
+            "backend.src.api.routes.agents.check_content_safety.handler",
             new=AsyncMock(return_value=_safety_response(0.50)),
         ):
             r = await client.put("/api/v1/me/agent", json=body)
@@ -200,7 +200,7 @@ class TestNameSafety:
     async def test_safe_name_accepted(self, client):
         body = _valid_body(agent_name="Sparkle")
         with patch(
-            "backend.src.api.routes.agents.check_content_safety",
+            "backend.src.api.routes.agents.check_content_safety.handler",
             new=AsyncMock(return_value=_safety_response(0.99)),
         ):
             r = await client.put("/api/v1/me/agent", json=body)
@@ -221,7 +221,7 @@ class TestCuratedTitleBypass:
         body = _valid_body(agent_title="Brave Lion")
         mock_safety = AsyncMock(return_value=_safety_response(0.99))
         with patch(
-            "backend.src.api.routes.agents.check_content_safety",
+            "backend.src.api.routes.agents.check_content_safety.handler",
             new=mock_safety,
         ):
             r = await client.put("/api/v1/me/agent", json=body)
@@ -235,7 +235,7 @@ class TestCuratedTitleBypass:
         body = _valid_body(agent_title="My Cool Title")
         mock_safety = AsyncMock(return_value=_safety_response(0.99))
         with patch(
-            "backend.src.api.routes.agents.check_content_safety",
+            "backend.src.api.routes.agents.check_content_safety.handler",
             new=mock_safety,
         ):
             r = await client.put("/api/v1/me/agent", json=body)
@@ -257,7 +257,7 @@ class TestSafetyFailClosed:
         """When the MCP tool raises, the route must return 503 with SAFETY_UNAVAILABLE."""
         body = _valid_body()  # curated title, so only name is safety-checked
         with patch(
-            "backend.src.api.routes.agents.check_content_safety",
+            "backend.src.api.routes.agents.check_content_safety.handler",
             new=AsyncMock(side_effect=RuntimeError("boom")),
         ):
             r = await client.put("/api/v1/me/agent", json=body)
@@ -274,7 +274,7 @@ class TestSafetyFailClosed:
             ]
         }
         with patch(
-            "backend.src.api.routes.agents.check_content_safety",
+            "backend.src.api.routes.agents.check_content_safety.handler",
             new=AsyncMock(return_value=bad),
         ):
             r = await client.put("/api/v1/me/agent", json=body)
@@ -294,7 +294,7 @@ class TestUpsertIdempotency:
     async def test_repeated_put_same_body_same_agent_id(self, client):
         body = _valid_body(child_id="child_idempotent")
         with patch(
-            "backend.src.api.routes.agents.check_content_safety",
+            "backend.src.api.routes.agents.check_content_safety.handler",
             new=AsyncMock(return_value=_safety_response(0.99)),
         ):
             r1 = await client.put("/api/v1/me/agent", json=body)
@@ -306,7 +306,7 @@ class TestUpsertIdempotency:
     @pytest.mark.asyncio
     async def test_different_child_id_yields_distinct_agent(self, client):
         with patch(
-            "backend.src.api.routes.agents.check_content_safety",
+            "backend.src.api.routes.agents.check_content_safety.handler",
             new=AsyncMock(return_value=_safety_response(0.99)),
         ):
             r1 = await client.put(
@@ -340,7 +340,7 @@ class TestGetAgent:
     async def test_returns_agent_after_upsert(self, client):
         body = _valid_body(child_id="child_get_test")
         with patch(
-            "backend.src.api.routes.agents.check_content_safety",
+            "backend.src.api.routes.agents.check_content_safety.handler",
             new=AsyncMock(return_value=_safety_response(0.99)),
         ):
             put = await client.put("/api/v1/me/agent", json=body)
