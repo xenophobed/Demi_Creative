@@ -428,6 +428,7 @@ async def _build_episode(
             child_id=child_id,
             category=request.category.value,
             news_url=request.news_url,
+            user_id=user.user_id,
         )
     except Exception:
         # Graceful fallback to deterministic baseline conversion
@@ -805,6 +806,7 @@ async def generate_kids_daily_on_demand_stream(
             child_id=build_request.child_id,
             category=build_request.category.value,
             news_url=None,
+            user_id=user.user_id,
         ):
             if await http_request.is_disconnected():
                 logger.info("Client disconnected during on-demand script generation, aborting")
@@ -877,6 +879,7 @@ async def generate_kids_daily_stream(
             child_id=request.child_id,
             category=request.category.value,
             news_url=request.news_url,
+            user_id=user.user_id,
         ):
             if await http_request.is_disconnected():
                 logger.info("Client disconnected during kids daily generation, aborting")

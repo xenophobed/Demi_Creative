@@ -931,17 +931,22 @@ async def generate_kids_daily_dialogue(
     age_group: str,
     child_id: Optional[str] = None,
     news_url: Optional[str] = None,
+    user_id: str = "",
 ) -> Dict[str, Any]:
     """Generate Kids Daily dialogue script with safety metadata."""
 
     source_text = _clean_source_text(news_text, news_url)
     topic = _headline_from_text(source_text)
 
-    # Resolve guest from recurring characters first (#365)
+    # Resolve guest from recurring characters first (#365). Pass the
+    # real user_id — characters are scoped (user_id, child_id), so an
+    # empty user_id silently returns no rows and we'd always fall back
+    # to the default Professor Owl, severing the connection to the
+    # child's art and interactive stories.
     guest_name = _default_guest(child_id)
-    if child_id:
+    if child_id and user_id:
         try:
-            characters = await character_repo.get_characters("", child_id)
+            characters = await character_repo.get_characters(user_id, child_id)
             if characters:
                 guest_name = characters[0].get("name", guest_name)
         except Exception:
@@ -998,6 +1003,7 @@ async def generate_kids_daily_episode(
     child_id: Optional[str],
     category: str,
     news_url: Optional[str] = None,
+    user_id: str = "",
 ) -> Dict[str, Any]:
     """Compose kid summary + dialogue script payload for Kids Daily."""
 
@@ -1016,6 +1022,7 @@ async def generate_kids_daily_episode(
         age_group=age_group,
         child_id=child_id,
         news_url=news_url,
+        user_id=user_id,
     )
 
     return {
@@ -1039,6 +1046,7 @@ async def stream_kids_daily_generation(
     child_id: Optional[str],
     category: str,
     news_url: Optional[str] = None,
+    user_id: str = "",
 ) -> AsyncGenerator[Dict[str, Any], None]:
     """Stream Kids Daily generation progress events."""
 
@@ -1061,6 +1069,7 @@ async def stream_kids_daily_generation(
         child_id=child_id,
         category=category,
         news_url=news_url,
+        user_id=user_id,
     )
 
     yield {

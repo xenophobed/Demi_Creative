@@ -1050,3 +1050,93 @@ class TestDegradedMetadata:
         restored = KidsDailyGenerationMetadata(**data)
         assert restored.is_degraded is True
         assert restored.degraded_reason == "mock_environment"
+
+
+# ---------------------------------------------------------------------------
+# Guest anchor uses recurring characters from art/interactive stories
+# ---------------------------------------------------------------------------
+class TestGuestAnchorRecurringCharacter:
+    """Contract: the Kids Daily guest anchor must be sourced from the child's
+    recurring story characters when one exists, so the show stays connected
+    to the art and interactive stories the child has already created."""
+
+    @pytest.mark.asyncio
+    async def test_recurring_character_overrides_default_guest(self):
+        """Top recurring character (by appearance_count) must replace the
+        deterministic default guest when (user_id, child_id) yields rows."""
+        from unittest.mock import AsyncMock, patch
+
+        from backend.src.agents.kids_daily_agent import generate_kids_daily_dialogue
+
+        with patch(
+            "backend.src.agents.kids_daily_agent._should_use_mock", return_value=True
+        ), patch(
+            "backend.src.agents.kids_daily_agent.character_repo.get_characters",
+            new_callable=AsyncMock,
+            return_value=[
+                {"name": "Lightning Dog", "appearance_count": 5},
+                {"name": "Sparkle Cat", "appearance_count": 2},
+            ],
+        ) as mock_get:
+            result = await generate_kids_daily_dialogue(
+                news_text="Scientists discovered a new planet.",
+                age_group="6-8",
+                child_id="c123",
+                user_id="u_abc",
+            )
+
+        # The lookup must be scoped to the actual user_id, not "".
+        # Empty user_id silently returned no rows pre-fix, defeating the feature.
+        mock_get.assert_awaited_once_with("u_abc", "c123")
+        assert result["guest_character"] == "Lightning Dog"
+
+    @pytest.mark.asyncio
+    async def test_empty_user_id_skips_lookup_falls_back_to_default(self):
+        """Without a user_id we MUST NOT query characters with "" — that
+        returns no rows by accident and is misleading. Skip and use default."""
+        from unittest.mock import AsyncMock, patch
+
+        from backend.src.agents.kids_daily_agent import generate_kids_daily_dialogue
+
+        with patch(
+            "backend.src.agents.kids_daily_agent._should_use_mock", return_value=True
+        ), patch(
+            "backend.src.agents.kids_daily_agent.character_repo.get_characters",
+            new_callable=AsyncMock,
+            return_value=[],
+        ) as mock_get:
+            result = await generate_kids_daily_dialogue(
+                news_text="Scientists discovered a new planet.",
+                age_group="6-8",
+                child_id="c123",
+                # user_id intentionally omitted
+            )
+
+        mock_get.assert_not_awaited()
+        assert result["guest_character"], "Default guest must still be present"
+
+    @pytest.mark.asyncio
+    async def test_no_recurring_characters_uses_default_owl(self):
+        """When the lookup returns no characters, fall back to deterministic default."""
+        from unittest.mock import AsyncMock, patch
+
+        from backend.src.agents.kids_daily_agent import (
+            _default_guest,
+            generate_kids_daily_dialogue,
+        )
+
+        with patch(
+            "backend.src.agents.kids_daily_agent._should_use_mock", return_value=True
+        ), patch(
+            "backend.src.agents.kids_daily_agent.character_repo.get_characters",
+            new_callable=AsyncMock,
+            return_value=[],
+        ):
+            result = await generate_kids_daily_dialogue(
+                news_text="Scientists discovered a new planet.",
+                age_group="6-8",
+                child_id="c123",
+                user_id="u_abc",
+            )
+
+        assert result["guest_character"] == _default_guest("c123")
