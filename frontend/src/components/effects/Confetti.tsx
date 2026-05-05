@@ -4,7 +4,7 @@
  */
 
 import { motion, AnimatePresence } from 'framer-motion'
-import { useState, useEffect, useCallback, memo } from 'react'
+import { useState, useEffect, useRef, memo } from 'react'
 import { useStreamVisualizationContext, registerEffectCallback } from '@/providers/StreamVisualizationProvider'
 import { colors } from '@/config/animationPresets'
 import type { EffectTrigger } from '@/types/streaming'
@@ -125,23 +125,39 @@ function ConfettiComponent({
   const [confetti, setConfetti] = useState<ConfettiPiece[]>([])
 
   // Trigger confetti
-  const triggerConfetti = useCallback(() => {
-    if (prefersReducedMotion) return
-
-    setConfetti(generateConfetti(count, colorOptions, origin, spread))
-
-    // Clear after duration
-    setTimeout(() => {
-      setConfetti([])
-    }, duration)
-  }, [count, colorOptions, origin, spread, duration, prefersReducedMotion])
+  // Refs over state to keep the props stable inside the effect below
+  // without forcing a render cycle when the parent passes a new
+  // colors / origin object on every render. Without this, the parent
+  // (ConfettiController) spreads a freshly-built `config` object each
+  // time it re-renders, which makes triggerConfetti a new reference,
+  // which fires the effect, which calls setConfetti, which re-renders
+  // the parent — Maximum update depth exceeded.
+  const propsRef = useRef({
+    count,
+    colorOptions,
+    origin,
+    spread,
+    duration,
+    prefersReducedMotion,
+  })
+  propsRef.current = {
+    count,
+    colorOptions,
+    origin,
+    spread,
+    duration,
+    prefersReducedMotion,
+  }
 
   // Handle active prop changes
   useEffect(() => {
-    if (active) {
-      triggerConfetti()
-    }
-  }, [active, triggerConfetti])
+    if (!active) return
+    const p = propsRef.current
+    if (p.prefersReducedMotion) return
+    setConfetti(generateConfetti(p.count, p.colorOptions, p.origin, p.spread))
+    const t = setTimeout(() => setConfetti([]), p.duration)
+    return () => clearTimeout(t)
+  }, [active])
 
   if (prefersReducedMotion || confetti.length === 0) {
     return null

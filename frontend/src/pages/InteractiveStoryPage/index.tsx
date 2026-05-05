@@ -147,6 +147,18 @@ function InteractiveStoryPage() {
   );
   const sessionParam = searchParams.get("session");
 
+  // Track whether this mount entered via a deep-link resume URL.
+  // When a user lands here from a Content Hub share they clicked "Read"
+  // — they did NOT ask for audio. Auto-playing TTS at full volume on
+  // cold landing is jarring (and arrived as a real bug report). We
+  // suppress auto-play until the user takes their first in-page
+  // interaction (e.g. tapping a choice). Captured once at mount so
+  // subsequent state changes don't flip it.
+  const [enteredViaResume] = useState<boolean>(() => Boolean(sessionParam));
+  const [userHasInteracted, setUserHasInteracted] = useState<boolean>(false);
+  const audioMaySelfStart =
+    activeAgeGroup === "3-5" && (!enteredViaResume || userHasInteracted);
+
   useEffect(() => {
     // Explicit resume path: /interactive?session=...
     if (sessionParam) {
@@ -252,6 +264,11 @@ function InteractiveStoryPage() {
 
   // Choice handler - uses streaming for real-time progress
   const handleChoice = async (choiceId: string) => {
+    // First in-page interaction unlocks audio auto-play (see
+    // audioMaySelfStart above). Without this, a user who lands here
+    // via a Content Hub share would never get audio even when they
+    // wanted it on subsequent segments.
+    setUserHasInteracted(true);
     try {
       await makeChoiceStream(choiceId);
     } catch {
@@ -640,7 +657,7 @@ function InteractiveStoryPage() {
             audioUrl={currentSegment.audio_url || onDemandAudioUrl}
             onRequestAudio={handleRequestAudio}
             isAudioLoading={isAudioGenerating}
-            autoPlayAudio={activeAgeGroup === "3-5"}
+            autoPlayAudio={audioMaySelfStart}
             textContent={renderStoryTimeline()}
           />
 
@@ -709,7 +726,7 @@ function InteractiveStoryPage() {
               audioUrl={currentSegment.audio_url || onDemandAudioUrl}
               onRequestAudio={handleRequestAudio}
               isAudioLoading={isAudioGenerating}
-              autoPlayAudio={activeAgeGroup === "3-5"}
+              autoPlayAudio={audioMaySelfStart}
               textContent={renderStoryTimeline()}
             />
           )}
