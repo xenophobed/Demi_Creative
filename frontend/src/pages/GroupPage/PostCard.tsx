@@ -75,7 +75,7 @@ export default function PostCard({ post }: Props) {
       >
         <span
           aria-hidden="true"
-          className="pointer-events-none absolute inset-0 flex items-center justify-center text-7xl drop-shadow-md transition-transform duration-300 group-hover:scale-110"
+          className="pointer-events-none absolute inset-0 flex items-center justify-center text-7xl drop-shadow-md"
         >
           {cover.icon}
         </span>
