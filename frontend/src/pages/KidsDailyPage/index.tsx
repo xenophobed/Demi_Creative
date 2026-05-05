@@ -1,7 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Card from "@/components/common/Card";
 import { storyService } from "@/api/services/storyService";
 import useAuthStore from "@/store/useAuthStore";
@@ -256,50 +255,15 @@ function GeneratingOverlay({
   );
 }
 
-/** Sparkle burst when subscribing succeeds */
-function SubscribeSuccessBurst() {
-  return (
-    <motion.div
-      className="absolute inset-0 pointer-events-none z-10 flex items-center justify-center"
-      initial={{ opacity: 1 }}
-      animate={{ opacity: 0 }}
-      transition={{ duration: 0.8, delay: 0.2 }}
-    >
-      {[...Array(6)].map((_, i) => (
-        <motion.span
-          key={i}
-          className="absolute text-xl"
-          initial={{ scale: 0, x: 0, y: 0 }}
-          animate={{
-            scale: [0, 1.2, 0],
-            x: Math.cos((i * Math.PI * 2) / 6) * 40,
-            y: Math.sin((i * Math.PI * 2) / 6) * 40,
-          }}
-          transition={{ duration: 0.6 }}
-        >
-          {["✨", "⭐", "🌟", "💫", "✨", "⭐"][i]}
-        </motion.span>
-      ))}
-    </motion.div>
-  );
-}
-
 function KidsDailyPage() {
   const { isAuthenticated } = useAuthStore();
   const { currentChild, defaultChildId } = useChildStore();
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
 
   const childId = currentChild?.child_id || defaultChildId;
   const ageGroup = currentChild?.age_group || "6-8";
 
   const [generatingTopic, setGeneratingTopic] = useState<NewsCategory | null>(
-    null,
-  );
-  const [pendingSubscribe, setPendingSubscribe] = useState<NewsCategory | null>(
-    null,
-  );
-  const [justSubscribed, setJustSubscribed] = useState<NewsCategory | null>(
     null,
   );
   const [error, setError] = useState<string | null>(null);
@@ -309,61 +273,6 @@ function KidsDailyPage() {
   } | null>(null);
   const retryTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const abortRef = useRef<AbortController | null>(null);
-
-  const { data: subsData } = useQuery({
-    queryKey: ["kids-daily-subscriptions", childId],
-    queryFn: () => storyService.getSubscriptions(childId),
-    enabled: !!childId && isAuthenticated,
-  });
-
-  const activeTopics = new Set(
-    (subsData?.items ?? []).filter((s) => s.is_active).map((s) => s.topic),
-  );
-  const subscribedCount = activeTopics.size;
-
-  const handleSubscribe = useCallback(
-    async (topic: NewsCategory) => {
-      if (!childId || pendingSubscribe) return;
-      setError(null);
-      setPendingSubscribe(topic);
-      try {
-        await storyService.subscribeTopic({ child_id: childId, topic });
-        setJustSubscribed(topic);
-        setTimeout(() => setJustSubscribed(null), 1000);
-        await queryClient.invalidateQueries({
-          queryKey: ["kids-daily-subscriptions", childId],
-        });
-      } catch (err) {
-        setError(
-          err instanceof Error ? err.message : "Oops, something went wrong!",
-        );
-      } finally {
-        setPendingSubscribe(null);
-      }
-    },
-    [childId, pendingSubscribe, queryClient],
-  );
-
-  const handleUnsubscribe = useCallback(
-    async (topic: NewsCategory) => {
-      if (!childId || pendingSubscribe) return;
-      setError(null);
-      setPendingSubscribe(topic);
-      try {
-        await storyService.unsubscribeTopic(childId, topic);
-        await queryClient.invalidateQueries({
-          queryKey: ["kids-daily-subscriptions", childId],
-        });
-      } catch (err) {
-        setError(
-          err instanceof Error ? err.message : "Oops, something went wrong!",
-        );
-      } finally {
-        setPendingSubscribe(null);
-      }
-    },
-    [childId, pendingSubscribe, queryClient],
-  );
 
   const handleListenNow = useCallback(
     async (topic: NewsCategory) => {
@@ -411,9 +320,11 @@ function KidsDailyPage() {
             "You've used all your listens for today - come back tomorrow!",
           );
         } else if (status === 502) {
-          setError("No fresh news right now - try again in a minute!");
+          setError(
+            "Our story-makers are taking a quick break — try again in a moment! 🌟",
+          );
         } else {
-          setError("Something went wrong - try again!");
+          setError("Something went wrong — let's give it another go in a sec! 🦊");
         }
       } finally {
         abortRef.current = null;
@@ -461,7 +372,7 @@ function KidsDailyPage() {
         <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/80 border border-primary/20 shadow-sm">
           <span className="text-sm">🌈</span>
           <span className="text-sm font-semibold text-gray-700">
-            Following {subscribedCount}/{ALL_TOPICS.length} channels
+            {ALL_TOPICS.length} story channels — pick any to listen
           </span>
         </div>
       </motion.div>
@@ -493,11 +404,8 @@ function KidsDailyPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {ALL_TOPICS.map((item, index) => {
             const theme = TOPIC_THEME[item.topic];
-            const subscribed = activeTopics.has(item.topic);
             const isGenerating = generatingTopic === item.topic;
-            const isSubscribing = pendingSubscribe === item.topic;
             const isRateLimited = rateLimitRetry?.topic === item.topic;
-            const showBurst = justSubscribed === item.topic;
 
             return (
               <motion.div
@@ -512,32 +420,21 @@ function KidsDailyPage() {
                 <Card
                   hover={false}
                   padding="none"
-                  className={`h-full relative overflow-hidden rounded-3xl border-2 bg-gradient-to-br transition-all ${
-                    theme.card
-                  } ${subscribed ? "shadow-kid-md" : "shadow-kid-sm"}`}
+                  className={`h-full relative overflow-hidden rounded-3xl border-2 bg-gradient-to-br transition-all shadow-kid-md ${theme.card}`}
                 >
-                  <div className="h-full min-h-[352px] p-5 flex flex-col gap-3.5">
-                    {/* Row 1: Icon + Follow state (fixed height) */}
-                    <div className="h-[66px] flex items-start justify-between">
+                  <div className="h-full min-h-[260px] p-5 flex flex-col gap-3.5">
+                    {/* Row 1: Icon */}
+                    <div className="h-[66px] flex items-start">
                       <div
                         className={`w-14 h-14 rounded-3xl bg-gradient-to-br ${theme.iconBubble} flex items-center justify-center shadow-sm border border-white/60`}
                       >
                         <motion.div
                           className="text-4xl"
-                          animate={subscribed ? { scale: [1, 1.08, 1] } : {}}
-                          transition={{ duration: 0.4 }}
+                          animate={{ scale: [1, 1.04, 1] }}
+                          transition={{ duration: 4, repeat: Infinity }}
                         >
                           {item.icon}
                         </motion.div>
-                      </div>
-                      <div
-                        className={`h-8 px-3 rounded-full text-xs font-bold flex items-center ${
-                          subscribed
-                            ? theme.accentPill
-                            : "bg-white/80 text-gray-500 border border-gray-200"
-                        }`}
-                      >
-                        {subscribed ? "Following" : "Not Following"}
                       </div>
                     </div>
 
@@ -557,99 +454,48 @@ function KidsDailyPage() {
                         <span className="text-xs font-semibold text-amber-700 bg-amber-100 px-3 py-1 rounded-full">
                           Retry in {rateLimitRetry!.seconds}s
                         </span>
-                      ) : subscribed ? (
+                      ) : (
                         <span className="text-xs text-gray-600 bg-white/70 px-3 py-1 rounded-full border border-white/80">
                           Ready to listen
-                        </span>
-                      ) : (
-                        <span className="text-xs text-gray-500 bg-white/70 px-3 py-1 rounded-full border border-white/80">
-                          Follow to unlock listen
                         </span>
                       )}
                     </div>
 
-                    {/* Row 4: Actions (fixed button heights) */}
-                    <div className="mt-auto space-y-3">
-                      {subscribed ? (
-                        <>
-                          <motion.button
-                            className={`h-12 w-full flex items-center justify-center gap-2 rounded-2xl text-base font-bold border transition-colors ${
-                              isGenerating
-                                ? "bg-white/70 text-gray-500 border-white cursor-wait"
-                                : isRateLimited
-                                  ? "bg-amber-300 text-amber-900 border-amber-200 cursor-not-allowed"
-                                  : `${theme.listenBtn} ${theme.listenBtnHover} text-white border-transparent`
-                            }`}
-                            disabled={generatingTopic !== null || isRateLimited}
-                            onClick={() => handleListenNow(item.topic)}
-                            whileTap={
-                              !isGenerating && !isRateLimited
-                                ? { scale: 0.95 }
-                                : {}
-                            }
-                          >
-                            {isRateLimited ? (
-                              <>
-                                <motion.span
-                                  animate={{ rotate: [0, 180] }}
-                                  transition={{ duration: 1, repeat: Infinity }}
-                                >
-                                  ⏳
-                                </motion.span>
-                                Wait {rateLimitRetry!.seconds}s
-                              </>
-                            ) : (
-                              <>
-                                <span>▶</span>
-                                Listen Now
-                              </>
-                            )}
-                          </motion.button>
-
-                          <button
-                            className="h-10 w-full rounded-xl text-sm font-semibold text-gray-500 bg-white/70 border border-white/90 hover:text-red-500 hover:bg-red-50 transition-colors"
-                            disabled={isSubscribing}
-                            onClick={() => handleUnsubscribe(item.topic)}
-                          >
-                            {isSubscribing ? "Removing..." : "Unfollow"}
-                          </button>
-                        </>
-                      ) : (
-                        <motion.button
-                          className={`h-12 w-full flex items-center justify-center gap-1 rounded-2xl text-base font-bold border-2 bg-white/80 transition-colors ${
-                            isSubscribing
-                              ? "border-primary/50 bg-primary/10 text-primary"
-                              : theme.followBtn
-                          }`}
-                          disabled={isSubscribing}
-                          onClick={() => handleSubscribe(item.topic)}
-                          whileTap={{ scale: 0.93 }}
-                        >
-                          {isSubscribing ? (
-                            <>
-                              <motion.span
-                                animate={{ rotate: 360 }}
-                                transition={{
-                                  duration: 0.8,
-                                  repeat: Infinity,
-                                  ease: "linear",
-                                }}
-                              >
-                                ✨
-                              </motion.span>
-                              Following
-                              <BouncingDots />
-                            </>
-                          ) : (
-                            "+ Follow"
-                          )}
-                        </motion.button>
-                      )}
-                      {!subscribed && (
-                        <div className="h-10 w-full rounded-xl text-xs font-medium text-gray-400 bg-white/60 border border-white/90 flex items-center justify-center">
-                          Follow first, then listen
-                        </div>
-                      )}
+                    {/* Row 4: Listen Now button */}
+                    <div className="mt-auto">
+                      <motion.button
+                        className={`h-12 w-full flex items-center justify-center gap-2 rounded-2xl text-base font-bold border transition-colors ${
+                          isGenerating
+                            ? "bg-white/70 text-gray-500 border-white cursor-wait"
+                            : isRateLimited
+                              ? "bg-amber-300 text-amber-900 border-amber-200 cursor-not-allowed"
+                              : `${theme.listenBtn} ${theme.listenBtnHover} text-white border-transparent`
+                        }`}
+                        disabled={generatingTopic !== null || isRateLimited}
+                        onClick={() => handleListenNow(item.topic)}
+                        whileTap={
+                          !isGenerating && !isRateLimited
+                            ? { scale: 0.95 }
+                            : {}
+                        }
+                      >
+                        {isRateLimited ? (
+                          <>
+                            <motion.span
+                              animate={{ rotate: [0, 180] }}
+                              transition={{ duration: 1, repeat: Infinity }}
+                            >
+                              ⏳
+                            </motion.span>
+                            Wait {rateLimitRetry!.seconds}s
+                          </>
+                        ) : (
+                          <>
+                            <span>▶</span>
+                            Listen Now
+                          </>
+                        )}
+                      </motion.button>
                     </div>
                   </div>
 
@@ -664,11 +510,6 @@ function KidsDailyPage() {
                     )}
                   </AnimatePresence>
                 </Card>
-
-                {/* Subscribe sparkle burst */}
-                <AnimatePresence>
-                  {showBurst && <SubscribeSuccessBurst />}
-                </AnimatePresence>
               </motion.div>
             );
           })}
@@ -676,7 +517,7 @@ function KidsDailyPage() {
       </div>
 
       <div className="text-center pb-4 text-xs text-gray-500">
-        Tap any card to follow, then press Listen.
+        Pick any card and tap Listen — fresh stories every time. ✨
       </div>
     </div>
   );
