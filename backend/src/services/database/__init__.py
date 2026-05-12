@@ -23,6 +23,12 @@ from .usage_repository import UsageRepository, usage_repo
 from .referral_repository import ReferralRepository, referral_repo
 from .vector_repository import VectorRepository, vector_repo
 from .agent_repository import AgentRepository, AgentData, agent_repo
+from .agent_chat_repository import (
+    AgentChatRepository,
+    AgentChatSession,
+    AgentChatMessage,
+    agent_chat_repo,
+)
 from .group_repository import (
     GroupRepository,
     group_repo,
@@ -74,6 +80,10 @@ __all__ = [
     "AgentRepository",
     "AgentData",
     "agent_repo",
+    "AgentChatRepository",
+    "AgentChatSession",
+    "AgentChatMessage",
+    "agent_chat_repo",
     "GroupRepository",
     "group_repo",
     "GroupData",

@@ -820,6 +820,12 @@ class AgentResponse(BaseModel):
     agent_name: str = Field(..., description="Agent display name")
     agent_avatar_id: str = Field(..., description="Avatar identifier (e.g. 'emoji:🦊')")
     agent_title: str = Field(..., description="Agent title (curated or free-text)")
+    tone: str = Field(default="warm_curious", description="Guided tone preset")
+    interaction_style: str = Field(default="guided_playful", description="Guided interaction style preset")
+    enabled_skills: List[str] = Field(default_factory=list, description="Enabled My Agent skill IDs")
+    favorite_topics: List[str] = Field(default_factory=list, description="Topics the buddy should favor")
+    learning_goals: List[str] = Field(default_factory=list, description="Parent-selected learning goals")
+    custom_instructions: str = Field(default="", max_length=500, description="Parent-approved custom guidance")
     created_at: datetime = Field(..., description="When the agent was first created")
     updated_at: datetime = Field(..., description="When the agent was last updated")
 
@@ -830,6 +836,19 @@ class UpsertAgentRequest(BaseModel):
     agent_avatar_id: str = Field(..., min_length=1, description="Avatar identifier from the whitelist")
     agent_title: str = Field(..., min_length=1, max_length=32, description="Agent title")
     child_id: str = Field(..., min_length=1, description="Child profile this agent is bound to")
+    tone: str = Field(default="warm_curious", min_length=1, max_length=40)
+    interaction_style: str = Field(default="guided_playful", min_length=1, max_length=40)
+    enabled_skills: List[str] = Field(default_factory=list)
+    favorite_topics: List[str] = Field(default_factory=list, max_length=8)
+    learning_goals: List[str] = Field(default_factory=list, max_length=8)
+    custom_instructions: str = Field(default="", max_length=500)
+
+
+class AgentChatRequest(BaseModel):
+    """JSON body for POST /me/agent/chat/stream."""
+    child_id: str = Field(..., min_length=1)
+    message: str = Field(..., min_length=1, max_length=2000)
+    session_id: Optional[str] = Field(None, min_length=1)
 
 
 class CompleteOnboardingRequest(BaseModel):

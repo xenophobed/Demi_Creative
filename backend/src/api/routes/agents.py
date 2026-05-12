@@ -17,12 +17,17 @@ Validation pipeline for PUT /me/agent:
 
 import json
 import logging
+import os
 from datetime import datetime
+from pathlib import Path
+from tempfile import NamedTemporaryFile
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi.responses import StreamingResponse
 
 from ..deps import get_current_user
-from ..models import AgentResponse, UpsertAgentRequest
+from ..models import AgentChatRequest, AgentResponse, UpsertAgentRequest
+from ...agents.my_agent_proxy import stream_my_agent_chat
 from ...mcp_servers import check_content_safety
 from ...services.agent_constants import (
     AVATAR_IDS,
@@ -43,6 +48,25 @@ router = APIRouter(prefix="/api/v1/me/agent", tags=["My Agent"])
 # (3-5 -> 4) to apply the strictest filter.
 _AGENT_SAFETY_TARGET_AGE = 4
 _SAFETY_THRESHOLD = 0.85
+_ALLOWED_TONES = {
+    "warm_curious",
+    "funny_playful",
+    "calm_gentle",
+    "adventurous",
+    "teacherly",
+}
+_ALLOWED_INTERACTION_STYLES = {
+    "guided_playful",
+    "question_first",
+    "storyteller",
+    "coach",
+}
+_ALLOWED_SKILLS = {
+    "image_story",
+    "interactive_story",
+    "kids_daily",
+    "audio_narration",
+}
 
 
 class _SafetyUnavailableError(RuntimeError):
@@ -108,9 +132,49 @@ def _to_response(agent) -> AgentResponse:
         agent_name=agent.agent_name,
         agent_avatar_id=agent.agent_avatar_id,
         agent_title=agent.agent_title,
+        tone=agent.tone,
+        interaction_style=agent.interaction_style,
+        enabled_skills=agent.enabled_skills or [],
+        favorite_topics=agent.favorite_topics or [],
+        learning_goals=agent.learning_goals or [],
+        custom_instructions=agent.custom_instructions or "",
         created_at=datetime.fromisoformat(agent.created_at),
         updated_at=datetime.fromisoformat(agent.updated_at),
     )
+
+
+def _clean_list(values: list[str], *, max_items: int = 8, max_len: int = 40) -> list[str]:
+    cleaned: list[str] = []
+    for value in values or []:
+        item = str(value).strip()
+        if not item:
+            continue
+        cleaned.append(item[:max_len])
+        if len(cleaned) >= max_items:
+            break
+    return cleaned
+
+
+async def _safety_check_optional_text(text: str, code_prefix: str) -> None:
+    cleaned = text.strip()
+    if not cleaned:
+        return
+    try:
+        score = await _run_safety_check(cleaned)
+    except _SafetyUnavailableError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={"code": "SAFETY_UNAVAILABLE"},
+        )
+    if score < _SAFETY_THRESHOLD:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": f"UNSAFE_{code_prefix}",
+                "reason": "This buddy setting did not pass content safety check",
+                "score": score,
+            },
+        )
 
 
 @router.get(
@@ -213,6 +277,30 @@ async def upsert_my_agent(
             },
         )
 
+    tone = request.tone if request.tone in _ALLOWED_TONES else "warm_curious"
+    interaction_style = (
+        request.interaction_style
+        if request.interaction_style in _ALLOWED_INTERACTION_STYLES
+        else "guided_playful"
+    )
+    enabled_skills = [
+        skill for skill in (request.enabled_skills or []) if skill in _ALLOWED_SKILLS
+    ]
+    if not enabled_skills:
+        enabled_skills = [
+            "image_story",
+            "interactive_story",
+            "kids_daily",
+            "audio_narration",
+        ]
+    favorite_topics = _clean_list(request.favorite_topics)
+    learning_goals = _clean_list(request.learning_goals)
+    custom_instructions = (request.custom_instructions or "").strip()[:500]
+
+    await _safety_check_optional_text(custom_instructions, "CUSTOM_INSTRUCTIONS")
+    await _safety_check_optional_text(" ".join(favorite_topics), "FAVORITE_TOPICS")
+    await _safety_check_optional_text(" ".join(learning_goals), "LEARNING_GOALS")
+
     # 3. Persist via repository (insert or update on (user_id, child_id)).
     agent = await agent_repo.upsert_agent(
         user_id=user.user_id,
@@ -220,6 +308,12 @@ async def upsert_my_agent(
         agent_name=request.agent_name,
         agent_avatar_id=request.agent_avatar_id,
         agent_title=request.agent_title,
+        tone=tone,
+        interaction_style=interaction_style,
+        enabled_skills=enabled_skills,
+        favorite_topics=favorite_topics,
+        learning_goals=learning_goals,
+        custom_instructions=custom_instructions,
     )
 
     # 4. Persist default_child_id on first agent creation (#455). Set-once
@@ -233,3 +327,64 @@ async def upsert_my_agent(
         )
 
     return _to_response(agent)
+
+
+async def _parse_chat_request(request: Request) -> tuple[AgentChatRequest, str | None]:
+    content_type = request.headers.get("content-type", "")
+    image_path: str | None = None
+    if content_type.startswith("multipart/form-data"):
+        form = await request.form()
+        payload = AgentChatRequest(
+            child_id=str(form.get("child_id") or ""),
+            message=str(form.get("message") or ""),
+            session_id=str(form.get("session_id") or "") or None,
+        )
+        upload = form.get("image")
+        if upload is not None and hasattr(upload, "read"):
+            suffix = Path(getattr(upload, "filename", "") or "upload.png").suffix or ".png"
+            data = await upload.read()
+            tmp = NamedTemporaryFile(delete=False, suffix=suffix)
+            tmp.write(data)
+            tmp.close()
+            image_path = tmp.name
+        return payload, image_path
+
+    data = await request.json()
+    return AgentChatRequest(**data), None
+
+
+@router.post(
+    "/chat/stream",
+    summary="Chat with the current user's My Agent buddy",
+    description="Streams buddy chat and specialist tool results as SSE.",
+)
+async def chat_with_my_agent_stream(
+    request: Request,
+    user: UserData = Depends(get_current_user),
+):
+    try:
+        payload, image_path = await _parse_chat_request(request)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "INVALID_AGENT_CHAT_REQUEST", "reason": str(exc)},
+        )
+
+    async def _events():
+        try:
+            async for event in stream_my_agent_chat(
+                user_id=user.user_id,
+                child_id=payload.child_id,
+                message=payload.message,
+                session_id=payload.session_id,
+                image_path=image_path,
+            ):
+                yield event
+        finally:
+            if image_path:
+                try:
+                    os.unlink(image_path)
+                except OSError:
+                    pass
+
+    return StreamingResponse(_events(), media_type="text/event-stream")
