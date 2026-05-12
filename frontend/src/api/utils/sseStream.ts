@@ -42,6 +42,11 @@ export async function consumeSSEStream(
             case 'result':      callbacks.onResult?.(data);     break
             case 'complete':    callbacks.onComplete?.(data);   break
             case 'error':       callbacks.onError?.(data);      break
+            // #496 — launch_flow lets the buddy hand off control to a
+            // matching standalone experience page. Older SPAs that don't
+            // register onLaunchFlow simply ignore the event and fall back
+            // to the regular `result` text reply.
+            case 'launch_flow': callbacks.onLaunchFlow?.(data); break
           }
           eventType = null
         }
