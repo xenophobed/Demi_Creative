@@ -144,6 +144,171 @@ def _build_launch_flow_data(parsed: dict[str, Any]) -> Optional[dict[str, Any]]:
     }
 
 
+# #498 — Safety gate for every buddy chat reply.
+#
+# Default threshold matches the project-wide convention (PRD §3.4 +
+# routes/agents.py). Ages 3-5 get a stricter bar because younger
+# children are more susceptible to even mildly off-tone content.
+_REPLY_SAFETY_THRESHOLD = 0.85
+_REPLY_SAFETY_THRESHOLD_YOUNG = 0.90
+
+# Warm, age-neutral fallback. Children are the audience — corporate
+# phrasing would feel jarring, but we also avoid implying the child did
+# anything wrong (the unsafe content came from the model, not the child).
+_SAFETY_FALLBACK_MESSAGE = (
+    "Let's try that again — what would you like to make?"
+)
+
+
+def _threshold_for_age(age_group: Optional[str]) -> float:
+    """Return the safety threshold a reply must meet for this age bucket."""
+    return _REPLY_SAFETY_THRESHOLD_YOUNG if age_group == "3-5" else _REPLY_SAFETY_THRESHOLD
+
+
+async def _run_safety_score(text: str, *, age_group: Optional[str]) -> tuple[Optional[float], Optional[str]]:
+    """Call the safety MCP against ``text``.
+
+    Returns ``(score, None)`` on success or ``(None, reason)`` when the
+    safety MCP is unreachable / returned a malformed envelope, so the
+    caller can fail closed without trusting a partial result. We never
+    raise — the proxy is mid-stream and an exception here would orphan
+    the SSE connection.
+
+    ``check_content_safety`` is decorated with the SDK's ``@tool``, which
+    wraps it in a non-callable ``SdkMcpTool`` registration object; the
+    raw async handler lives at ``.handler`` (same gotcha documented in
+    routes/agents.py::_run_safety_check).
+    """
+    target_age = 4 if age_group == "3-5" else 7 if age_group == "6-8" else 10
+    try:
+        handler = getattr(check_content_safety, "handler", check_content_safety)
+        result = await handler({
+            "content_text": text,
+            "content_type": "story",
+            "target_age": target_age,
+        })
+    except Exception as exc:  # noqa: BLE001 — fail closed on any error
+        logger.warning("My Agent reply safety MCP unavailable: %s", exc)
+        return None, "safety_unavailable"
+
+    try:
+        data = json.loads(result["content"][0]["text"])
+    except (KeyError, IndexError, TypeError, ValueError):
+        logger.warning("My Agent reply safety MCP returned malformed payload")
+        return None, "safety_unavailable"
+
+    if not isinstance(data, dict) or "error" in data:
+        logger.warning("My Agent reply safety MCP returned error envelope: %s", data)
+        return None, "safety_unavailable"
+
+    score = data.get("safety_score")
+    if score is None:
+        logger.warning("My Agent reply safety MCP omitted safety_score")
+        return None, "safety_unavailable"
+
+    return float(score), None
+
+
+async def _suggest_improved_text(text: str, *, age_group: Optional[str]) -> Optional[str]:
+    """Ask the safety MCP for an improved rewrite of an unsafe reply.
+
+    Returns the suggested text or ``None`` when the improvement service
+    is unreachable / malformed. The caller will fall back to a generic
+    safe message in that case.
+    """
+    try:
+        from ..mcp_servers.safety_check_server import suggest_content_improvements
+        handler = getattr(suggest_content_improvements, "handler", suggest_content_improvements)
+        target_age = 4 if age_group == "3-5" else 7 if age_group == "6-8" else 10
+        result = await handler({
+            "content_text": text,
+            "content_type": "story",
+            "target_age": target_age,
+            "safety_issues": [],
+        })
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("My Agent reply safety improvement MCP unavailable: %s", exc)
+        return None
+
+    try:
+        data = json.loads(result["content"][0]["text"])
+    except (KeyError, IndexError, TypeError, ValueError):
+        logger.warning("My Agent reply safety improvement returned malformed payload")
+        return None
+
+    if not isinstance(data, dict):
+        return None
+    # Different shapes accepted: improved_content, improved_text, or content.
+    for key in ("improved_content", "improved_text", "content"):
+        value = data.get(key)
+        if isinstance(value, str) and value.strip():
+            return value
+    return None
+
+
+async def enforce_chat_safety(
+    reply_text: str,
+    *,
+    age_group: Optional[str],
+    allow_retry: bool = True,
+) -> tuple[str, float, bool]:
+    """Run the buddy reply through the safety gate, with one retry path.
+
+    Returns ``(text, score, used_fallback)`` where:
+      - ``text`` is the possibly-improved reply that should be sent
+      - ``score`` is the final safety score (0.0 if MCP failed or
+        fallback was used)
+      - ``used_fallback`` is True when the generic fallback message
+        replaced the original reply
+
+    Behaviour:
+      1. Score the original reply. If it meets the age-aware threshold,
+         return it unchanged.
+      2. If allow_retry, call ``suggest_content_improvements`` and
+         re-score the rewrite once. If the rewrite passes, return it.
+      3. Otherwise return the safe fallback message.
+
+    Trade-off: we run at most ONE retry. Unlimited retries would risk
+    looping on a degenerate model output and stalling the stream. One
+    retry gives us a meaningful recovery shot while bounding latency.
+    """
+    threshold = _threshold_for_age(age_group)
+    score, error = await _run_safety_score(reply_text, age_group=age_group)
+    if error is None and score is not None:
+        logger.info(
+            "Buddy reply safety score=%.2f threshold=%.2f age_group=%s",
+            score,
+            threshold,
+            age_group,
+        )
+        if score >= threshold:
+            return reply_text, score, False
+    else:
+        logger.warning(
+            "Buddy reply safety MCP failed (reason=%s) — falling back",
+            error,
+        )
+
+    if allow_retry and error is None:
+        improved = await _suggest_improved_text(reply_text, age_group=age_group)
+        if improved:
+            retry_score, retry_error = await _run_safety_score(improved, age_group=age_group)
+            if retry_error is None and retry_score is not None:
+                logger.info(
+                    "Buddy reply retry safety score=%.2f threshold=%.2f",
+                    retry_score,
+                    threshold,
+                )
+                if retry_score >= threshold:
+                    return improved, retry_score, False
+
+    logger.warning(
+        "Buddy reply blocked — replacing with safe fallback (age_group=%s)",
+        age_group,
+    )
+    return _SAFETY_FALLBACK_MESSAGE, score or 0.0, True
+
+
 def _supports_callable(cls: Any, kwargs: dict[str, Any]) -> dict[str, Any]:
     if cls is None:
         return {}
@@ -704,6 +869,7 @@ async def stream_my_agent_chat(
     message: str,
     session_id: Optional[str] = None,
     image_path: Optional[str] = None,
+    age_group: Optional[str] = None,
 ) -> AsyncGenerator[str, None]:
     """Stream an SDK-orchestrated My Agent chat response as SSE."""
     chat_session = await agent_chat_repo.get_or_create_session(
@@ -848,6 +1014,40 @@ async def stream_my_agent_chat(
         return
 
     final_text = final_text.strip() or "I'm here and ready to create with you."
+
+    # #498 — Safety gate: every buddy chat reply MUST pass content-safety
+    # review before reaching the client. PRD §3.4 treats child safety as
+    # non-negotiable; the user-experience cost of a fallback message is
+    # far less than the cost of delivering unsafe text.
+    #
+    # Inline-mode skip: when a specialist tool already returned a
+    # generated artifact, that content was safety-checked by the
+    # specialist itself. We re-check the BUDDY WRAPPER PROSE (which is
+    # `final_text` — the proxy's natural-language summary) rather than
+    # the specialist payload. Cheaper, and avoids double-scoring large
+    # story text. The wrapper is still what the child reads first.
+    safety_text, safety_score, used_fallback = await enforce_chat_safety(
+        final_text,
+        age_group=age_group,
+        allow_retry=True,
+    )
+    if used_fallback or safety_text != final_text:
+        yield _sse(
+            "safety_blocked",
+            {
+                "reason": "below_threshold" if not used_fallback else "fallback_used",
+                "safety_score": safety_score,
+                "threshold": _threshold_for_age(age_group),
+                "original_length": len(final_text),
+            },
+        )
+        final_text = safety_text
+        if used_fallback:
+            # Wrapper prose blocked — strip any specialist metadata so
+            # the SPA doesn't try to navigate to a launched flow that
+            # was supposed to be introduced by unsafe text.
+            result_metadata = {"response_type": "chat"}
+
     result_payload = {
         "response_type": result_metadata["response_type"],
         "message": final_text,
