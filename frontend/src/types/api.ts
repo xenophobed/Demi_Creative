@@ -466,7 +466,8 @@ export type SSEEventType =
   | "session"
   | "result"
   | "complete"
-  | "error";
+  | "error"
+  | "launch_flow";
 
 // SSE event data
 export interface SSEStatusData {
@@ -500,6 +501,24 @@ export interface SSEErrorData {
   message: string;
 }
 
+/**
+ * SSE `launch_flow` payload — emitted by the My Agent proxy (#496) when
+ * a specialist tool returns a typed result. The frontend uses this to
+ * navigate to the matching standalone experience page (`/story/:id`,
+ * `/interactive-story/:session_id`, `/kids-daily/:episode_id`, etc.)
+ * with prefill values applied as query params.
+ *
+ * `route` is server-validated and always resolves to a known landing or
+ * detail route — the SPA should NOT compose its own route from
+ * `flow_type` because the proxy may also fall back to a landing route
+ * when no resource ID is available yet.
+ */
+export interface SSELaunchFlowData {
+  flow_type: "image_story" | "interactive_story" | "kids_daily";
+  route: string;
+  prefill: Record<string, string | number | boolean | null>;
+}
+
 // Stream callback types
 export interface StreamCallbacks {
   onStatus?: (data: SSEStatusData) => void;
@@ -511,4 +530,5 @@ export interface StreamCallbacks {
   onResult?: (data: any) => void;
   onComplete?: (data: SSEStatusData) => void;
   onError?: (data: SSEErrorData) => void;
+  onLaunchFlow?: (data: SSELaunchFlowData) => void;
 }

@@ -705,3 +705,248 @@ class TestSafetyOnEveryReply:
         blocked = [e for e in events if e["event"] == "safety_blocked"]
         assert blocked, "Expected safety_blocked event on malformed payload (fail closed)"
         assert blocked[0]["data"].get("reason") in {"safety_unavailable", "mcp_error"}
+
+
+# ---------------------------------------------------------------------------
+# launch_flow SSE event (#496)
+# ---------------------------------------------------------------------------
+
+
+class _FakeSDKClient:
+    """Async-context-manager stand-in for ClaudeSDKClient.
+
+    Yields a caller-supplied list of SDK messages from receive_response()
+    so we can drive ToolResultBlock paths without spinning a real agent.
+    """
+
+    def __init__(self, *, messages):
+        self._messages = messages
+
+    def __call__(self, *_args, **_kwargs):  # pragma: no cover - unused
+        return self
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        return False
+
+    async def query(self, _prompt):
+        return None
+
+    async def receive_response(self):
+        for message in self._messages:
+            yield message
+
+
+def _assistant_with_tool_result(payload: dict[str, Any]):
+    """Build an AssistantMessage carrying a single ToolResultBlock with payload."""
+    from claude_agent_sdk import AssistantMessage, ToolResultBlock
+
+    block = ToolResultBlock(
+        tool_use_id="tu_test",
+        content=[{"type": "text", "text": json.dumps(payload, ensure_ascii=False)}],
+        is_error=False,
+    )
+    return AssistantMessage(content=[block], model="claude-haiku")
+
+
+def _fake_result_message(text: str):
+    """Build a ResultMessage stand-in with the SDK's real class.
+
+    The proxy checks `isinstance(sdk_message, ResultMessage)`, so we must
+    use the real class. We pass through enough kwargs to instantiate it.
+    """
+    from claude_agent_sdk import ResultMessage
+
+    return ResultMessage(
+        subtype="success",
+        duration_ms=0,
+        duration_api_ms=0,
+        is_error=False,
+        num_turns=1,
+        session_id="sdk_sess_1",
+        total_cost_usd=0.0,
+        result=text,
+    )
+
+
+async def _collect_launch_flow_run(messages, *, image_path=None):
+    """Drive stream_my_agent_chat with a fake SDK client and parse SSE.
+
+    Patches in:
+      - a fake SDKClient that yields the supplied messages,
+      - a fake agent persona with all four specialist skills enabled,
+      - a passthrough safety MCP so any future buddy-reply safety gate
+        (e.g. PRD §3.4) doesn't silently swallow the response and hide
+        the launch_flow contract we are exercising here.
+    """
+    fake_client = _FakeSDKClient(messages=messages)
+    fake_agent = _fake_agent(
+        enabled_skills=["image_story", "interactive_story", "kids_daily", "audio_narration"]
+    )
+    safe_envelope = {"content": [{"type": "text", "text": json.dumps({"safety_score": 0.99})}]}
+    with patch.object(my_agent_proxy.agent_repo, "get_agent", new=AsyncMock(return_value=fake_agent)), \
+         patch.object(my_agent_proxy, "ClaudeSDKClient", lambda *a, **kw: fake_client), \
+         patch.object(
+             my_agent_proxy,
+             "build_my_agent_context",
+             new=AsyncMock(return_value="ctx"),
+         ), \
+         patch(
+             "backend.src.agents.my_agent_proxy.check_content_safety.handler",
+             new=AsyncMock(return_value=safe_envelope),
+         ):
+        chunks: list[str] = []
+        async for chunk in my_agent_proxy.stream_my_agent_chat(
+            user_id=_TEST_USER_ID,
+            child_id=_TEST_CHILD_ID,
+            message="hi buddy",
+            image_path=image_path,
+        ):
+            chunks.append(chunk)
+    return _parse_sse_events("".join(chunks))
+
+
+class TestLaunchFlowEvent:
+    """When a specialist tool returns a structured payload the proxy must
+    emit a typed `launch_flow` SSE event BEFORE the `result` event. This is
+    the primitive that lets the My Agent chat hop the user to the matching
+    standalone experience page with prefilled query params (#496)."""
+
+    @pytest.mark.asyncio
+    async def test_image_story_emits_launch_flow_before_result(self, test_db):
+        payload = {
+            "response_type": "image_story",
+            "payload": {
+                "story_id": "stry_abc123",
+                "story": "Once upon a time...",
+                "child_id": "c_test",
+                "age_group": "6-8",
+                "themes": ["adventure"],
+            },
+        }
+        events = await _collect_launch_flow_run(
+            messages=[
+                _assistant_with_tool_result(payload),
+                _fake_result_message("Story made!"),
+            ],
+            image_path="/tmp/x.png",
+        )
+        names = [e["event"] for e in events]
+        assert "launch_flow" in names, f"launch_flow missing from {names}"
+        # launch_flow must come before result so the frontend can navigate first.
+        assert names.index("launch_flow") < names.index("result")
+        launch = next(e for e in events if e["event"] == "launch_flow")
+        assert launch["data"]["flow_type"] == "image_story"
+        assert launch["data"]["route"] == "/story/stry_abc123"
+        prefill = launch["data"]["prefill"]
+        assert prefill.get("story_id") == "stry_abc123"
+        # Prefill should carry the IDs the target page reads from query params.
+        assert "child_id" in prefill
+
+    @pytest.mark.asyncio
+    async def test_interactive_story_emits_launch_flow(self, test_db):
+        payload = {
+            "response_type": "interactive_story",
+            "payload": {
+                "session_id": "sess_xyz999",
+                "title": "Forest Quest",
+                "age_group": "6-8",
+                "theme": "forest",
+            },
+        }
+        events = await _collect_launch_flow_run(
+            messages=[
+                _assistant_with_tool_result(payload),
+                _fake_result_message("Story started!"),
+            ],
+        )
+        launch = next((e for e in events if e["event"] == "launch_flow"), None)
+        assert launch is not None, "launch_flow event missing for interactive_story"
+        assert launch["data"]["flow_type"] == "interactive_story"
+        assert launch["data"]["route"] == "/interactive-story/sess_xyz999"
+        prefill = launch["data"]["prefill"]
+        assert prefill.get("session_id") == "sess_xyz999"
+        assert prefill.get("age_group") == "6-8"
+
+    @pytest.mark.asyncio
+    async def test_kids_daily_emits_launch_flow(self, test_db):
+        payload = {
+            "response_type": "kids_daily",
+            "payload": {
+                "episode_id": "ep_777",
+                "kid_title": "Today's Big News",
+                "age_group": "6-8",
+                "category": "science",
+            },
+        }
+        events = await _collect_launch_flow_run(
+            messages=[
+                _assistant_with_tool_result(payload),
+                _fake_result_message("Episode ready!"),
+            ],
+        )
+        launch = next((e for e in events if e["event"] == "launch_flow"), None)
+        assert launch is not None, "launch_flow event missing for kids_daily"
+        assert launch["data"]["flow_type"] == "kids_daily"
+        assert launch["data"]["route"] == "/kids-daily/ep_777"
+        prefill = launch["data"]["prefill"]
+        assert prefill.get("episode_id") == "ep_777"
+
+    @pytest.mark.asyncio
+    async def test_chat_response_does_not_emit_launch_flow(self, test_db):
+        """When no specialist fires, response_type defaults to 'chat' and
+        the proxy must NOT emit a launch_flow event — otherwise the frontend
+        would try to navigate away from a plain text reply."""
+        events = await _collect_launch_flow_run(
+            messages=[_fake_result_message("Hi friend!")],
+        )
+        names = [e["event"] for e in events]
+        assert "launch_flow" not in names, (
+            f"Unexpected launch_flow for plain chat: {names}"
+        )
+        # We still expect a result event for the chat reply.
+        assert "result" in names
+
+    @pytest.mark.asyncio
+    async def test_invalid_response_type_does_not_emit_launch_flow(self, test_db):
+        """Defensive: an unknown response_type must not produce a
+        launch_flow event with an unmapped route. This snapshots the
+        whitelist policy so a future agent that returns 'video_story' or
+        similar can't silently navigate the user somewhere broken."""
+        payload = {"response_type": "video_story", "payload": {"video_id": "v1"}}
+        events = await _collect_launch_flow_run(
+            messages=[
+                _assistant_with_tool_result(payload),
+                _fake_result_message("Made a thing."),
+            ],
+        )
+        names = [e["event"] for e in events]
+        assert "launch_flow" not in names, (
+            f"launch_flow emitted for unknown response_type: {names}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_missing_id_falls_back_to_landing_route(self, test_db):
+        """If the specialist payload has no story_id/session_id/episode_id
+        the proxy should still emit launch_flow pointing at the landing
+        page so the user lands in the right experience (with prefill) even
+        when persistence isn't wired through the buddy yet."""
+        payload = {
+            "response_type": "image_story",
+            "payload": {"child_id": "c_test", "age_group": "6-8"},  # no story_id
+        }
+        events = await _collect_launch_flow_run(
+            messages=[
+                _assistant_with_tool_result(payload),
+                _fake_result_message("Made a story."),
+            ],
+            image_path="/tmp/x.png",
+        )
+        launch = next((e for e in events if e["event"] == "launch_flow"), None)
+        assert launch is not None, "launch_flow should still fire without an ID"
+        assert launch["data"]["flow_type"] == "image_story"
+        # Landing route (no /:id) so the page can pick up where it left off.
+        assert launch["data"]["route"] == "/upload"
+        assert launch["data"]["prefill"].get("child_id") == "c_test"
