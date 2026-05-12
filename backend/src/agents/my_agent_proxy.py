@@ -59,6 +59,61 @@ def _json_tool_result(data: dict[str, Any]) -> dict[str, Any]:
     return {"content": [{"type": "text", "text": json.dumps(data, ensure_ascii=False)}]}
 
 
+# Threshold matches the project-wide convention used in routes/agents.py
+# and PRD §3.4. Replies scoring below this are blocked and replaced with
+# a child-friendly fallback before delivery.
+_REPLY_SAFETY_THRESHOLD = 0.85
+
+# Warm, age-neutral fallback. Children are the audience — corporate
+# phrasing would feel jarring, but we also avoid implying the child did
+# anything wrong (the unsafe content came from the model, not the child).
+_SAFETY_FALLBACK_MESSAGE = (
+    "Let's try something else! What kind of story would you like to make?"
+)
+
+
+async def _check_reply_safety(text: str) -> tuple[Optional[float], Optional[str]]:
+    """Run the child-safety MCP against a buddy chat reply.
+
+    Returns ``(score, None)`` on success or ``(None, reason)`` when the
+    safety MCP is unreachable / returned a malformed envelope, so the
+    caller can fail closed without trusting a partial result. We never
+    raise — the proxy is mid-stream and an exception here would orphan
+    the SSE connection.
+
+    ``check_content_safety`` is decorated with the SDK's ``@tool``, which
+    wraps it in a non-callable ``SdkMcpTool`` registration object; the
+    raw async handler lives at ``.handler`` (same gotcha documented in
+    routes/agents.py::_run_safety_check).
+    """
+    try:
+        result = await check_content_safety.handler({
+            "content_text": text,
+            "content_type": "story",
+            "target_age": 7,
+        })
+    except Exception as exc:  # noqa: BLE001 — fail closed on any error
+        logger.warning("My Agent reply safety MCP unavailable: %s", exc)
+        return None, "safety_unavailable"
+
+    try:
+        data = json.loads(result["content"][0]["text"])
+    except (KeyError, IndexError, TypeError, ValueError):
+        logger.warning("My Agent reply safety MCP returned malformed payload")
+        return None, "safety_unavailable"
+
+    if not isinstance(data, dict) or "error" in data:
+        logger.warning("My Agent reply safety MCP returned error envelope: %s", data)
+        return None, "safety_unavailable"
+
+    score = data.get("safety_score")
+    if score is None:
+        logger.warning("My Agent reply safety MCP omitted safety_score")
+        return None, "safety_unavailable"
+
+    return float(score), None
+
+
 def _supports_callable(cls: Any, kwargs: dict[str, Any]) -> dict[str, Any]:
     if cls is None:
         return {}
@@ -464,6 +519,51 @@ Return either a friendly chat reply or a short summary of the generated result.
         return
 
     final_text = final_text.strip() or "I'm here and ready to create with you."
+
+    # #498 — Safety gate: every buddy chat reply MUST pass content-safety
+    # review before reaching the client. We fail closed on MCP errors
+    # because PRD §3.4 treats child safety as non-negotiable; the user
+    # experience cost of a fallback message is far less than the cost
+    # of delivering unsafe text. The original (blocked) text is logged
+    # for telemetry but never re-emitted on the SSE stream.
+    safety_score, safety_error = await _check_reply_safety(final_text)
+    if safety_error is not None:
+        logger.warning(
+            "Replacing buddy reply with safe fallback (reason=%s, len=%d)",
+            safety_error,
+            len(final_text),
+        )
+        yield _sse(
+            "safety_blocked",
+            {
+                "reason": safety_error,
+                "safety_score": None,
+                "original_length": len(final_text),
+            },
+        )
+        final_text = _SAFETY_FALLBACK_MESSAGE
+        result_metadata = {"response_type": "chat"}
+    elif safety_score is not None and safety_score < _REPLY_SAFETY_THRESHOLD:
+        logger.warning(
+            "Replacing buddy reply with safe fallback (score=%.2f, len=%d)",
+            safety_score,
+            len(final_text),
+        )
+        yield _sse(
+            "safety_blocked",
+            {
+                "reason": "below_threshold",
+                "safety_score": safety_score,
+                "threshold": _REPLY_SAFETY_THRESHOLD,
+                "original_length": len(final_text),
+            },
+        )
+        final_text = _SAFETY_FALLBACK_MESSAGE
+        result_metadata = {"response_type": "chat"}
+    else:
+        # Successful safe reply — log score for monitoring (per-turn telemetry).
+        logger.info("Buddy reply passed safety review (score=%.2f)", safety_score or 0.0)
+
     result_payload = {
         "response_type": result_metadata["response_type"],
         "message": final_text,
