@@ -10,7 +10,12 @@
 
 import { AxiosError } from "axios";
 import apiClient from "../client";
-import type { Agent, UpsertAgentPayload } from "@/types/agent";
+import { consumeSSEStream } from "../utils/sseStream";
+import { getFreshAuthHeaders } from "../authUtils";
+import type { StreamCallbacks } from "@/types/api";
+import type { Agent, AgentChatPayload, UpsertAgentPayload } from "@/types/agent";
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api/v1";
 
 /**
  * Fetch the agent persona for the given child. Resolves to `null` when
@@ -45,4 +50,43 @@ export async function putAgent(payload: UpsertAgentPayload): Promise<Agent> {
   return r.data;
 }
 
-export const agentService = { getAgent, putAgent };
+export async function streamAgentChat(
+  payload: AgentChatPayload,
+  callbacks: StreamCallbacks,
+  signal?: AbortSignal,
+): Promise<void> {
+  let body: BodyInit;
+  let headers: HeadersInit;
+  if (payload.image) {
+    const form = new FormData();
+    form.append("child_id", payload.child_id);
+    form.append("message", payload.message);
+    if (payload.session_id) form.append("session_id", payload.session_id);
+    form.append("image", payload.image);
+    body = form;
+    headers = await getFreshAuthHeaders();
+  } else {
+    body = JSON.stringify({
+      child_id: payload.child_id,
+      message: payload.message,
+      session_id: payload.session_id ?? undefined,
+    });
+    headers = {
+      ...(await getFreshAuthHeaders()),
+      "Content-Type": "application/json",
+    };
+  }
+
+  const response = await fetch(`${API_BASE_URL}/me/agent/chat/stream`, {
+    method: "POST",
+    headers,
+    body,
+    signal,
+  });
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+  await consumeSSEStream(response, callbacks);
+}
+
+export const agentService = { getAgent, putAgent, streamAgentChat };
