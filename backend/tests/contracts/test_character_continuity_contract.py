@@ -129,7 +129,12 @@ class TestKidsDailyGuestFromCharacters:
 
     @pytest.mark.asyncio
     async def test_guest_uses_recurring_character_in_mock(self):
-        """In mock mode, guest_character should be top recurring character."""
+        """In mock mode, guest_character should be top recurring character.
+
+        The lookup is gated on (child_id, user_id) — characters are scoped
+        per-user, so the test must pass a real user_id for the repo call
+        to fire. See PR #494 for why the empty-user_id guard was added.
+        """
         from backend.src.agents.kids_daily_agent import generate_kids_daily_dialogue
 
         characters = [
@@ -148,6 +153,7 @@ class TestKidsDailyGuestFromCharacters:
                 news_text="Scientists found a new planet.",
                 age_group="6-8",
                 child_id="child-with-chars",
+                user_id="user-with-chars",
             )
 
         assert result["guest_character"] == "Lightning Dog"
@@ -168,6 +174,7 @@ class TestKidsDailyGuestFromCharacters:
                 news_text="New robot helps kids learn.",
                 age_group="6-8",
                 child_id="child-no-chars",
+                user_id="user-no-chars",
             )
 
         assert result["guest_character"] in _DEFAULT_GUESTS
