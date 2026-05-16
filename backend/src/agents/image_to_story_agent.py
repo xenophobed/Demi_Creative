@@ -99,6 +99,18 @@ from ..mcp_servers import (
     vision_server,
 )
 from ..services.story_memory import get_story_memory_prompt
+from ._safety import enforce_post_gen_safety
+
+
+def _age_group_from_int(age: int) -> str:
+    """Map an integer child age to the canonical 3-band age group used
+    by the safety helper. Mirrors logic in `kids_daily_agent`."""
+
+    if age <= 5:
+        return "3-5"
+    if age <= 8:
+        return "6-8"
+    return "9-12"
 
 
 async def _search_story_dedup(
@@ -704,19 +716,36 @@ Return your response as JSON:
 
     yield {"type": "tool_result", "data": {"status": "completed"}}
 
-    # Step 4: Safety check
+    # Step 4: Programmatic post-generation safety enforcement (#421).
+    # Non-bypassable in code: even if the SDK prompt is ignored, this
+    # gate runs before content is returned. One retry via
+    # ``suggest_content_improvements`` on failure; if it still fails,
+    # emit a structured error event and stop the stream.
     yield {"type": "tool_use", "data": {"tool": "mcp__safety-check__check_content_safety", "message": "Checking content safety..."}}
 
-    safety_result = await check_content_safety({
-        "content_text": story_data.get("story", ""),
-        "content_type": "story",
-        "target_age": child_age,
-    })
-    safety_text = safety_result.get("content", [{}])[0].get("text", "{}")
+    raw_story_text = story_data.get("story", "")
+    safety_age_group = _age_group_from_int(child_age)
     try:
-        safety_data = json.loads(safety_text)
-    except json.JSONDecodeError:
-        safety_data = {"safety_score": 0.9, "passed": True}
+        improved_story, safety_score, _retried = await enforce_post_gen_safety(
+            raw_story_text,
+            content_type="image_story",
+            age_group=safety_age_group,
+        )
+        story_data["story"] = improved_story
+        safety_data = {"safety_score": safety_score, "passed": True}
+    except RuntimeError as safety_exc:
+        yield {
+            "type": "error",
+            "data": {
+                "error": "SafetyCheckFailed",
+                "message": (
+                    "We couldn't make this story safe enough after a repair "
+                    "attempt. Please try again with a different drawing."
+                ),
+                "detail": str(safety_exc),
+            },
+        }
+        return
 
     yield {"type": "tool_result", "data": {"status": "completed"}}
 
