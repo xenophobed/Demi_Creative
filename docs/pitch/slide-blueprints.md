@@ -3,7 +3,7 @@
 Per-slide component spec for building the deck in Apple Keynote.
 Keep this file open in your IDE alongside `keynote-deck.md` while assembling slides.
 
-> **Narrative arc:** Emotional hook (1–3) → product intro (4) → **agentic evolution: single agent (5–6) → agent team (7) → innovation moats (8)** → product proof + demo (9) → traction (10) → **failures we owned (11)** → bookend close (12). Plus appendix backup slide (13) hidden by default for Q&A.
+> **Narrative arc:** Emotional hook (1–3) → product intro (4) → **agentic evolution: single agent (5–6) → agent team (7) → design decisions (8) → innovation moats (9)** → product proof + demo (10) → traction (11) → **failures we owned (12)** → bookend close (13). Plus appendix backup slide (14) hidden by default for Q&A.
 
 ---
 
@@ -25,7 +25,7 @@ Keep this file open in your IDE alongside `keynote-deck.md` while assembling sli
 | Body font | SF Pro Text (or Inter) — weight 400 | All body text |
 
 **Aspect ratio:** 16:9 widescreen
-**Slide count:** 12 main + 1 appendix (default-cut slides 3 + 11 for a 5-min slot → 10 visible; cut slides 3 + 6 + 11 for a ~4-min slot → 9 visible; cut slides 3 + 6 + 8 + 11 for a 3-min slot → 8 visible)
+**Slide count:** 13 main + 1 appendix (default-cut slides 3 + 8 + 12 for a 5-min slot → 10 visible; cut slides 3 + 6 + 8 + 12 for a ~4-min slot → 9 visible; cut slides 3 + 6 + 8 + 9 + 12 for a 3-min slot → 8 visible)
 **Total target time:** ~5:00 with handoff buffer
 
 ---
@@ -221,7 +221,43 @@ Keep this file open in your IDE alongside `keynote-deck.md` while assembling sli
 
 ---
 
-## Slide 8 — Innovation moats *(NEW)*
+## Slide 8 — Decisions, not defaults *(NEW · design rationale)*
+
+**Layout:** 4-column × 4-row table · H2 above · vocabulary footer · light background
+
+**Background:** Default white
+
+**Components:**
+
+| Component | Content | Style | Position |
+|---|---|---|---|
+| H2 heading | `Decisions, not defaults — every primitive earned its place` | Violet #7C3AED · 36px · weight 700 · italic accent on "every primitive earned its place" | Top-left |
+| Table headers | `Decision` · `Alternative we rejected` · `What we chose` · `Why` | Violet #7C3AED · 18px · weight 700 | Row 1 |
+| Row — Prompts | `Prompts` / `Python f-strings inline in code` / `Markdown files in backend/src/prompts/` / `Versioned · code-reviewable · age-stratified per file` | Slate body · 17px · bold "Prompts" · code styling for file paths | Row 2 |
+| Row — Tools | `Tools` / `Direct API calls in agent loops` / `Custom MCP servers · typed JSON envelopes · .handler calling convention` / `Composable · testable · independently versionable` | Slate body · 17px · bold "Tools" · code styling for .handler | Row 3 |
+| Row — Skills | `Skills` / `Hardcoded behaviors per agent class` / `enabled_skills field on AgentDefinition · _enabled(agent, skill) runs server-side` / `Per-age gating · A2A plug-in · single registration` | Slate body · 17px · bold "Skills" · code styling | Row 4 |
+| Row — Multi-agent | `Multi-agent` / `Bigger prompt + conditional branching` / `Proxy + 4 subagents + shared context bus` / `Specialty isolation · safety_review on EVERY reply · responsive routing` | Slate body · 17px · bold "Multi-agent" · "EVERY" emphasized | Row 5 |
+| Vocabulary footer | `Vocabulary — agent · subagent · team · orchestrator — each role is precise. See appendix.` | Slate body · 18px · italic on the four vocabulary words | Below table · 24px gap |
+
+**Visuals:** None. The 4×4 table IS the slide.
+
+**Timing:** ~30 seconds
+
+**Speaker beat:** Walk it row-by-row, ~7 seconds per row:
+1. *"Prompts could have been Python f-strings. We chose markdown in git — versioned and code-reviewable."*
+2. *"Tools could have been direct API calls. We chose MCP servers with typed envelopes — composable and testable."*
+3. *"Skills could have been hardcoded. We chose enabled_skills as a field on AgentDefinition — per-age gating, A2A extensible."*
+4. *"Multi-agent could have been a bigger prompt with branching. We chose a proxy plus 4 subagents — specialty isolated, safety_review runs on EVERY reply."*
+
+Close: *"We didn't adopt defaults. Each row is a trade-off we made deliberately."* Point at the vocabulary footer: *"And we use precise terms — agent, subagent, team, orchestrator. Each role is distinct."*
+
+**Why this slide exists:** Distinguishes "we wrote prompts and called the API" from "we made architectural decisions and designed primitives that compose." Judges who care about technical depth want to see the **decision framework**, not just the implementation list. Without this slide, slide 5 (Foundation) reads like "we used the SDK"; with this slide, it reads "we designed our primitives deliberately."
+
+**Default-cut for 5-min slot.** Keep for 6-min slot, technical-heavy judging panels, or when fielding "how is your stack different from X?" follow-ups.
+
+---
+
+## Slide 9 — Innovation moats *(was slide 8)*
 
 **Layout:** 3-column × 2-row matrix · H2 above · footer punchline · light background
 
@@ -261,7 +297,7 @@ Land hard on: *"Most ship one of these. We ship all six."* Pause. Then move.
 
 ---
 
-## Slide 9 — What kids do + how they share *(MERGED, was slide 8)*
+## Slide 10 — What kids do + how they share *(was slide 9)*
 
 **Layout:** 3-column table + screenshots + community footer · light background
 
@@ -287,7 +323,7 @@ Land hard on: *"Most ship one of these. We ship all six."* Pause. Then move.
 
 ---
 
-## Slide 10 — Where we are (traction) *(was slide 9)*
+## Slide 11 — Where we are (traction) *(was slide 10)*
 
 **Layout:** Phase-progress table · engineering rigor line · meta caption · light background
 
@@ -314,7 +350,7 @@ Land hard on: *"Most ship one of these. We ship all six."* Pause. Then move.
 
 ---
 
-## Slide 11 — Failures we owned *(NEW · anti-pitch slide)*
+## Slide 12 — Failures we owned *(anti-pitch slide, was slide 11)*
 
 **Layout:** 3-column table · H2 above · punchline below · light background
 
@@ -346,7 +382,7 @@ Land hard on punchline: *"Most pitches hide bugs. We name ours."*
 
 ---
 
-## Slide 12 — Why this matters *(CLOSING BOOKEND, was slide 10/11)*
+## Slide 13 — Why this matters *(CLOSING BOOKEND, was slide 12)*
 
 **Layout:** Title card · 5 achievements + closing bookend line · gradient background
 
@@ -370,7 +406,7 @@ Land hard on punchline: *"Most pitches hide bugs. We name ours."*
 
 ---
 
-## Master timing — 5-min cut (10 visible slides, default-cut 3 + 11)
+## Master timing — 5-min cut (10 visible slides, default-cut 3 + 8 + 12)
 
 | # | Slide | Target |
 |---|---|---|
@@ -381,24 +417,29 @@ Land hard on punchline: *"Most pitches hide bugs. We name ours."*
 | 5 | **Foundation: single agent** | 35s |
 | 6 | **Three properties** | 35s |
 | 7 | **Multi-agent team (centerpiece)** | 50s |
-| 8 | **Innovation moats** | 30s |
-| 9 | Product + demo beat | 35s |
-| 10 | Where we are | 25s |
-| ~~11~~ | ~~Failures we owned (default-cut for 5-min)~~ | — |
-| 12 | Why this matters | 25s |
+| ~~8~~ | ~~Decisions, not defaults (default-cut for 5-min)~~ | — |
+| 9 | **Innovation moats** | 30s |
+| 10 | Product + demo beat | 35s |
+| 11 | Where we are | 25s |
+| ~~12~~ | ~~Failures we owned (default-cut for 5-min)~~ | — |
+| 13 | Why this matters | 25s |
 | | **Total** | **~4:58** |
 
 Leaves ~2 seconds buffer in a 5-min slot.
 
-## Master timing — 6-min cut (12 slides, add slides 3 and 11 back)
+## Master timing — 6-min cut (13 slides, add slides 3, 8 and 12 back)
 
-12 slides, ~5:48 total. Adds the "Today's AI fails" comparison AND the "Failures we owned" anti-pitch slide. Use if the contest gives you 6 minutes — the anti-pitch slide builds trust that nothing else replaces.
+13 slides, ~6:23 total. Adds the "Today's AI fails" comparison, the "Decisions, not defaults" technical-depth slide, AND the "Failures we owned" anti-pitch slide. Use for a 6-minute slot, especially with technical-heavy judging panels.
 
-## Master timing — 4-min cut (drop slides 3 + 6 + 11)
+## Master timing — 7-min technical cut (13 slides, expanded slide 8)
 
-9 visible slides, ~4:23 total. Drops "Today's AI fails", "Three properties", and "Failures we owned". Single-agent foundation (slide 5) still hits the SDK/tools/MCP/skills story; innovation moats (slide 8) still names the differentiators.
+If a technical judging panel is probing the design decisions, give slide 8 ~60 seconds instead of 30 — walk every row. Total ~6:53.
 
-## Master timing — 3-min cut (drop slides 3 + 6 + 8 + 11)
+## Master timing — 4-min cut (drop slides 3 + 6 + 8 + 12)
+
+9 visible slides, ~4:23 total. Drops "Today's AI fails", "Three properties", "Decisions not defaults", and "Failures we owned". Single-agent foundation (slide 5) still hits the SDK/tools/MCP/skills story; innovation moats (slide 9) still names the differentiators.
+
+## Master timing — 3-min cut (drop slides 3 + 6 + 8 + 9 + 12)
 
 8 visible slides, ~3:53 total. For a true 3-min cut, also compress slide 7 (multi-agent) to 35s by skipping the shared-context-bus walk-through. Total ~3:38.
 
