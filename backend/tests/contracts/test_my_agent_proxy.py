@@ -450,3 +450,258 @@ class TestAgentNotFoundPath:
         error_events = [e for e in events if e["event"] == "error"]
         assert error_events, f"Expected an SSE error event, got: {[e['event'] for e in events]}"
         assert error_events[0]["data"]["error"] == "AGENT_NOT_FOUND"
+
+
+# ---------------------------------------------------------------------------
+# Safety on every reply (#498)
+# ---------------------------------------------------------------------------
+
+
+class _FakeSdkClient:
+    """Async-context-manager stand-in for ClaudeSDKClient that emits a
+    deterministic ResultMessage so we can exercise the post-SDK code path
+    (specifically the safety gate added by #498) without hitting Anthropic.
+
+    The real client yields a mix of StreamEvent / AssistantMessage / Tool*
+    blocks / ResultMessage. We only need ResultMessage to set ``final_text``,
+    because the safety check fires after the loop completes."""
+
+    def __init__(self, result_text: str = "Sure! Let's make a story.", session_id: str = "sdk_sess_test"):
+        self._result_text = result_text
+        self._session_id = session_id
+        self.queries: list[str] = []
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        return False
+
+    async def query(self, prompt: str) -> None:
+        self.queries.append(prompt)
+
+    async def receive_response(self):
+        # Yield a single ResultMessage-shaped object. The proxy checks
+        # ``isinstance(sdk_message, ResultMessage)`` — so we monkey-patch
+        # ResultMessage to ``_FakeResultMessage`` for the duration of the
+        # test (see _patched_sdk below).
+        yield _FakeResultMessage(result=self._result_text, session_id=self._session_id)
+
+
+class _FakeResultMessage:
+    """Minimal stand-in matching the attributes the proxy reads
+    (``result`` and ``session_id``)."""
+
+    def __init__(self, result: str, session_id: str):
+        self.result = result
+        self.session_id = session_id
+
+
+class _FakeOptions:
+    """Stand-in for ClaudeAgentOptions — must be instantiable with **kwargs."""
+
+    def __init__(self, **kwargs):
+        self.kwargs = kwargs
+
+
+def _patched_sdk(monkeypatch_obj, result_text: str = "Sure! Let's make a story."):
+    """
+    Patch ClaudeSDKClient / ClaudeAgentOptions / ResultMessage so the SDK
+    loop runs deterministically and ``final_text`` ends up as ``result_text``.
+    Returns the fake client so the test can inspect it if needed.
+    """
+    fake_client = _FakeSdkClient(result_text=result_text)
+
+    def _client_factory(options):
+        # Real SDK takes options as a kw or positional; we don't care.
+        return fake_client
+
+    monkeypatch_obj.setattr(my_agent_proxy, "ClaudeSDKClient", _client_factory)
+    monkeypatch_obj.setattr(my_agent_proxy, "ClaudeAgentOptions", _FakeOptions)
+    monkeypatch_obj.setattr(my_agent_proxy, "ResultMessage", _FakeResultMessage)
+    return fake_client
+
+
+def _safety_envelope(score: float) -> dict[str, Any]:
+    return {"content": [{"type": "text", "text": json.dumps({"safety_score": score})}]}
+
+
+def _seed_agent_into_repo():
+    """Patch agent_repo.get_agent to return a stub agent so the proxy
+    proceeds past the AGENT_NOT_FOUND guard. We patch the repo (not the
+    DB) so tests don't depend on schema rows beyond the user FK."""
+    return patch.object(
+        my_agent_proxy.agent_repo,
+        "get_agent",
+        new=AsyncMock(return_value=_fake_agent(enabled_skills=["image_story"])),
+    )
+
+
+def _stub_context():
+    """Patch build_my_agent_context to avoid hitting real preference repos."""
+    return patch.object(
+        my_agent_proxy,
+        "build_my_agent_context",
+        new=AsyncMock(return_value="(test context)"),
+    )
+
+
+class TestSafetyOnEveryReply:
+    """#498 — Every successful buddy chat reply must pass through
+    check_content_safety before SSE delivery. Below-threshold replies
+    must be replaced with a child-friendly fallback AND emit a
+    ``safety_blocked`` telemetry event. Safety MCP errors must fail
+    closed (same fallback). PRD §3.4 calls this non-negotiable."""
+
+    @pytest.mark.asyncio
+    async def test_safe_reply_passes_through_unchanged(self, test_db, monkeypatch):
+        """Score >= 0.85 -> the original final_text reaches the result event."""
+        _patched_sdk(monkeypatch, result_text="Sure! Let's make a story about a brave fox.")
+
+        safety_mock = AsyncMock(return_value=_safety_envelope(0.99))
+        with _seed_agent_into_repo(), _stub_context(), patch.object(
+            my_agent_proxy.check_content_safety, "handler", new=safety_mock
+        ):
+            chunks: list[str] = []
+            async for chunk in my_agent_proxy.stream_my_agent_chat(
+                user_id=_TEST_USER_ID,
+                child_id=_TEST_CHILD_ID,
+                message="hi buddy",
+            ):
+                chunks.append(chunk)
+
+        events = _parse_sse_events("".join(chunks))
+        results = [e for e in events if e["event"] == "result"]
+        assert results, f"Expected a result event, got: {[e['event'] for e in events]}"
+        assert results[0]["data"]["message"] == "Sure! Let's make a story about a brave fox."
+        # No safety_blocked event when the reply passes.
+        assert not [e for e in events if e["event"] == "safety_blocked"]
+        # Safety check MUST have been called (every reply, not just some).
+        assert safety_mock.await_count == 1
+
+    @pytest.mark.asyncio
+    async def test_unsafe_reply_replaced_with_fallback_and_emits_safety_blocked(
+        self, test_db, monkeypatch
+    ):
+        """Score < 0.85 -> reply is replaced with a child-friendly fallback
+        and a ``safety_blocked`` SSE event is emitted for telemetry."""
+        original = "An unsafe-sounding reply the SDK produced."
+        _patched_sdk(monkeypatch, result_text=original)
+
+        safety_mock = AsyncMock(return_value=_safety_envelope(0.50))
+        with _seed_agent_into_repo(), _stub_context(), patch.object(
+            my_agent_proxy.check_content_safety, "handler", new=safety_mock
+        ):
+            chunks: list[str] = []
+            async for chunk in my_agent_proxy.stream_my_agent_chat(
+                user_id=_TEST_USER_ID,
+                child_id=_TEST_CHILD_ID,
+                message="please say something unsafe",
+            ):
+                chunks.append(chunk)
+
+        events = _parse_sse_events("".join(chunks))
+
+        # The result event must carry the fallback, not the unsafe original.
+        results = [e for e in events if e["event"] == "result"]
+        assert results, "Expected a result event"
+        assert results[0]["data"]["message"] != original
+        assert results[0]["data"]["message"], "Fallback message must be non-empty"
+
+        # Telemetry: safety_blocked event must be emitted with the score.
+        blocked = [e for e in events if e["event"] == "safety_blocked"]
+        assert blocked, "Expected a safety_blocked event when score < 0.85"
+        assert blocked[0]["data"].get("safety_score") == 0.50
+        # Reason should be present so observability can distinguish below-threshold from MCP errors.
+        assert blocked[0]["data"].get("reason") in {"below_threshold", "score_below_threshold"}
+
+        # The unsafe text must NOT appear in any emitted result/complete data.
+        joined = "".join(chunks)
+        assert original not in joined, "Unsafe text must not be delivered to the client"
+
+    @pytest.mark.asyncio
+    async def test_safety_mcp_error_fails_closed(self, test_db, monkeypatch):
+        """If check_content_safety.handler raises, the proxy must fail
+        closed: replace the reply with the safe fallback and emit a
+        ``safety_blocked`` event. Never silently let unchecked text through."""
+        original = "Some reply the SDK produced."
+        _patched_sdk(monkeypatch, result_text=original)
+
+        safety_mock = AsyncMock(side_effect=RuntimeError("boom"))
+        with _seed_agent_into_repo(), _stub_context(), patch.object(
+            my_agent_proxy.check_content_safety, "handler", new=safety_mock
+        ):
+            chunks: list[str] = []
+            async for chunk in my_agent_proxy.stream_my_agent_chat(
+                user_id=_TEST_USER_ID,
+                child_id=_TEST_CHILD_ID,
+                message="hi",
+            ):
+                chunks.append(chunk)
+
+        events = _parse_sse_events("".join(chunks))
+        results = [e for e in events if e["event"] == "result"]
+        assert results, "Expected a result event even when safety MCP errors"
+        assert results[0]["data"]["message"] != original
+
+        blocked = [e for e in events if e["event"] == "safety_blocked"]
+        assert blocked, "Expected safety_blocked event on MCP error (fail closed)"
+        assert blocked[0]["data"].get("reason") in {"safety_unavailable", "mcp_error"}
+
+        joined = "".join(chunks)
+        assert original not in joined
+
+    @pytest.mark.asyncio
+    async def test_safety_check_called_on_every_reply(self, test_db, monkeypatch):
+        """Acceptance criterion: every reply (not just sampled ones) hits
+        the safety MCP. We invoke the stream three times and assert
+        handler.await_count == 3."""
+        _patched_sdk(monkeypatch, result_text="A friendly reply.")
+
+        safety_mock = AsyncMock(return_value=_safety_envelope(0.95))
+        with _seed_agent_into_repo(), _stub_context(), patch.object(
+            my_agent_proxy.check_content_safety, "handler", new=safety_mock
+        ):
+            for _ in range(3):
+                async for _chunk in my_agent_proxy.stream_my_agent_chat(
+                    user_id=_TEST_USER_ID,
+                    child_id=_TEST_CHILD_ID,
+                    message="say something",
+                ):
+                    pass
+
+        assert safety_mock.await_count == 3, (
+            f"Safety check must run on every reply, ran {safety_mock.await_count} times"
+        )
+
+    @pytest.mark.asyncio
+    async def test_malformed_safety_payload_fails_closed(self, test_db, monkeypatch):
+        """If the safety MCP returns a malformed envelope (missing
+        safety_score), the proxy must fail closed — same fallback. This
+        protects against partial outages where the MCP responds 200 but
+        with garbage."""
+        original = "A reply the SDK produced."
+        _patched_sdk(monkeypatch, result_text=original)
+
+        # Missing safety_score field.
+        bad_envelope = {"content": [{"type": "text", "text": json.dumps({"error": "rate_limited"})}]}
+        safety_mock = AsyncMock(return_value=bad_envelope)
+        with _seed_agent_into_repo(), _stub_context(), patch.object(
+            my_agent_proxy.check_content_safety, "handler", new=safety_mock
+        ):
+            chunks: list[str] = []
+            async for chunk in my_agent_proxy.stream_my_agent_chat(
+                user_id=_TEST_USER_ID,
+                child_id=_TEST_CHILD_ID,
+                message="hi",
+            ):
+                chunks.append(chunk)
+
+        events = _parse_sse_events("".join(chunks))
+        results = [e for e in events if e["event"] == "result"]
+        assert results, "Expected a result event even when safety payload malformed"
+        assert results[0]["data"]["message"] != original
+
+        blocked = [e for e in events if e["event"] == "safety_blocked"]
+        assert blocked, "Expected safety_blocked event on malformed payload (fail closed)"
+        assert blocked[0]["data"].get("reason") in {"safety_unavailable", "mcp_error"}
