@@ -1,57 +1,30 @@
 /**
- * MyAgentPage — view + edit of the user's buddy persona (#442).
+ * MyAgentPage — three exclusive states (#510 follow-up):
  *
- * Renders:
- *   - Welcome header (uses the active child's name when available)
- *   - Agent name input (max 32) with character counter and inline error
- *   - 5x4 avatar grid sourced from the shared ANIMAL_EMOJIS list
- *   - AgentTitlePicker (curated dropdown + free-text for ages 9-12)
- *   - Save button (disabled while pending), with success + failure toasts
+ *   1. Guest          → SignInPrompt.
+ *   2. Authed, no buddy → OnboardingModal (full-screen). The buddy
+ *      doesn't exist yet, so there's nothing else to show — the modal
+ *      is the page.
+ *   3. Authed, buddy exists → AgentChatPanel as the primary surface +
+ *      Configure button in the chat header that opens
+ *      PersonaEditorSheet. The persona editor is no longer always
+ *      visible; the chat is the page.
  *
- * Backend contract (#439):
- *   - PUT /me/agent rejects with detail.code = INVALID_AVATAR / UNSAFE_*
- *     so we can map the failure back to the right field.
+ * Splitting cleanly avoids the previous "modal stacked on top of chat
+ * which stacked on top of editor" UX. PRD §3.11 — My Agent persona.
  *
- * NOTE: This page does NOT add the navigation entry or the
- * <RequireOnboarded> route gate — those land in #444.
+ * Parent epic: #436
  */
 
 import { useEffect, useMemo, useState } from "react";
-import { AxiosError } from "axios";
-import { ANIMAL_EMOJIS } from "@/lib/avatars";
 import useChildStore from "@/store/useChildStore";
 import useAuthStore from "@/store/useAuthStore";
-import { useAgent, useUpsertAgent } from "@/hooks/useAgent";
-import AgentTitlePicker from "./AgentTitlePicker";
+import { useAgent } from "@/hooks/useAgent";
+import AgentChatPanel from "./AgentChatPanel";
 import OnboardingModal from "./OnboardingModal";
+import PersonaEditorSheet from "./PersonaEditorSheet";
 import { shouldAutoOpenOnboarding } from "./onboardingState";
 import SignInPrompt from "@/components/common/SignInPrompt";
-import type { AgentErrorDetail } from "@/types/agent";
-
-const MAX_NAME = 32;
-
-interface FieldErrors {
-  name?: string;
-  avatar?: string;
-  title?: string;
-  general?: string;
-}
-
-function avatarIdFor(emoji: string): string {
-  return `emoji:${emoji}`;
-}
-
-function detailFrom(err: unknown): AgentErrorDetail | null {
-  if (!(err instanceof AxiosError)) return null;
-  const data = err.response?.data;
-  if (data && typeof data === "object" && "detail" in data) {
-    const d = (data as { detail: unknown }).detail;
-    if (d && typeof d === "object" && "code" in d) {
-      return d as AgentErrorDetail;
-    }
-  }
-  return null;
-}
 
 export default function MyAgentPage() {
   const currentChild = useChildStore((s) => s.currentChild);
@@ -59,18 +32,14 @@ export default function MyAgentPage() {
   const childId = currentChild?.child_id ?? defaultChildId;
   const ageGroup = currentChild?.age_group;
 
-  // First-login modal: auto-opens when authenticated user has not yet
-  // completed onboarding (#443). The modal walks through name/avatar/title
-  // + parent consent and calls POST /me/onboarding/complete on submit.
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const onboardedAt = useAuthStore((s) => s.user?.onboarded_at);
 
-  // Guard: useAgent is gated on isAuthenticated, but we also short-circuit
-  // the page tree entirely so guests see a clean sign-in prompt instead of
-  // a half-rendered editor that can't possibly save.
   const { data: existing, isLoading } = useAgent(childId);
-  const upsert = useUpsertAgent();
-  const [modalOpen, setModalOpen] = useState(false);
+
+  const [onboardingOpen, setOnboardingOpen] = useState(false);
+  const [editorOpen, setEditorOpen] = useState(false);
+
   useEffect(() => {
     if (isLoading) return;
     if (
@@ -80,94 +49,18 @@ export default function MyAgentPage() {
         hasExistingAgent: existing != null,
       })
     ) {
-      setModalOpen(true);
+      setOnboardingOpen(true);
     }
   }, [isAuthenticated, onboardedAt, existing, isLoading]);
 
-  const [name, setName] = useState("");
-  const [avatarId, setAvatarId] = useState<string>(
-    avatarIdFor(ANIMAL_EMOJIS[0]),
-  );
-  const [title, setTitle] = useState("Story Wizard");
-  const [errors, setErrors] = useState<FieldErrors>({});
-  const [savedAt, setSavedAt] = useState<number | null>(null);
-
-  // Hydrate form when the existing agent loads.
-  useEffect(() => {
-    if (existing) {
-      setName(existing.agent_name);
-      setAvatarId(existing.agent_avatar_id);
-      setTitle(existing.agent_title);
-    }
-  }, [existing]);
-
   const childGreeting = useMemo(() => {
     const childName = currentChild?.name?.trim();
-    return childName ? `${childName}'s creative buddy` : "Meet your creative buddy";
+    return childName
+      ? `${childName}'s creative buddy`
+      : "Meet your creative buddy";
   }, [currentChild?.name]);
 
-  const onSave = async () => {
-    setErrors({});
-    if (!childId) {
-      setErrors({ general: "No active child profile found." });
-      return;
-    }
-    if (!name.trim()) {
-      setErrors({ name: "Give your buddy a name (1-32 characters)." });
-      return;
-    }
-    if (!title.trim()) {
-      setErrors({ title: "Pick a title or write your own." });
-      return;
-    }
-    try {
-      await upsert.mutateAsync({
-        agent_name: name.trim(),
-        agent_avatar_id: avatarId,
-        agent_title: title.trim(),
-        child_id: childId,
-      });
-      setSavedAt(Date.now());
-    } catch (err) {
-      const detail = detailFrom(err);
-      if (!detail) {
-        setErrors({
-          general: "We couldn't save your buddy. Try again in a moment.",
-        });
-        return;
-      }
-      switch (detail.code) {
-        case "INVALID_AVATAR":
-          setErrors({ avatar: "Pick a different animal — that one isn't allowed." });
-          break;
-        case "UNSAFE_AGENT_NAME":
-        case "INVALID_AGENT_NAME":
-          setErrors({
-            name:
-              detail.reason ??
-              "Try a different name — that one didn't pass our safety check.",
-          });
-          break;
-        case "UNSAFE_AGENT_TITLE":
-        case "INVALID_AGENT_TITLE":
-          setErrors({
-            title:
-              detail.reason ??
-              "Try a different title — that one didn't pass our safety check.",
-          });
-          break;
-        case "SAFETY_UNAVAILABLE":
-          setErrors({
-            general:
-              "Our safety checker is taking a break. Please try again in a minute.",
-          });
-          break;
-        default:
-          setErrors({ general: detail.reason ?? "Something went wrong saving your buddy." });
-      }
-    }
-  };
-
+  // --- State 1: Guest ---------------------------------------------------
   if (!isAuthenticated) {
     return (
       <div className="mx-auto flex max-w-3xl flex-col gap-6 px-4 py-8">
@@ -189,121 +82,68 @@ export default function MyAgentPage() {
     );
   }
 
+  // --- Loading ---------------------------------------------------------
+  if (isLoading) {
+    return (
+      <div className="mx-auto flex max-w-3xl flex-col gap-6 px-4 py-8">
+        <p className="text-gray-500">Loading…</p>
+      </div>
+    );
+  }
+
+  // --- State 2: Authed, no buddy → onboarding only --------------------
+  if (!existing || !childId) {
+    return (
+      <div className="mx-auto flex max-w-3xl flex-col gap-6 px-4 py-8">
+        <header className="flex flex-col gap-1">
+          <h1 className="text-2xl font-semibold text-gray-900">
+            {childGreeting}
+          </h1>
+          <p className="text-sm text-gray-600">
+            Let's set up your buddy. We'll walk through name, animal, and a
+            quick parent consent step.
+          </p>
+        </header>
+        <div className="rounded-2xl border border-dashed border-violet-200 bg-violet-50/60 p-8 text-center">
+          <div className="mx-auto mb-3 text-5xl">🦊</div>
+          <p className="text-sm text-gray-700">
+            Your buddy isn't set up yet. Take a minute to introduce yourselves.
+          </p>
+          <button
+            type="button"
+            onClick={() => setOnboardingOpen(true)}
+            className="mt-4 rounded-md bg-violet-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-violet-700 focus:outline-none focus:ring-2 focus:ring-violet-500"
+          >
+            Start onboarding
+          </button>
+        </div>
+        <OnboardingModal
+          open={onboardingOpen}
+          childId={childId}
+          ageGroup={ageGroup}
+          onClose={() => setOnboardingOpen(false)}
+        />
+      </div>
+    );
+  }
+
+  // --- State 3: Authed + buddy exists → chat + configure --------------
   return (
-    <div className="mx-auto flex max-w-3xl flex-col gap-6 px-4 py-8">
-      <OnboardingModal
-        open={modalOpen}
+    <div className="mx-auto flex h-[calc(100vh-7rem)] max-w-3xl flex-col gap-4 px-4 pb-4 pt-6">
+      <AgentChatPanel
+        agent={existing}
         childId={childId}
         ageGroup={ageGroup}
-        onClose={() => setModalOpen(false)}
+        interests={currentChild?.interests ?? []}
+        onConfigure={() => setEditorOpen(true)}
       />
-      <header className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold text-gray-900">{childGreeting}</h1>
-        <p className="text-sm text-gray-600">
-          Your buddy is the name and animal we'll show whenever you share a story.
-          Pick anything you like — you can always change it later.
-        </p>
-      </header>
-
-      {isLoading ? (
-        <p className="text-gray-500">Loading…</p>
-      ) : (
-        <section className="flex flex-col gap-6 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-          {/* Name */}
-          <div className="flex flex-col gap-2">
-            <label htmlFor="agent-name" className="text-sm font-medium text-gray-700">
-              Buddy name
-            </label>
-            <input
-              id="agent-name"
-              type="text"
-              className="w-full rounded-md border border-gray-300 px-3 py-2 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 disabled:bg-gray-100"
-              value={name}
-              maxLength={MAX_NAME}
-              placeholder="e.g. Sparkle"
-              disabled={upsert.isPending}
-              onChange={(e) => setName(e.target.value.slice(0, MAX_NAME))}
-              aria-describedby="agent-name-counter"
-            />
-            <div className="flex items-center justify-between">
-              <p id="agent-name-counter" className="text-xs text-gray-500">
-                {name.length}/{MAX_NAME}
-              </p>
-              {errors.name && (
-                <p className="text-xs text-red-600">{errors.name}</p>
-              )}
-            </div>
-          </div>
-
-          {/* Avatar */}
-          <div className="flex flex-col gap-2">
-            <span className="text-sm font-medium text-gray-700">Buddy animal</span>
-            <div
-              role="radiogroup"
-              aria-label="Buddy animal"
-              className="grid grid-cols-5 gap-2"
-            >
-              {ANIMAL_EMOJIS.map((emoji) => {
-                const id = avatarIdFor(emoji);
-                const selected = avatarId === id;
-                return (
-                  <button
-                    key={emoji}
-                    type="button"
-                    role="radio"
-                    aria-checked={selected}
-                    aria-label={`Choose ${emoji}`}
-                    disabled={upsert.isPending}
-                    onClick={() => setAvatarId(id)}
-                    className={[
-                      "flex aspect-square items-center justify-center rounded-xl border-2 text-2xl transition-colors focus:outline-none focus:ring-2 focus:ring-violet-500",
-                      selected
-                        ? "border-violet-500 bg-violet-50"
-                        : "border-gray-200 hover:border-gray-300",
-                    ].join(" ")}
-                  >
-                    {emoji}
-                  </button>
-                );
-              })}
-            </div>
-            {errors.avatar && (
-              <p className="text-xs text-red-600">{errors.avatar}</p>
-            )}
-          </div>
-
-          {/* Title */}
-          <AgentTitlePicker
-            value={title}
-            onChange={setTitle}
-            ageGroup={ageGroup}
-            disabled={upsert.isPending}
-            error={errors.title ?? null}
-          />
-
-          {/* Save */}
-          <div className="flex flex-col gap-2">
-            {errors.general && (
-              <p className="text-sm text-red-600" role="alert">
-                {errors.general}
-              </p>
-            )}
-            {savedAt && !errors.general && (
-              <p className="text-sm text-emerald-600" role="status">
-                Buddy saved!
-              </p>
-            )}
-            <button
-              type="button"
-              className="self-end rounded-md bg-violet-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-violet-700 focus:outline-none focus:ring-2 focus:ring-violet-500 disabled:bg-gray-300"
-              disabled={upsert.isPending}
-              onClick={onSave}
-            >
-              {upsert.isPending ? "Saving…" : existing ? "Save buddy" : "Meet my buddy"}
-            </button>
-          </div>
-        </section>
-      )}
+      <PersonaEditorSheet
+        open={editorOpen}
+        agent={existing}
+        childId={childId}
+        ageGroup={ageGroup}
+        onClose={() => setEditorOpen(false)}
+      />
     </div>
   );
 }

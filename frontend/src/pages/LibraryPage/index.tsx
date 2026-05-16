@@ -800,10 +800,11 @@ function LibraryPage() {
   // ---- data fetching (#61 — unified API for authenticated users) ----
 
   const apiType = tabToApiType(activeTab);
+  const currentUserId = user?.user_id ?? "anonymous";
 
   // Unified library (authenticated, not searching)
   const { data: libraryData, isLoading: libraryLoading } = useQuery({
-    queryKey: ["library", activeTab, sortOrder, offset, pageSize],
+    queryKey: ["library", currentUserId, activeTab, sortOrder, offset, pageSize],
     queryFn: () =>
       libraryService.getLibrary({
         type: apiType,
@@ -816,7 +817,7 @@ function LibraryPage() {
 
   // Search (authenticated, searching)
   const { data: searchData, isLoading: searchLoading } = useQuery({
-    queryKey: ["library-search", searchQuery, activeTab, sortOrder, offset],
+    queryKey: ["library-search", currentUserId, searchQuery, activeTab, sortOrder, offset],
     queryFn: () =>
       libraryService.searchLibrary({
         q: searchQuery,

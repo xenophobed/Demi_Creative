@@ -39,6 +39,10 @@ export interface JoinGroupResult {
   joined_at: string;
 }
 
+export interface JoinByInvitePayload {
+  invite_token: string;
+}
+
 export interface HubPost {
   post_id: string;
   group_id: string;

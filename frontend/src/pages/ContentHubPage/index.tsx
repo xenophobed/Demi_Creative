@@ -18,6 +18,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { KeyRound, Plus, Sparkles, Users } from "lucide-react";
 import { hubService } from "@/api/services/hubService";
 import useAuthStore from "@/store/useAuthStore";
 import SignInPrompt from "@/components/common/SignInPrompt";
@@ -28,6 +29,7 @@ import type {
 } from "@/types/hub";
 import GroupCard from "./GroupCard";
 import GroupCreateModal from "./GroupCreateModal";
+import JoinPrivateGroupModal from "./JoinPrivateGroupModal";
 
 const HUB_GROUPS_KEY = ["hub-groups"] as const;
 
@@ -37,6 +39,7 @@ export default function ContentHubPage() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const onboardedAt = useAuthStore((s) => s.user?.onboarded_at);
   const [createOpen, setCreateOpen] = useState(false);
+  const [joinByCodeOpen, setJoinByCodeOpen] = useState(false);
   const [joinError, setJoinError] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery<ListGroupsResponse>({
@@ -56,6 +59,13 @@ export default function ContentHubPage() {
   const joinMutation = useMutation({
     mutationFn: ({ groupId }: { groupId: string }) =>
       hubService.joinGroup(groupId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: HUB_GROUPS_KEY });
+    },
+  });
+
+  const joinByInviteMutation = useMutation({
+    mutationFn: (inviteToken: string) => hubService.joinByInvite(inviteToken),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: HUB_GROUPS_KEY });
     },
@@ -84,6 +94,11 @@ export default function ContentHubPage() {
     }
   };
 
+  const handleJoinByInvite = async (inviteToken: string) => {
+    const group = await joinByInviteMutation.mutateAsync(inviteToken);
+    navigate(`/content-hub/${group.slug}`);
+  };
+
   const items = data?.items ?? [];
   const myGroups = items.filter((g) => g.visibility === "private");
   const publicGroups = items.filter((g) => g.visibility === "public");
@@ -91,10 +106,10 @@ export default function ContentHubPage() {
 
   if (!isAuthenticated) {
     return (
-      <div className="mx-auto flex max-w-4xl flex-col gap-6 px-4 py-8">
-        <header>
-          <h1 className="text-2xl font-semibold text-gray-900">Content Hub</h1>
-          <p className="text-sm text-gray-600">
+      <div className="k12-page-narrow">
+        <header className="k12-hero">
+          <h1 className="k12-hero-title">Content Hub</h1>
+          <p className="k12-hero-copy">
             Browse stories from other kids and start groups around the themes
             you love.
           </p>
@@ -109,40 +124,53 @@ export default function ContentHubPage() {
   }
 
   return (
-    <div className="mx-auto flex max-w-4xl flex-col gap-6 px-4 py-8">
-      <header className="flex items-start justify-between gap-3">
+    <div className="k12-page">
+      <header className="k12-hero flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Content Hub</h1>
-          <p className="text-sm text-gray-600">
+          <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-white/75 px-3 py-1 text-xs font-bold text-primary-dark">
+            <Users size={14} />
+            Shared stories, safe names
+          </div>
+          <h1 className="k12-hero-title">Content Hub</h1>
+          <p className="k12-hero-copy">
             Browse stories from other kids, or start a group around your
             favourite theme. Stories you share show your buddy's name and
             animal — never your real name.
           </p>
         </div>
         {canCreate ? (
-          <button
-            type="button"
-            className="shrink-0 rounded-md bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700"
-            onClick={() => setCreateOpen(true)}
-          >
-            + New group
-          </button>
+          <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
+            <button
+              type="button"
+              className="k12-button-secondary"
+              onClick={() => setJoinByCodeOpen(true)}
+            >
+              <KeyRound size={16} /> Join with code
+            </button>
+            <button
+              type="button"
+              className="k12-button-primary"
+              onClick={() => setCreateOpen(true)}
+            >
+              <Plus size={16} /> New group
+            </button>
+          </div>
         ) : (
           <button
             type="button"
-            className="shrink-0 rounded-md border border-violet-300 bg-white px-4 py-2 text-sm font-medium text-violet-700 hover:bg-violet-50"
+            className="k12-button-secondary shrink-0"
             onClick={() =>
               navigate(`/my-agent?return=${encodeURIComponent("/content-hub")}`)
             }
             title="Meet your buddy first to create a group"
           >
-            Meet buddy → New group
+            <Sparkles size={16} /> Meet buddy first
           </button>
         )}
       </header>
 
       {joinError && (
-        <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
           {joinError}
         </p>
       )}
@@ -150,7 +178,7 @@ export default function ContentHubPage() {
       {isLoading && <p className="text-gray-500">Loading…</p>}
 
       {!isLoading && items.length === 0 && (
-        <div className="rounded-2xl border-2 border-dashed border-gray-200 bg-white p-8 text-center">
+        <div className="k12-panel border-2 border-dashed border-gray-200 p-8 text-center">
           <p className="text-base font-medium text-gray-700">
             No groups yet — be the first!
           </p>
@@ -161,7 +189,7 @@ export default function ContentHubPage() {
           </p>
           <button
             type="button"
-            className="mt-4 rounded-md bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700"
+            className="k12-button-primary mt-4"
             onClick={() =>
               canCreate
                 ? setCreateOpen(true)
@@ -172,13 +200,24 @@ export default function ContentHubPage() {
           >
             {canCreate ? "Create the first group" : "Meet your buddy first"}
           </button>
+          {canCreate && (
+            <button
+              type="button"
+              className="k12-button-secondary mt-3"
+              onClick={() => setJoinByCodeOpen(true)}
+            >
+              <KeyRound size={16} /> Join with code
+            </button>
+          )}
         </div>
       )}
 
       {myGroups.length > 0 && (
-        <section className="flex flex-col gap-2">
-          <h2 className="text-base font-semibold text-gray-800">My groups</h2>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <section className="flex flex-col gap-3">
+          <h2 className="flex items-center gap-2 text-base font-bold text-gray-800">
+            <Sparkles size={18} className="text-primary" /> My groups
+          </h2>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {myGroups.map((g) => (
               <GroupCard
                 key={g.group_id}
@@ -192,11 +231,12 @@ export default function ContentHubPage() {
       )}
 
       {publicGroups.length > 0 && (
-        <section className="flex flex-col gap-2">
-          <h2 className="text-base font-semibold text-gray-800">
+        <section className="flex flex-col gap-3">
+          <h2 className="flex items-center gap-2 text-base font-bold text-gray-800">
+            <Users size={18} className="text-secondary-dark" />
             Public groups
           </h2>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {publicGroups.map((g) => (
               <GroupCard
                 key={g.group_id}
@@ -214,6 +254,11 @@ export default function ContentHubPage() {
         open={createOpen}
         onClose={() => setCreateOpen(false)}
         onCreate={handleCreate}
+      />
+      <JoinPrivateGroupModal
+        open={joinByCodeOpen}
+        onClose={() => setJoinByCodeOpen(false)}
+        onJoin={handleJoinByInvite}
       />
     </div>
   );

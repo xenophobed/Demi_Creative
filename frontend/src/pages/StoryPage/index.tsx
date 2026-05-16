@@ -10,6 +10,7 @@ import StoryDisplay from "@/components/story/StoryDisplay";
 import TabbedMetadata from "@/components/story/TabbedMetadata";
 import useStoryStore from "@/store/useStoryStore";
 import useChildStore from "@/store/useChildStore";
+import useAuthStore from "@/store/useAuthStore";
 import storyService from "@/api/services/storyService";
 import { resolveMediaUrl } from "@/utils/mediaUrl";
 import ShareToHubModal from "@/components/hub/ShareToHubModal";
@@ -51,6 +52,7 @@ function StoryPage() {
     setJustGenerated,
   } = useStoryStore();
   const { currentChild } = useChildStore();
+  const { isAuthenticated, user } = useAuthStore();
 
   // Show banner only when navigating directly from the upload/generation flow
   const [showBanner, setShowBanner] = useState(false);
@@ -69,8 +71,9 @@ function StoryPage() {
   const [isAudioGenerating, setIsAudioGenerating] = useState(false);
 
   // Only use currentStory if it matches the URL's storyId
+  const currentUserId = user?.user_id ?? "anonymous";
   const matchingStory =
-    currentStory?.story_id === storyId ? currentStory : null;
+    !isAuthenticated && currentStory?.story_id === storyId ? currentStory : null;
 
   // If store doesn't have the matching story, fetch from API
   const {
@@ -78,7 +81,7 @@ function StoryPage() {
     isLoading,
     error,
   } = useQuery({
-    queryKey: ["story", storyId],
+    queryKey: ["story", currentUserId, storyId],
     queryFn: () => storyService.getStory(storyId!),
     enabled: !matchingStory && !!storyId,
     retry: 1,
@@ -113,6 +116,9 @@ function StoryPage() {
     navigate("/upload");
   };
 
+  const isForbidden =
+    (error as { response?: { status?: number } } | null)?.response?.status === 403;
+
   // Loading state
   if (isLoading) {
     return (
@@ -134,10 +140,12 @@ function StoryPage() {
           😢
         </motion.div>
         <h2 className="text-xl font-bold text-gray-800 mb-2">
-          Story not found
+          {isForbidden ? "Story not available for this account" : "Story not found"}
         </h2>
         <p className="text-gray-500 mb-6">
-          This story may have expired or doesn't exist
+          {isForbidden
+            ? "You are signed in as a different user than the one who created this story."
+            : "This story may have expired or doesn't exist"}
         </p>
         <Link to="/upload">
           <Button>Create New Story</Button>

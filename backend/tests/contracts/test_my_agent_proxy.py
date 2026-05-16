@@ -14,8 +14,8 @@ powers POST /api/v1/me/agent/chat/stream:
     safety is non-negotiable per PRD §3.4 and this test snapshots that
     policy so a future "gate everything" refactor cannot silently
     disable child-safety review.
-  - `create_image_story` returns `{"error": "image_required"}` when no
-    image is attached, even if the image_story skill is enabled.
+  - `create_image_story` returns image-story launch metadata when no
+    image is attached, so the frontend can open the upload flow.
   - `_build_subagents` produces four AgentDefinitions whose allow-listed
     tool names stay in lock-step with `_make_tools` — preventing rename
     drift between the registration site and the subagent contract.
@@ -32,6 +32,7 @@ Issue: #495
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, patch
 
@@ -70,7 +71,12 @@ def _fake_agent(enabled_skills: list[str] | None = None) -> AgentData:
     )
 
 
-def _build_tools_for(agent: AgentData, *, image_path: str | None = None) -> dict[str, Any]:
+def _build_tools_for(
+    agent: AgentData,
+    *,
+    image_path: str | None = None,
+    result_sink: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """
     Call `_make_tools` with create_sdk_mcp_server patched to passthrough,
     so the returned dict exposes the raw SdkMcpTool objects via the
@@ -85,6 +91,7 @@ def _build_tools_for(agent: AgentData, *, image_path: str | None = None) -> dict
             child_id="c_test",
             image_path=image_path,
             agent=agent,
+            result_sink=result_sink,
         )
 
 
@@ -254,6 +261,95 @@ class TestSkillGating:
         assert payload == {"error": "skill_disabled", "skill": "interactive_story"}
 
     @pytest.mark.asyncio
+    async def test_start_interactive_story_records_structured_result(self):
+        """The in-process tool sink catches SDK versions that summarize launch metadata."""
+        sink: dict[str, Any] = {}
+        server = _build_tools_for(
+            _fake_agent(enabled_skills=["interactive_story"]),
+            result_sink=sink,
+        )
+        with patch.object(
+            my_agent_proxy,
+            "generate_story_opening",
+            new=AsyncMock(
+                return_value={
+                    "session_id": "sess_recorded",
+                    "title": "Recorded Quest",
+                    "segment": {"text": "Once..."},
+                }
+            ),
+        ):
+            result = await _invoke(
+                _tool_by_name(server, "start_interactive_story"),
+                {"age_group": "6-8", "interests": ["space"], "theme": "", "enable_audio": False},
+            )
+
+        payload = _unwrap_envelope(result)
+        assert payload["response_type"] == "interactive_story"
+        assert sink["latest"]["response_type"] == "interactive_story"
+        assert sink["latest"]["payload"]["session_id"] == "sess_recorded"
+
+    @pytest.mark.asyncio
+    async def test_start_interactive_story_persists_opening_session_for_resume(self):
+        """My Agent-created openings need a resumable `/interactive?session=...` id."""
+        sink: dict[str, Any] = {}
+        server = _build_tools_for(
+            _fake_agent(enabled_skills=["interactive_story"]),
+            result_sink=sink,
+        )
+        create_session = AsyncMock(
+            return_value=SimpleNamespace(
+                session_id="sess_from_repo",
+                story_title="Forest Quest",
+            )
+        )
+        update_session = AsyncMock(return_value=True)
+        increment = AsyncMock(return_value=None)
+        with patch.object(
+            my_agent_proxy,
+            "generate_story_opening",
+            new=AsyncMock(
+                return_value={
+                    "title": "Forest Quest",
+                    "segment": {"segment_id": "seg_1", "text": "Choose a path."},
+                }
+            ),
+        ), patch.object(
+            my_agent_proxy.session_repo,
+            "create_session",
+            new=create_session,
+        ), patch.object(
+            my_agent_proxy.session_repo,
+            "update_session",
+            new=update_session,
+        ), patch.object(
+            my_agent_proxy.usage_repo,
+            "increment",
+            new=increment,
+        ):
+            result = await _invoke(
+                _tool_by_name(server, "start_interactive_story"),
+                {
+                    "age_group": "6-8",
+                    "interests": ["forest"],
+                    "theme": "forest",
+                    "enable_audio": False,
+                },
+            )
+
+        payload = _unwrap_envelope(result)
+        assert payload["payload"]["session_id"] == "sess_from_repo"
+        assert sink["latest"]["payload"]["session_id"] == "sess_from_repo"
+        create_session.assert_awaited_once()
+        update_session.assert_awaited_once_with(
+            session_id="sess_from_repo",
+            segment={"segment_id": "seg_1", "text": "Choose a path."},
+            audio_url=None,
+            segment_id=None,
+        )
+        increment.assert_awaited_once_with("u_test", "interactive_story")
+
+    @pytest.mark.asyncio
     async def test_continue_interactive_story_gated_on_interactive_story(self):
         server = _build_tools_for(_fake_agent(enabled_skills=[]))
         result = await _invoke(
@@ -315,20 +411,28 @@ class TestSafetyToolNeverGated:
 
 
 class TestImageRequiredGuard:
-    """create_image_story must refuse to run without an attached image."""
+    """create_image_story must route to upload when no image is attached."""
 
     @pytest.mark.asyncio
-    async def test_missing_image_returns_image_required(self):
+    async def test_missing_image_returns_upload_launch_metadata(self):
+        sink: dict[str, Any] = {}
         server = _build_tools_for(
             _fake_agent(enabled_skills=["image_story"]),
             image_path=None,
+            result_sink=sink,
         )
         result = await _invoke(
             _tool_by_name(server, "create_image_story"),
             {"child_age": 7, "interests": [], "enable_audio": False, "voice": "", "art_theme": ""},
         )
         payload = _unwrap_envelope(result)
-        assert payload == {"error": "image_required"}
+        assert payload["response_type"] == "image_story"
+        assert payload["payload"] == {
+            "child_id": "c_test",
+            "age_group": "6-8",
+            "image_required": True,
+        }
+        assert sink["latest"]["response_type"] == "image_story"
 
 
 # ---------------------------------------------------------------------------
@@ -771,7 +875,14 @@ def _fake_result_message(text: str):
     )
 
 
-async def _collect_launch_flow_run(messages, *, image_path=None):
+async def _collect_launch_flow_run(
+    messages,
+    *,
+    image_path=None,
+    message: str = "hi buddy",
+    age_group: str | None = None,
+    interests: list[str] | None = None,
+):
     """Drive stream_my_agent_chat with a fake SDK client and parse SSE.
 
     Patches in:
@@ -801,8 +912,10 @@ async def _collect_launch_flow_run(messages, *, image_path=None):
         async for chunk in my_agent_proxy.stream_my_agent_chat(
             user_id=_TEST_USER_ID,
             child_id=_TEST_CHILD_ID,
-            message="hi buddy",
+            message=message,
             image_path=image_path,
+            age_group=age_group,
+            interests=interests,
         ):
             chunks.append(chunk)
     return _parse_sse_events("".join(chunks))
@@ -865,9 +978,10 @@ class TestLaunchFlowEvent:
         launch = next((e for e in events if e["event"] == "launch_flow"), None)
         assert launch is not None, "launch_flow event missing for interactive_story"
         assert launch["data"]["flow_type"] == "interactive_story"
-        assert launch["data"]["route"] == "/interactive-story/sess_xyz999"
+        assert launch["data"]["route"] == "/interactive"
         prefill = launch["data"]["prefill"]
-        assert prefill.get("session_id") == "sess_xyz999"
+        assert prefill.get("session") == "sess_xyz999"
+        assert "session_id" not in prefill
         assert prefill.get("age_group") == "6-8"
 
     @pytest.mark.asyncio
@@ -950,3 +1064,49 @@ class TestLaunchFlowEvent:
         # Landing route (no /:id) so the page can pick up where it left off.
         assert launch["data"]["route"] == "/upload"
         assert launch["data"]["prefill"].get("child_id") == "c_test"
+
+    @pytest.mark.asyncio
+    async def test_image_story_text_request_without_image_launches_upload(self, test_db):
+        """A text-only "image to story" request should open the existing upload flow."""
+        events = await _collect_launch_flow_run(
+            messages=[],
+            message="image to story please",
+            image_path=None,
+            age_group="6-8",
+        )
+        names = [e["event"] for e in events]
+        assert "launch_flow" in names, f"launch_flow missing from {names}"
+        assert names.index("launch_flow") < names.index("result")
+        launch = next(e for e in events if e["event"] == "launch_flow")
+        assert launch["data"] == {
+            "flow_type": "image_story",
+            "route": "/upload",
+            "prefill": {"child_id": _TEST_CHILD_ID, "age_group": "6-8"},
+        }
+        result = next(e for e in events if e["event"] == "result")
+        assert result["data"]["response_type"] == "image_story"
+
+    @pytest.mark.asyncio
+    async def test_kids_daily_text_request_launches_kids_daily(self, test_db):
+        """The chat starter should open Kids Daily using the active child profile."""
+        events = await _collect_launch_flow_run(
+            messages=[],
+            message="What's in the news today for kids?",
+            age_group="9-12",
+            interests=["science"],
+        )
+        names = [e["event"] for e in events]
+        assert "launch_flow" in names, f"launch_flow missing from {names}"
+        assert names.index("launch_flow") < names.index("result")
+        launch = next(e for e in events if e["event"] == "launch_flow")
+        assert launch["data"] == {
+            "flow_type": "kids_daily",
+            "route": "/kids-daily",
+            "prefill": {
+                "child_id": _TEST_CHILD_ID,
+                "age_group": "9-12",
+                "category": "general",
+            },
+        }
+        result = next(e for e in events if e["event"] == "result")
+        assert result["data"]["response_type"] == "kids_daily"

@@ -31,6 +31,7 @@ from ...deps import get_current_user
 from ...models import (
     CreateGroupRequest,
     GroupResponse,
+    JoinByInviteRequest,
     JoinGroupResponse,
     ListGroupsResponse,
 )
@@ -163,6 +164,47 @@ async def get_group(
     # Owner sees the invite_token; everyone else does not.
     is_owner = group.created_by_user_id == user.user_id
     return _to_response(group, include_invite_token=is_owner)
+
+
+@router.post(
+    "/join-by-invite",
+    response_model=GroupResponse,
+    summary="Join a private group with an invite code",
+)
+async def join_by_invite(
+    body: JoinByInviteRequest,
+    user: UserData = Depends(get_current_user),
+):
+    _require_onboarded(user)
+    if user.default_child_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_412_PRECONDITION_FAILED,
+            detail={"code": "CHILD_PROFILE_REQUIRED"},
+        )
+
+    invite_token = body.invite_token.strip()
+    group = await group_repo.get_by_invite_token(invite_token)
+    if group is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "INVITE_NOT_FOUND"},
+        )
+
+    try:
+        await group_repo.join_group(
+            group_id=group.group_id,
+            user_id=user.user_id,
+            child_id=user.default_child_id,
+            invite_token=invite_token,
+        )
+    except PermissionError:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": "INVALID_INVITE_TOKEN"},
+        )
+
+    fresh = await group_repo.get_by_id(group.group_id)
+    return _to_response(fresh or group, include_invite_token=False)
 
 
 @router.post(

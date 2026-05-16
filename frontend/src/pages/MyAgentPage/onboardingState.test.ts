@@ -33,14 +33,18 @@ describe("shouldAutoOpenOnboarding", () => {
       }),
     ).toBe(true);
   });
-  it("opens when authenticated + not onboarded yet (agent exists but consent missing)", () => {
+  it("does NOT open when an agent already exists, even if consent hasn't been recorded", () => {
+    // #510 follow-up: stacking the modal on top of the live chat panel
+    // looks broken. Treat a saved buddy as implicit consent and let the
+    // user chat; the persona editor below the chat still lets them
+    // tweak the buddy without re-onboarding.
     expect(
       shouldAutoOpenOnboarding({
         isAuthenticated: true,
         onboardedAt: undefined,
         hasExistingAgent: true,
       }),
-    ).toBe(true);
+    ).toBe(false);
   });
 });
 

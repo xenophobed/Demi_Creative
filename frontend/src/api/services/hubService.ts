@@ -55,6 +55,13 @@ export async function joinGroup(
   return r.data;
 }
 
+export async function joinByInvite(inviteToken: string): Promise<Group> {
+  const r = await apiClient.post<Group>("/hub/groups/join-by-invite", {
+    invite_token: inviteToken,
+  });
+  return r.data;
+}
+
 export async function listGroupPosts(
   groupId: string,
   opts: {
@@ -91,6 +98,7 @@ export const hubService = {
   createGroup,
   getGroup,
   joinGroup,
+  joinByInvite,
   listGroupPosts,
   createHubPost,
 };

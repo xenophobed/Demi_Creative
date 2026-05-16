@@ -9,6 +9,7 @@
  */
 
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import type { Group, GroupVisibility } from "@/types/hub";
 
 interface Props {
@@ -70,14 +71,14 @@ export default function GroupCreateModal({ open, onClose, onCreate }: Props) {
     onClose();
   };
 
-  return (
+  return createPortal(
     <div
       role="dialog"
       aria-modal="true"
       aria-labelledby="create-group-title"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 py-8"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 px-4 py-8"
     >
-      <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl">
+      <div className="w-full max-w-lg rounded-lg bg-white p-6 shadow-xl">
         {created ? (
           <div className="flex flex-col gap-4">
             <h2
@@ -108,7 +109,7 @@ export default function GroupCreateModal({ open, onClose, onCreate }: Props) {
             )}
             <button
               type="button"
-              className="self-end rounded-md bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700"
+              className="k12-button-primary self-end"
               onClick={handleClose}
             >
               Done
@@ -126,7 +127,7 @@ export default function GroupCreateModal({ open, onClose, onCreate }: Props) {
             <label className="flex flex-col gap-1 text-sm font-medium text-gray-700">
               Name
               <input
-                className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                className="k12-input"
                 value={name}
                 maxLength={80}
                 onChange={(e) => setName(e.target.value.slice(0, 80))}
@@ -138,7 +139,7 @@ export default function GroupCreateModal({ open, onClose, onCreate }: Props) {
             <label className="flex flex-col gap-1 text-sm font-medium text-gray-700">
               Theme (optional)
               <input
-                className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                className="k12-input"
                 value={theme}
                 maxLength={50}
                 onChange={(e) => setTheme(e.target.value.slice(0, 50))}
@@ -150,7 +151,7 @@ export default function GroupCreateModal({ open, onClose, onCreate }: Props) {
             <label className="flex flex-col gap-1 text-sm font-medium text-gray-700">
               Description (optional)
               <textarea
-                className="min-h-[64px] rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                className="k12-input min-h-[64px]"
                 value={description}
                 maxLength={500}
                 onChange={(e) => setDescription(e.target.value.slice(0, 500))}
@@ -194,7 +195,7 @@ export default function GroupCreateModal({ open, onClose, onCreate }: Props) {
             <div className="flex items-center justify-end gap-2">
               <button
                 type="button"
-                className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                className="k12-button-secondary"
                 onClick={handleClose}
                 disabled={busy}
               >
@@ -202,7 +203,7 @@ export default function GroupCreateModal({ open, onClose, onCreate }: Props) {
               </button>
               <button
                 type="button"
-                className="rounded-md bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700 disabled:bg-gray-300"
+                className="k12-button-primary"
                 onClick={handleCreate}
                 disabled={busy || !name.trim()}
               >
@@ -212,6 +213,7 @@ export default function GroupCreateModal({ open, onClose, onCreate }: Props) {
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

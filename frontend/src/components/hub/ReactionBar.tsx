@@ -128,9 +128,9 @@ export default function ReactionBar({
             onClick={() => onToggle(kind)}
             className={[
               "inline-flex items-center gap-1 rounded-full border px-2 py-1 text-sm transition-colors",
-              "focus:outline-none focus:ring-2 focus:ring-violet-500",
+              "focus:outline-none focus:ring-2 focus:ring-primary/60",
               active
-                ? "border-violet-500 bg-violet-50 text-violet-700"
+                ? "border-primary bg-primary/10 text-primary-dark"
                 : "border-gray-200 bg-white text-gray-600 hover:border-gray-300",
               "disabled:opacity-60",
             ].join(" ")}

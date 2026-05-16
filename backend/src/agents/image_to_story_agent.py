@@ -99,6 +99,7 @@ from ..mcp_servers import (
     vision_server,
 )
 from ..services.story_memory import get_story_memory_prompt
+from ..services.my_agent_context import build_my_agent_context
 from ._safety import enforce_post_gen_safety
 
 
@@ -655,6 +656,12 @@ async def _direct_stream_image_to_story(
     except Exception:
         pass
 
+    my_agent_context = ""
+    try:
+        my_agent_context = await build_my_agent_context(user_id=user_id, child_id=child_id)
+    except Exception:
+        pass
+
     # Step 3: Generate story via Anthropic API
     yield {"type": "tool_use", "data": {"tool": "story_generation", "message": "Creating your story..."}}
 
@@ -665,6 +672,7 @@ Drawing Analysis:
 
 Child age: {child_age} years old
 Interests: {interests_str}
+{my_agent_context}
 {stream_memory_section}{stream_dedup_nudge}
 Requirements:
 - Story length: approximately {min_words}-{max_words} words

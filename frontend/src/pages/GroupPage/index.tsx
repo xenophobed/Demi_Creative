@@ -17,6 +17,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { AxiosError } from "axios";
 import { motion } from "framer-motion";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { ArrowLeft, Lock, Sparkles, Users } from "lucide-react";
 import { hubService } from "@/api/services/hubService";
 import type {
   Group,
@@ -25,7 +26,7 @@ import type {
   ListHubPostsResponse,
 } from "@/types/hub";
 import PostCard from "./PostCard";
-import { accentForSlug, emojiForTheme } from "./groupTheme";
+import { emojiForTheme } from "./groupTheme";
 
 const PAGE_SIZE = 10;
 
@@ -37,7 +38,6 @@ export default function GroupPage() {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
   const [forbidden, setForbidden] = useState(false);
-  const accent = accentForSlug(slug);
 
   const { data: group, isLoading: groupLoading } = useQuery<Group | null>({
     queryKey: ["hub-group", slug],
@@ -72,7 +72,7 @@ export default function GroupPage() {
 
   if (groupLoading) {
     return (
-      <div className="mx-auto max-w-3xl px-4 py-8 text-gray-500">
+      <div className="k12-page-narrow text-gray-500">
         Loading group…
       </div>
     );
@@ -80,14 +80,14 @@ export default function GroupPage() {
 
   if (!group) {
     return (
-      <div className="mx-auto flex max-w-3xl flex-col gap-3 px-4 py-12 text-center">
+      <div className="k12-page-narrow items-center py-12 text-center">
         <span className="text-5xl">🔭</span>
         <p className="text-lg font-medium text-gray-700">
           Couldn't find that group.
         </p>
         <Link
           to="/content-hub"
-          className="text-sm font-medium text-violet-700 underline"
+          className="text-sm font-medium text-primary-dark underline"
         >
           Back to Content Hub
         </Link>
@@ -97,16 +97,14 @@ export default function GroupPage() {
 
   if (forbidden) {
     return (
-      <div className="mx-auto flex max-w-4xl flex-col gap-6 px-4 py-8">
-        <div
-          className={`overflow-hidden rounded-3xl bg-gradient-to-br ${accent.bannerGradient} px-8 py-10 shadow-sm`}
-        >
-          <h1 className="text-3xl font-bold text-gray-900">{group.name}</h1>
+      <div className="k12-page-narrow">
+        <div className="k12-hero">
+          <h1 className="k12-hero-title">{group.name}</h1>
           <p className="mt-2 text-sm text-gray-700">Private group</p>
         </div>
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6">
-          <p className="text-base font-medium text-amber-900">
-            🔒 This is a private group.
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-6">
+          <p className="flex items-center gap-2 text-base font-bold text-amber-900">
+            <Lock size={18} /> This is a private group.
           </p>
           <p className="mt-1 text-sm text-amber-800">
             Open the invite link a friend sent you to join, then come back to
@@ -114,7 +112,7 @@ export default function GroupPage() {
           </p>
           <Link
             to="/content-hub"
-            className="mt-3 inline-block text-sm font-semibold text-violet-700 underline"
+            className="mt-3 inline-block text-sm font-semibold text-primary-dark underline"
           >
             Back to Content Hub
           </Link>
@@ -128,15 +126,13 @@ export default function GroupPage() {
     group.member_count === 1 ? "1 member" : `${group.member_count} members`;
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8">
+    <div className="k12-page">
       {/* Hero banner */}
-      <header
-        className={`relative overflow-hidden rounded-3xl bg-gradient-to-br ${accent.bannerGradient} px-6 py-8 shadow-sm sm:px-10 sm:py-12`}
-      >
+      <header className="k12-hero relative overflow-hidden">
         {/* Decorative floating emoji on the right */}
         <motion.span
           aria-hidden="true"
-          className="pointer-events-none absolute right-4 top-4 text-7xl opacity-90 sm:right-10 sm:top-6 sm:text-8xl"
+          className="pointer-events-none absolute right-5 top-5 text-6xl opacity-80 sm:right-8 sm:text-7xl"
           animate={{ y: [0, -6, 0] }}
           transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
         >
@@ -146,32 +142,34 @@ export default function GroupPage() {
         <div className="relative flex flex-col gap-2">
           <Link
             to="/content-hub"
-            className={`text-xs font-semibold uppercase tracking-wider ${accent.accentText} hover:underline`}
+            className="inline-flex w-fit items-center gap-1 text-xs font-bold uppercase tracking-wide text-primary-dark hover:underline"
           >
-            ← Content Hub
+            <ArrowLeft size={14} /> Content Hub
           </Link>
-          <h1 className="text-3xl font-bold text-gray-900 sm:text-4xl">
+          <h1 className="k12-hero-title">
             {group.name}
           </h1>
           <div className="flex flex-wrap items-center gap-2 text-xs">
             <span
-              className={`rounded-full px-2.5 py-0.5 font-semibold ${accent.chipBg}`}
+              className={group.visibility === "private" ? "k12-chip bg-accent/45 text-yellow-800" : "k12-chip bg-secondary/15 text-teal-700"}
             >
-              {group.visibility === "private" ? "🔒 Private" : "🌐 Public"}
+              {group.visibility === "private" ? <Lock size={12} /> : <Users size={12} />}
+              {group.visibility === "private" ? "Private" : "Public"}
             </span>
-            <span className="rounded-full bg-white/70 px-2.5 py-0.5 font-medium text-gray-700">
+            <span className="k12-chip bg-white/75 text-gray-700">
+              <Users size={12} />
               {memberLabel}
             </span>
             {group.theme && (
               <span
-                className={`rounded-full px-2.5 py-0.5 font-medium ${accent.chipBg}`}
+                className="k12-chip bg-primary/10 text-primary-dark"
               >
                 #{group.theme}
               </span>
             )}
           </div>
           {group.description && (
-            <p className="mt-2 max-w-2xl text-sm italic text-gray-700">
+            <p className="k12-hero-copy">
               {group.description}
             </p>
           )}
@@ -182,7 +180,7 @@ export default function GroupPage() {
       {postsLoading && <p className="text-gray-500">Loading stories…</p>}
 
       {!postsLoading && posts.length === 0 && (
-        <div className="flex flex-col items-center gap-4 rounded-3xl border-2 border-dashed border-gray-200 bg-white px-6 py-12 text-center shadow-sm">
+        <div className="k12-panel flex flex-col items-center gap-4 border-2 border-dashed border-gray-200 px-6 py-12 text-center">
           <div className="flex justify-center gap-3 text-5xl">
             <motion.span
               animate={{ y: [0, -8, 0] }}
@@ -213,9 +211,10 @@ export default function GroupPage() {
           </div>
           <button
             type="button"
-            className="rounded-full bg-violet-600 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-violet-700"
+            className="k12-button-primary"
             onClick={() => navigate("/upload")}
           >
+            <Sparkles size={16} />
             Make a story
           </button>
         </div>
@@ -233,7 +232,7 @@ export default function GroupPage() {
         <div className="flex justify-center">
           <button
             type="button"
-            className="rounded-full border border-gray-300 bg-white px-5 py-2 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-50 disabled:opacity-50"
+            className="k12-button-secondary"
             onClick={() => fetchNextPage()}
             disabled={isFetchingNextPage}
           >

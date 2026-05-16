@@ -26,7 +26,7 @@ export default function SignInPrompt({
     returnPath ?? (typeof window !== "undefined" ? window.location.pathname : "/");
   const href = `/login?return=${encodeURIComponent(ret)}`;
   return (
-    <div className="mx-auto flex max-w-2xl flex-col items-center gap-3 rounded-2xl border-2 border-dashed border-gray-200 bg-white px-6 py-10 text-center">
+    <div className="mx-auto flex max-w-2xl flex-col items-center gap-3 rounded-lg border-2 border-dashed border-primary/20 bg-white px-6 py-10 text-center">
       <span className="text-4xl" aria-hidden="true">
         {icon}
       </span>
@@ -34,7 +34,7 @@ export default function SignInPrompt({
       <p className="max-w-md text-sm text-gray-600">{description}</p>
       <Link
         to={href}
-        className="mt-2 rounded-md bg-violet-600 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-violet-700 focus:outline-none focus:ring-2 focus:ring-violet-500"
+        className="k12-button-primary mt-2"
       >
         Sign in
       </Link>

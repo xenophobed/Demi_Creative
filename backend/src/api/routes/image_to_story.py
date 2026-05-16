@@ -1589,7 +1589,7 @@ async def get_story_by_id(
     """
     Get story details (requires authentication + ownership verification)
     """
-    story = await get_story_for_owner(story_id, user.user_id)
+    story = await get_story_for_owner(story_id, user.user_id, allow_hub_shared=True)
     return JSONResponse(content=story)
 
 

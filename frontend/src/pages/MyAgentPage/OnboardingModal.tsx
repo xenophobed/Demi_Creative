@@ -165,9 +165,9 @@ export default function OnboardingModal({
       aria-labelledby="onboarding-title"
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 py-8"
     >
-      <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl">
+      <div className="w-full max-w-lg rounded-lg bg-white p-6 shadow-xl">
         <header className="flex flex-col gap-1">
-          <p className="text-xs uppercase tracking-wide text-violet-600">
+          <p className="text-xs uppercase tracking-wide text-primary-dark">
             Step {stepIdx + 1} of {steps.length}
           </p>
           <h2 id="onboarding-title" className="text-xl font-semibold text-gray-900">
@@ -197,7 +197,7 @@ export default function OnboardingModal({
               <input
                 id="ob-name"
                 type="text"
-                className="w-full rounded-md border border-gray-300 px-3 py-2 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                className="k12-input w-full"
                 value={name}
                 maxLength={MAX_NAME}
                 onChange={(e) => setName(e.target.value.slice(0, MAX_NAME))}
@@ -227,10 +227,10 @@ export default function OnboardingModal({
                       aria-label={`Choose ${emoji}`}
                       onClick={() => setAvatarId(id)}
                       className={[
-                        "flex aspect-square items-center justify-center rounded-xl border-2 text-2xl transition-colors",
+                        "flex aspect-square items-center justify-center rounded-lg border-2 text-2xl transition-colors",
                         selected
-                          ? "border-violet-500 bg-violet-50"
-                          : "border-gray-200 hover:border-gray-300",
+                          ? "border-primary bg-primary/10"
+                          : "border-gray-200 hover:border-primary/35 hover:bg-primary/5",
                       ].join(" ")}
                     >
                       {emoji}
@@ -243,7 +243,7 @@ export default function OnboardingModal({
                   We'll call your buddy <strong>{name}</strong>. Tap{" "}
                   <button
                     type="button"
-                    className="text-violet-600 underline"
+                    className="text-primary-dark underline"
                     onClick={() => setName(pickRandomName())}
                   >
                     🔀 shuffle
@@ -260,7 +260,7 @@ export default function OnboardingModal({
                 Pick a title
               </label>
               <select
-                className="w-full rounded-md border border-gray-300 px-3 py-2 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                className="k12-input w-full"
                 value={CURATED_TITLES.includes(title as never) ? title : "__custom__"}
                 onChange={(e) => {
                   if (e.target.value === "__custom__") setTitle("");
@@ -280,7 +280,7 @@ export default function OnboardingModal({
                 !CURATED_TITLES.includes(title as never) && (
                   <input
                     type="text"
-                    className="w-full rounded-md border border-gray-300 px-3 py-2 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                    className="k12-input w-full"
                     value={title}
                     maxLength={MAX_TITLE}
                     onChange={(e) =>
@@ -337,7 +337,7 @@ export default function OnboardingModal({
             <div className="flex gap-2">
               <button
                 type="button"
-                className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                className="k12-button-secondary"
                 onClick={onClose}
                 disabled={busy}
               >
@@ -345,7 +345,7 @@ export default function OnboardingModal({
               </button>
               <button
                 type="button"
-                className="rounded-md bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700 disabled:bg-gray-300"
+                className="k12-button-primary"
                 onClick={handleConsent}
                 disabled={busy || !name.trim() || !title.trim()}
               >
@@ -355,7 +355,7 @@ export default function OnboardingModal({
           ) : (
             <button
               type="button"
-              className="rounded-md bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700 disabled:bg-gray-300"
+              className="k12-button-primary"
               onClick={goNext}
               disabled={
                 (currentStep === "name" && !name.trim()) ||

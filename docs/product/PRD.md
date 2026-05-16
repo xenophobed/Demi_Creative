@@ -1389,6 +1389,87 @@ When a story is shared to Content Hub (§3.12), the server attaches the buddy pe
 - `/content-hub/*` — buddy byline shown on every public post
 - (Future, §3.5) — buddy is the second-person voice the memory system addresses the child with
 
+#### 3.11.7 Multi-Agent Orchestration & Page Launcher [Phase 2]
+
+The buddy is also a **conversational launcher** built on Claude Agent SDK
+subagent delegation. It holds one chat conversation, detects creative intent,
+and routes work to the right specialist while keeping the existing standalone
+pages untouched.
+
+##### Architecture
+
+| Layer | Role |
+|---|---|
+| Proxy agent (`backend/src/agents/my_agent_proxy.py`) | Holds the chat conversation, detects intent, delegates via SDK `Agent` tool, streams SSE |
+| `image-story-specialist` | Creates a story from an uploaded drawing (wraps `image_to_story_agent`) |
+| `interactive-story-specialist` | Starts or continues branching stories (wraps `interactive_story_agent`) |
+| `kids-daily-specialist` | Creates child-friendly news episodes (wraps `kids_daily_agent`) |
+| `safety-review-specialist` | Reviews every buddy chat reply for §3.4 compliance before delivery |
+
+All four specialists share an MCP server (`my-agent-tools`) that exposes the
+underlying agent functions as tools. Skill gating (the `enabled_skills` field
+on `user_agents`) is enforced inside each tool — not just in the prompt.
+
+##### Two Response Modes
+
+Each turn the proxy picks one of two modes:
+
+1. **Launch mode (default for creation requests)** — emits a `launch_flow`
+   SSE event:
+   ```json
+   {"target": "image-to-story", "prefill": {"child_id": "...", "age_group": "6-8"}}
+   ```
+   The frontend handler routes to the existing page with prefill query params.
+   The standalone page UI (upload widget, age picker, theme picker) handles
+   the rest.
+
+2. **Inline mode** — when context is sufficient (image already in chat,
+   chat-only question, safety check on a buddy title, etc.), the specialist
+   generates the result directly and returns it in the buddy's reply.
+
+The `launch_flow` `target` field is **enum-validated server-side** to a closed
+list (`image-to-story`, `interactive-story`, `kids-daily`). The model cannot
+inject arbitrary routes — this is the safety primitive that protects against
+prompt-injection-driven navigation.
+
+##### Intent Routing Examples
+
+| Child says | Mode | Subagent | Target |
+|---|---|---|---|
+| "Make a story from my drawing" | launch | image-story | `/image-to-story` |
+| "Tell me about today's news" | launch | kids-daily | `/kids-daily` |
+| "Continue our story" | launch | interactive-story | `/interactive-story` |
+| "What did we make yesterday?" | inline | (proxy itself) | — |
+| "Is 'Dragon Slayer' a good buddy title?" | inline | safety-review | — |
+
+##### Age-Adapted Routing
+
+| Ages 3–5 | Ages 6–8 | Ages 9–12 |
+|---|---|---|
+| Vague utterances ("story?") default to image-to-story. Safety threshold raised to 0.90. | Default behavior. One disambiguation question allowed for unclear intent. | Multiple specialists may be suggested in one reply ("I can do A or B — which?"). |
+
+##### Backwards Compatibility (Non-Negotiable)
+
+The multi-agent layer is purely additive. Users who never visit `/my-agent`
+see zero behavior change:
+
+- `image_to_story()`, `generate_story_opening()`, `generate_next_segment()`,
+  and `generate_kids_daily_episode()` signatures are unchanged.
+- `/api/v1/image-to-story`, `/api/v1/interactive-story`, `/api/v1/kids-daily`
+  keep their current contracts.
+- A user with `agent.enabled_skills = []` sees a polite chat-only buddy that
+  never launches anything.
+
+##### Why Claude Agent SDK (and not direct API calls)
+
+The SDK provides subagent definitions, MCP tool servers, session resume, and
+the `Agent` delegation tool out of the box. Reimplementing this on top of
+`anthropic.AsyncAnthropic()` would mean rebuilding tool-use loops,
+multi-agent routing, and session resume from scratch — work that delivers no
+user value. Reliability issues (e.g. memory pressure on serverless) are
+addressed inside the SDK via model selection and `effort` tuning, not by
+removing it.
+
 #### Acceptance Criteria
 - [ ] First-login user is redirected to `/my-agent` and the onboarding modal auto-opens
 - [ ] `users.onboarded_at` is non-null only after both an agent exists AND `parent_consent_at` is set
@@ -1398,13 +1479,22 @@ When a story is shared to Content Hub (§3.12), the server attaches the buddy pe
 - [ ] `GET /api/v1/me` returns `has_agent: bool` and `onboarded_at: string | null` so the frontend can drive the route gate without a second request
 - [ ] Each child profile on the same account has its own buddy (per-child, not per-user — see closed bug #200 for the precedent)
 - [ ] Age-gated onboarding variants render the correct steps for the active child's age group
+- [ ] Buddy chat detects creation intent and emits `launch_flow` SSE events with enum-validated targets
+- [ ] `launch_flow` events route the frontend to the matching standalone page with prefill query params
+- [ ] Every buddy chat reply passes `check_content_safety` ≥ 0.85 before being delivered
+- [ ] Disabled skills (per `user_agents.enabled_skills`) are blocked server-side, not just in prompts
+- [ ] Existing standalone routes (`/image-to-story`, `/interactive-story`, `/kids-daily`) pass their pre-existing contract tests unchanged
+- [ ] SDK session resumes across buddy chat turns via `chat_session.sdk_session_id`
 
 #### Out of Scope (Phase 2)
 - Multiple buddies per child profile (table designed to allow this in v3)
 - Buddy deletion / reset (only edit in v1 — deletion deferred until snapshot policy is finalized)
 - Buddy memory of past stories (Memory §3.5 will plug in here)
-- Buddy voice / TTS persona (deferred — current TTS uses fixed voices)
+- Buddy voice / TTS persona — neither buddy edits nor chat replies use a buddy voice in v1; current TTS uses fixed voices
 - Custom buddy avatars (image upload) — closed whitelist only in v1
+- Replacing standalone pages with chat-only flows (launcher pattern only in v1)
+- Inline image upload from inside the chat textbox (deferred — large UI surface, low value)
+- Multi-turn negotiation in buddy chat ("which kind of story?") — buddy asks at most once, otherwise picks a default
 
 ---
 
