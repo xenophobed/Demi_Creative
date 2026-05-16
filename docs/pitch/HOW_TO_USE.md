@@ -67,6 +67,45 @@ If your slot is 3 minutes instead of 5, drop these slides:
 
 That leaves 8 slides at ~22 seconds each.
 
+## Speaker scripts — where to read them while presenting
+
+Every slide has a **full verbatim script** embedded as speaker notes — the actual words to say, with stage directions (pause / point / pause), timing (`⏱ ~30s`), and transitions to the next slide.
+
+### View scripts in **Keynote**
+
+1. Open the `.pptx` (it converts to a `.key` document)
+2. During edit: **View → Show Presenter Notes** (or `⌥⌘P`) — notes appear under each slide
+3. While presenting: **Play → Customize Presenter Display…** — toggle on "Presenter Notes"
+4. During the show, the notes appear on your laptop screen while the audience sees only the slides
+
+Shortcut while presenting: press `X` to swap displays if the wrong screen is showing notes.
+
+### View scripts in **PowerPoint**
+
+1. Open the `.pptx`
+2. During edit: **View → Notes** — notes panel appears under the current slide
+3. While presenting: **Slide Show → Use Presenter View** (or check "Use Presenter View" in the toolbar)
+4. The notes pane appears on your laptop screen; audience sees the slide only
+
+### Script format reference
+
+Each script follows a consistent shape:
+
+```
+🎤 SCRIPT · Slide N · Title
+⏱ ~30 seconds · 5-min cut: KEEP / DEFAULT-CUT
+
+"[Full verbatim script — read or paraphrase]"
+
+🎬 Delivery: [pacing + stage directions]
+➡ Transition: [bridge sentence to next slide]
+```
+
+Tips:
+- **Don't read robotically.** Memorize the first sentence of each slide; paraphrase the rest. The transitions matter most — those are the glue.
+- **Numbers out loud sound bigger.** "Two hundred seventy-two" beats "272 slash 272."
+- **Pauses are content.** When the script says `[PAUSE]`, take 2-3 seconds. Silence is more uncomfortable for you than for the audience.
+
 ## Why Marp instead of building in Keynote directly
 
 - **Version-controlled** — the deck source lives in git; future you can diff what changed

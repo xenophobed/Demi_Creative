@@ -77,9 +77,16 @@ style: |
 <small>5-minute pitch · Single agent → agent team · 2026</small>
 
 <!--
-SPEAKER NOTES (slide 1 — Title)
-Open warm and slow. Read the title, pause, read the subtitle slowly.
-Say: "I want to start with a moment." Then click forward.
+🎤 SCRIPT · Slide 1 · Title
+⏱ ~8 seconds · 5-min cut: KEEP
+
+"Good [morning/afternoon]. Kids Creative Workshop —
+an agentic app for kids, built on Claude Agent SDK.
+
+Let me start with a moment."
+
+🎬 Delivery: Warm and slow. Don't rush the subtitle. Pause, then click.
+➡ Transition: pivot directly to the emotional anchor on slide 2.
 -->
 
 ---
@@ -97,10 +104,25 @@ Say: "I want to start with a moment." Then click forward.
 # *In her character. Her voice. Her world.*
 
 <!--
-SPEAKER NOTES (slide 2 — The moment)
-Pause 3 seconds after each line. Resist the urge to rush.
-This is the emotional anchor of the whole pitch.
-Everything technical that follows is in service of THIS moment.
+🎤 SCRIPT · Slide 2 · The moment
+⏱ ~25 seconds · 5-min cut: KEEP
+
+"A five-year-old hands you a crayon drawing.
+
+[3-second pause]
+
+What if it became a story?
+
+[3-second pause]
+
+In her character. Her voice. Her world.
+
+[3-second pause]
+
+Everything technical I'm about to show you exists in service of that moment."
+
+🎬 Delivery: SLOW. The pauses are the slide. Don't fill the silence.
+➡ Transition: "But today's AI can't do this. Here's why."
 -->
 
 ---
@@ -117,9 +139,23 @@ Everything technical that follows is in service of THIS moment.
 # Existing AI **extracts**. We **collaborate**.
 
 <!--
-SPEAKER NOTES (slide 3 — OPTIONAL, drop for 3-min)
-Quick. Two columns. Don't dwell — the contrast does the work.
-Land on the bold line. Then move.
+🎤 SCRIPT · Slide 3 · Today's AI fails kids
+⏱ ~20 seconds · 5-min cut: DEFAULT-CUT (optional)
+
+"Today's AI fails kids in two opposite ways.
+
+ChatGPT treats the kid as input — their drawing ignored,
+their character forgotten, their voice overridden.
+
+Image generators treat the kid as an object to replace —
+their drawing erased, their character redesigned.
+
+[brief pause]
+
+Existing AI extracts. We collaborate."
+
+🎬 Delivery: Quick. The contrast does the work. Don't dwell.
+➡ Transition: "Here's what we built instead."
 -->
 
 ---
@@ -136,10 +172,28 @@ A personal AI buddy the child **names**, **customizes**, and **grows with**.
 <small>One chat surface. Four specialists. One non-negotiable safety gate.</small>
 
 <!--
-SPEAKER NOTES (slide 4 — Product intro)
-The product IS the agentic architecture wrapped in a buddy persona.
-Don't read the bullets — narrate over them.
-"Lightning the puppy" is sticky; use the name.
+🎤 SCRIPT · Slide 4 · Meet My Agent
+⏱ ~30 seconds · 5-min cut: KEEP
+
+"Meet My Agent — a personal AI buddy the child names,
+customizes, and grows with.
+
+It RECOGNIZES their recurring characters. Lightning the
+puppy from last week is back.
+
+It ROUTES their requests to the right specialist.
+
+It PROTECTS every reply with a safety subagent before
+the child sees it.
+
+And it SHARES under the buddy's name — never the child's.
+COPPA by construction.
+
+One chat surface. Four specialists. One non-negotiable
+safety gate."
+
+🎬 Delivery: Don't read the bullets — narrate over them. Use "Lightning the puppy" by name; concrete sticks.
+➡ Transition: "Let me show you how we built it. We started simple."
 -->
 
 ---
@@ -174,9 +228,29 @@ Built on **Claude Agent SDK**:
 <small>One agent. No orchestrator. Just an LLM with the right scaffolding.</small>
 
 <!--
-SPEAKER NOTES (slide 5 — Single-agent foundation)
-This is "how we started simple." The pitch arc is EVOLUTION — judges love seeing a team that started right-sized and grew when needed.
-Quick walk: Prompt design (versioned in git, not in code strings), Tools (MCP servers we wrote ourselves), MCP (the standard that made tool-calling actually clean), Skills (we gate features per child-agent via enabled_skills — that's the kid-safety layer at the affordance level).
+🎤 SCRIPT · Slide 5 · Foundation — single agent
+⏱ ~35 seconds · 5-min cut: KEEP
+
+"We started simple — one agent, built right.
+Four primitives compose it, all on Claude Agent SDK.
+
+PROMPT DESIGN — markdown files versioned in git,
+not Python strings. Code-reviewable.
+
+TOOLS — custom MCP servers we wrote ourselves:
+vision analysis, vector search, safety check, TTS.
+
+MCP itself — tool calls become first-class
+agent affordances, not parsed-string hacks.
+
+SKILLS — composable behaviors with the @tool
+decorator, gated per agent via enabled_skills.
+
+One agent. No orchestrator yet. Just an LLM with
+the right scaffolding."
+
+🎬 Delivery: Point at each card as you name it. Don't read every word — narrate.
+➡ Transition: "And that single agent already gave us three properties kids felt."
 -->
 
 ---
@@ -191,12 +265,27 @@ Quick walk: Prompt design (versioned in git, not in code strings), Tools (MCP se
 <small>One agent. Three properties. **Already a real product.**</small>
 
 <!--
-SPEAKER NOTES (slide 6 — Three properties)
-This is the "what good agentic feels like" slide. Each property has a concrete kid moment under it.
-Interactive = streaming SSE; not loading spinners, the story writes itself live.
-Proactive = the buddy suggests, recalls. NOT a Q&A bot.
-Persistent = memory across sessions. Lightning the puppy you drew last week appears in this week's Kids Daily as the guest anchor.
-End with the line "already a real product" — that's the pivot before showing why one agent wasn't enough.
+🎤 SCRIPT · Slide 6 · Three properties
+⏱ ~35 seconds · 5-min cut: KEEP
+
+"Three properties kids felt immediately.
+
+INTERACTIVE — Server-Sent Events stream the story
+token by token. The kid watches it write itself.
+'It's writing right now!'
+
+PROACTIVE — the buddy suggests next moves and
+recalls recurring characters across sessions.
+'Lightning the puppy is back!'
+
+PERSISTENT — character memory and agent memory
+survive across sessions. Same buddy persona,
+for life.
+
+One agent. Three properties. Already a real product."
+
+🎬 Delivery: End on "already a real product" — that's the pivot. Pause briefly. Then the next slide shows why one agent wasn't enough.
+➡ Transition: "But one agent hit a ceiling."
 -->
 
 ---
@@ -214,17 +303,45 @@ One agent hit a ceiling. Branching stories, news podcasts, per-reply safety — 
 **Unlocks**: 🎯 **responsive** · 🎨 **dynamic** · ➕ **A2A extensible**
 
 <!--
-SPEAKER NOTES (slide 7 — Multi-agent extension, the CENTERPIECE)
-Walk the diagram top to bottom. 30-40 seconds.
+🎤 SCRIPT · Slide 7 · Multi-agent team (CENTERPIECE)
+⏱ ~50 seconds · 5-min cut: KEEP
 
-1. "We extended — same SDK, new shape."
-2. "The proxy ORCHESTRATES — it routes the child's intent to the right specialist."
-3. "Four specialists, each with their own prompt, tools, and skill set."
-4. "Every reply passes through safety_review — that subagent is the non-negotiable gate."
-5. "And underneath everything, SHARED CONTEXT — persona, child_id, recurring characters — flows to every agent. So Lightning the puppy is the same dog in the story AS in the podcast."
-6. "Two more properties unlocked: responsive (right specialist in milliseconds) and dynamic (different experience per turn). And it's A2A extensible — new specialists plug in by registering one AgentDefinition."
+"Branching adventures, daily podcasts, per-reply
+safety — each needed its own expertise. So we
+extended to an agent team. Still on Claude Agent SDK.
 
-REBUILD THIS IN KEYNOTE with real shapes after import. The ASCII version is a placeholder.
+[point at proxy node — top of diagram]
+
+The child's message comes in. The proxy ORCHESTRATES —
+routes the intent with deterministic rules plus LLM
+disambiguation.
+
+[point at the four specialists]
+
+Four specialists. Image story, interactive story,
+kids daily, audio narration. Each has its own prompt,
+tools, and skill set.
+
+[point at safety_review — pause for emphasis]
+
+Every reply passes through safety_review. That subagent
+is the non-negotiable gate before anything reaches
+the child.
+
+[point at the shared context bus]
+
+And underneath everything — SHARED CONTEXT. Persona,
+child ID, recurring characters — flows to every agent.
+So Lightning the puppy is the same dog in the story
+AS in the podcast.
+
+This unlocks responsive — right specialist in
+milliseconds. Dynamic — different experience per turn.
+And A2A extensible — new specialists plug in by
+registering one AgentDefinition."
+
+🎬 Delivery: This is the CENTERPIECE. Walk top-to-bottom. PAUSE after "before anything reaches the child" — let it land.
+➡ Transition: "These weren't accidents — every primitive earned its place."
 -->
 
 ---
@@ -241,18 +358,31 @@ REBUILD THIS IN KEYNOTE with real shapes after import. The ASCII version is a pl
 **Vocabulary** — *agent* · *subagent* · *team* · *orchestrator* — each role is precise. See appendix.
 
 <!--
-SPEAKER NOTES (slide 8 — Design decisions, NEW)
-This is the "we made decisions, not defaults" slide.
+🎤 SCRIPT · Slide 8 · Decisions, not defaults
+⏱ ~30 seconds · 5-min cut: DEFAULT-CUT (keep for 6-min slot)
 
-Walk it row-by-row, ~7 seconds per row:
-1. Prompts: "We could have inlined prompts as Python strings. We chose markdown files in git — versioned, code-reviewable, age-stratified per file."
-2. Tools: "We could have called the API directly inside agent code. We chose custom MCP servers with typed envelopes — composable, testable, and the .handler convention lets us debug them."
-3. Skills: "We could have hardcoded behaviors. We chose enabled_skills as a field on AgentDefinition — per-age gating, A2A extensible, server-side gate."
-4. Multi-agent: "We could have used a bigger system prompt with branching. We chose a proxy + 4 subagents — each specialty isolated, safety subagent on EVERY reply, responsive routing."
+"Every primitive on the previous slides was a decision.
 
-Close: "We didn't adopt defaults. Each row is a trade-off we made deliberately."
+PROMPTS — we could have inlined them as Python f-strings.
+We chose markdown files in git. Versioned. Code-reviewable.
+Age-stratified per file.
 
-DEFAULT-CUT FOR 5-MIN — keep for 6-min slot or technical-heavy judging panels.
+TOOLS — we could have called the API directly inside
+agent code. We chose custom MCP servers with typed
+envelopes. Composable. Testable.
+
+SKILLS — we could have hardcoded behaviors per agent.
+We chose enabled_skills as a field on AgentDefinition —
+per-age gating, A2A extensible, server-side gate.
+
+MULTI-AGENT — we could have written a bigger prompt
+with branching. We chose a proxy plus four subagents.
+Each specialty isolated. Safety subagent on EVERY reply.
+
+We didn't adopt defaults."
+
+🎬 Delivery: Walk row by row, ~7 seconds each. Land hard on "We didn't adopt defaults."
+➡ Transition: "Three layers, six bets — here's where we innovate."
 -->
 
 ---
@@ -267,15 +397,31 @@ DEFAULT-CUT FOR 5-MIN — keep for 6-min slot or technical-heavy judging panels.
 <small>Most kid-AI products ship **one** of these. We ship **all six**.</small>
 
 <!--
-SPEAKER NOTES (slide 8 — Innovation moats, NEW)
-This is the "we are not a wrapper" slide. Read each cell as a defensible claim, NOT a feature list.
+🎤 SCRIPT · Slide 9 · Innovation moats
+⏱ ~30 seconds · 5-min cut: KEEP
 
-Walk it column-by-column, ~7 seconds per cell:
-- Agentic stack: "Multi-agent with shared state on the SDK — A2A extensible, so new specialists plug in by registering a single AgentDefinition."
-- Safety architecture: "Per-reply programmatic safety with age-aware thresholds — and COPPA enforced AT THE SCHEMA LEVEL. The unsafe JOIN can't even be expressed."
-- Kid experience: "Character continuity across surfaces — same Lightning the puppy from her drawing shows up in her interactive story, her podcast, her community feed. One buddy, many specialists, one identity."
+"Three layers. Six specific bets.
 
-Land hard on: "Most ship ONE of these. We ship ALL SIX." Pause. Then move.
+AGENTIC STACK — multi-agent with shared state on Claude
+Agent SDK. A2A extensible — new specialists plug in
+by registering one AgentDefinition.
+
+SAFETY ARCHITECTURE — per-reply programmatic safety,
+age-aware thresholds. And COPPA enforced AT THE SCHEMA
+LEVEL. The unsafe JOIN can't even be expressed.
+
+KID EXPERIENCE — character continuity across image,
+story, podcast, and community. One buddy, many
+specialists, one identity.
+
+[brief pause]
+
+Most kid-AI products ship ONE of these.
+
+We ship ALL SIX."
+
+🎬 Delivery: Read each cell as a defensible CLAIM, not a feature list. PAUSE before the closing line. Land hard on "all six."
+➡ Transition: "Here's what kids actually do."
 -->
 
 ---
@@ -289,13 +435,28 @@ The buddy's three starter prompts map to three specialists: **bedtime story** �
 > 🎬 **Live demo here — 15 seconds.** Open the app. Draw → buddy generates a story with their character.
 
 <!--
-SPEAKER NOTES (slide 9 — Product proof + demo beat)
-This is the PROOF slide. Point at the buddy's chat in the hero screenshot.
-The 3 starter prompts in the screenshot map DIRECTLY to 3 specialists — that's the user-facing surface of the multi-agent diagram from slide 7. Make this point explicitly:
-"You can see the buddy — Dianna in this case — offering three starter prompts. Each one routes to a different specialist underneath. Tell me a story → image_story. What's in the news → kids_daily. Choose your own adventure → interactive_story. One chat surface, the multi-agent team behind it."
+🎤 SCRIPT · Slide 10 · Product proof + demo beat
+⏱ ~35 seconds · 5-min cut: KEEP
 
-DEMO BEAT (optional but high-impact):
-If you have 15 seconds of buffer, open the actual app and run ONE flow live — preferably drawing-to-story. Don't try to demo all four specialists; pick one and let it land. If you don't have live demo capability, replace this slide's demo box with a 10-second screen recording (drop it into Keynote as a video).
+"You can see the buddy here — Dianna in this case —
+offering three starter prompts.
+
+Each one routes to a different specialist underneath.
+
+'Tell me a bedtime story' goes to image_story.
+
+'What's in the news for kids' goes to kids_daily.
+
+'Choose your own adventure' goes to interactive_story.
+
+One chat surface. The multi-agent team behind it.
+
+[OPTIONAL — 15-second live demo here. Open the app.
+Draw → buddy generates a story with their character.
+Pick ONE flow, not all four. Let it land.]"
+
+🎬 Delivery: Point at the hero screenshot. Read the 3 prompts. Make the mapping to specialists EXPLICIT — it's the proof of the slide-7 architecture.
+➡ Transition: "Here's where we are in shipping this."
 -->
 
 ---
@@ -315,9 +476,27 @@ If you have 15 seconds of buffer, open the actual app and run ONE flow live — 
 <small>*Add real numbers in Keynote: pilot users · sessions/week · feedback quotes.*</small>
 
 <!--
-SPEAKER NOTES (slide 9 — Traction)
-The "272 stories shipped" is execution proof. So is the silent-safety-bypass-fixed-in-1-day story (that's the kind of receipt judges remember).
-If you have pilot users, replace the italic line. Even closed-beta numbers are credibility.
+🎤 SCRIPT · Slide 11 · Where we are
+⏱ ~25 seconds · 5-min cut: KEEP
+
+"Two hundred seventy-two stories shipped across
+three milestones.
+
+Phase 1 — MVP, single agent — done.
+Phase 2 — multi-agent team plus community — done.
+Phase 3 — video and parent dashboard — in design.
+
+Engineering rigor matters as much as features.
+
+Seven hundred contract tests. Per-reply programmatic
+safety. A silent safety-bypass we caught and fixed
+in twenty-four hours. A merge train of seven PRs
+landed last week.
+
+We don't pitch features — we ship them."
+
+🎬 Delivery: Speak the numbers slowly. "Two hundred seventy-two" beats "272/272" by a long way out loud. If you have real pilot numbers, replace the placeholder.
+➡ Transition: "And we own our bugs too."
 -->
 
 ---
@@ -333,17 +512,31 @@ If you have pilot users, replace the italic line. Even closed-beta numbers are c
 <small>Most pitches hide bugs. We name ours — that's how you know we *actually* run safety like infrastructure.</small>
 
 <!--
-SPEAKER NOTES (slide 10 — Failures we owned, NEW)
-Counter-intuitive slide. Most pitches show only wins. This one builds trust by showing you look at your own AI critically.
+🎤 SCRIPT · Slide 12 · Failures we owned
+⏱ ~30 seconds · 5-min cut: DEFAULT-CUT (keep for 6-min slot)
 
-Land each row in ~9 seconds:
-1. "We tried the SDK subprocess for image-to-story — Railway killed it. So we ported to direct API and got half the memory back."
-2. "We tried calling check_content_safety directly — the wrapper isn't callable, the TypeError was swallowed, every story shipped with a default 0.9 score. We caught it ourselves and fixed it in a day."
-3. "We tried single agent + safety prompt — not good enough. So we built per-reply programmatic safety with retry."
+"And we own our bugs.
 
-Punchline: "Most pitches hide bugs. We name ours. That's how you know we actually run safety like infrastructure."
+We tried the SDK subprocess for image-to-story.
+Railway killed it — out-of-memory under load.
+So we ported all three generation agents to direct
+API. Got half the memory back.
 
-If your slot is tight, this is the FIRST slide to cut. But judges who see it remember it.
+We tried calling check_content_safety directly.
+The wrapper isn't callable. The TypeError got
+swallowed. Every story shipped with a default
+0.9 score. We caught it ourselves and fixed it
+in twenty-four hours.
+
+We tried single agent plus a safety prompt.
+The model occasionally produced unsafe replies.
+So we built per-reply programmatic safety with
+suggest-and-retry.
+
+Most pitches hide bugs. We name ours."
+
+🎬 Delivery: Counter-intuitive slide. Speak each row in ~9 seconds. The 24-hour bypass story is the receipt — speak it slowly.
+➡ Transition: "Here's why this matters."
 -->
 
 ---
@@ -363,10 +556,36 @@ If your slot is tight, this is the FIRST slide to cut. But judges who see it rem
 # *AI that grows up* ***with*** *kids — safely.*
 
 <!--
-SPEAKER NOTES (slide 11 — Closing bookend)
-Closing mirrors the opening ("agentic for kids" → "grows up WITH kids").
-Read the achievements briskly. PAUSE. Then deliver the closing line slowly, holding eye contact.
-Then: "Happy to take questions."
+🎤 SCRIPT · Slide 13 · Why this matters (CLOSING BOOKEND)
+⏱ ~25 seconds · 5-min cut: KEEP
+
+"Why this matters.
+
+Agentic from day one — not a wrapper, not a prompt.
+Real SDK. Real tools. Real orchestration.
+
+272 stories shipped across three milestones —
+execution proof.
+
+Programmatic safety on every reply — non-negotiable,
+code-enforced, not vibes.
+
+A community that protects child PII at the schema
+level — COPPA by construction.
+
+A buddy that grows with the child — character
+continuity across image, story, podcast, and share.
+
+[PAUSE]
+
+AI that grows up WITH kids — safely.
+
+[PAUSE — hold eye contact, don't fill the silence]
+
+Happy to take questions."
+
+🎬 Delivery: Read the achievements briskly. PAUSE before the closing line. Deliver it SLOWLY, holding eye contact. Don't smile until you've said "happy to take questions."
+➡ End of pitch.
 -->
 
 ---
@@ -392,8 +611,34 @@ Then: "Happy to take questions."
 <small>This slide is hidden by default. Reveal only if a judge probes the architecture.</small>
 
 <!--
-SPEAKER NOTES (slide 12 — APPENDIX, hidden by default)
-HIDE THIS SLIDE in Keynote during the main presentation (right-click slide thumbnail → Skip Slide).
-UNHIDE only if a judge asks a deep technical question during Q&A — then jump to it.
-Each row is a one-line answer to a likely follow-up question. Don't read the whole table — jump to the relevant row.
+🎤 SCRIPT · Slide 14 · Appendix (Q&A backup, HIDDEN BY DEFAULT)
+⏱ Variable · Only reveal during Q&A
+
+This slide should be HIDDEN during the main presentation:
+Keynote → right-click slide thumbnail → Skip Slide
+
+REVEAL only if a judge asks a deep technical question.
+Then jump straight to the relevant row.
+
+Example responses you might say:
+
+If asked "what's the difference between agent and subagent?":
+"An agent is an AgentDefinition — model, system prompt,
+tools, and skills. A subagent is one of those registered
+under our proxy's agents dictionary. The SDK's Agent tool
+lets the proxy delegate to a subagent based on intent."
+
+If asked "why not just a bigger prompt?":
+"Quality degrades as specialty count grows in one prompt.
+And we'd lose per-reply safety as a separate subagent —
+which is the non-negotiable gate."
+
+If asked "how is your COPPA pattern different?":
+"Most teams enforce kid-PII rules in code review.
+We enforce them in the schema. The hub_posts table has
+agent_name, agent_avatar, agent_title as immutable
+snapshot columns. There's no read path that JOINs users.
+The unsafe query can't be expressed."
+
+🎬 Don't read the whole table out loud — jump to the row that answers the question.
 -->
