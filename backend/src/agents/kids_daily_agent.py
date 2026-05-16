@@ -24,6 +24,7 @@ from ..mcp_servers.safety_check_server import check_content_safety
 from ..services.database import character_repo
 from ..services.my_agent_context import build_my_agent_context
 from ..utils.model_config import get_claude_agent_model
+from ._safety import enforce_post_gen_safety
 
 logger = logging.getLogger(__name__)
 
@@ -453,21 +454,6 @@ async def _generate_kids_daily_text_live(
     if not result_data:
         raise RuntimeError("Empty model output from direct API")
 
-    # Run safety check explicitly
-    kid_content_text = str(result_data.get("kid_content", ""))
-    if kid_content_text:
-        try:
-            safety_result = await check_content_safety({
-                "content_text": kid_content_text,
-                "content_type": "kids_news",
-                "target_age": int(age_group.split("-")[0]),
-            })
-            if isinstance(safety_result, str):
-                safety_result = json.loads(safety_result)
-            result_data["safety_score"] = safety_result.get("safety_score", 0.9)
-        except Exception:
-            result_data["safety_score"] = 0.9
-
     # Normalize and validate fields
     kid_title = (
         str(result_data.get("kid_title", "")).strip()
@@ -482,15 +468,14 @@ async def _generate_kids_daily_text_live(
 
     kid_content = _trim_words(kid_content, rules["max_words"])
 
-    # Extract safety score from SDK output (safety check was done via MCP tool)
-    safety_score = float(result_data.get("safety_score", 0.9))
-    safety_score = max(0.0, min(1.0, safety_score))
-
-    # Safety floor enforcement — all content must pass >= 0.85 (CLAUDE.md)
-    if safety_score < 0.85:
-        raise RuntimeError(
-            f"Live news content failed safety check (score={safety_score:.2f})"
-        )
+    # Programmatic post-generation safety enforcement (#421).
+    # This is non-bypassable in code: even if the SDK skipped the safety
+    # MCP call, we run it here and raise if it fails after one repair pass.
+    kid_content, safety_score, _was_retried = await enforce_post_gen_safety(
+        kid_content,
+        content_type="kids_daily",
+        age_group=age_group,
+    )
 
     return {
         "kid_title": kid_title,
@@ -954,11 +939,15 @@ async def generate_kids_daily_dialogue(
     source_text = _clean_source_text(news_text, news_url)
     topic = _headline_from_text(source_text)
 
-    # Resolve guest from recurring characters first (#365)
+    # Resolve guest from recurring characters first (#365). Pass the
+    # real user_id — characters are scoped (user_id, child_id), so an
+    # empty user_id silently returns no rows and we'd always fall back
+    # to the default Professor Owl, severing the connection to the
+    # child's art and interactive stories.
     guest_name = _default_guest(child_id)
-    if child_id:
+    if child_id and user_id:
         try:
-            characters = await character_repo.get_characters("", child_id)
+            characters = await character_repo.get_characters(user_id, child_id)
             if characters:
                 guest_name = characters[0].get("name", guest_name)
         except Exception:
@@ -973,26 +962,36 @@ async def generate_kids_daily_dialogue(
         degraded_reason = "mock_environment"
     else:
         try:
-            script, safety_score = await _generate_dialogue_with_sdk(
+            script, _model_score = await _generate_dialogue_with_sdk(
                 source_text=source_text,
                 age_group=age_group,
                 guest_name=guest_name,
                 child_id=child_id,
                 user_id=user_id,
             )
-            used_mock = False
+            # Programmatic post-generation safety enforcement (#421).
+            # The model-reported score (``_model_score``) is advisory only;
+            # we run a fresh in-process check here so a dishonest or
+            # forgetful model cannot ship unchecked dialogue.
+            joined_text = "\n".join(line.text for line in script.lines if line.text)
+            try:
+                _enforced_text, safety_score, _was_retried = await enforce_post_gen_safety(
+                    joined_text,
+                    content_type="kids_daily_dialogue",
+                    age_group=age_group,
+                )
+                used_mock = False
+            except RuntimeError as safety_exc:
+                # Below-threshold even after repair attempt: degrade to mock.
+                script = _build_mock_dialogue_script(topic, age_group, guest_name)
+                used_mock = True
+                safety_score = 0.95
+                degraded_reason = f"safety_below_threshold: {safety_exc}"
         except Exception as exc:
             script = _build_mock_dialogue_script(topic, age_group, guest_name)
             used_mock = True
             safety_score = 0.95
             degraded_reason = f"live_generation_failed: {exc}"
-
-    # Safety hard floor — if below 0.85, fall back to deterministic content
-    if safety_score < 0.85:
-        script = _build_mock_dialogue_script(topic, age_group, guest_name)
-        safety_score = 0.95
-        used_mock = True
-        degraded_reason = "safety_score_below_threshold"
 
     return {
         "dialogue_script": script.model_dump(),
@@ -1060,6 +1059,7 @@ async def stream_kids_daily_generation(
     child_id: Optional[str],
     category: str,
     news_url: Optional[str] = None,
+    user_id: str = "",
 ) -> AsyncGenerator[Dict[str, Any], None]:
     """Stream Kids Daily generation progress events."""
 
@@ -1082,6 +1082,7 @@ async def stream_kids_daily_generation(
         child_id=child_id,
         category=category,
         news_url=news_url,
+        user_id=user_id,
     )
 
     yield {

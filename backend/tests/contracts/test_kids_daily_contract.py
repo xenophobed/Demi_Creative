@@ -882,25 +882,17 @@ class TestSafetyScoreExtraction:
 
     @pytest.mark.asyncio
     async def test_sdk_safety_score_propagated_to_agent_output(self):
-        """Contract: when SDK returns safety_score=0.91, agent output must show 0.91, not 0.9.
+        """Contract: the programmatic post-gen safety gate's score (not the
+        SDK-reported one) is the score we ship.
 
-        Fixes #135 — safety score was previously hardcoded to 0.9.
+        Originally fixed #135 (don't hardcode to 0.9). Updated for #421:
+        the SDK-reported score is now advisory; the authoritative score
+        comes from ``enforce_post_gen_safety`` so a dishonest model
+        can't ship unchecked dialogue.
         """
-        from unittest.mock import AsyncMock, MagicMock, patch
+        from unittest.mock import AsyncMock, patch
 
         from backend.src.agents.kids_daily_agent import generate_kids_daily_dialogue
-
-        # Build a mock SDK result with safety_score=0.91
-        mock_script_data = {
-            "lines": [
-                {"role": "curious_kid", "text": "Why is space so big?", "timestamp_start": 0.0, "timestamp_end": 5.0},
-                {"role": "fun_expert", "text": "Great question!", "timestamp_start": 5.0, "timestamp_end": 10.0},
-                {"role": "guest", "text": "Let me explain!", "timestamp_start": 10.0, "timestamp_end": 15.0},
-            ],
-            "total_duration": 15.0,
-            "guest_character": "Professor Owl",
-            "safety_score": 0.91,
-        }
 
         from backend.src.agents.kids_daily_agent import DialogueScript, DialogueLine
 
@@ -914,12 +906,18 @@ class TestSafetyScoreExtraction:
             guest_character="Professor Owl",
         )
 
+        # The post-gen gate returns 0.91 — that's the score we expect
+        # in the output, regardless of what the SDK self-reported.
         with patch(
             "backend.src.agents.kids_daily_agent._should_use_mock", return_value=False
         ), patch(
             "backend.src.agents.kids_daily_agent._generate_dialogue_with_sdk",
             new_callable=AsyncMock,
-            return_value=(mock_script, 0.91),
+            return_value=(mock_script, 0.50),  # SDK self-reported is now ignored
+        ), patch(
+            "backend.src.agents.kids_daily_agent.enforce_post_gen_safety",
+            new_callable=AsyncMock,
+            return_value=("Why is space so big?\nGreat question!\nLet me explain!", 0.91, False),
         ):
             result = await generate_kids_daily_dialogue(
                 news_text="Scientists discovered a new planet.",
@@ -927,15 +925,18 @@ class TestSafetyScoreExtraction:
             )
 
         assert result["safety_score"] == 0.91, (
-            f"Expected safety_score=0.91 from SDK, got {result['safety_score']}. "
-            "Score must not be hardcoded to 0.9."
+            f"Expected programmatic safety gate score=0.91, got {result['safety_score']}. "
+            "Score must come from enforce_post_gen_safety, not from the SDK self-report."
         )
 
     @pytest.mark.asyncio
     async def test_sdk_safety_score_below_threshold_triggers_fallback(self):
-        """Contract: when SDK returns safety_score=0.7, agent must fall back to mock.
+        """Contract: when the programmatic post-gen safety gate fails
+        (both initial check and repaired retry below threshold), the
+        agent must fall back to deterministic mock content.
 
-        Fixes #135 — the safety floor (>= 0.85) must work with real scores.
+        Originally fixed #135. Updated for #421 — the floor is now
+        enforced by ``enforce_post_gen_safety`` raising ``RuntimeError``.
         """
         from unittest.mock import AsyncMock, patch
 
@@ -959,13 +960,17 @@ class TestSafetyScoreExtraction:
             "backend.src.agents.kids_daily_agent._generate_dialogue_with_sdk",
             new_callable=AsyncMock,
             return_value=(mock_script, 0.70),
+        ), patch(
+            "backend.src.agents.kids_daily_agent.enforce_post_gen_safety",
+            new_callable=AsyncMock,
+            side_effect=RuntimeError("safety_below_threshold_after_retry"),
         ):
             result = await generate_kids_daily_dialogue(
                 news_text="Some news content.",
                 age_group="6-8",
             )
 
-        # Safety floor: score < 0.85 → fallback to mock with 0.95
+        # Programmatic gate raised → fall back to deterministic mock with 0.95
         assert result["used_mock"] is True
         assert result["safety_score"] == 0.95
 
@@ -1050,3 +1055,93 @@ class TestDegradedMetadata:
         restored = KidsDailyGenerationMetadata(**data)
         assert restored.is_degraded is True
         assert restored.degraded_reason == "mock_environment"
+
+
+# ---------------------------------------------------------------------------
+# Guest anchor uses recurring characters from art/interactive stories
+# ---------------------------------------------------------------------------
+class TestGuestAnchorRecurringCharacter:
+    """Contract: the Kids Daily guest anchor must be sourced from the child's
+    recurring story characters when one exists, so the show stays connected
+    to the art and interactive stories the child has already created."""
+
+    @pytest.mark.asyncio
+    async def test_recurring_character_overrides_default_guest(self):
+        """Top recurring character (by appearance_count) must replace the
+        deterministic default guest when (user_id, child_id) yields rows."""
+        from unittest.mock import AsyncMock, patch
+
+        from backend.src.agents.kids_daily_agent import generate_kids_daily_dialogue
+
+        with patch(
+            "backend.src.agents.kids_daily_agent._should_use_mock", return_value=True
+        ), patch(
+            "backend.src.agents.kids_daily_agent.character_repo.get_characters",
+            new_callable=AsyncMock,
+            return_value=[
+                {"name": "Lightning Dog", "appearance_count": 5},
+                {"name": "Sparkle Cat", "appearance_count": 2},
+            ],
+        ) as mock_get:
+            result = await generate_kids_daily_dialogue(
+                news_text="Scientists discovered a new planet.",
+                age_group="6-8",
+                child_id="c123",
+                user_id="u_abc",
+            )
+
+        # The lookup must be scoped to the actual user_id, not "".
+        # Empty user_id silently returned no rows pre-fix, defeating the feature.
+        mock_get.assert_awaited_once_with("u_abc", "c123")
+        assert result["guest_character"] == "Lightning Dog"
+
+    @pytest.mark.asyncio
+    async def test_empty_user_id_skips_lookup_falls_back_to_default(self):
+        """Without a user_id we MUST NOT query characters with "" — that
+        returns no rows by accident and is misleading. Skip and use default."""
+        from unittest.mock import AsyncMock, patch
+
+        from backend.src.agents.kids_daily_agent import generate_kids_daily_dialogue
+
+        with patch(
+            "backend.src.agents.kids_daily_agent._should_use_mock", return_value=True
+        ), patch(
+            "backend.src.agents.kids_daily_agent.character_repo.get_characters",
+            new_callable=AsyncMock,
+            return_value=[],
+        ) as mock_get:
+            result = await generate_kids_daily_dialogue(
+                news_text="Scientists discovered a new planet.",
+                age_group="6-8",
+                child_id="c123",
+                # user_id intentionally omitted
+            )
+
+        mock_get.assert_not_awaited()
+        assert result["guest_character"], "Default guest must still be present"
+
+    @pytest.mark.asyncio
+    async def test_no_recurring_characters_uses_default_owl(self):
+        """When the lookup returns no characters, fall back to deterministic default."""
+        from unittest.mock import AsyncMock, patch
+
+        from backend.src.agents.kids_daily_agent import (
+            _default_guest,
+            generate_kids_daily_dialogue,
+        )
+
+        with patch(
+            "backend.src.agents.kids_daily_agent._should_use_mock", return_value=True
+        ), patch(
+            "backend.src.agents.kids_daily_agent.character_repo.get_characters",
+            new_callable=AsyncMock,
+            return_value=[],
+        ):
+            result = await generate_kids_daily_dialogue(
+                news_text="Scientists discovered a new planet.",
+                age_group="6-8",
+                child_id="c123",
+                user_id="u_abc",
+            )
+
+        assert result["guest_character"] == _default_guest("c123")

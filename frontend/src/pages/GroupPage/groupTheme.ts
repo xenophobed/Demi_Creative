@@ -126,8 +126,8 @@ export function coverFor(
     };
   }
   return {
-    gradient: "from-secondary via-secondary-light to-accent",
-    icon: "🌟",
+    gradient: "from-violet-400 via-fuchsia-300 to-sky-300",
+    icon: "🎭",
     label: "Interactive story",
   };
 }
