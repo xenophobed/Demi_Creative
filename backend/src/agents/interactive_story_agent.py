@@ -51,6 +51,7 @@ from ..mcp_servers.tts_generator_server import generate_story_audio
 from ..services.database import preference_repo
 from ..services.story_memory import get_story_memory_prompt
 from ..utils.model_config import get_claude_agent_model
+from ._safety import enforce_post_gen_safety
 
 
 async def _direct_generate(prompt: str, max_tokens: int = 4096) -> str:
@@ -1010,21 +1011,30 @@ async def generate_story_opening(
     except Exception as e:
         logger.warning("Direct API opening generation failed: %s", e)
 
-    # Safety check on generated content
+    # Programmatic post-generation safety enforcement (#421).
+    # Non-bypassable: runs in-process, retries once via
+    # ``suggest_content_improvements`` if below threshold, falls back to
+    # the deterministic opening if both passes fail.
     if result_data and "segment" in result_data:
         story_text = result_data["segment"].get("text", "")
         if story_text:
             try:
-                safety_result = await check_content_safety({
-                    "content_text": story_text,
-                    "content_type": "interactive_story",
-                    "target_age": int(age_group.split("-")[0]),
-                })
-                if isinstance(safety_result, str):
-                    safety_result = json.loads(safety_result)
-                result_data["safety_score"] = safety_result.get("safety_score", 0.9)
-            except Exception:
-                result_data["safety_score"] = 0.9
+                improved_text, safety_score, _retried = await enforce_post_gen_safety(
+                    story_text,
+                    content_type="interactive_story",
+                    age_group=age_group,
+                )
+                result_data["segment"]["text"] = improved_text
+                result_data["safety_score"] = safety_score
+            except RuntimeError as safety_exc:
+                logger.warning(
+                    "Interactive opening failed safety enforcement, "
+                    "falling back to deterministic opening: %s",
+                    safety_exc,
+                )
+                result_data = _create_default_opening(theme_str, interests, config)
+                result_data["safety_score"] = 0.95
+                result_data["degraded_reason"] = "safety_below_threshold_after_retry"
 
     # Generate TTS audio if enabled
     if enable_audio and result_data and "segment" in result_data:
@@ -1187,7 +1197,7 @@ async def generate_story_opening_stream(
         }
         result_data = _create_default_opening(theme_str, interests, config)
 
-    # Safety check on generated content
+    # Programmatic post-generation safety enforcement (#421).
     if result_data and "segment" in result_data:
         story_text = result_data["segment"].get("text", "")
         if story_text:
@@ -1196,16 +1206,22 @@ async def generate_story_opening_stream(
                 "data": {"tool": "safety_check", "message": "Checking content safety..."},
             }
             try:
-                safety_result = await check_content_safety({
-                    "content_text": story_text,
-                    "content_type": "interactive_story",
-                    "target_age": int(age_group.split("-")[0]),
-                })
-                if isinstance(safety_result, str):
-                    safety_result = json.loads(safety_result)
-                result_data["safety_score"] = safety_result.get("safety_score", 0.9)
-            except Exception:
-                result_data["safety_score"] = 0.9
+                improved_text, safety_score, _retried = await enforce_post_gen_safety(
+                    story_text,
+                    content_type="interactive_story",
+                    age_group=age_group,
+                )
+                result_data["segment"]["text"] = improved_text
+                result_data["safety_score"] = safety_score
+            except RuntimeError as safety_exc:
+                logger.warning(
+                    "Streaming opening failed safety enforcement, "
+                    "falling back to deterministic opening: %s",
+                    safety_exc,
+                )
+                result_data = _create_default_opening(theme_str, interests, config)
+                result_data["safety_score"] = 0.95
+                result_data["degraded_reason"] = "safety_below_threshold_after_retry"
             yield {"type": "tool_result", "data": {"status": "completed"}}
 
     # Generate TTS audio if enabled
@@ -1423,7 +1439,7 @@ async def generate_next_segment_stream(
             segment_count, is_final_segment, chosen_option
         )
 
-    # Safety check on generated content
+    # Programmatic post-generation safety enforcement (#421).
     if result_data and "segment" in result_data:
         story_text = result_data["segment"].get("text", "")
         if story_text:
@@ -1432,16 +1448,24 @@ async def generate_next_segment_stream(
                 "data": {"tool": "safety_check", "message": "Checking content safety..."},
             }
             try:
-                safety_result = await check_content_safety({
-                    "content_text": story_text,
-                    "content_type": "interactive_story",
-                    "target_age": int(age_group.split("-")[0]),
-                })
-                if isinstance(safety_result, str):
-                    safety_result = json.loads(safety_result)
-                result_data["safety_score"] = safety_result.get("safety_score", 0.9)
-            except Exception:
-                result_data["safety_score"] = 0.9
+                improved_text, safety_score, _retried = await enforce_post_gen_safety(
+                    story_text,
+                    content_type="interactive_story",
+                    age_group=age_group,
+                )
+                result_data["segment"]["text"] = improved_text
+                result_data["safety_score"] = safety_score
+            except RuntimeError as safety_exc:
+                logger.warning(
+                    "Streaming segment failed safety enforcement, "
+                    "falling back to deterministic segment: %s",
+                    safety_exc,
+                )
+                result_data = _create_default_segment(
+                    segment_count, is_final_segment, chosen_option
+                )
+                result_data["safety_score"] = 0.95
+                result_data["degraded_reason"] = "safety_below_threshold_after_retry"
             yield {"type": "tool_result", "data": {"status": "completed"}}
 
     # Generate TTS audio if enabled
@@ -1647,21 +1671,29 @@ async def generate_next_segment(
     except Exception as e:
         logger.warning("Direct API segment generation failed: %s", e)
 
-    # Safety check on generated content
+    # Programmatic post-generation safety enforcement (#421).
     if result_data and "segment" in result_data:
         story_text = result_data["segment"].get("text", "")
         if story_text:
             try:
-                safety_result = await check_content_safety({
-                    "content_text": story_text,
-                    "content_type": "interactive_story",
-                    "target_age": int(age_group.split("-")[0]),
-                })
-                if isinstance(safety_result, str):
-                    safety_result = json.loads(safety_result)
-                result_data["safety_score"] = safety_result.get("safety_score", 0.9)
-            except Exception:
-                result_data["safety_score"] = 0.9
+                improved_text, safety_score, _retried = await enforce_post_gen_safety(
+                    story_text,
+                    content_type="interactive_story",
+                    age_group=age_group,
+                )
+                result_data["segment"]["text"] = improved_text
+                result_data["safety_score"] = safety_score
+            except RuntimeError as safety_exc:
+                logger.warning(
+                    "Interactive segment failed safety enforcement, "
+                    "falling back to deterministic segment: %s",
+                    safety_exc,
+                )
+                result_data = _create_default_segment(
+                    segment_count, is_final_segment, chosen_option
+                )
+                result_data["safety_score"] = 0.95
+                result_data["degraded_reason"] = "safety_below_threshold_after_retry"
 
     # Generate TTS audio if enabled
     if enable_audio and result_data and "segment" in result_data:
