@@ -79,6 +79,25 @@ describe("streamAgentChat", () => {
     expect(parsed.session_id).toBe("sess_42");
   });
 
+  it("forwards child profile context so the proxy does not ask again", async () => {
+    fetchMock.mockResolvedValueOnce(sseResponse(""));
+
+    await streamAgentChat(
+      {
+        child_id: "c1",
+        message: "continue our story",
+        age_group: "6-8",
+        interests: ["Space", "Magic"],
+      },
+      {},
+    );
+
+    const init = fetchMock.mock.calls[0][1];
+    const parsed = JSON.parse(init.body as string);
+    expect(parsed.age_group).toBe("6-8");
+    expect(parsed.interests).toEqual(["Space", "Magic"]);
+  });
+
   it("sends multipart FormData (no JSON Content-Type) when an image is attached", async () => {
     fetchMock.mockResolvedValueOnce(sseResponse(""));
     const image = new File(["x"], "drawing.png", { type: "image/png" });

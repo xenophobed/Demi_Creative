@@ -1,8 +1,40 @@
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { ExternalLink, Loader2, Send, Sparkles, X } from "lucide-react";
+/**
+ * AgentChatPanel — the chat surface for the user's buddy (#510).
+ *
+ * Owns: message list state, draft + image attachment, AbortController
+ * lifecycle, and the streaming SSE pipeline. Pure merge logic lives in
+ * `./chatMessageState` so the streaming-delta semantics stay
+ * unit-testable without RTL.
+ *
+ * Layout: the panel fills its parent's height. MyAgentPage gives it
+ * `h-[calc(100vh-7rem)]` so the composer sticks to the viewport floor
+ * and the message list scrolls inside the panel.
+ *
+ * Parent epic: #436
+ */
+import {
+  ChangeEvent,
+  FormEvent,
+  KeyboardEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import {
+  ExternalLink,
+  ImagePlus,
+  Loader2,
+  Send,
+  Settings,
+  Sparkles,
+  Square,
+  X,
+} from "lucide-react";
 import { agentService } from "@/api/services/agentService";
 import { useLaunchFlowNavigation } from "@/hooks/useLaunchFlowNavigation";
 import type { Agent } from "@/types/agent";
+import type { AgeGroup } from "@/types/api";
 import type {
   SSEErrorData,
   SSELaunchFlowData,
@@ -20,7 +52,24 @@ import {
 interface Props {
   agent: Agent;
   childId: string;
+  ageGroup?: AgeGroup | null;
+  interests?: string[];
+  /** Open the persona editor sheet (gear button in header). */
+  onConfigure?: () => void;
 }
+
+/**
+ * Conversation starters surfaced in the empty state. Each chip
+ * pre-fills the composer so the user can tweak before sending. The
+ * order roughly maps to the three specialist flows the proxy can
+ * delegate to, so a single tap shows the launch_flow handoff working
+ * end-to-end.
+ */
+const STARTER_PROMPTS: string[] = [
+  "Tell me a bedtime story about a friendly dragon",
+  "What's in the news today for kids?",
+  "Let's make an interactive choose-your-own adventure",
+];
 
 function nextMessageId(prefix: string): string {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -55,8 +104,15 @@ function resultMessage(data: unknown): string {
   return "";
 }
 
-export default function AgentChatPanel({ agent, childId }: Props) {
+export default function AgentChatPanel({
+  agent,
+  childId,
+  ageGroup,
+  interests = [],
+  onConfigure,
+}: Props) {
   const [draft, setDraft] = useState("");
+  const [image, setImage] = useState<File | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
@@ -64,6 +120,9 @@ export default function AgentChatPanel({ agent, childId }: Props) {
   const [toolText, setToolText] = useState<string | null>(null);
   const [errorText, setErrorText] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const imageInputRef = useRef<HTMLInputElement | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const {
     onLaunchFlow,
     pendingLaunchFlow,
@@ -75,11 +134,43 @@ export default function AgentChatPanel({ agent, childId }: Props) {
     return () => abortRef.current?.abort();
   }, []);
 
-  const heading = useMemo(
-    () => `Chat with ${agent.agent_name}`,
-    [agent.agent_name],
-  );
+  const tail = messages[messages.length - 1]?.text ?? "";
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [messages.length, tail]);
+
+  const buddyGlyph = useMemo(() => avatarGlyph(agent), [agent]);
   const canSend = Boolean(draft.trim()) && !isStreaming && Boolean(childId);
+  const imageInputId = `agent-chat-image-${agent.agent_id}`;
+
+  const clearImage = () => {
+    setImage(null);
+    if (imageInputRef.current) imageInputRef.current.value = "";
+  };
+
+  const onImageChange = (event: ChangeEvent<HTMLInputElement>) => {
+    setImage(event.target.files?.[0] ?? null);
+  };
+
+  const onDraftKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      event.currentTarget.form?.requestSubmit();
+    }
+  };
+
+  const useStarter = (prompt: string) => {
+    setDraft(prompt);
+    setTimeout(() => textareaRef.current?.focus(), 0);
+  };
+
+  const cancelStream = () => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    setIsStreaming(false);
+    setToolText(null);
+    setStatusText(`${agent.agent_name} stopped.`);
+  };
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -87,9 +178,11 @@ export default function AgentChatPanel({ agent, childId }: Props) {
     if (!message || isStreaming) return;
 
     const controller = new AbortController();
+    const attachedImage = image;
     abortRef.current?.abort();
     abortRef.current = controller;
     setDraft("");
+    clearImage();
     setErrorText(null);
     setToolText(null);
     setStatusText(`${agent.agent_name} is thinking...`);
@@ -102,7 +195,14 @@ export default function AgentChatPanel({ agent, childId }: Props) {
 
     try {
       await agentService.streamAgentChat(
-        { child_id: childId, message, session_id: sessionId },
+        {
+          child_id: childId,
+          message,
+          session_id: sessionId,
+          age_group: ageGroup,
+          interests,
+          image: attachedImage,
+        },
         {
           onSession: (data) => setSessionId(data.session_id),
           onStatus: (data: SSEStatusData) => setStatusText(data.message),
@@ -149,56 +249,120 @@ export default function AgentChatPanel({ agent, childId }: Props) {
   };
 
   return (
-    <section className="flex flex-col gap-4 rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-      <header className="flex items-center justify-between gap-3">
+    <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+      <header className="flex items-center justify-between gap-3 border-b border-gray-100 bg-gradient-to-r from-violet-50 to-pink-50 px-5 py-3.5">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-violet-50 text-2xl">
-            {avatarGlyph(agent)}
+          <div
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white text-2xl shadow-sm ring-1 ring-violet-100"
+            aria-hidden="true"
+          >
+            {buddyGlyph}
           </div>
-          <div>
-            <h2 className="text-base font-semibold text-gray-900">{heading}</h2>
-            <p className="text-xs font-medium text-violet-700">
+          <div className="min-w-0">
+            <h2 className="truncate text-base font-semibold text-gray-900">
+              {agent.agent_name}
+            </h2>
+            <p className="truncate text-xs font-medium text-violet-700">
               {agent.agent_title}
             </p>
           </div>
         </div>
-        {isStreaming && (
-          <Loader2
-            size={18}
-            className="shrink-0 animate-spin text-violet-600"
-            aria-hidden="true"
-          />
-        )}
+        <div className="flex items-center gap-1">
+          {isStreaming && (
+            <Loader2
+              size={18}
+              className="shrink-0 animate-spin text-violet-600"
+              aria-label="Streaming"
+            />
+          )}
+          {onConfigure && (
+            <button
+              type="button"
+              onClick={onConfigure}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full text-gray-500 hover:bg-white hover:text-violet-700 focus:outline-none focus:ring-2 focus:ring-violet-500"
+              aria-label="Configure buddy"
+              title="Configure buddy"
+            >
+              <Settings size={18} />
+            </button>
+          )}
+        </div>
       </header>
 
       <div
-        className="flex max-h-80 min-h-32 flex-col gap-3 overflow-y-auto rounded-md border border-gray-100 bg-gray-50 p-3"
+        className="min-h-0 flex-1 overflow-y-auto bg-gradient-to-b from-gray-50 to-white px-5 py-5"
         aria-live="polite"
       >
         {messages.length === 0 ? (
-          <div className="flex h-24 items-center justify-center text-sm text-gray-500">
-            <Sparkles size={16} className="mr-2 text-violet-500" />
-            Say hello to begin.
+          <div className="mx-auto flex h-full max-w-md flex-col items-center justify-center gap-5 text-center">
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white text-3xl shadow-md ring-2 ring-violet-100">
+              {buddyGlyph}
+            </div>
+            <div>
+              <p className="text-base font-semibold text-gray-900">
+                Hi! I'm {agent.agent_name}.
+              </p>
+              <p className="mt-1 flex items-center justify-center gap-1 text-sm text-gray-600">
+                <Sparkles size={14} className="text-violet-500" />
+                Pick a starter or type your own.
+              </p>
+            </div>
+            <div className="flex flex-col gap-2">
+              {STARTER_PROMPTS.map((prompt) => (
+                <button
+                  key={prompt}
+                  type="button"
+                  onClick={() => useStarter(prompt)}
+                  className="rounded-full border border-violet-200 bg-white px-4 py-2 text-left text-sm text-violet-900 shadow-sm transition-colors hover:border-violet-400 hover:bg-violet-50 focus:outline-none focus:ring-2 focus:ring-violet-500"
+                >
+                  {prompt}
+                </button>
+              ))}
+            </div>
           </div>
         ) : (
-          messages.map((message) => (
-            <div
-              key={message.id}
-              className={[
-                "max-w-[85%] rounded-lg px-3 py-2 text-sm leading-6",
-                message.role === "user"
-                  ? "self-end bg-violet-600 text-white"
-                  : "self-start border border-gray-200 bg-white text-gray-800",
-              ].join(" ")}
-            >
-              {message.text}
-            </div>
-          ))
+          <div className="flex flex-col gap-3">
+            {messages.map((message) => (
+              <div
+                key={message.id}
+                className={[
+                  "flex w-full",
+                  message.role === "user" ? "justify-end" : "justify-start",
+                ].join(" ")}
+              >
+                {message.role === "assistant" && (
+                  <div
+                    aria-hidden="true"
+                    className="mr-2 mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white text-base shadow-sm ring-1 ring-violet-100"
+                  >
+                    {buddyGlyph}
+                  </div>
+                )}
+                <div
+                  className={[
+                    "max-w-[85%] whitespace-pre-wrap rounded-2xl px-4 py-2.5 text-sm leading-6 shadow-sm",
+                    message.role === "user"
+                      ? "rounded-br-md bg-violet-600 text-white"
+                      : "rounded-bl-md border border-gray-100 bg-white text-gray-800",
+                  ].join(" ")}
+                >
+                  {message.text}
+                  {message.streaming && (
+                    <span
+                      aria-hidden="true"
+                      className="ml-0.5 inline-block h-3 w-1 animate-pulse rounded-sm bg-violet-400 align-middle"
+                    />
+                  )}
+                </div>
+              </div>
+            ))}
+            <div ref={messagesEndRef} />
+          </div>
         )}
       </div>
 
       {(statusText || toolText || errorText) && (
-        <div className="min-h-5 text-xs">
+        <div className="border-t border-gray-100 bg-white px-5 py-1.5 text-xs">
           {errorText ? (
             <p className="text-red-600" role="alert">
               {errorText}
@@ -210,21 +374,21 @@ export default function AgentChatPanel({ agent, childId }: Props) {
       )}
 
       {pendingLaunchFlow && (
-        <div className="flex flex-col gap-3 rounded-lg border border-violet-200 bg-violet-50 p-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mx-5 mb-3 flex flex-col gap-3 rounded-xl border border-violet-200 bg-violet-50 p-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm font-medium text-violet-900">
             {agent.agent_name} made {launchLabel(pendingLaunchFlow)}.
           </p>
           <div className="flex gap-2">
             <button
               type="button"
-              className="inline-flex items-center gap-1 rounded-md bg-violet-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-violet-700 focus:outline-none focus:ring-2 focus:ring-violet-500"
+              className="inline-flex items-center gap-1 rounded-full bg-violet-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-violet-700 focus:outline-none focus:ring-2 focus:ring-violet-500"
               onClick={navigateToPendingFlow}
             >
               <ExternalLink size={15} /> Open
             </button>
             <button
               type="button"
-              className="inline-flex items-center gap-1 rounded-md border border-violet-200 bg-white px-3 py-1.5 text-sm font-medium text-violet-800 hover:bg-violet-100 focus:outline-none focus:ring-2 focus:ring-violet-500"
+              className="inline-flex items-center gap-1 rounded-full border border-violet-200 bg-white px-3 py-1.5 text-sm font-medium text-violet-800 hover:bg-violet-100 focus:outline-none focus:ring-2 focus:ring-violet-500"
               onClick={resetPendingFlow}
             >
               <X size={15} /> Stay
@@ -233,27 +397,79 @@ export default function AgentChatPanel({ agent, childId }: Props) {
         </div>
       )}
 
-      <form className="flex gap-2" onSubmit={onSubmit}>
+      <form
+        className="border-t border-gray-100 bg-white px-4 py-3"
+        onSubmit={onSubmit}
+      >
         <label htmlFor="agent-chat-message" className="sr-only">
-          Message
+          Message {agent.agent_name}
         </label>
-        <input
-          id="agent-chat-message"
-          type="text"
-          className="min-w-0 flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 disabled:bg-gray-100"
-          value={draft}
-          disabled={isStreaming}
-          placeholder={`Message ${agent.agent_name}`}
-          onChange={(e) => setDraft(e.target.value)}
-        />
-        <button
-          type="submit"
-          className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-violet-600 text-white hover:bg-violet-700 focus:outline-none focus:ring-2 focus:ring-violet-500 disabled:bg-gray-300"
-          disabled={!canSend}
-          aria-label="Send message"
-        >
-          <Send size={17} />
-        </button>
+        {image && (
+          <div className="mb-2 flex items-center justify-between gap-2 rounded-lg border border-violet-100 bg-violet-50 px-3 py-1.5 text-xs text-violet-800">
+            <span className="truncate">{image.name}</span>
+            <button
+              type="button"
+              className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md hover:bg-violet-100 focus:outline-none focus:ring-2 focus:ring-violet-500"
+              onClick={clearImage}
+              aria-label="Remove attached image"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        )}
+        <div className="flex items-end gap-2">
+          <textarea
+            id="agent-chat-message"
+            ref={textareaRef}
+            rows={1}
+            className="max-h-32 min-h-11 min-w-0 flex-1 resize-y rounded-2xl border border-gray-300 px-4 py-2.5 text-sm leading-6 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 disabled:bg-gray-100"
+            value={draft}
+            disabled={isStreaming}
+            placeholder={`Message ${agent.agent_name}…  (Shift+Enter for newline)`}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={onDraftKeyDown}
+          />
+          <input
+            ref={imageInputRef}
+            id={imageInputId}
+            type="file"
+            accept="image/*"
+            className="sr-only"
+            disabled={isStreaming}
+            onChange={onImageChange}
+          />
+          <label
+            htmlFor={imageInputId}
+            className={[
+              "inline-flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-full border border-gray-300 text-gray-600 hover:bg-gray-50 focus-within:ring-2 focus-within:ring-violet-500",
+              isStreaming ? "pointer-events-none bg-gray-100 text-gray-300" : "",
+            ].join(" ")}
+            title="Attach image"
+          >
+            <ImagePlus size={18} />
+            <span className="sr-only">Attach image</span>
+          </label>
+          {isStreaming ? (
+            <button
+              type="button"
+              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-gray-300 text-gray-600 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-violet-500"
+              onClick={cancelStream}
+              aria-label="Cancel response"
+              title="Stop"
+            >
+              <Square size={16} />
+            </button>
+          ) : (
+            <button
+              type="submit"
+              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-violet-600 text-white shadow-sm transition-colors hover:bg-violet-700 focus:outline-none focus:ring-2 focus:ring-violet-500 disabled:bg-gray-300"
+              disabled={!canSend}
+              aria-label="Send message"
+            >
+              <Send size={18} />
+            </button>
+          )}
+        </div>
       </form>
     </section>
   );

@@ -63,5 +63,7 @@ export interface AgentChatPayload {
   child_id: string;
   message: string;
   session_id?: string | null;
+  age_group?: string | null;
+  interests?: string[];
   image?: File | null;
 }

@@ -62,6 +62,8 @@ export async function streamAgentChat(
     form.append("child_id", payload.child_id);
     form.append("message", payload.message);
     if (payload.session_id) form.append("session_id", payload.session_id);
+    if (payload.age_group) form.append("age_group", payload.age_group);
+    if (payload.interests?.length) form.append("interests", payload.interests.join(","));
     form.append("image", payload.image);
     body = form;
     headers = await getFreshAuthHeaders();
@@ -70,6 +72,8 @@ export async function streamAgentChat(
       child_id: payload.child_id,
       message: payload.message,
       session_id: payload.session_id ?? undefined,
+      age_group: payload.age_group ?? undefined,
+      interests: payload.interests?.length ? payload.interests : undefined,
     });
     headers = {
       ...(await getFreshAuthHeaders()),
