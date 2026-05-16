@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 120" font-family="-apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif">
+  <defs>
+    <linearGradient id="storyGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#DB2777"/>
+      <stop offset="100%" stop-color="#7C3AED"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Crayon drawing icon -->
+  <g transform="translate(20, 30)">
+    <rect x="0" y="0" width="64" height="64" rx="10" fill="#FDF2F8" stroke="#DB2777" stroke-width="2.5"/>
+    <!-- Crayon scribble inside -->
+    <path d="M 12 36 Q 20 18, 28 30 T 44 30 T 56 22"
+          stroke="#DB2777" stroke-width="3" fill="none" stroke-linecap="round"/>
+    <circle cx="22" cy="48" r="3" fill="#7C3AED"/>
+    <circle cx="42" cy="46" r="3" fill="#F472B6"/>
+  </g>
+
+  <!-- Arrow 1 -->
+  <line x1="92" y1="62" x2="138" y2="62" stroke="url(#storyGrad)" stroke-width="2.5" marker-end="url(#aHead)"/>
+
+  <!-- Buddy avatar (round) -->
+  <g transform="translate(150, 30)">
+    <circle cx="32" cy="32" r="32" fill="#F5F3FF" stroke="#7C3AED" stroke-width="2.5"/>
+    <!-- Simple buddy face -->
+    <circle cx="22" cy="28" r="3" fill="#7C3AED"/>
+    <circle cx="42" cy="28" r="3" fill="#7C3AED"/>
+    <path d="M 22 42 Q 32 50, 42 42" stroke="#DB2777" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+    <!-- Small sparkle -->
+    <text x="50" y="14" fill="#F472B6" font-size="14">✦</text>
+  </g>
+
+  <!-- Arrow 2 -->
+  <line x1="222" y1="62" x2="268" y2="62" stroke="url(#storyGrad)" stroke-width="2.5" marker-end="url(#aHead)"/>
+
+  <!-- Story page icon -->
+  <g transform="translate(280, 30)">
+    <rect x="0" y="0" width="50" height="64" rx="6" fill="#FFFFFF" stroke="#7C3AED" stroke-width="2.5"/>
+    <line x1="8" y1="14" x2="42" y2="14" stroke="#1E293B" stroke-width="1.5"/>
+    <line x1="8" y1="22" x2="42" y2="22" stroke="#1E293B" stroke-width="1.5"/>
+    <line x1="8" y1="30" x2="36" y2="30" stroke="#1E293B" stroke-width="1.5"/>
+    <line x1="8" y1="42" x2="42" y2="42" stroke="#1E293B" stroke-width="1.5"/>
+    <line x1="8" y1="50" x2="32" y2="50" stroke="#1E293B" stroke-width="1.5"/>
+  </g>
+
+  <!-- Arrowheads marker -->
+  <defs>
+    <marker id="aHead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#7C3AED"/>
+    </marker>
+  </defs>
+</svg>
