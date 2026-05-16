@@ -229,6 +229,34 @@ REBUILD THIS IN KEYNOTE with real shapes after import. The ASCII version is a pl
 
 ---
 
+## Decisions, not defaults — *every primitive earned its place*
+
+| Decision | Alternative we rejected | What we chose | Why |
+|---|---|---|---|
+| **Prompts** | Python f-strings inline in code | Markdown files in `backend/src/prompts/` — `story-generation.md`, `age-adapter.md`, `interactive-story.md` | Versioned · code-reviewable · age-stratified per file |
+| **Tools** | Direct API calls in agent loops | Custom MCP servers · typed JSON envelopes · `.handler` calling convention | Composable · testable · independently versionable |
+| **Skills** | Hardcoded behaviors per agent class | `enabled_skills` field on `AgentDefinition` · `_enabled(agent, skill)` runs server-side | Per-age gating · A2A plug-in · single registration |
+| **Multi-agent** | Bigger prompt + conditional branching | Proxy + 4 subagents + shared context bus | Specialty isolation · safety_review on **every** reply · responsive routing |
+
+**Vocabulary** — *agent* · *subagent* · *team* · *orchestrator* — each role is precise. See appendix.
+
+<!--
+SPEAKER NOTES (slide 8 — Design decisions, NEW)
+This is the "we made decisions, not defaults" slide.
+
+Walk it row-by-row, ~7 seconds per row:
+1. Prompts: "We could have inlined prompts as Python strings. We chose markdown files in git — versioned, code-reviewable, age-stratified per file."
+2. Tools: "We could have called the API directly inside agent code. We chose custom MCP servers with typed envelopes — composable, testable, and the .handler convention lets us debug them."
+3. Skills: "We could have hardcoded behaviors. We chose enabled_skills as a field on AgentDefinition — per-age gating, A2A extensible, server-side gate."
+4. Multi-agent: "We could have used a bigger system prompt with branching. We chose a proxy + 4 subagents — each specialty isolated, safety subagent on EVERY reply, responsive routing."
+
+Close: "We didn't adopt defaults. Each row is a trade-off we made deliberately."
+
+DEFAULT-CUT FOR 5-MIN — keep for 6-min slot or technical-heavy judging panels.
+-->
+
+---
+
 ## Where we innovate — *three layers, six bets*
 
 | 🤖 **Agentic stack** | 🛡️ **Safety architecture** | 🌟 **Kid experience** |
@@ -343,22 +371,22 @@ Then: "Happy to take questions."
 
 ---
 
-<!-- _backgroundColor: "#0F172A" -->
-<!-- _color: "#F8FAFC" -->
-<!-- _class: dark -->
-
 ## Appendix — technical deep-dive *(backup for Q&A)*
 
 | Topic | One-line answer |
 |---|---|
+| **Agent** | `AgentDefinition(model="haiku", system_prompt=..., tools=[...], enabled_skills=[...])` — one specialist w/ a curated capability set |
+| **Subagent** | An agent registered under the proxy's `agents=` dict · invoked via the SDK's `Agent` tool delegation |
+| **Agent team** | Proxy + 4 subagents (image_story · interactive_story · kids_daily · audio_narration) + safety_review · all share the context bus |
+| **Orchestrator** | The proxy ("My Agent") — routes intent · composes specialist outputs · runs safety_review on every reply |
+| **Why this shape** | Bigger prompt → quality degrades w/ specialty count · prompt chaining → no shared state · agent team → shared context + parallel specialty + A2A extensibility |
 | **SDK** | `claude_agent_sdk` — `ClaudeSDKClient` + `AgentDefinition`s + custom MCP servers via `@tool` |
-| **Specialists** | 4 `AgentDefinition`s w/ `model="haiku"`, distinct system prompts + tool sets + `enabled_skills` |
-| **Intent routing** | `_classify_intent(utterance, age)` — deterministic keyword rules + LLM disambiguation for vague utterances · age 3-5 vague `"story?"` → image_story by default |
+| **Intent routing** | `_classify_intent(utterance, age)` — deterministic keyword rules + LLM disambiguation · age 3-5 vague `"story?"` → image_story by default |
 | **Per-reply safety** | `enforce_chat_safety()` after every proxy reply · age-aware threshold · `suggest_content_improvements` retry · `safety_blocked` SSE telemetry on fail |
 | **Shared state** | `build_my_agent_context(user_id, child_id)` passes persona + recurring characters to every specialist's system prompt |
 | **COPPA pattern** | `hub_posts.agent_name`, `agent_avatar`, `agent_title` — immutable snapshot columns; no read path JOINs `users` |
-| **Streaming** | SSE — `event:` types: `status` / `progress` / `tool_use` / `tool_result` / `launch_flow` / `safety_blocked` / `result` / `complete` |
-| **Testing** | 700+ contract tests · per-MCP-tool contracts + per-agent contracts + per-route contracts · pytest, `pytest-asyncio` |
+| **Streaming** | SSE event types: `status` · `progress` · `tool_use` · `tool_result` · `launch_flow` · `safety_blocked` · `result` · `complete` |
+| **Testing** | 700+ contract tests · per-MCP-tool + per-agent + per-route contracts · pytest, `pytest-asyncio` |
 | **Tech stack** | FastAPI + Pydantic v2 · SQLite (dev) / Postgres + pgvector (prod) · React 18 + TypeScript + Tailwind + TanStack Query |
 
 <small>This slide is hidden by default. Reveal only if a judge probes the architecture.</small>
