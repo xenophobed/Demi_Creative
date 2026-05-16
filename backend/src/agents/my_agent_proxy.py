@@ -215,16 +215,22 @@ async def _suggest_improved_text(text: str, *, age_group: Optional[str]) -> Opti
     Returns the suggested text or ``None`` when the improvement service
     is unreachable / malformed. The caller will fall back to a generic
     safe message in that case.
+
+    Note: ``suggest_content_improvements`` is also wrapped as an MCP
+    tool, so we call ``.handler`` for the raw async callable. Its
+    contract takes ``original_content`` + ``safety_check_result`` —
+    we pass an empty results dict, which causes the tool to short-circuit
+    to "no improvement needed" unless the surrounding LLM rewrite path
+    fires. Either way we never raise.
     """
     try:
         from ..mcp_servers.safety_check_server import suggest_content_improvements
         handler = getattr(suggest_content_improvements, "handler", suggest_content_improvements)
         target_age = 4 if age_group == "3-5" else 7 if age_group == "6-8" else 10
         result = await handler({
-            "content_text": text,
-            "content_type": "story",
+            "original_content": text,
+            "safety_check_result": {"issues": [], "suggestions": []},
             "target_age": target_age,
-            "safety_issues": [],
         })
     except Exception as exc:  # noqa: BLE001
         logger.warning("My Agent reply safety improvement MCP unavailable: %s", exc)
@@ -238,7 +244,8 @@ async def _suggest_improved_text(text: str, *, age_group: Optional[str]) -> Opti
 
     if not isinstance(data, dict):
         return None
-    # Different shapes accepted: improved_content, improved_text, or content.
+    # The MCP tool returns ``improved_content``; we accept a few
+    # near-name variants in case a future implementation drifts.
     for key in ("improved_content", "improved_text", "content"):
         value = data.get(key)
         if isinstance(value, str) and value.strip():
@@ -251,15 +258,23 @@ async def enforce_chat_safety(
     *,
     age_group: Optional[str],
     allow_retry: bool = True,
-) -> tuple[str, float, bool]:
+) -> tuple[str, float, bool, str]:
     """Run the buddy reply through the safety gate, with one retry path.
 
-    Returns ``(text, score, used_fallback)`` where:
+    Returns ``(text, score, used_fallback, reason)`` where:
       - ``text`` is the possibly-improved reply that should be sent
       - ``score`` is the final safety score (0.0 if MCP failed or
         fallback was used)
       - ``used_fallback`` is True when the generic fallback message
         replaced the original reply
+      - ``reason`` is one of:
+          - ``"ok"`` — passed (no fallback / no improvement needed)
+          - ``"improved"`` — the rewrite suggested by
+            ``suggest_content_improvements`` passed and is being sent
+          - ``"below_threshold"`` — score was below threshold and the
+            retry path could not recover the reply
+          - ``"safety_unavailable"`` — the safety MCP errored or
+            returned a malformed envelope (we fail closed)
 
     Behaviour:
       1. Score the original reply. If it meets the age-aware threshold,
@@ -282,13 +297,15 @@ async def enforce_chat_safety(
             age_group,
         )
         if score >= threshold:
-            return reply_text, score, False
+            return reply_text, score, False, "ok"
     else:
         logger.warning(
             "Buddy reply safety MCP failed (reason=%s) — falling back",
             error,
         )
 
+    # Retry only if we actually got a usable below-threshold score.
+    # If the MCP itself errored we don't trust the rewrite path either.
     if allow_retry and error is None:
         improved = await _suggest_improved_text(reply_text, age_group=age_group)
         if improved:
@@ -300,13 +317,15 @@ async def enforce_chat_safety(
                     threshold,
                 )
                 if retry_score >= threshold:
-                    return improved, retry_score, False
+                    return improved, retry_score, False, "improved"
 
+    final_reason = "safety_unavailable" if error else "below_threshold"
     logger.warning(
-        "Buddy reply blocked — replacing with safe fallback (age_group=%s)",
+        "Buddy reply blocked — replacing with safe fallback (reason=%s age_group=%s)",
+        final_reason,
         age_group,
     )
-    return _SAFETY_FALLBACK_MESSAGE, score or 0.0, True
+    return _SAFETY_FALLBACK_MESSAGE, score or 0.0, True, final_reason
 
 
 def _supports_callable(cls: Any, kwargs: dict[str, Any]) -> dict[str, Any]:
@@ -1026,7 +1045,7 @@ async def stream_my_agent_chat(
     # `final_text` — the proxy's natural-language summary) rather than
     # the specialist payload. Cheaper, and avoids double-scoring large
     # story text. The wrapper is still what the child reads first.
-    safety_text, safety_score, used_fallback = await enforce_chat_safety(
+    safety_text, safety_score, used_fallback, safety_reason = await enforce_chat_safety(
         final_text,
         age_group=age_group,
         allow_retry=True,
@@ -1035,7 +1054,7 @@ async def stream_my_agent_chat(
         yield _sse(
             "safety_blocked",
             {
-                "reason": "below_threshold" if not used_fallback else "fallback_used",
+                "reason": safety_reason,
                 "safety_score": safety_score,
                 "threshold": _threshold_for_age(age_group),
                 "original_length": len(final_text),
