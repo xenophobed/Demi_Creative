@@ -114,6 +114,91 @@ async def _check_reply_safety(text: str) -> tuple[Optional[float], Optional[str]
     return float(score), None
 
 
+# #496 — launch_flow whitelist. Maps the specialist `response_type` (set
+# by tools in `_make_tools` below) to the landing route the SPA should
+# navigate to and the payload field that carries the resource ID, if any.
+# Centralised so adding a new specialist requires updating exactly one
+# table — the contract test_invalid_response_type pins this whitelist.
+_LAUNCH_FLOW_REGISTRY: dict[str, dict[str, str]] = {
+    "image_story": {
+        "id_field": "story_id",
+        "detail_route": "/story",
+        "landing_route": "/upload",
+    },
+    "interactive_story": {
+        "id_field": "session_id",
+        "detail_route": "/interactive-story",
+        "landing_route": "/interactive",
+    },
+    "kids_daily": {
+        "id_field": "episode_id",
+        "detail_route": "/kids-daily",
+        "landing_route": "/kids-daily",
+    },
+}
+
+# Keys we are willing to forward as prefill query params. Bounded by
+# design so a future specialist that returns large or sensitive fields
+# can't accidentally leak them through the URL. PRD §3.4 keeps child
+# identifiers out of marketing surfaces — these keys are all safe to
+# pass through as query params on the user's own browser.
+_LAUNCH_FLOW_PREFILL_KEYS: frozenset[str] = frozenset(
+    {
+        "story_id",
+        "session_id",
+        "episode_id",
+        "child_id",
+        "age_group",
+        "theme",
+        "category",
+    }
+)
+
+
+def _build_launch_flow_data(parsed: dict[str, Any]) -> Optional[dict[str, Any]]:
+    """Translate a specialist tool result into a launch_flow event payload.
+
+    The proxy receives tool results shaped as
+    ``{"response_type": "<flow>", "payload": {...}}``. This helper returns
+    the SSE event body (``flow_type`` / ``route`` / ``prefill``) or
+    ``None`` when the response type is not in the whitelist (e.g.
+    plain chat replies, or an unknown future type) — the caller then
+    skips the event entirely rather than navigating somewhere undefined.
+
+    Trade-off: we whitelist routes server-side rather than letting the
+    subagent choose freely. That costs flexibility but eliminates the
+    risk of an LLM-generated route navigating the child to an unrelated
+    page on an open-redirect-style mistake.
+    """
+    if not isinstance(parsed, dict):
+        return None
+    response_type = parsed.get("response_type")
+    spec = _LAUNCH_FLOW_REGISTRY.get(response_type)
+    if spec is None:
+        return None
+    payload_raw = parsed.get("payload")
+    payload = payload_raw if isinstance(payload_raw, dict) else {}
+
+    resource_id = payload.get(spec["id_field"])
+    if resource_id:
+        route = f"{spec['detail_route']}/{resource_id}"
+    else:
+        # No persisted ID yet — bounce to the landing page so the user
+        # can finish the flow with prefilled defaults.
+        route = spec["landing_route"]
+
+    prefill = {
+        key: payload[key]
+        for key in _LAUNCH_FLOW_PREFILL_KEYS
+        if key in payload and payload[key] is not None
+    }
+    return {
+        "flow_type": response_type,
+        "route": route,
+        "prefill": prefill,
+    }
+
+
 def _supports_callable(cls: Any, kwargs: dict[str, Any]) -> dict[str, Any]:
     if cls is None:
         return {}
@@ -783,6 +868,17 @@ async def stream_my_agent_chat(
                                         parsed = {}
                                     if isinstance(parsed, dict) and parsed.get("response_type"):
                                         result_metadata = parsed
+                                        # #496 — Surface a typed navigation
+                                        # hint as soon as a specialist
+                                        # tool returns a known flow. The
+                                        # event is emitted BEFORE the
+                                        # `result` event so the SPA can
+                                        # navigate to the matching page
+                                        # with prefill params while the
+                                        # chat reply is still streaming.
+                                        launch = _build_launch_flow_data(parsed)
+                                        if launch is not None:
+                                            yield _sse("launch_flow", launch)
                                 yield _sse(
                                     "tool_result",
                                     {"status": "completed", "message": "Specialist finished."},
