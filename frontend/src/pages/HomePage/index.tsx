@@ -82,7 +82,7 @@ function FloatingStar({
 
 function HomePage() {
   const navigate = useNavigate()
-  const { isAuthenticated } = useAuthStore()
+  const { isAuthenticated, user } = useAuthStore()
   const { mousePosition, prefersReducedMotion } = useStreamVisualizationContext()
 
   // Daily task system
@@ -131,8 +131,10 @@ function HomePage() {
   }, [claimStar])
 
   // Fetch latest 3 items from unified library API (all content types)
+  const currentUserId = user?.user_id ?? 'anonymous'
+
   const { data: libraryData } = useQuery({
-    queryKey: ['homepage-recent'],
+    queryKey: ['homepage-recent', currentUserId],
     queryFn: () => libraryService.getLibrary({ sort: 'newest', limit: 3 }),
     enabled: isAuthenticated,
   })

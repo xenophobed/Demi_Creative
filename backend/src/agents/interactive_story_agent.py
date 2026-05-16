@@ -50,6 +50,7 @@ from ..mcp_servers.safety_check_server import check_content_safety
 from ..mcp_servers.tts_generator_server import generate_story_audio
 from ..services.database import preference_repo
 from ..services.story_memory import get_story_memory_prompt
+from ..services.my_agent_context import build_my_agent_context
 from ..utils.model_config import get_claude_agent_model
 
 
@@ -320,6 +321,7 @@ def _build_opening_prompt(
     story_memory_section: str = "",
     dedup_nudge: str = "",
     character_memory_section: str = "",
+    my_agent_context: str = "",
 ) -> str:
     """
     Build the full prompt for interactive story opening generation.
@@ -344,6 +346,9 @@ Please create the **opening** of an interactive story for a {age_group} year old
 - Theme depth: {config["theme_depth"]}
 - Choices style: {config["choices_style"]}
 """
+
+    if my_agent_context:
+        prompt += f"\n{my_agent_context}\nFollow the buddy context while preserving all story requirements.\n"
 
     # Inject preference context (#72)
     if preference_context:
@@ -411,6 +416,7 @@ def _build_next_segment_prompt(
     choice_history_context: str = "",
     opening_hook: str = "",
     continuity_anchors: str = "",
+    my_agent_context: str = "",
 ) -> str:
     """Build prompt for generating the next story segment."""
     return f"""You are a professional children's story writer, continuing an interactive story.
@@ -423,6 +429,8 @@ def _build_next_segment_prompt(
 - Current segment: Segment {segment_count + 1} (of {total_segments} total)
 - Is this the ending: {"yes" if is_final_segment else "no"}
 - Pacing: {"Wrap up quickly — short story mode" if total_segments <= 5 else "Medium pace — develop the plot steadily" if total_segments <= 10 else "Long adventure — take your time, build rich worlds"}
+
+{my_agent_context}
 
 **Previous Story Content**:
 {story_context if story_context else "This is the beginning of the story"}
@@ -950,6 +958,12 @@ async def generate_story_opening(
     except Exception:
         pass  # Best-effort
 
+    my_agent_context = ""
+    try:
+        my_agent_context = await build_my_agent_context(user_id=user_id, child_id=child_id)
+    except Exception:
+        pass
+
     # Build prompt with preference + character continuity (#72, #73)
     prompt = _build_opening_prompt(
         child_id=child_id,
@@ -960,6 +974,7 @@ async def generate_story_opening(
         preference_context=preference_context,
         story_memory_section=story_memory_section,
         dedup_nudge=dedup_nudge,
+        my_agent_context=my_agent_context,
     )
 
     # Determine if we should generate audio based on age_group audio_mode
@@ -1120,6 +1135,12 @@ async def generate_story_opening_stream(
     except Exception:
         pass  # Non-critical
 
+    my_agent_context = ""
+    try:
+        my_agent_context = await build_my_agent_context(user_id=user_id, child_id=child_id)
+    except Exception:
+        pass
+
     # Build prompt with preference + character continuity (#72, #73)
     prompt = _build_opening_prompt(
         child_id=child_id,
@@ -1129,6 +1150,7 @@ async def generate_story_opening_stream(
         config=config,
         preference_context=preference_context,
         story_memory_section=story_memory_section,
+        my_agent_context=my_agent_context,
     )
 
     # Determine if we should generate audio based on age_group audio_mode
@@ -1289,6 +1311,8 @@ async def generate_next_segment_stream(
     story_title = session_data.get("story_title", "A mysterious adventure")
     story_length_mode = session_data.get("story_length_mode", "short")
     force_ending = session_data.get("force_ending", False)
+    user_id = session_data.get("user_id", "")
+    child_id = session_data.get("child_id", "")
 
     config = AGE_CONFIG.get(age_group, AGE_CONFIG["6-8"])
     segment_count = len(segments)
@@ -1353,6 +1377,11 @@ async def generate_next_segment_stream(
         chosen_option=chosen_option,
         choice_history_context=choice_history_context,
     )
+    my_agent_context = ""
+    try:
+        my_agent_context = await build_my_agent_context(user_id=user_id, child_id=child_id)
+    except Exception:
+        pass
 
     prompt = _build_next_segment_prompt(
         story_title=story_title,
@@ -1369,6 +1398,7 @@ async def generate_next_segment_stream(
         choice_history_context=choice_history_context,
         opening_hook=opening_hook,
         continuity_anchors="、".join(continuity_anchors),
+        my_agent_context=my_agent_context,
     )
 
     # Determine if we should generate audio based on age_group audio_mode
@@ -1547,6 +1577,8 @@ async def generate_next_segment(
     story_title = session_data.get("story_title", "A mysterious adventure")
     story_length_mode = session_data.get("story_length_mode", "short")
     force_ending = session_data.get("force_ending", False)
+    user_id = session_data.get("user_id", "")
+    child_id = session_data.get("child_id", "")
 
     config = AGE_CONFIG.get(age_group, AGE_CONFIG["6-8"])
     segment_count = len(segments)
@@ -1588,6 +1620,11 @@ async def generate_next_segment(
         chosen_option=chosen_option,
         choice_history_context=choice_history_context,
     )
+    my_agent_context = ""
+    try:
+        my_agent_context = await build_my_agent_context(user_id=user_id, child_id=child_id)
+    except Exception:
+        pass
 
     prompt = _build_next_segment_prompt(
         story_title=story_title,
@@ -1604,6 +1641,7 @@ async def generate_next_segment(
         choice_history_context=choice_history_context,
         opening_hook=opening_hook,
         continuity_anchors="、".join(continuity_anchors),
+        my_agent_context=my_agent_context,
     )
 
     # Determine if we should generate audio based on age_group audio_mode

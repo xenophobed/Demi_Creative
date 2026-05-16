@@ -849,6 +849,8 @@ class AgentChatRequest(BaseModel):
     child_id: str = Field(..., min_length=1)
     message: str = Field(..., min_length=1, max_length=2000)
     session_id: Optional[str] = Field(None, min_length=1)
+    age_group: Optional[str] = Field(None, description="Active child age group, e.g. 6-8")
+    interests: List[str] = Field(default_factory=list, max_length=8)
 
 
 class CompleteOnboardingRequest(BaseModel):
@@ -868,6 +870,11 @@ class CreateGroupRequest(BaseModel):
     visibility: str = Field(..., description="public | private")
     description: Optional[str] = Field(None, max_length=500)
     theme: Optional[str] = Field(None, max_length=50, description="Optional theme tag, e.g. 'fantasy'")
+
+
+class JoinByInviteRequest(BaseModel):
+    """POST /hub/groups/join-by-invite body."""
+    invite_token: str = Field(..., min_length=1, max_length=200)
 
 
 class GroupResponse(BaseModel):

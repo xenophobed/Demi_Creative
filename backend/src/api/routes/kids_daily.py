@@ -43,7 +43,7 @@ from ...services.tts_service import generate_multi_speaker_audio
 from ...services.user_service import UserData
 from ...utils.text import count_words
 from ...paths import AUDIO_DIR, UPLOAD_DIR
-from ..deps import get_current_user, check_generation_quota
+from ..deps import check_generation_quota, get_current_user, has_visible_hub_post
 from ...services.database import usage_repo
 from ..models import (
     DialogueScript,
@@ -428,6 +428,7 @@ async def _build_episode(
             child_id=child_id,
             category=request.category.value,
             news_url=request.news_url,
+            user_id=user.user_id,
         )
     except Exception:
         # Graceful fallback to deterministic baseline conversion
@@ -942,6 +943,7 @@ async def convert_news(
             news_url=request.news_url,
             enable_audio=request.enable_audio,
             voice=request.voice.value if request.voice else None,
+            user_id=user.user_id,
         )
 
         conversion_id = str(uuid.uuid4())
@@ -1238,7 +1240,13 @@ async def get_kids_daily_episode(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Episode not found")
 
     if story.get("user_id") != user.user_id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+        is_shared = await has_visible_hub_post(
+            source_id=episode_id,
+            source_types=("kids_daily",),
+            user_id=user.user_id,
+        )
+        if not is_shared:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
 
     return _story_analysis_to_episode(story)
 

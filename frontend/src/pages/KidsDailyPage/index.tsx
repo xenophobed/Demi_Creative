@@ -115,13 +115,13 @@ const TOPIC_THEME: Record<
       "border-cyan-300 text-cyan-700 hover:bg-cyan-100 hover:border-cyan-500",
   },
   science: {
-    card: "from-violet-50 via-indigo-50 to-violet-100 border-violet-200",
-    iconBubble: "from-violet-200 to-indigo-200",
-    accentPill: "bg-violet-100 text-violet-700",
-    listenBtn: "bg-violet-500",
-    listenBtnHover: "hover:bg-violet-600 active:bg-violet-700",
+    card: "from-warm-100 via-red-50 to-cyan-50 border-primary/20",
+    iconBubble: "from-accent/50 to-secondary/35",
+    accentPill: "bg-primary/10 text-primary-dark",
+    listenBtn: "bg-primary",
+    listenBtnHover: "hover:bg-primary-dark active:bg-primary-dark",
     followBtn:
-      "border-violet-300 text-violet-700 hover:bg-violet-100 hover:border-violet-500",
+      "border-secondary/35 text-teal-700 hover:bg-secondary/10 hover:border-secondary",
   },
   nature: {
     card: "from-teal-50 via-emerald-50 to-teal-100 border-teal-200",

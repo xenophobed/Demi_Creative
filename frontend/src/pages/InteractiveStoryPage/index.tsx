@@ -166,10 +166,16 @@ function InteractiveStoryPage() {
       setIsResuming(true);
       setSessionExpiredMsg(null);
       resumeSession(sessionParam)
-        .catch(() => {
+        .catch((err) => {
           reset();
           if (!cancelled) {
-            setSessionExpiredMsg("This story is no longer available. Please start a new story.");
+            const isForbidden =
+              (err as { response?: { status?: number } })?.response?.status === 403;
+            setSessionExpiredMsg(
+              isForbidden
+                ? "This story belongs to another account. Please switch accounts or start a new story."
+                : "This story is no longer available. Please start a new story.",
+            );
           }
         })
         .finally(() => {

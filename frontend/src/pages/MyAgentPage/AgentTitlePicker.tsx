@@ -59,7 +59,7 @@ export default function AgentTitlePicker({
         Buddy title
       </label>
       <select
-        className="w-full rounded-md border border-gray-300 px-3 py-2 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 disabled:bg-gray-100"
+        className="k12-input w-full disabled:bg-gray-100"
         value={selectValue}
         disabled={disabled}
         onChange={onSelectChange}
@@ -79,7 +79,7 @@ export default function AgentTitlePicker({
       </select>
       {mode === "custom" && allowCustom && (
         <input
-          className="w-full rounded-md border border-gray-300 px-3 py-2 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 disabled:bg-gray-100"
+          className="k12-input w-full disabled:bg-gray-100"
           type="text"
           value={value}
           maxLength={32}

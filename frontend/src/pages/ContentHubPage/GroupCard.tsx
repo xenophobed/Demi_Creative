@@ -4,6 +4,7 @@
  * Issue: #451 | Parent epic: #437
  */
 
+import { Lock, Users } from "lucide-react";
 import type { Group } from "@/types/hub";
 
 interface Props {
@@ -16,15 +17,14 @@ interface Props {
 export default function GroupCard({ group, onOpen, onJoin, joined }: Props) {
   const isPrivate = group.visibility === "private";
   return (
-    <article
-      className="group flex flex-col gap-2 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition-all hover:shadow-md"
-    >
+    <article className="k12-card group flex min-h-44 flex-col gap-3 p-5">
       <header className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
           <h3 className="text-lg font-semibold text-gray-900 line-clamp-1">
             {group.name}
           </h3>
-          <p className="text-xs text-gray-500">
+          <p className="mt-1 flex items-center gap-1 text-xs font-medium text-gray-500">
+            <Users size={13} />
             {group.member_count}{" "}
             {group.member_count === 1 ? "member" : "members"} ·{" "}
             {isPrivate ? "Private" : "Public"}
@@ -32,13 +32,14 @@ export default function GroupCard({ group, onOpen, onJoin, joined }: Props) {
         </div>
         <span
           className={[
-            "rounded-full px-2 py-0.5 text-xs font-semibold",
+            "k12-chip",
             isPrivate
-              ? "bg-amber-100 text-amber-700"
-              : "bg-emerald-100 text-emerald-700",
+              ? "bg-accent/45 text-yellow-800"
+              : "bg-secondary/15 text-teal-700",
           ].join(" ")}
         >
-          {isPrivate ? "🔒 Private" : "🌐 Public"}
+          {isPrivate ? <Lock size={12} /> : null}
+          {isPrivate ? "Private" : "Public"}
         </span>
       </header>
 
@@ -49,7 +50,7 @@ export default function GroupCard({ group, onOpen, onJoin, joined }: Props) {
       <footer className="mt-2 flex items-center gap-2">
         <button
           type="button"
-          className="rounded-md bg-violet-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-violet-700"
+          className="k12-button-primary px-3 py-1.5"
           onClick={onOpen}
         >
           Open
@@ -57,14 +58,14 @@ export default function GroupCard({ group, onOpen, onJoin, joined }: Props) {
         {onJoin && !joined && (
           <button
             type="button"
-            className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            className="k12-button-secondary px-3 py-1.5"
             onClick={onJoin}
           >
             {isPrivate ? "Join with invite" : "Join"}
           </button>
         )}
         {joined && (
-          <span className="text-xs font-medium text-emerald-600">
+          <span className="text-xs font-medium text-teal-700">
             ✓ Joined
           </span>
         )}

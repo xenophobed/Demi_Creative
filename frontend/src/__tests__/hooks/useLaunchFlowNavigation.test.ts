@@ -45,13 +45,13 @@ describe("buildLaunchFlowPath", () => {
   it("appends prefill as query params", () => {
     const data: SSELaunchFlowData = {
       flow_type: "interactive_story",
-      route: "/interactive-story/sess_xyz",
-      prefill: { session_id: "sess_xyz", age_group: "6-8", theme: "forest" },
+      route: "/interactive",
+      prefill: { session: "sess_xyz", age_group: "6-8", theme: "forest" },
     };
     const path = buildLaunchFlowPath(data);
-    expect(path.startsWith("/interactive-story/sess_xyz?")).toBe(true);
+    expect(path.startsWith("/interactive?")).toBe(true);
     const params = new URLSearchParams(path.split("?")[1]);
-    expect(params.get("session_id")).toBe("sess_xyz");
+    expect(params.get("session")).toBe("sess_xyz");
     expect(params.get("age_group")).toBe("6-8");
     expect(params.get("theme")).toBe("forest");
   });

@@ -96,6 +96,16 @@ function launchLabel(flow: SSELaunchFlowData): string {
   }
 }
 
+function launchMessage(agent: Agent, flow: SSELaunchFlowData): string {
+  if (flow.flow_type === "image_story" && !flow.prefill?.story_id) {
+    return `${agent.agent_name} is ready to turn an image into a story.`;
+  }
+  if (flow.flow_type === "kids_daily" && !flow.prefill?.episode_id) {
+    return `${agent.agent_name} is ready to open Kids Daily.`;
+  }
+  return `${agent.agent_name} made ${launchLabel(flow)}.`;
+}
+
 function resultMessage(data: unknown): string {
   if (data && typeof data === "object" && "message" in data) {
     const message = (data as { message?: unknown }).message;
@@ -376,7 +386,7 @@ export default function AgentChatPanel({
       {pendingLaunchFlow && (
         <div className="mx-5 mb-3 flex flex-col gap-3 rounded-xl border border-violet-200 bg-violet-50 p-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm font-medium text-violet-900">
-            {agent.agent_name} made {launchLabel(pendingLaunchFlow)}.
+            {launchMessage(agent, pendingLaunchFlow)}
           </p>
           <div className="flex gap-2">
             <button

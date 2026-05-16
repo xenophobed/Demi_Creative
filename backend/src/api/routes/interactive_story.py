@@ -580,6 +580,8 @@ async def choose_story_branch_stream(
                     "theme": session.theme,
                     "story_title": session.story_title,
                     "story_length_mode": session.story_length_mode,
+                    "child_id": session.child_id,
+                    "user_id": user.user_id,
                 },
                 enable_audio=session.enable_audio,
                 voice=session.voice
@@ -790,6 +792,8 @@ async def choose_story_branch(
                 "theme": session.theme,
                 "story_title": session.story_title,
                 "story_length_mode": session.story_length_mode,
+                "child_id": session.child_id,
+                "user_id": user.user_id,
             },
             enable_audio=session.enable_audio,
             voice=session.voice
@@ -969,6 +973,8 @@ async def end_story_stream(
                     "theme": session.theme,
                     "story_title": session.story_title,
                     "story_length_mode": session.story_length_mode,
+                    "child_id": session.child_id,
+                    "user_id": user.user_id,
                     "force_ending": True,
                 },
                 enable_audio=session.enable_audio,
@@ -1063,7 +1069,9 @@ async def resume_session(
     frontend can restore the story view from a My Library card click.
     """
     try:
-        session = await get_session_for_owner(session_id, user.user_id)
+        session = await get_session_for_owner(
+            session_id, user.user_id, allow_hub_shared=True
+        )
 
         # Reactivate expired sessions so the user can continue playing
         if session.status == "expired":

@@ -143,6 +143,18 @@ class GroupRepository:
         )
         return self._row_to_group(row) if row else None
 
+    async def get_by_invite_token(self, invite_token: str) -> Optional[GroupData]:
+        row = await self._db.fetchone(
+            """
+            SELECT group_id, slug, name, description, theme, visibility,
+                   invite_token, created_by_user_id, created_at, member_count
+            FROM hub_groups
+            WHERE visibility = 'private' AND invite_token = ?
+            """,
+            (invite_token,),
+        )
+        return self._row_to_group(row) if row else None
+
     async def list_public(self, limit: int = 50, offset: int = 0) -> List[GroupData]:
         rows = await self._db.fetchall(
             """

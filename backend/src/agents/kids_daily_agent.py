@@ -22,6 +22,7 @@ from ..api.models import DialogueLine, DialogueScript
 from ..mcp_servers import safety_server, tts_server, vector_server
 from ..mcp_servers.safety_check_server import check_content_safety
 from ..services.database import character_repo
+from ..services.my_agent_context import build_my_agent_context
 from ..utils.model_config import get_claude_agent_model
 
 logger = logging.getLogger(__name__)
@@ -356,6 +357,7 @@ async def _generate_kids_daily_text_live(
     enable_audio: bool = True,
     voice: Optional[str] = None,
     child_id: str = "",
+    user_id: str = "",
 ) -> Dict[str, Any]:
     """Generate kid-friendly news content using Claude Agent SDK with MCP safety check."""
     rules = AGE_RULES.get(age_group, AGE_RULES["6-8"])
@@ -370,6 +372,11 @@ async def _generate_kids_daily_text_live(
     ]
     actual_voice = voice or audio_config["voice"]
     audio_speed = audio_config["speed"]
+    my_agent_context = ""
+    try:
+        my_agent_context = await build_my_agent_context(user_id=user_id, child_id=child_id)
+    except Exception:
+        pass
 
     prompt = (
         "Rewrite the following news text for children.\n"
@@ -384,6 +391,7 @@ async def _generate_kids_daily_text_live(
         "- key_concepts (array of {term, explanation, emoji})\n"
         "- interactive_questions (array of {question, hint, emoji})\n"
         "No markdown, no extra keys.\n\n"
+        f"{my_agent_context}\n\n"
         f"News text:\n{source}\n\n"
         "**Safety check (mandatory)**:\n"
         "After generating the content, you MUST use `mcp__safety-check__check_content_safety` "
@@ -644,6 +652,7 @@ async def _generate_dialogue_with_sdk(
     age_group: str,
     guest_name: str,
     child_id: Optional[str],
+    user_id: str = "",
 ) -> Tuple[DialogueScript, float]:
     """Generate dialogue via Claude Agent SDK with MCP safety check and vector search.
 
@@ -653,10 +662,16 @@ async def _generate_dialogue_with_sdk(
     line_count = int(config["line_count"])
     line_duration = float(config["line_duration"])
     target_age_val = _target_age(age_group)
+    my_agent_context = ""
+    try:
+        my_agent_context = await build_my_agent_context(user_id=user_id, child_id=child_id)
+    except Exception:
+        pass
 
     prompt_template = _load_prompt()
     user_prompt = (
         f"{prompt_template}\n\n"
+        f"{my_agent_context}\n\n"
         "Generate one complete script for the input below.\n"
         f"- age_group: {age_group}\n"
         f"- target_line_count: {line_count}\n"
@@ -846,6 +861,7 @@ async def generate_kids_daily_text(
     news_url: Optional[str] = None,
     enable_audio: bool = True,
     voice: Optional[str] = None,
+    user_id: str = "",
 ) -> Dict[str, Any]:
     """Convert news article to kid-friendly text content."""
     source = _normalize(news_text)
@@ -855,7 +871,7 @@ async def generate_kids_daily_text(
     if not _should_use_mock():
         try:
             result = await _generate_kids_daily_text_live(
-                source, age_group, category, enable_audio, voice, child_id
+                source, age_group, category, enable_audio, voice, child_id, user_id
             )
             result["used_mock"] = False
             result["degraded_reason"] = None
@@ -931,6 +947,7 @@ async def generate_kids_daily_dialogue(
     age_group: str,
     child_id: Optional[str] = None,
     news_url: Optional[str] = None,
+    user_id: str = "",
 ) -> Dict[str, Any]:
     """Generate Kids Daily dialogue script with safety metadata."""
 
@@ -961,6 +978,7 @@ async def generate_kids_daily_dialogue(
                 age_group=age_group,
                 guest_name=guest_name,
                 child_id=child_id,
+                user_id=user_id,
             )
             used_mock = False
         except Exception as exc:
@@ -998,6 +1016,7 @@ async def generate_kids_daily_episode(
     child_id: Optional[str],
     category: str,
     news_url: Optional[str] = None,
+    user_id: str = "",
 ) -> Dict[str, Any]:
     """Compose kid summary + dialogue script payload for Kids Daily."""
 
@@ -1009,6 +1028,7 @@ async def generate_kids_daily_episode(
         news_url=news_url,
         enable_audio=False,
         voice=None,
+        user_id=user_id,
     )
 
     dialogue_data = await generate_kids_daily_dialogue(
@@ -1016,6 +1036,7 @@ async def generate_kids_daily_episode(
         age_group=age_group,
         child_id=child_id,
         news_url=news_url,
+        user_id=user_id,
     )
 
     return {

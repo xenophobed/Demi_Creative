@@ -11,6 +11,7 @@ import { motion } from 'framer-motion'
 import { TrendingUp } from 'lucide-react'
 import { libraryService } from '@/api/services/libraryService'
 import type { StatsGroupBy, RichStatsPeriod } from '@/api/services/libraryService'
+import useAuthStore from '@/store/useAuthStore'
 
 // ---- Metric Card ----
 
@@ -225,9 +226,10 @@ function EmptyState() {
 
 export default function GrowthTimeline() {
   const [groupBy, setGroupBy] = useState<StatsGroupBy>('week')
+  const userId = useAuthStore((state) => state.user?.user_id ?? 'anonymous')
 
   const { data, isLoading } = useQuery({
-    queryKey: ['library-stats-rich', groupBy],
+    queryKey: ['library-stats-rich', userId, groupBy],
     queryFn: () => libraryService.getRichStats(groupBy),
   })
 

@@ -137,6 +137,53 @@
     @apply max-w-4xl mx-auto;
   }
 
+  .k12-page {
+    @apply mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-6 sm:py-8;
+  }
+
+  .k12-page-narrow {
+    @apply mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-6 sm:py-8;
+  }
+
+  .k12-hero {
+    @apply rounded-lg border border-primary/20 bg-white p-5 shadow-sm sm:p-6;
+    background:
+      radial-gradient(circle at 12% 18%, rgba(255, 230, 109, 0.42), transparent 30%),
+      linear-gradient(135deg, #fff9f5 0%, rgba(255, 107, 107, 0.14) 48%, rgba(78, 205, 196, 0.16) 100%);
+  }
+
+  .k12-hero-title {
+    @apply text-2xl font-bold text-gray-900 sm:text-3xl;
+  }
+
+  .k12-hero-copy {
+    @apply mt-1 max-w-3xl text-sm leading-relaxed text-gray-600;
+  }
+
+  .k12-panel {
+    @apply rounded-lg border border-gray-200 bg-white shadow-sm;
+  }
+
+  .k12-card {
+    @apply rounded-lg border border-gray-200 bg-white shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md;
+  }
+
+  .k12-button-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white shadow-sm transition-colors hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-primary/60 disabled:bg-gray-300;
+  }
+
+  .k12-button-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg border border-secondary/35 bg-white px-4 py-2 text-sm font-bold text-teal-700 transition-colors hover:bg-secondary/10 focus:outline-none focus:ring-2 focus:ring-secondary/60 disabled:opacity-50;
+  }
+
+  .k12-chip {
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold;
+  }
+
+  .k12-input {
+    @apply rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/60;
+  }
+
   /* Gradient background */
   .gradient-bg {
     background: linear-gradient(135deg, #FFF9F5 0%, #FFE8E8 50%, #E8FFF9 100%);
@@ -366,7 +413,7 @@
   }
 
   .glow-purple {
-    box-shadow: 0 0 20px rgba(155, 89, 182, 0.4);
+    box-shadow: 0 0 20px rgba(78, 205, 196, 0.4);
   }
 
   /* Reduced motion */
@@ -1006,7 +1053,7 @@
 }
 
 .analysis-badge.info {
-  @apply bg-purple-50 text-purple-700;
+  @apply bg-secondary/10 text-teal-700;
 }
 
 /* ===== News Detail — Newspaper Style ===== */

@@ -6,6 +6,7 @@ import Card from "@/components/common/Card";
 import Button from "@/components/common/Button";
 import { storyService } from "@/api/services/storyService";
 import useChildStore from "@/store/useChildStore";
+import useAuthStore from "@/store/useAuthStore";
 import { resolveMediaUrl } from "@/utils/mediaUrl";
 import ShareToHubModal from "@/components/hub/ShareToHubModal";
 
@@ -29,6 +30,7 @@ function KidsDailyEpisodePage() {
   const navigate = useNavigate();
   const { episodeId } = useParams<{ episodeId: string }>();
   const { currentChild, defaultChildId } = useChildStore();
+  const currentUserId = useAuthStore((state) => state.user?.user_id ?? "anonymous");
 
   const [currentLineIndex, setCurrentLineIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -47,10 +49,13 @@ function KidsDailyEpisodePage() {
     isLoading,
     error,
   } = useQuery({
-    queryKey: ["kids-daily-episode", episodeId],
+    queryKey: ["kids-daily-episode", currentUserId, episodeId],
     queryFn: () => storyService.getMorningShowEpisode(episodeId || ""),
     enabled: !!episodeId,
   });
+
+  const isForbidden =
+    (error as { response?: { status?: number } } | null)?.response?.status === 403;
 
   const lines = episode?.dialogue_script.lines ?? [];
   const currentLine = lines[currentLineIndex];
@@ -210,9 +215,13 @@ function KidsDailyEpisodePage() {
   if (error || !episode) {
     return (
       <div className="max-w-2xl mx-auto text-center py-16 space-y-4">
-        <h1 className="text-2xl font-bold text-gray-800">Episode not found</h1>
+        <h1 className="text-2xl font-bold text-gray-800">
+          {isForbidden ? "Episode not available for this account" : "Episode not found"}
+        </h1>
         <p className="text-gray-500">
-          This Kids Daily episode may have been removed.
+          {isForbidden
+            ? "You are signed in as a different user than the one who created this episode."
+            : "This Kids Daily episode may have been removed."}
         </p>
         <Button onClick={() => navigate("/library")}>Back to Library</Button>
       </div>

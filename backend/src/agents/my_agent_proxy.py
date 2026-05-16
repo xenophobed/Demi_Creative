@@ -40,11 +40,15 @@ except Exception:  # pragma: no cover - test/minimal env fallback
         return kwargs
 
 from .image_to_story_agent import image_to_story
-from .interactive_story_agent import generate_next_segment, generate_story_opening
+from .interactive_story_agent import (
+    generate_next_segment,
+    generate_story_opening,
+    get_total_segments,
+)
 from .kids_daily_agent import generate_kids_daily_episode
 from ..mcp_servers import check_content_safety
 from ..mcp_servers.tts_generator_server import generate_story_audio
-from ..services.database import agent_chat_repo, agent_repo
+from ..services.database import agent_chat_repo, agent_repo, session_repo, usage_repo
 from ..services.my_agent_context import build_my_agent_context
 from ..utils.model_config import get_claude_agent_model
 
@@ -64,7 +68,7 @@ def _json_tool_result(data: dict[str, Any]) -> dict[str, Any]:
 # navigate to and the payload field that carries the resource ID, if any.
 # Centralised so adding a new specialist requires updating exactly one
 # table — the contract test_invalid_response_type pins this whitelist.
-_LAUNCH_FLOW_REGISTRY: dict[str, dict[str, str]] = {
+_LAUNCH_FLOW_REGISTRY: dict[str, dict[str, Any]] = {
     "image_story": {
         "id_field": "story_id",
         "detail_route": "/story",
@@ -72,8 +76,10 @@ _LAUNCH_FLOW_REGISTRY: dict[str, dict[str, str]] = {
     },
     "interactive_story": {
         "id_field": "session_id",
-        "detail_route": "/interactive-story",
+        "detail_route": "/interactive",
         "landing_route": "/interactive",
+        "id_location": "query",
+        "query_id_param": "session",
     },
     "kids_daily": {
         "id_field": "episode_id",
@@ -92,6 +98,7 @@ _LAUNCH_FLOW_PREFILL_KEYS: frozenset[str] = frozenset(
         "story_id",
         "session_id",
         "episode_id",
+        "session",
         "child_id",
         "age_group",
         "theme",
@@ -125,7 +132,13 @@ def _build_launch_flow_data(parsed: dict[str, Any]) -> Optional[dict[str, Any]]:
     payload = payload_raw if isinstance(payload_raw, dict) else {}
 
     resource_id = payload.get(spec["id_field"])
-    if resource_id:
+    if resource_id and spec.get("id_location") == "query":
+        # The SPA owns interactive story resumes as
+        # /interactive?session=<id>, not /interactive-story/<id>. Keep
+        # the resource id in prefill so the frontend composes the real
+        # route with URLSearchParams.
+        route = spec["detail_route"]
+    elif resource_id:
         route = f"{spec['detail_route']}/{resource_id}"
     else:
         # No persisted ID yet — bounce to the landing page so the user
@@ -137,6 +150,10 @@ def _build_launch_flow_data(parsed: dict[str, Any]) -> Optional[dict[str, Any]]:
         for key in _LAUNCH_FLOW_PREFILL_KEYS
         if key in payload and payload[key] is not None
     }
+    query_id_param = spec.get("query_id_param")
+    if resource_id and query_id_param:
+        prefill.pop(spec["id_field"], None)
+        prefill[query_id_param] = resource_id
     return {
         "flow_type": response_type,
         "route": route,
@@ -152,6 +169,107 @@ def _supports_callable(cls: Any, kwargs: dict[str, Any]) -> dict[str, Any]:
     except (TypeError, ValueError):
         return kwargs
     return {key: value for key, value in kwargs.items() if key in params}
+
+
+def _age_to_group(age: int) -> str:
+    if age <= 5:
+        return "3-5"
+    if age <= 8:
+        return "6-8"
+    return "9-12"
+
+
+def _is_image_story_landing_request(message: str) -> bool:
+    text = " ".join(message.lower().replace("-", " ").split())
+    explicit_phrases = (
+        "image to story",
+        "picture to story",
+        "photo to story",
+        "drawing to story",
+        "art to story",
+        "image story",
+        "picture story",
+        "drawing story",
+    )
+    if any(phrase in text for phrase in explicit_phrases):
+        return True
+
+    image_terms = ("image", "picture", "photo", "drawing", "draw", "artwork", "upload")
+    story_terms = ("story", "stories", "tale")
+    action_terms = ("make", "create", "turn", "write", "tell", "generate")
+    return (
+        any(term in text for term in image_terms)
+        and any(term in text for term in story_terms)
+        and any(term in text for term in action_terms)
+    )
+
+
+def _is_kids_daily_landing_request(message: str) -> bool:
+    text = " ".join(message.lower().replace("-", " ").split())
+    explicit_phrases = (
+        "kids daily",
+        "news today",
+        "today's news",
+        "todays news",
+        "news for kids",
+        "kid friendly news",
+        "child friendly news",
+        "morning show",
+    )
+    if any(phrase in text for phrase in explicit_phrases):
+        return True
+
+    news_terms = ("news", "headline", "headlines", "world today", "happening today")
+    kid_terms = ("kid", "kids", "child", "children")
+    return any(term in text for term in news_terms) and any(term in text for term in kid_terms)
+
+
+async def _persist_interactive_opening(
+    result: dict[str, Any],
+    *,
+    child_id: str,
+    user_id: str,
+    age_group: str,
+    interests: list[str],
+    theme: Optional[str],
+    enable_audio: bool,
+) -> dict[str, Any]:
+    """Attach a resumable session_id to openings produced through My Agent."""
+    if result.get("session_id"):
+        return result
+
+    segment = result.get("segment")
+    title = result.get("title") or result.get("story_title")
+    if not isinstance(segment, dict) or not title:
+        return result
+
+    session = await session_repo.create_session(
+        child_id=child_id,
+        story_title=str(title),
+        age_group=age_group,
+        interests=interests,
+        theme=theme,
+        voice="fable",
+        enable_audio=enable_audio,
+        total_segments=get_total_segments("short", age_group),
+        user_id=user_id,
+        story_length_mode="short",
+    )
+    audio_url = segment.get("audio_url") or result.get("audio_url")
+    segment_id = segment.get("segment_id") if audio_url is not None else None
+    await session_repo.update_session(
+        session_id=session.session_id,
+        segment=segment,
+        audio_url=audio_url,
+        segment_id=segment_id,
+    )
+    if user_id:
+        await usage_repo.increment(user_id, "interactive_story")
+    return {
+        **result,
+        "session_id": session.session_id,
+        "story_title": session.story_title,
+    }
 
 
 def _make_agent_definition(**kwargs: Any):
@@ -170,7 +288,13 @@ def _make_tools(
     child_id: str,
     image_path: Optional[str],
     agent,
+    result_sink: Optional[dict[str, Any]] = None,
 ):
+    def record_result(data: dict[str, Any]) -> dict[str, Any]:
+        if result_sink is not None and data.get("response_type"):
+            result_sink["latest"] = data
+        return _json_tool_result(data)
+
     @tool(
         "create_image_story",
         "Create a story from the uploaded child drawing. Requires an uploaded image.",
@@ -186,7 +310,18 @@ def _make_tools(
         if not _enabled(agent, "image_story"):
             return _json_tool_result({"error": "skill_disabled", "skill": "image_story"})
         if not image_path:
-            return _json_tool_result({"error": "image_required"})
+            child_age = int(args.get("child_age") or 7)
+            return record_result(
+                {
+                    "response_type": "image_story",
+                    "message": "Open Image to Story and upload a picture to begin.",
+                    "payload": {
+                        "child_id": child_id,
+                        "age_group": _age_to_group(child_age),
+                        "image_required": True,
+                    },
+                }
+            )
         result = await image_to_story(
             image_path=image_path,
             child_id=child_id,
@@ -197,7 +332,7 @@ def _make_tools(
             art_theme=args.get("art_theme") or None,
             user_id=user_id,
         )
-        return _json_tool_result({"response_type": "image_story", "payload": result})
+        return record_result({"response_type": "image_story", "payload": result})
 
     @tool(
         "start_interactive_story",
@@ -207,15 +342,28 @@ def _make_tools(
     async def start_interactive_story(args: dict[str, Any]) -> dict[str, Any]:
         if not _enabled(agent, "interactive_story"):
             return _json_tool_result({"error": "skill_disabled", "skill": "interactive_story"})
+        age_group = args.get("age_group") or "6-8"
+        interests = args.get("interests") or ["adventure"]
+        theme = args.get("theme") or None
+        enable_audio = bool(args.get("enable_audio", True))
         result = await generate_story_opening(
             child_id=child_id,
-            age_group=args.get("age_group") or "6-8",
-            interests=args.get("interests") or ["adventure"],
-            theme=args.get("theme") or None,
-            enable_audio=bool(args.get("enable_audio", True)),
+            age_group=age_group,
+            interests=interests,
+            theme=theme,
+            enable_audio=enable_audio,
             user_id=user_id,
         )
-        return _json_tool_result({"response_type": "interactive_story", "payload": result})
+        result = await _persist_interactive_opening(
+            result,
+            child_id=child_id,
+            user_id=user_id,
+            age_group=age_group,
+            interests=interests,
+            theme=theme,
+            enable_audio=enable_audio,
+        )
+        return record_result({"response_type": "interactive_story", "payload": result})
 
     @tool(
         "continue_interactive_story",
@@ -234,7 +382,7 @@ def _make_tools(
             session_data=session_data,
             enable_audio=bool(args.get("enable_audio", True)),
         )
-        return _json_tool_result({"response_type": "interactive_story", "payload": result})
+        return record_result({"response_type": "interactive_story", "payload": result})
 
     @tool(
         "create_kids_daily_episode",
@@ -252,7 +400,7 @@ def _make_tools(
             news_url=args.get("news_url") or None,
             user_id=user_id,
         )
-        return _json_tool_result({"response_type": "kids_daily", "payload": result})
+        return record_result({"response_type": "kids_daily", "payload": result})
 
     @tool(
         "check_child_content_safety",
@@ -402,6 +550,8 @@ async def stream_my_agent_chat(
     message: str,
     session_id: Optional[str] = None,
     image_path: Optional[str] = None,
+    age_group: Optional[str] = None,
+    interests: Optional[list[str]] = None,
 ) -> AsyncGenerator[str, None]:
     """Stream an SDK-orchestrated My Agent chat response as SSE."""
     chat_session = await agent_chat_repo.get_or_create_session(
@@ -438,8 +588,74 @@ async def stream_my_agent_chat(
     my_agent_context = await build_my_agent_context(user_id=user_id, child_id=child_id)
     recent = await agent_chat_repo.list_recent_messages(chat_session.session_id, limit=10)
     history = "\n".join(f"{m.role}: {m.text}" for m in recent[:-1])
+    child_age_group = (age_group or "6-8").strip() or "6-8"
+    child_interests = [str(i).strip() for i in (interests or []) if str(i).strip()]
+    child_interest_text = ", ".join(child_interests) if child_interests else "adventure"
+    if (
+        not image_path
+        and _enabled(agent, "image_story")
+        and _is_image_story_landing_request(message)
+    ):
+        result_metadata = {
+            "response_type": "image_story",
+            "payload": {"child_id": child_id, "age_group": child_age_group},
+        }
+        launch = _build_launch_flow_data(result_metadata)
+        if launch is not None:
+            yield _sse("launch_flow", launch)
+        final_text = "Let's turn your picture into a story. Open Image to Story and upload your drawing there."
+        result_payload = {
+            "response_type": "image_story",
+            "message": final_text,
+            "session_id": chat_session.session_id,
+            "payload": result_metadata["payload"],
+        }
+        await agent_chat_repo.add_message(
+            session_id=chat_session.session_id,
+            role="assistant",
+            text=final_text,
+            result_metadata=result_payload,
+        )
+        yield _sse("result", result_payload)
+        yield _sse("complete", {"status": "completed", "message": "Buddy replied."})
+        return
+
+    if _enabled(agent, "kids_daily") and _is_kids_daily_landing_request(message):
+        result_metadata = {
+            "response_type": "kids_daily",
+            "payload": {
+                "child_id": child_id,
+                "age_group": child_age_group,
+                "category": "general",
+            },
+        }
+        launch = _build_launch_flow_data(result_metadata)
+        if launch is not None:
+            yield _sse("launch_flow", launch)
+        final_text = "Let's explore today's news in a kid-friendly way. Open Kids Daily to get started."
+        result_payload = {
+            "response_type": "kids_daily",
+            "message": final_text,
+            "session_id": chat_session.session_id,
+            "payload": result_metadata["payload"],
+        }
+        await agent_chat_repo.add_message(
+            session_id=chat_session.session_id,
+            role="assistant",
+            text=final_text,
+            result_metadata=result_payload,
+        )
+        yield _sse("result", result_payload)
+        yield _sse("complete", {"status": "completed", "message": "Buddy replied."})
+        return
+
+    tool_result_sink: dict[str, Any] = {}
     tools_server = _make_tools(
-        user_id=user_id, child_id=child_id, image_path=image_path, agent=agent
+        user_id=user_id,
+        child_id=child_id,
+        image_path=image_path,
+        agent=agent,
+        result_sink=tool_result_sink,
     )
     prompt = f"""
 {my_agent_context}
@@ -452,9 +668,20 @@ nearby safe activity.
 Recent chat:
 {history or "(no prior messages)"}
 
+Active child profile:
+- child_id: {child_id}
+- age_group: {child_age_group}
+- interests: {child_interest_text}
+
 Image uploaded for this turn: {"yes" if image_path else "no"}
 Current child message:
 {message}
+
+If the child asks to make, start, continue, or tell a story and the active child
+profile already provides an age_group, do not ask for age again. Use the supplied
+age_group and interests. If they ask to continue a story but no existing
+interactive story session is available in chat history, start a new interactive
+story.
 
 Return either a friendly chat reply or a short summary of the generated result.
 """
@@ -487,6 +714,7 @@ Return either a friendly chat reply or a short summary of the generated result.
 
     final_text = ""
     emitted_partial_text = False
+    emitted_launch_flow = False
     result_metadata: dict[str, Any] = {"response_type": "chat"}
     try:
         options = ClaudeAgentOptions(**_supports_callable(ClaudeAgentOptions, options_kwargs))
@@ -535,6 +763,7 @@ Return either a friendly chat reply or a short summary of the generated result.
                                         # chat reply is still streaming.
                                         launch = _build_launch_flow_data(parsed)
                                         if launch is not None:
+                                            emitted_launch_flow = True
                                             yield _sse("launch_flow", launch)
                                 yield _sse(
                                     "tool_result",
@@ -560,6 +789,17 @@ Return either a friendly chat reply or a short summary of the generated result.
         return
 
     final_text = final_text.strip() or "I'm here and ready to create with you."
+    if result_metadata["response_type"] == "chat" and tool_result_sink.get("latest"):
+        # Some SDK/CLI versions surface the MCP tool use but summarize
+        # the result into the final assistant text rather than returning
+        # a ToolResultBlock to the parent stream. The in-process tool
+        # still ran, so use the recorded structured result as the
+        # authoritative launch metadata.
+        result_metadata = tool_result_sink["latest"]
+    if not emitted_launch_flow:
+        launch = _build_launch_flow_data(result_metadata)
+        if launch is not None:
+            yield _sse("launch_flow", launch)
     result_payload = {
         "response_type": result_metadata["response_type"],
         "message": final_text,

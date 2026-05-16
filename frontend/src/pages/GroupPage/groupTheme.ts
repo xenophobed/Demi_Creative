@@ -28,10 +28,10 @@ const PALETTE: GroupAccent[] = [
     chipBg: "bg-rose-100 text-rose-700",
   },
   {
-    bannerGradient: "from-violet-200 via-purple-100 to-fuchsia-100",
-    coverGradient: "from-violet-300 via-purple-200 to-fuchsia-200",
-    accentText: "text-violet-700",
-    chipBg: "bg-violet-100 text-violet-700",
+    bannerGradient: "from-red-100 via-rose-100 to-yellow-100",
+    coverGradient: "from-primary via-primary-light to-accent",
+    accentText: "text-primary-dark",
+    chipBg: "bg-primary/10 text-primary-dark",
   },
   {
     bannerGradient: "from-sky-200 via-cyan-100 to-emerald-100",
@@ -105,7 +105,7 @@ export function emojiForTheme(theme: string | null | undefined): string {
 
 /**
  * Per-source-type cover treatment. Art stories get a warm bookish
- * gradient, interactive stories a playful violet — both override the
+ * gradient, interactive stories a teal adventure band — both override the
  * group's accent so individual posts read differently at a glance.
  */
 export function coverFor(
@@ -126,7 +126,7 @@ export function coverFor(
     };
   }
   return {
-    gradient: "from-violet-400 via-fuchsia-300 to-sky-300",
+    gradient: "from-secondary via-secondary-light to-accent",
     icon: "🌟",
     label: "Interactive story",
   };

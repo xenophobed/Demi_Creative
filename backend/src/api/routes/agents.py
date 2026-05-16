@@ -338,6 +338,12 @@ async def _parse_chat_request(request: Request) -> tuple[AgentChatRequest, str |
             child_id=str(form.get("child_id") or ""),
             message=str(form.get("message") or ""),
             session_id=str(form.get("session_id") or "") or None,
+            age_group=str(form.get("age_group") or "") or None,
+            interests=[
+                str(v).strip()
+                for v in str(form.get("interests") or "").split(",")
+                if str(v).strip()
+            ],
         )
         upload = form.get("image")
         if upload is not None and hasattr(upload, "read"):
@@ -378,6 +384,8 @@ async def chat_with_my_agent_stream(
                 message=payload.message,
                 session_id=payload.session_id,
                 image_path=image_path,
+                age_group=payload.age_group,
+                interests=payload.interests,
             ):
                 yield event
         finally:

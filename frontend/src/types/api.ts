@@ -505,7 +505,7 @@ export interface SSEErrorData {
  * SSE `launch_flow` payload — emitted by the My Agent proxy (#496) when
  * a specialist tool returns a typed result. The frontend uses this to
  * navigate to the matching standalone experience page (`/story/:id`,
- * `/interactive-story/:session_id`, `/kids-daily/:episode_id`, etc.)
+ * `/interactive?session=:session_id`, `/kids-daily/:episode_id`, etc.)
  * with prefill values applied as query params.
  *
  * `route` is server-validated and always resolves to a known landing or

@@ -6,7 +6,7 @@ Consolidated authentication and ownership verification for all protected routes.
 
 import hmac
 import os
-from typing import Optional
+from typing import Optional, Sequence
 
 from fastapi import Depends, Header, HTTPException, status
 
@@ -25,6 +25,41 @@ from ..services.user_service import UserData, user_service
 
 _DEFAULT_DAILY_QUOTA = 6
 _TIER_QUOTA = {"free": 3, "plus": 9}
+
+
+async def has_visible_hub_post(
+    *,
+    source_id: str,
+    source_types: Sequence[str],
+    user_id: str,
+) -> bool:
+    """
+    Return true when a source artifact is readable through Content Hub.
+
+    Library/detail endpoints are normally owner-only. A Hub post is the
+    intentional sharing boundary: public groups are readable by any signed-in
+    user, while private groups require membership on the account.
+    """
+    if not source_types:
+        return False
+
+    placeholders = ",".join("?" for _ in source_types)
+    row = await db_manager.fetchone(
+        f"""
+        SELECT 1
+        FROM hub_posts p
+        JOIN hub_groups g ON g.group_id = p.group_id
+        LEFT JOIN hub_group_memberships m
+          ON m.group_id = p.group_id AND m.user_id = ?
+        WHERE p.source_id = ?
+          AND p.source_artifact_type IN ({placeholders})
+          AND p.removed_at IS NULL
+          AND (g.visibility = 'public' OR m.group_id IS NOT NULL)
+        LIMIT 1
+        """,
+        (user_id, source_id, *source_types),
+    )
+    return row is not None
 
 
 def _is_development_env() -> bool:
@@ -277,7 +312,12 @@ async def check_generation_quota(
     return user
 
 
-async def get_story_for_owner(story_id: str, user_id: str) -> dict:
+async def get_story_for_owner(
+    story_id: str,
+    user_id: str,
+    *,
+    allow_hub_shared: bool = False,
+) -> dict:
     """
     Fetch story by ID, verify ownership.
 
@@ -299,15 +339,26 @@ async def get_story_for_owner(story_id: str, user_id: str) -> dict:
             detail="This resource is not accessible",
         )
     elif owner != user_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You do not have access to this story",
-        )
+        is_shared = await has_visible_hub_post(
+            source_id=story_id,
+            source_types=("art_story", "kids_daily"),
+            user_id=user_id,
+        ) if allow_hub_shared else False
+        if not is_shared:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have access to this story",
+            )
 
     return story
 
 
-async def get_session_for_owner(session_id: str, user_id: str) -> SessionData:
+async def get_session_for_owner(
+    session_id: str,
+    user_id: str,
+    *,
+    allow_hub_shared: bool = False,
+) -> SessionData:
     """
     Fetch session by ID, verify ownership.
 
@@ -328,9 +379,15 @@ async def get_session_for_owner(session_id: str, user_id: str) -> SessionData:
             detail="This resource is not accessible",
         )
     elif session.user_id != user_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You do not have permission to access this session",
-        )
+        is_shared = await has_visible_hub_post(
+            source_id=session_id,
+            source_types=("interactive_story",),
+            user_id=user_id,
+        ) if allow_hub_shared else False
+        if not is_shared:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have permission to access this session",
+            )
 
     return session

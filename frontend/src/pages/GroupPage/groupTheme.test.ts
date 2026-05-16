@@ -44,7 +44,7 @@ describe("coverFor", () => {
     expect(c.icon).toBe("📖");
     expect(c.label).toBe("Art story");
   });
-  it("interactive_story uses the playful violet gradient", () => {
+  it("interactive_story uses the playful teal gradient", () => {
     const c = coverFor("interactive_story");
     expect(c.icon).toBe("🌟");
     expect(c.label).toBe("Interactive story");
