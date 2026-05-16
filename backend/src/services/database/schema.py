@@ -295,6 +295,12 @@ CREATE TABLE IF NOT EXISTS user_agents (
     agent_name TEXT NOT NULL,
     agent_avatar_id TEXT NOT NULL,
     agent_title TEXT NOT NULL,
+    tone TEXT NOT NULL DEFAULT 'warm_curious',
+    interaction_style TEXT NOT NULL DEFAULT 'guided_playful',
+    enabled_skills TEXT NOT NULL DEFAULT '["image_story","interactive_story","kids_daily","audio_narration"]',
+    favorite_topics TEXT NOT NULL DEFAULT '[]',
+    learning_goals TEXT NOT NULL DEFAULT '[]',
+    custom_instructions TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     UNIQUE(user_id, child_id),
@@ -304,6 +310,41 @@ CREATE TABLE IF NOT EXISTS user_agents (
 
 USER_AGENTS_INDEXES = """
 CREATE INDEX IF NOT EXISTS idx_user_agents_user ON user_agents(user_id);
+"""
+
+
+AGENT_CHAT_SESSIONS_TABLE = """
+CREATE TABLE IF NOT EXISTS agent_chat_sessions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT NOT NULL UNIQUE,
+    user_id TEXT NOT NULL,
+    child_id TEXT NOT NULL,
+    sdk_session_id TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY(user_id) REFERENCES users(user_id) ON DELETE CASCADE
+);
+"""
+
+AGENT_CHAT_SESSIONS_INDEXES = """
+CREATE INDEX IF NOT EXISTS idx_agent_chat_sessions_user_child ON agent_chat_sessions(user_id, child_id);
+"""
+
+AGENT_CHAT_MESSAGES_TABLE = """
+CREATE TABLE IF NOT EXISTS agent_chat_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    message_id TEXT NOT NULL UNIQUE,
+    session_id TEXT NOT NULL,
+    role TEXT NOT NULL,
+    text TEXT NOT NULL,
+    result_metadata TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL,
+    FOREIGN KEY(session_id) REFERENCES agent_chat_sessions(session_id) ON DELETE CASCADE
+);
+"""
+
+AGENT_CHAT_MESSAGES_INDEXES = """
+CREATE INDEX IF NOT EXISTS idx_agent_chat_messages_session_created ON agent_chat_messages(session_id, created_at);
 """
 
 
@@ -503,6 +544,8 @@ async def init_schema(db: "DatabaseManager") -> None:
     await _migrate_add_story_length_mode(db)
     await _migrate_add_onboarding_columns(db)
     await _migrate_create_user_agents_table(db)
+    await _migrate_add_user_agent_config_columns(db)
+    await _migrate_create_agent_chat_tables(db)
     await _migrate_create_hub_groups_table(db)
     await _migrate_create_hub_group_memberships_table(db)
     await _migrate_create_hub_posts_table(db)
@@ -782,6 +825,47 @@ async def _migrate_create_user_agents_table(db: "DatabaseManager") -> None:
     """
     await db.execute(translate_ddl(USER_AGENTS_TABLE, db.dialect))
     for stmt in USER_AGENTS_INDEXES.strip().split(";"):
+        if stmt.strip():
+            try:
+                await db.execute(stmt)
+            except Exception:
+                pass
+    await db.commit()
+
+
+async def _migrate_add_user_agent_config_columns(db: "DatabaseManager") -> None:
+    """Migration: Add guided My Agent configuration columns."""
+    columns = [
+        ("tone", "ALTER TABLE user_agents ADD COLUMN tone TEXT NOT NULL DEFAULT 'warm_curious'"),
+        ("interaction_style", "ALTER TABLE user_agents ADD COLUMN interaction_style TEXT NOT NULL DEFAULT 'guided_playful'"),
+        ("enabled_skills", "ALTER TABLE user_agents ADD COLUMN enabled_skills TEXT NOT NULL DEFAULT '[\"image_story\",\"interactive_story\",\"kids_daily\",\"audio_narration\"]'"),
+        ("favorite_topics", "ALTER TABLE user_agents ADD COLUMN favorite_topics TEXT NOT NULL DEFAULT '[]'"),
+        ("learning_goals", "ALTER TABLE user_agents ADD COLUMN learning_goals TEXT NOT NULL DEFAULT '[]'"),
+        ("custom_instructions", "ALTER TABLE user_agents ADD COLUMN custom_instructions TEXT NOT NULL DEFAULT ''"),
+    ]
+    added = False
+    for column_name, ddl in columns:
+        if not await column_exists(db, "user_agents", column_name):
+            if not added:
+                print("Migrating user_agents table: adding My Agent config columns...")
+                added = True
+            await db.execute(ddl)
+    if added:
+        await db.commit()
+        print("User agents config migration completed")
+
+
+async def _migrate_create_agent_chat_tables(db: "DatabaseManager") -> None:
+    """Migration: Create lightweight My Agent chat state tables."""
+    await db.execute(translate_ddl(AGENT_CHAT_SESSIONS_TABLE, db.dialect))
+    for stmt in AGENT_CHAT_SESSIONS_INDEXES.strip().split(";"):
+        if stmt.strip():
+            try:
+                await db.execute(stmt)
+            except Exception:
+                pass
+    await db.execute(translate_ddl(AGENT_CHAT_MESSAGES_TABLE, db.dialect))
+    for stmt in AGENT_CHAT_MESSAGES_INDEXES.strip().split(";"):
         if stmt.strip():
             try:
                 await db.execute(stmt)

@@ -350,3 +350,55 @@ class TestGetAgent:
         )
         assert get.status_code == 200
         assert get.json()["agent_id"] == put.json()["agent_id"]
+
+
+class TestAgentConfiguration:
+    """Guided My Agent config is persisted and safety checked."""
+
+    @pytest.mark.asyncio
+    async def test_put_get_roundtrip_includes_guided_config(self, client):
+        body = _valid_body(
+            child_id="child_config_test",
+            tone="adventurous",
+            interaction_style="storyteller",
+            enabled_skills=["image_story", "kids_daily"],
+            favorite_topics=["space", "painting"],
+            learning_goals=["kindness"],
+            custom_instructions="Use gentle cliffhangers and celebrate curiosity.",
+        )
+        with patch(
+            "backend.src.api.routes.agents.check_content_safety.handler",
+            new=AsyncMock(return_value=_safety_response(0.99)),
+        ):
+            put = await client.put("/api/v1/me/agent", json=body)
+            get = await client.get(
+                "/api/v1/me/agent", params={"child_id": "child_config_test"}
+            )
+
+        assert put.status_code == 200, put.text
+        assert get.status_code == 200, get.text
+        data = get.json()
+        assert data["tone"] == "adventurous"
+        assert data["interaction_style"] == "storyteller"
+        assert data["enabled_skills"] == ["image_story", "kids_daily"]
+        assert data["favorite_topics"] == ["space", "painting"]
+        assert data["learning_goals"] == ["kindness"]
+        assert data["custom_instructions"] == "Use gentle cliffhangers and celebrate curiosity."
+
+    @pytest.mark.asyncio
+    async def test_unsafe_custom_instructions_rejected(self, client):
+        body = _valid_body(custom_instructions="unsafe guidance")
+        mock_safety = AsyncMock(
+            side_effect=[
+                _safety_response(0.99),  # name
+                _safety_response(0.50),  # custom instructions
+            ]
+        )
+        with patch(
+            "backend.src.api.routes.agents.check_content_safety.handler",
+            new=mock_safety,
+        ):
+            r = await client.put("/api/v1/me/agent", json=body)
+
+        assert r.status_code == 400
+        assert r.json()["detail"]["code"] == "UNSAFE_CUSTOM_INSTRUCTIONS"
