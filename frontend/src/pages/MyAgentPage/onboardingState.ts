@@ -19,9 +19,12 @@ export interface AutoOpenInput {
 export function shouldAutoOpenOnboarding(input: AutoOpenInput): boolean {
   if (!input.isAuthenticated) return false;
   if (input.onboardedAt) return false;
-  // Show onboarding even if an agent already exists — onboarding completion
-  // is gated by parent consent, not by agent existence. A user might have
-  // saved a buddy in a prior session and bounced before parent consent.
+  // If a buddy already exists for this child, treat that as implicit
+  // consent and skip the auto-open. Otherwise the modal stacks on top
+  // of the live AgentChatPanel — the user sees their chat peeking
+  // through the modal backdrop and the experience looks broken (#510
+  // follow-up). Returning users without a buddy still see onboarding.
+  if (input.hasExistingAgent) return false;
   return true;
 }
 
