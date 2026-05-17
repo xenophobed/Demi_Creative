@@ -223,58 +223,50 @@ Persistent — same buddy persona, every time."
 
 ---
 
-## Foundation — *one agent, four primitives*
+## Foundation — *six agentic features, one stack*
 
-Built on **Claude Agent SDK**:
+| Agentic feature | How we build it |
+|---|---|
+| 🌊 **Interactive** | Streaming **SSE** · async-generator agents · live tool-use events |
+| 🎯 **Responsive** | **LLM model** (Claude Haiku for speed) · deterministic + LLM intent routing · per-agent skill curation |
+| 💡 **Proactive** | **Prompt engineering** (system-prompt scaffolding for starter suggestions) · **vector DB** recall · `character_repo` lookups |
+| 🧠 **Persistent** | **Vector DB** (ChromaDB / pgvector) · `agent_repo` + `character_repo` (SQL) · cross-session memory |
+| 🛡️ **Reactive** | **MCP** safety tool · `@tool` decorator · `enforce_chat_safety` + suggest-and-retry · age-aware thresholds (0.90 / 0.85) |
+| 🚀 **Autonomous** *(future)* | Multi-step planning · **skills** composition · self-prompted explore loops · scheduled buddy initiatives |
 
-<div class="cards cols-2">
-  <div class="card">
-    <span class="card-emoji">🧭</span>
-    <span class="card-title">Prompt design</span>
-    <span class="card-body">Markdown prompts versioned in git</span>
-  </div>
-  <div class="card">
-    <span class="card-emoji">🔧</span>
-    <span class="card-title">Tools</span>
-    <span class="card-body">Custom MCP servers: vision · vector · safety · TTS</span>
-  </div>
-  <div class="card">
-    <span class="card-emoji">🔌</span>
-    <span class="card-title">MCP</span>
-    <span class="card-body">Tool calls as first-class affordances — not string-parsing</span>
-  </div>
-  <div class="card">
-    <span class="card-emoji">🛠️</span>
-    <span class="card-title">Skills</span>
-    <span class="card-body"><code>@tool</code> decorators · per-agent skill gating</span>
-  </div>
-</div>
-
-<small>One agent. No orchestrator. Just an LLM with the right scaffolding.</small>
+<small>Built from: **prompt engineering** · **MCP** · **tools** · **skills** · **LLM model** · **vector DB**. One stack — six features, one ceiling away from autonomous.</small>
 
 <!--
-🎤 SCRIPT · Slide 5 · Foundation — single agent
-⏱ ~35 seconds · 5-min cut: KEEP
+🎤 SCRIPT · Slide 5 · Six agentic features
+⏱ ~40 seconds · 5-min cut: KEEP
 
-"We started simple — one agent, built right.
-Four primitives compose it, all on Claude Agent SDK.
+"Six agentic features. One stack.
 
-PROMPT DESIGN — markdown files versioned in git,
-not Python strings. Code-reviewable.
+INTERACTIVE — streaming SSE plus async-generator
+agents. The story writes itself token by token.
 
-TOOLS — custom MCP servers we wrote ourselves:
-vision analysis, vector search, safety check, TTS.
+RESPONSIVE — Claude Haiku for speed, deterministic
+plus LLM-disambiguating intent routing, per-agent
+skill curation.
 
-MCP itself — tool calls become first-class
-agent affordances, not parsed-string hacks.
+PROACTIVE — prompt engineering shapes the buddy's
+starter suggestions; vector DB recall surfaces
+recurring characters; character_repo proposes next
+moves.
 
-SKILLS — composable behaviors with the @tool
-decorator, gated per agent via enabled_skills.
+PERSISTENT — vector DB plus SQL repos hold the
+buddy across sessions. ChromaDB locally, pgvector
+in production.
 
-One agent. No orchestrator yet. Just an LLM with
-the right scaffolding."
+REACTIVE — every reply runs through the safety MCP
+tool. Age-aware thresholds: 0.90 for three to five,
+0.85 for six to twelve. Suggest-and-retry on fail.
 
-🎬 Delivery: Point at each card as you name it. Don't read every word — narrate.
+AUTONOMOUS — this one's the next frontier.
+Multi-step planning, self-prompted explore loops,
+scheduled buddy initiatives. One ceiling away."
+
+🎬 Delivery: Walk row-by-row. Linger on REACTIVE (the safety story). Mark AUTONOMOUS as future explicitly so judges don't think you're claiming it.
 ➡ Transition: "One agent hit a ceiling. So we extended to a team."
 -->
 
