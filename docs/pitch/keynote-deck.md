@@ -93,107 +93,132 @@ Let me start with a moment."
 
 <!-- _class: title -->
 
-# A 5-year-old hands you a crayon drawing.
+# Three moments. One buddy.
 
 <br>
 
-# *What if it became a story?*
+# *Her drawing — becomes a story.*
 
-<br>
+# *Her character — stars in the next adventure.*
 
-# *In her character. Her voice. Her world.*
+# *Tomorrow's news — arrives as her podcast.*
 
 <!--
-🎤 SCRIPT · Slide 2 · The moment
-⏱ ~25 seconds · 5-min cut: KEEP
+🎤 SCRIPT · Slide 2 · Three moments
+⏱ ~28 seconds · 5-min cut: KEEP
 
-"A five-year-old hands you a crayon drawing.
+"Three moments — one buddy.
+
+[2-second pause]
+
+A five-year-old hands her drawing to her buddy.
+It becomes a story — in her character, her voice.
+
+[2-second pause]
+
+The same character stars in the next adventure —
+her choices, her ending.
+
+[2-second pause]
+
+Tomorrow's news arrives as her podcast —
+kid-safe, in her buddy's voice.
 
 [3-second pause]
 
-What if it became a story?
+One buddy. Three kinds of moments. Her world, every time."
 
-[3-second pause]
-
-In her character. Her voice. Her world.
-
-[3-second pause]
-
-Everything technical I'm about to show you exists in service of that moment."
-
-🎬 Delivery: SLOW. The pauses are the slide. Don't fill the silence.
-➡ Transition: "But today's AI can't do this. Here's why."
+🎬 Delivery: SLOW. Three product moments, three deliberate pauses. The cadence is the slide.
+➡ Transition: "But today's AI fails her on every one of those moments. Here's how."
 -->
 
 ---
 
-## Today's AI fails kids in two opposite ways
+## Today's AI fails kids on *four* fronts
 
-|  | ChatGPT | Image generators |
-|---|---|---|
-| **Treats kid as** | input | object to replace |
-| **Their drawing** | ignored | erased |
-| **Their character** | forgotten | redesigned |
-| **Their voice** | overridden | gone |
+| 🚫 **Not personalized enough** | 🚫 **Not highly customized** |
+|---|---|
+| Generic output. No memory of *her* characters, *her* voice, *her* age. | Same prompt, same answer for every child. No buddy identity. No per-child capability set. |
 
-# Existing AI **extracts**. We **collaborate**.
+| 🚫 **No suited news for kids** | 🚫 **No long-term persistence** |
+|---|---|
+| Today's news products are adult-first. No age-aware filter. No narrative voice for kids. | Each session resets. *Lightning the puppy* is forgotten by Monday. |
+
+<small>Existing AI **extracts**. We **collaborate**.</small>
 
 <!--
-🎤 SCRIPT · Slide 3 · Today's AI fails kids
-⏱ ~20 seconds · 5-min cut: DEFAULT-CUT (optional)
+🎤 SCRIPT · Slide 3 · Four problems
+⏱ ~28 seconds · 5-min cut: KEEP
 
-"Today's AI fails kids in two opposite ways.
+"Today's AI fails kids on four fronts.
 
-ChatGPT treats the kid as input — their drawing ignored,
-their character forgotten, their voice overridden.
+NOT PERSONALIZED ENOUGH — generic outputs.
+No memory of her characters, her voice, her age.
 
-Image generators treat the kid as an object to replace —
-their drawing erased, their character redesigned.
+NOT HIGHLY CUSTOMIZED — every child gets the
+same prompt and same answer. No buddy identity.
+No per-child capability set.
+
+NO SUITED NEWS FOR KIDS — today's news products
+are adult-first. No age-aware filter, no narrative
+voice for kids.
+
+NO LONG-TERM PERSISTENCE — each session resets.
+Lightning the puppy is forgotten by Monday.
 
 [brief pause]
 
 Existing AI extracts. We collaborate."
 
-🎬 Delivery: Quick. The contrast does the work. Don't dwell.
-➡ Transition: "Here's what we built instead."
+🎬 Delivery: Read each problem deliberately. The 4-card grid does the work; don't editorialize.
+➡ Transition: "Here's how our agent's abilities solve each one."
 -->
 
 ---
 
-# Meet **My Agent**
+# Meet **My Agent** — *one ability per problem*
 
-A personal AI buddy the child **names**, **customizes**, and **grows with**.
+| Problem | Our agent's ability |
+|---|---|
+| Not personalized enough | **Persona + character memory** — buddy is named & customized; recurring characters recalled across sessions (`character_repo`) |
+| Not highly customized | **Per-child `AgentDefinition` + skills gating** — age-aware capabilities (3–5 / 6–8 / 9–12); buddy persona shared as system context to every specialist |
+| No suited news for kids | **`kids_daily` specialist** — age-stratified prompts + per-reply safety review; news arrives as a kid-safe podcast in the buddy's voice |
+| No long-term persistence | **`agent_repo` + `character_repo` + vector search** — buddy persona and recurring characters survive every session; one buddy, for life |
 
-- **Recognizes** their recurring characters (Lightning the puppy is back)
-- **Routes** their requests to the right specialist
-- **Protects** every reply with a safety subagent before delivery
-- **Shares** under the buddy's name — zero PII, COPPA by construction
-
-<small>One chat surface. Four specialists. One non-negotiable safety gate.</small>
+<small>What kids feel: **interactive** (streaming) · **proactive** (recommendations + recall) · **persistent** (memory).</small>
 
 <!--
-🎤 SCRIPT · Slide 4 · Meet My Agent
-⏱ ~30 seconds · 5-min cut: KEEP
+🎤 SCRIPT · Slide 4 · Our agent's abilities
+⏱ ~35 seconds · 5-min cut: KEEP
 
-"Meet My Agent — a personal AI buddy the child names,
-customizes, and grows with.
+"Four problems. Four agent abilities — one for each.
 
-It RECOGNIZES their recurring characters. Lightning the
-puppy from last week is back.
+NOT PERSONALIZED → PERSONA + CHARACTER MEMORY.
+The buddy is named and customized. Recurring
+characters — Lightning the puppy — are recalled
+across sessions through character_repo.
 
-It ROUTES their requests to the right specialist.
+NOT HIGHLY CUSTOMIZED → PER-CHILD AGENT DEFINITION
+WITH SKILLS GATING. Age-aware capabilities for
+three to five, six to eight, nine to twelve. The
+buddy persona is shared as system context to
+every specialist.
 
-It PROTECTS every reply with a safety subagent before
-the child sees it.
+NO KID-NEWS → THE KIDS_DAILY SPECIALIST.
+Age-stratified prompts plus per-reply safety review.
+News arrives as a kid-safe podcast in the buddy's voice.
 
-And it SHARES under the buddy's name — never the child's.
-COPPA by construction.
+NO PERSISTENCE → AGENT_REPO + CHARACTER_REPO +
+VECTOR SEARCH. The buddy survives every session.
+One buddy. For life.
 
-One chat surface. Four specialists. One non-negotiable
-safety gate."
+And kids feel three things immediately:
+interactive — the story streams as it writes itself.
+Proactive — the buddy suggests and recalls.
+Persistent — same buddy persona, every time."
 
-🎬 Delivery: Don't read the bullets — narrate over them. Use "Lightning the puppy" by name; concrete sticks.
-➡ Transition: "Let me show you how we built it. We started simple."
+🎬 Delivery: Read each row tightly — problem then ability. The 1-to-1 mapping does the work.
+➡ Transition: "These abilities are built on four SDK primitives."
 -->
 
 ---
@@ -250,42 +275,7 @@ One agent. No orchestrator yet. Just an LLM with
 the right scaffolding."
 
 🎬 Delivery: Point at each card as you name it. Don't read every word — narrate.
-➡ Transition: "And that single agent already gave us three properties kids felt."
--->
-
----
-
-## Three properties — kids feel them *immediately*
-
-| 🌊 **Interactive** | 💡 **Proactive** | 🧠 **Persistent** |
-|---|---|---|
-| Streaming SSE — story writes itself, token by token | Recommends next moves · recalls recurring characters | Memory across sessions — same buddy for life |
-| *"It's writing right now!"* | *"Lightning the puppy is back!"* | *"My buddy remembers."* |
-
-<small>One agent. Three properties. **Already a real product.**</small>
-
-<!--
-🎤 SCRIPT · Slide 6 · Three properties
-⏱ ~35 seconds · 5-min cut: KEEP
-
-"Three properties kids felt immediately.
-
-INTERACTIVE — Server-Sent Events stream the story
-token by token. The kid watches it write itself.
-'It's writing right now!'
-
-PROACTIVE — the buddy suggests next moves and
-recalls recurring characters across sessions.
-'Lightning the puppy is back!'
-
-PERSISTENT — character memory and agent memory
-survive across sessions. Same buddy persona,
-for life.
-
-One agent. Three properties. Already a real product."
-
-🎬 Delivery: End on "already a real product" — that's the pivot. Pause briefly. Then the next slide shows why one agent wasn't enough.
-➡ Transition: "But one agent hit a ceiling."
+➡ Transition: "One agent hit a ceiling. So we extended to a team."
 -->
 
 ---
@@ -294,7 +284,7 @@ One agent. Three properties. Already a real product."
 <!-- _color: "#F8FAFC" -->
 <!-- _class: dark -->
 
-## Extending to a team — *responsive + dynamic*
+## The team — *one proxy, four specialists, one safety gate*
 
 One agent hit a ceiling. Branching stories, news podcasts, per-reply safety — each needed its own expertise. We extended to an **agent team** — still on Claude Agent SDK.
 
@@ -303,7 +293,7 @@ One agent hit a ceiling. Branching stories, news podcasts, per-reply safety — 
 **Unlocks**: 🎯 **responsive** · 🎨 **dynamic** · ➕ **A2A extensible**
 
 <!--
-🎤 SCRIPT · Slide 7 · Multi-agent team (CENTERPIECE)
+🎤 SCRIPT · Slide 6 · The team (CENTERPIECE)
 ⏱ ~50 seconds · 5-min cut: KEEP
 
 "Branching adventures, daily podcasts, per-reply
@@ -358,7 +348,7 @@ registering one AgentDefinition."
 **Vocabulary** — *agent* · *subagent* · *team* · *orchestrator* — each role is precise. See appendix.
 
 <!--
-🎤 SCRIPT · Slide 8 · Decisions, not defaults
+🎤 SCRIPT · Slide 7 · Why this shape (rationale)
 ⏱ ~30 seconds · 5-min cut: DEFAULT-CUT (keep for 6-min slot)
 
 "Every primitive on the previous slides was a decision.
@@ -397,7 +387,7 @@ We didn't adopt defaults."
 <small>Most kid-AI products ship **one** of these. We ship **all six**.</small>
 
 <!--
-🎤 SCRIPT · Slide 9 · Innovation moats
+🎤 SCRIPT · Slide 8 · What's good about it (moats)
 ⏱ ~30 seconds · 5-min cut: KEEP
 
 "Three layers. Six specific bets.
@@ -435,7 +425,7 @@ The buddy's three starter prompts map to three specialists: **bedtime story** �
 > 🎬 **Live demo here — 15 seconds.** Open the app. Draw → buddy generates a story with their character.
 
 <!--
-🎤 SCRIPT · Slide 10 · Product proof + demo beat
+🎤 SCRIPT · Slide 9 · Product proof + demo beat
 ⏱ ~35 seconds · 5-min cut: KEEP
 
 "You can see the buddy here — Dianna in this case —
@@ -476,7 +466,7 @@ Pick ONE flow, not all four. Let it land.]"
 <small>*Add real numbers in Keynote: pilot users · sessions/week · feedback quotes.*</small>
 
 <!--
-🎤 SCRIPT · Slide 11 · Where we are
+🎤 SCRIPT · Slide 10 · Where we are
 ⏱ ~25 seconds · 5-min cut: KEEP
 
 "Two hundred seventy-two stories shipped across
@@ -512,7 +502,7 @@ We don't pitch features — we ship them."
 <small>Most pitches hide bugs. We name ours — that's how you know we *actually* run safety like infrastructure.</small>
 
 <!--
-🎤 SCRIPT · Slide 12 · Failures we owned
+🎤 SCRIPT · Slide 11 · Failures we owned
 ⏱ ~30 seconds · 5-min cut: DEFAULT-CUT (keep for 6-min slot)
 
 "And we own our bugs.
@@ -556,7 +546,7 @@ Most pitches hide bugs. We name ours."
 # *AI that grows up* ***with*** *kids — safely.*
 
 <!--
-🎤 SCRIPT · Slide 13 · Why this matters (CLOSING BOOKEND)
+🎤 SCRIPT · Slide 12 · Why this matters (CLOSING BOOKEND)
 ⏱ ~25 seconds · 5-min cut: KEEP
 
 "Why this matters.
@@ -611,7 +601,7 @@ Happy to take questions."
 <small>This slide is hidden by default. Reveal only if a judge probes the architecture.</small>
 
 <!--
-🎤 SCRIPT · Slide 14 · Appendix (Q&A backup, HIDDEN BY DEFAULT)
+🎤 SCRIPT · Slide 13 · Appendix (Q&A backup, HIDDEN BY DEFAULT)
 ⏱ Variable · Only reveal during Q&A
 
 This slide should be HIDDEN during the main presentation:
