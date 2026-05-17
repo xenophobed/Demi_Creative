@@ -422,117 +422,263 @@ registering one AgentDefinition."
 
 ---
 
-## Decisions, not defaults — *every primitive earned its place*
+## Three-layer infrastructure — *each service does one thing*
 
-| Decision | Alternative we rejected | What we chose | Why |
-|---|---|---|---|
-| **Prompts** | Python f-strings inline in code | Markdown files in `backend/src/prompts/` — `story-generation.md`, `age-adapter.md`, `interactive-story.md` | Versioned · code-reviewable · age-stratified per file |
-| **Tools** | Direct API calls in agent loops | Custom MCP servers · typed JSON envelopes · `.handler` calling convention | Composable · testable · independently versionable |
-| **Skills** | Hardcoded behaviors per agent class | `enabled_skills` field on `AgentDefinition` · `_enabled(agent, skill)` runs server-side | Per-age gating · A2A plug-in · single registration |
-| **Multi-agent** | Bigger prompt + conditional branching | Proxy + 4 subagents + shared context bus | Specialty isolation · safety_review on **every** reply · responsive routing |
-
-**Vocabulary** — *agent* · *subagent* · *team* · *orchestrator* — each role is precise. See appendix.
+![infrastructure h:420](assets/infrastructure.svg)
 
 <!--
-🎤 SCRIPT · Slide 9 · Why this shape (rationale)
-⏱ ~30 seconds · 5-min cut: DEFAULT-CUT (keep for 6-min slot)
+🎤 SCRIPT · Slide 9 · Three-layer infrastructure
+⏱ ~28 seconds · 5-min cut: KEEP
 
-"Every primitive on the previous slides was a decision.
+"Three managed services, one HTTPS hop each.
 
-PROMPTS — we could have inlined them as Python f-strings.
-We chose markdown files in git. Versioned. Code-reviewable.
-Age-stratified per file.
+VERCEL hosts the frontend — React SPA on a CDN.
+Static files, fast everywhere.
 
-TOOLS — we could have called the API directly inside
-agent code. We chose custom MCP servers with typed
-envelopes. Composable. Testable.
+RAILWAY runs the FastAPI backend — Claude Agent SDK,
+seven MCP servers, auto-deploys from main.
 
-SKILLS — we could have hardcoded behaviors per agent.
-We chose enabled_skills as a field on AgentDefinition —
-per-age gating, A2A extensible, server-side gate.
+SUPABASE is the database — Postgres plus pgvector
+for embeddings, plus Auth, plus Storage. Managed,
+always-on.
 
-MULTI-AGENT — we could have written a bigger prompt
-with branching. We chose a proxy plus four subagents.
-Each specialty isolated. Safety subagent on EVERY reply.
+And AI APIs — Anthropic for Claude, OpenAI for TTS,
+ElevenLabs for premium voices, Tavily for kid-safe
+web search.
 
-We didn't adopt defaults."
+Each service has one job. Each HTTPS hop is one
+boundary. No magic, no monorepo coupling."
 
-🎬 Delivery: Walk row by row, ~7 seconds each. Land hard on "We didn't adopt defaults."
-➡ Transition: "Three layers, six bets — here's where we innovate."
+🎬 Delivery: Trace top to bottom. Pause on "each service does one thing" — judges score on architectural discipline.
+➡ Transition: "Inside the backend, the same principle holds."
 -->
 
 ---
 
-## Where we innovate — *three layers, six bets*
+## Backend — *seven layers, one direction*
 
-| 🤖 **Agentic stack** | 🛡️ **Safety architecture** | 🌟 **Kid experience** |
-|---|---|---|
-| **Multi-agent + shared state** on Claude Agent SDK | **Per-reply programmatic safety** — age-aware (0.90 / 0.85) | **Character continuity** across image · story · podcast · share |
-| **A2A extensible** — one `AgentDefinition` to add a specialist | **COPPA at the schema level** — the unsafe JOIN *can't be expressed* | **One buddy, N specialists, one identity** |
-
-<small>Most kid-AI products ship **one** of these. We ship **all six**.</small>
+![backend layers h:440](assets/backend-layers.svg)
 
 <!--
-🎤 SCRIPT · Slide 10 · What's good about it (moats)
+🎤 SCRIPT · Slide 10 · Backend layered architecture
+⏱ ~32 seconds · 5-min cut: KEEP
+
+"Inside the backend, the same discipline.
+
+ROUTES parse the request — fourteen modules.
+
+DEPENDENCIES handle auth and quota — dependency
+injection, not inline checks.
+
+AGENTS orchestrate — proxy plus four specialists
+on Claude Agent SDK.
+
+MCP SERVERS are the tool layer — seven of them,
+typed envelopes, .handler calling convention.
+
+SERVICES hold business logic — fourteen of them,
+including the shared my_agent_context builder.
+
+REPOSITORIES wrap database access — twenty repos,
+one per table.
+
+DATABASE is the adapter at the bottom — SQLite
+in dev, Postgres plus pgvector in production.
+
+Each layer talks down. No layer talks up. That's
+how we replace any layer in isolation."
+
+🎬 Delivery: Walk top-to-bottom. The "no layer talks up" line earns trust — it's the architectural discipline.
+➡ Transition: "Here's what the kid actually sees."
+-->
+
+---
+
+## The buddy — *three states, one identity*
+
+![buddy states h:410](assets/buddy-states.png)
+
+<small>**Empty state** → **Customize** (name, avatar, animal-emoji, theme) → **Chat** (three starter prompts that route to specialists). Three React states. One persona, persisted across every session.</small>
+
+<!--
+🎤 SCRIPT · Slide 11 · The buddy (3-state strip)
+⏱ ~28 seconds · 5-min cut: KEEP
+
+"Here's the buddy — three states, one identity.
+
+EMPTY STATE — child arrives, no buddy yet.
+
+CUSTOMIZE — they name their buddy, pick an avatar
+emoji, choose a theme. Maybe three minutes of
+delight.
+
+CHAT — the buddy greets them with three starter
+prompts. Each prompt routes to a different
+specialist underneath.
+
+Three React states. One persona. Persisted across
+every session through agent_repo."
+
+🎬 Delivery: Point at each pane. The "delight" beat on customize is real — kids love this part more than the chat itself.
+➡ Transition: "And here's what their buddy actually creates."
+-->
+
+---
+
+## What the system creates — *real AI outputs*
+
+![system creates h:380](assets/system-creates.png)
+
+| 📖 Image-to-Story | 🌟 Interactive Story | 🎙️ Kids Daily |
+|---|---|---|
+| Child draws a robot → buddy generates a 60-second story w/ their character | Branching adventure scene + 3 choices that change the ending | Today's news as a kid-safe podcast with the buddy as guest anchor |
+
+<small>Real generated covers from `backend/data/uploads/` — *the same buddy produces all three surfaces*.</small>
+
+<!--
+🎤 SCRIPT · Slide 12 · What the system creates (gallery)
+⏱ ~32 seconds · 5-min cut: KEEP
+
+"Three creative surfaces. Real AI outputs —
+these covers came straight out of the system.
+
+IMAGE-TO-STORY — child draws a robot, the buddy
+generates a sixty-second story with their character.
+
+INTERACTIVE STORY — branching adventure scene plus
+three choices that change the ending.
+
+KIDS DAILY — today's news as a kid-safe podcast
+with the buddy as guest anchor.
+
+Three surfaces, same buddy, same character
+continuity across all of them."
+
+🎬 Delivery: Point at each cover. Mention "Lightning the puppy" or whatever character anchored slide 4 — concrete continuity.
+➡ Transition: "And kids share what they make — safely."
+-->
+
+---
+
+## Community & sharing — *COPPA by schema, not by policy*
+
+| Where most products fail | What we do |
+|---|---|
+| Posts JOIN to `users.name` for byline | `hub_posts.agent_name` is a **snapshot column** — written at post time, never JOINed |
+| `users.email` accidentally leaks via API | Read paths can't reach `users` at all — schema doesn't allow it |
+| Safety is a code-review checklist | Safety is a CHECK constraint + invariant test |
+
+```
+hub_posts (id, agent_name, agent_avatar, agent_title, story_id, ...)
+                              ▲ immutable persona snapshot — no user JOIN
+```
+
+<small>Result: every Hub post is bylined by **the buddy persona**, never by the child. Zero PII exposure. Verified by `test_hub_coppa_invariant.py`.</small>
+
+<!--
+🎤 SCRIPT · Slide 13 · Community & sharing (COPPA at schema)
+⏱ ~28 seconds · 5-min cut: KEEP
+
+"Kids share what they create. Safely.
+
+Most kid-AI products fail COPPA the same way —
+they JOIN posts back to the users table for a
+byline, and somewhere along the way a child's
+real name leaks.
+
+We don't have that risk because the SCHEMA
+doesn't allow it.
+
+The hub_posts table has agent_name, agent_avatar,
+agent_title — IMMUTABLE persona snapshot columns
+written once at post time. No read path JOINs
+users. The unsafe query can't even be expressed.
+
+Safety isn't a code-review checklist for us.
+It's a schema invariant — verified by
+test_hub_coppa_invariant."
+
+🎬 Delivery: Land hard on "the unsafe query can't even be expressed." This is the moat most kid-AI products don't have.
+➡ Transition: "And the architecture is built to extend."
+-->
+
+---
+
+## Open by design — *one AgentDefinition adds a specialist*
+
+```python
+# Adding a "music_story" specialist to the agent team:
+proxy.register(AgentDefinition(
+    name="music_story",
+    model="haiku",
+    system_prompt=Path("prompts/music-story.md").read_text(),
+    tools=["music_generator", "vector_search"],
+    enabled_skills=["compose"],
+))
+
+# Routing picks it up automatically. Safety gate runs on every reply.
+# Shared context (persona, child_id, recurring chars) flows in.
+```
+
+<small>**A2A bridge** (future) extends to external agent teams — partner specialists join the buddy's team via the same registration contract.</small>
+
+<!--
+🎤 SCRIPT · Slide 14 · Open by design (extensibility)
 ⏱ ~30 seconds · 5-min cut: KEEP
 
-"Three layers. Six specific bets.
+"This architecture is open by design.
 
-AGENTIC STACK — multi-agent with shared state on Claude
-Agent SDK. A2A extensible — new specialists plug in
-by registering one AgentDefinition.
+Want to add a new specialist? One AgentDefinition.
 
-SAFETY ARCHITECTURE — per-reply programmatic safety,
-age-aware thresholds. And COPPA enforced AT THE SCHEMA
-LEVEL. The unsafe JOIN can't even be expressed.
+You give it a model, a system prompt, the tools
+it can call, and the skills it's allowed to use.
 
-KID EXPERIENCE — character continuity across image,
-story, podcast, and community. One buddy, many
-specialists, one identity.
+Routing picks it up automatically — the proxy's
+intent classifier learns the new specialist's
+trigger phrases from its description.
 
-[brief pause]
+Safety gate runs on every reply, regardless of
+which specialist generated it. Shared context flows
+in — persona, child_id, recurring characters.
 
-Most kid-AI products ship ONE of these.
+A2A bridge in the future — external agent teams
+join the buddy's world through the same contract."
 
-We ship ALL SIX."
-
-🎬 Delivery: Read each cell as a defensible CLAIM, not a feature list. PAUSE before the closing line. Land hard on "all six."
-➡ Transition: "Here's what kids actually do."
+🎬 Delivery: Read the code SLOWLY. Judges will read it themselves. After the code, the WORDS are the moat — "one AgentDefinition" is the product claim.
+➡ Transition: "And here's where we're headed."
 -->
 
 ---
 
-## What kids actually do — *one chat, four specialists*
+## Roadmap — *two phases shipped, two ahead*
 
-![product hero h:380](assets/product-hero.png)
-
-The buddy's three starter prompts map to three specialists: **bedtime story** → `image_story` · **news for kids** → `kids_daily` · **choose-your-own** → `interactive_story`. One chat. One persona. The orchestrator dispatches.
-
-> 🎬 **Live demo here — 15 seconds.** Open the app. Draw → buddy generates a story with their character.
+![roadmap h:380](assets/roadmap.svg)
 
 <!--
-🎤 SCRIPT · Slide 11 · Product proof + demo beat
-⏱ ~35 seconds · 5-min cut: KEEP
+🎤 SCRIPT · Slide 15 · Roadmap (Phase 1 → 4)
+⏱ ~25 seconds · 5-min cut: KEEP
 
-"You can see the buddy here — Dianna in this case —
-offering three starter prompts.
+"Two phases shipped. Two ahead.
 
-Each one routes to a different specialist underneath.
+PHASE 1 — MVP. Single agent. Image-to-Story plus
+safety plus TTS. Ninety-two of ninety-two stories
+shipped.
 
-'Tell me a bedtime story' goes to image_story.
+PHASE 2 — agent team. Multi-agent. Memory.
+Kids Daily. Community. Per-reply safety. One-eighty
+of one-eighty shipped.
 
-'What's in the news for kids' goes to kids_daily.
+PHASE 3 in design — video and dynamic picture books,
+parent dashboard, gamification.
 
-'Choose your own adventure' goes to interactive_story.
+PHASE 4 is the vision — autonomous. Multi-step
+planning, scheduled buddy initiatives, A2A bridge
+to external agent teams.
 
-One chat surface. The multi-agent team behind it.
+We don't pitch features — we ship them."
 
-[OPTIONAL — 15-second live demo here. Open the app.
-Draw → buddy generates a story with their character.
-Pick ONE flow, not all four. Let it land.]"
-
-🎬 Delivery: Point at the hero screenshot. Read the 3 prompts. Make the mapping to specialists EXPLICIT — it's the proof of the slide-7 architecture.
-➡ Transition: "Here's where we are in shipping this."
+🎬 Delivery: Tap each phase as you name it. Land on "we don't pitch features — we ship them" — it's the receipt.
+➡ Transition: "And here's the engineering rigor that makes that velocity possible."
 -->
 
 ---
@@ -552,7 +698,7 @@ Pick ONE flow, not all four. Let it land.]"
 <small>*Add real numbers in Keynote: pilot users · sessions/week · feedback quotes.*</small>
 
 <!--
-🎤 SCRIPT · Slide 12 · Where we are
+🎤 SCRIPT · Slide 16 · Where we are
 ⏱ ~25 seconds · 5-min cut: KEEP
 
 "Two hundred seventy-two stories shipped across
@@ -588,7 +734,7 @@ We don't pitch features — we ship them."
 <small>Most pitches hide bugs. We name ours — that's how you know we *actually* run safety like infrastructure.</small>
 
 <!--
-🎤 SCRIPT · Slide 13 · Failures we owned
+🎤 SCRIPT · Slide 17 · Failures we owned
 ⏱ ~30 seconds · 5-min cut: DEFAULT-CUT (keep for 6-min slot)
 
 "And we own our bugs.
@@ -632,7 +778,7 @@ Most pitches hide bugs. We name ours."
 # *AI that grows up* ***with*** *kids — safely.*
 
 <!--
-🎤 SCRIPT · Slide 14 · Why this matters (CLOSING BOOKEND)
+🎤 SCRIPT · Slide 18 · Why this matters (CLOSING BOOKEND)
 ⏱ ~25 seconds · 5-min cut: KEEP
 
 "Why this matters.
@@ -687,7 +833,7 @@ Happy to take questions."
 <small>This slide is hidden by default. Reveal only if a judge probes the architecture.</small>
 
 <!--
-🎤 SCRIPT · Slide 15 · Appendix (Q&A backup, HIDDEN BY DEFAULT)
+🎤 SCRIPT · Slide 19 · Appendix (Q&A backup, HIDDEN BY DEFAULT)
 ⏱ Variable · Only reveal during Q&A
 
 This slide should be HIDDEN during the main presentation:

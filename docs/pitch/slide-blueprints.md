@@ -3,7 +3,13 @@
 Per-slide component spec for building the deck in Apple Keynote.
 Keep this file open in your IDE alongside `keynote-deck.md` while assembling slides.
 
-> **Narrative arc:** Three-moment hook (1–2) → **four problems (3) → four agent abilities that solve them (4)** → six agentic features (5) → **four agent architecture patterns (6) → six memory types (7) → agent-team structure (8) → why this shape (9) → what's good about it (10)** → product proof + demo (11) → traction (12) → failures we owned (13) → bookend close (14). Plus appendix backup slide (15) hidden by default for Q&A.
+> **Narrative arc:**
+> **Product (1–8)** — Three-moment hook (1–2) → four problems (3) → four agent abilities (4) → six agentic features (5) → four architecture patterns (6) → six memory types (7) → agent-team structure (8)
+> **Technical (9–10)** — Three-layer infrastructure (9) → backend layered architecture (10)
+> **Demo (11–13)** — The buddy 3-state strip (11) → what the system creates (12) → community & sharing (13)
+> **Surprise (14–15)** — Open by design / extensibility (14) → roadmap (15)
+> **Close (16–18)** — Where we are (16) → failures we owned (17) → why this matters (18)
+> Plus appendix backup slide (19) hidden by default for Q&A.
 
 ---
 
@@ -25,8 +31,13 @@ Keep this file open in your IDE alongside `keynote-deck.md` while assembling sli
 | Body font | SF Pro Text (or Inter) — weight 400 | All body text |
 
 **Aspect ratio:** 16:9 widescreen
-**Slide count:** 14 main + 1 appendix (default-cut slides 9 + 13 for a 5-min slot → 12 visible; cut slides 7 + 9 + 13 for a ~4:30 slot → 11 visible; cut slides 3 + 7 + 9 + 13 for a 3-min slot → 10 visible — and run tighter)
-**Total target time:** ~5:30 with handoff buffer (deck is now technical-heavy; 6-min slot is the sweet spot)
+**Slide count:** 18 main + 1 appendix.
+- **6-min cut** (recommended) — drop slide 17 → 17 visible at ~6:30
+- **7-min cut** — keep all → 18 visible at ~7:00
+- **5-min cut** — drop 9, 13, 14, 17 → 14 visible at ~5:00 (loses backend layers + community + extensibility — becomes product+roadmap pitch)
+- **3-min cut** — drop 3, 6, 7, 9, 10, 13, 14, 17 → 10 visible at ~3:30 (only emotional hook + abilities + team + buddy + roadmap + close)
+
+**Total target time:** ~6:30 with handoff buffer. **Recommended slot: 6 min.** The deck now spans product + technical + demo + surprise — a 5-min cut sacrifices either tech or demo depth.
 
 ---
 

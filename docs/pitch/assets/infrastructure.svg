@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1160 480" font-family="-apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif">
+  <defs>
+    <marker id="arrowDown" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#7C3AED"/>
+    </marker>
+    <linearGradient id="vercel" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0EA5E9"/>
+      <stop offset="100%" stop-color="#0284C7"/>
+    </linearGradient>
+    <linearGradient id="railway" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#A855F7"/>
+      <stop offset="100%" stop-color="#7C3AED"/>
+    </linearGradient>
+    <linearGradient id="supabase" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#10B981"/>
+      <stop offset="100%" stop-color="#059669"/>
+    </linearGradient>
+    <linearGradient id="ai" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#F472B6"/>
+      <stop offset="100%" stop-color="#DB2777"/>
+    </linearGradient>
+  </defs>
+
+  <!-- User browser -->
+  <g>
+    <text x="580" y="32" text-anchor="middle" fill="#64748B" font-size="14" font-style="italic">👤 user's browser · creative.demi-app.com</text>
+    <line x1="580" y1="44" x2="580" y2="78" stroke="#7C3AED" stroke-width="2" marker-end="url(#arrowDown)"/>
+  </g>
+
+  <!-- Layer 1: Vercel (frontend) -->
+  <g>
+    <rect x="80" y="80" width="1000" height="80" rx="14" fill="url(#vercel)" opacity="0.95"/>
+    <text x="120" y="120" fill="#FFFFFF" font-size="22" font-weight="700">▲ Vercel</text>
+    <text x="120" y="145" fill="#E0F2FE" font-size="14">Frontend CDN · React 18 + TS + Vite</text>
+    <text x="1060" y="120" text-anchor="end" fill="#FFFFFF" font-size="14" font-style="italic">SPA · lazy routes · SSE consumer</text>
+    <text x="1060" y="145" text-anchor="end" fill="#E0F2FE" font-size="12">deploy: vercel --prod</text>
+  </g>
+
+  <!-- HTTPS arrow -->
+  <line x1="580" y1="160" x2="580" y2="200" stroke="#7C3AED" stroke-width="2" stroke-dasharray="4,3" marker-end="url(#arrowDown)"/>
+  <text x="595" y="184" fill="#64748B" font-size="11">HTTPS · REST + SSE</text>
+
+  <!-- Layer 2: Railway (backend) -->
+  <g>
+    <rect x="80" y="200" width="1000" height="80" rx="14" fill="url(#railway)" opacity="0.95"/>
+    <text x="120" y="240" fill="#FFFFFF" font-size="22" font-weight="700">🚂 Railway</text>
+    <text x="120" y="265" fill="#F5F3FF" font-size="14">FastAPI backend · Claude Agent SDK + MCP servers</text>
+    <text x="1060" y="240" text-anchor="end" fill="#FFFFFF" font-size="14" font-style="italic">auto-deploy from main</text>
+    <text x="1060" y="265" text-anchor="end" fill="#F5F3FF" font-size="12">health check / metrics</text>
+  </g>
+
+  <!-- SQL+Auth arrow -->
+  <line x1="580" y1="280" x2="580" y2="320" stroke="#7C3AED" stroke-width="2" stroke-dasharray="4,3" marker-end="url(#arrowDown)"/>
+  <text x="595" y="304" fill="#64748B" font-size="11">SQL · Auth · Storage</text>
+
+  <!-- Layer 3: Supabase (DB) -->
+  <g>
+    <rect x="80" y="320" width="1000" height="80" rx="14" fill="url(#supabase)" opacity="0.95"/>
+    <text x="120" y="360" fill="#FFFFFF" font-size="22" font-weight="700">⚡ Supabase</text>
+    <text x="120" y="385" fill="#D1FAE5" font-size="14">Postgres + pgvector · Auth · Storage</text>
+    <text x="1060" y="360" text-anchor="end" fill="#FFFFFF" font-size="14" font-style="italic">always-on managed service</text>
+    <text x="1060" y="385" text-anchor="end" fill="#D1FAE5" font-size="12">RLS · embeddings · sessions</text>
+  </g>
+
+  <!-- AI APIs branch (side-out from Railway) -->
+  <g>
+    <line x1="1080" y1="240" x2="1110" y2="240" stroke="#F472B6" stroke-width="2"/>
+    <rect x="1110" y="200" width="40" height="80" rx="10" fill="url(#ai)" opacity="0.95"/>
+    <text x="1130" y="232" text-anchor="middle" fill="#FFFFFF" font-size="11" font-weight="700" transform="rotate(-90, 1130, 232)">AI APIs</text>
+  </g>
+  <text x="1100" y="420" text-anchor="end" fill="#64748B" font-size="12">AI: Anthropic · OpenAI · ElevenLabs · Tavily</text>
+
+  <!-- Summary footer -->
+  <text x="580" y="455" text-anchor="middle" fill="#7C3AED" font-size="14" font-weight="600">Three managed services · one HTTPS hop each · all responsibilities split clean</text>
+</svg>
