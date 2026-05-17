@@ -3,7 +3,7 @@
 Per-slide component spec for building the deck in Apple Keynote.
 Keep this file open in your IDE alongside `keynote-deck.md` while assembling slides.
 
-> **Narrative arc:** Three-moment hook (1–2) → **four problems (3) → four agent abilities that solve them (4)** → single-agent foundation (5) → **agent-team structure (6) → why this shape (7) → what's good about it (8)** → product proof + demo (9) → traction (10) → failures we owned (11) → bookend close (12). Plus appendix backup slide (13) hidden by default for Q&A.
+> **Narrative arc:** Three-moment hook (1–2) → **four problems (3) → four agent abilities that solve them (4)** → six agentic features (5) → **four agent architecture patterns (6) → six memory types (7) → agent-team structure (8) → why this shape (9) → what's good about it (10)** → product proof + demo (11) → traction (12) → failures we owned (13) → bookend close (14). Plus appendix backup slide (15) hidden by default for Q&A.
 
 ---
 
@@ -25,8 +25,8 @@ Keep this file open in your IDE alongside `keynote-deck.md` while assembling sli
 | Body font | SF Pro Text (or Inter) — weight 400 | All body text |
 
 **Aspect ratio:** 16:9 widescreen
-**Slide count:** 12 main + 1 appendix (default-cut slides 7 + 11 for a 5-min slot → 10 visible; cut slides 7 + 8 + 11 for a ~4-min slot → 9 visible; cut slides 3 + 7 + 8 + 11 for a 3-min slot → 8 visible)
-**Total target time:** ~5:00 with handoff buffer
+**Slide count:** 14 main + 1 appendix (default-cut slides 9 + 13 for a 5-min slot → 12 visible; cut slides 7 + 9 + 13 for a ~4:30 slot → 11 visible; cut slides 3 + 7 + 9 + 13 for a 3-min slot → 10 visible — and run tighter)
+**Total target time:** ~5:30 with handoff buffer (deck is now technical-heavy; 6-min slot is the sweet spot)
 
 ---
 
@@ -406,41 +406,43 @@ Land hard on punchline: *"Most pitches hide bugs. We name ours."*
 
 ---
 
-## Master timing — 5-min cut (10 visible slides, default-cut 7 + 11)
+## Master timing — 5-min cut (12 visible slides, default-cut 9 + 13)
 
 | # | Slide | Target |
 |---|---|---|
 | 1 | Title | 8s |
 | 2 | Three moments | 28s |
 | 3 | Four problems | 28s |
-| 4 | **Our agent's abilities** (problem → ability) | 35s |
-| 5 | Foundation — single agent (4 SDK primitives) | 35s |
-| 6 | **The team** (1 proxy + 4 specialists + safety) ⭐ centerpiece | 50s |
-| ~~7~~ | ~~Why this shape (default-cut for 5-min)~~ | — |
-| 8 | **What's good about it** (moats) | 30s |
-| 9 | Product proof + demo beat | 35s |
-| 10 | Where we are | 25s |
-| ~~11~~ | ~~Failures we owned (default-cut for 5-min)~~ | — |
-| 12 | Why this matters | 25s |
-| | **Total** | **~4:59** |
+| 4 | **Our agent's abilities** (problem → ability) | 30s |
+| 5 | **Six agentic features** (capability × stack) | 35s |
+| 6 | **Four architecture patterns** | 28s |
+| 7 | **Six memory types** | 30s |
+| 8 | **The team** (1 proxy + 4 specialists + safety) ⭐ centerpiece | 40s |
+| ~~9~~ | ~~Why this shape (default-cut for 5-min)~~ | — |
+| 10 | **What's good about it** (moats) | 28s |
+| 11 | Product proof + demo beat | 32s |
+| 12 | Where we are | 25s |
+| ~~13~~ | ~~Failures we owned (default-cut for 5-min)~~ | — |
+| 14 | Why this matters | 25s |
+| | **Total** | **~5:37** |
 
-Leaves ~1 second buffer in a 5-min slot. Tight — rehearse with a timer.
+Tight — over by 37s on a strict 5-min slot. Trim speakers' tempo by ~3s/slide to hit 5:00, OR push to a 6-min slot (preferred).
 
-## Master timing — 6-min cut (11 visible slides, add slide 7 back)
+## Master timing — 6-min cut (13 visible slides, add slide 9 back)
 
-11 slides, ~5:29 total. Adds "Why this shape" between the team diagram and the moats — gives technical judges the rationale right after the architecture.
+13 slides, ~6:05 total. Keeps the rationale slide. Strongly recommended cut for technical judging.
 
-## Master timing — 7-min technical cut (all 12 main slides + room for Q&A)
+## Master timing — 7-min cut (all 14 main slides)
 
-12 slides, ~5:59 total. Adds "Failures we owned" too. Use for a technical-heavy panel that scores on engineering maturity.
+14 slides, ~6:35 total. Adds "Failures we owned" too. Use for a 7-min slot or expanded Q&A buffer.
 
-## Master timing — 4-min cut (drop slides 3 + 7 + 11)
+## Master timing — 4-min cut (drop slides 3 + 7 + 9 + 13)
 
-9 visible slides, ~4:31 total. Drops "Four problems" (forces slide 4 to carry the framing), "Why this shape", and "Failures we owned". Faster but loses the problem-statement clarity.
+10 visible slides, ~4:33 total. Drops "Four problems" (forces slide 4 to carry framing), "Six memory types", "Why this shape", and "Failures we owned". Faster but loses the memory-system depth.
 
-## Master timing — 3-min cut (drop slides 3 + 7 + 8 + 11)
+## Master timing — 3-min cut (drop slides 3 + 6 + 7 + 9 + 13)
 
-8 visible slides, ~4:01 total. For a true 3-min cut, also compress slide 6 (the team diagram) to 35s by skipping the shared-context-bus walk-through. Total ~3:46.
+9 visible slides, ~3:55 total. Compresses slide 8 (team) to 30s. Loses both patterns and memory framing — only use if forced.
 
 ---
 
