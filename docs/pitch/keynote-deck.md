@@ -272,6 +272,100 @@ scheduled buddy initiatives. One ceiling away."
 
 ---
 
+## Four agent architecture patterns — *we use all four*
+
+| # | Pattern | What it does | Where we use it |
+|---|---|---|---|
+| 1 | **🤖 Single agent** | One agent, one job · linear inference | Straight TTS via `audio_narration` |
+| 2 | **🔀 Sub-agent fan-out** | Same task spawned in parallel for speed | Concurrent vision crops · parallel `character_repo` lookups |
+| 3 | **👥 Agent team** | Multiple agents collaborate by **role** · defined via `AgentDefinition` | **My Agent**: proxy + 4 role specialists + `safety_review` |
+| 4 | **🎼 Multi-agent orchestrator** | Agents created **dynamically** · A2A extensible to external teams | Proxy registers new `AgentDefinition`s at runtime |
+
+<small>**Shared state** within a team flows through `build_my_agent_context()` — persona, child_id, recurring characters reach every specialist. **A2A** extends to external agent teams (future).</small>
+
+<!--
+🎤 SCRIPT · Slide 6 · Four architecture patterns
+⏱ ~30 seconds · 5-min cut: KEEP
+
+"Four agent architecture patterns. We use all four.
+
+PATTERN ONE — single agent. One agent, one job,
+linear inference. We use it for straight TTS via
+audio_narration.
+
+PATTERN TWO — sub-agent fan-out. The same task
+spawned in parallel for speed. Concurrent vision
+crops, parallel character_repo lookups.
+
+PATTERN THREE — agent team. Multiple agents
+collaborate by ROLE, defined via AgentDefinition.
+This is our My Agent: proxy plus four role
+specialists plus safety_review.
+
+PATTERN FOUR — multi-agent orchestrator. Agents
+are created DYNAMICALLY. A2A extensible. The proxy
+can register new AgentDefinitions at runtime.
+
+Shared state within a team flows through
+build_my_agent_context. A2A extends to external
+teams as future work."
+
+🎬 Delivery: Read each pattern with its example. The "we use all four" claim is the punchline — most teams build one pattern and force-fit everything.
+➡ Transition: "Each agent in the team is wired to six memory layers."
+-->
+
+---
+
+## Six memory types — *one buddy, layered recall*
+
+| # | Memory type | What it stores | Backed by |
+|---|---|---|---|
+| 1 | **🗨️ Session** | This-chat conversation history | `agent_chat_repository` |
+| 2 | **⚡ Working** | Per-turn execution context (in-flight tool results, persona) | `build_my_agent_context()` in proxy |
+| 3 | **📅 Episodic** | Past creations — stories, podcasts, branching choices | `stories` · `interactive_sessions` · `kids_daily_episodes` |
+| 4 | **📋 Factual** | Buddy persona, child profile, preferences | `agent_repo` · `preference_repository` · `users` |
+| 5 | **🧠 Semantic** | Embeddings of characters, themes, narrative style | ChromaDB (dev) / pgvector (prod) via `vector_search_server` |
+| 6 | **🛠️ Procedural** | How to generate each content type | `backend/src/prompts/*.md` · `@tool` skills · `enabled_skills` |
+
+<small>The buddy **remembers** (factual + episodic), **understands** (semantic), **acts** (procedural), **talks** (session), and **reasons in flight** (working).</small>
+
+<!--
+🎤 SCRIPT · Slide 7 · Six memory types
+⏱ ~32 seconds · 5-min cut: KEEP
+
+"Six memory types. One buddy. Layered recall.
+
+SESSION memory — this-chat conversation history,
+stored in agent_chat_repository.
+
+WORKING memory — per-turn execution context.
+In-flight tool results, persona, recurring characters,
+passed to every specialist via build_my_agent_context.
+
+EPISODIC memory — past creations.
+Stories, interactive sessions, kids_daily episodes.
+Three tables.
+
+FACTUAL memory — buddy persona, child profile,
+preferences. Agent repo, preference repo, users table.
+
+SEMANTIC memory — embeddings of characters, themes,
+narrative style. ChromaDB locally, pgvector in
+production, via the vector search MCP.
+
+PROCEDURAL memory — how to generate each content type.
+Versioned markdown prompts, at-tool skills, and
+enabled_skills gating per agent.
+
+The buddy remembers, understands, acts, talks,
+and reasons in flight."
+
+🎬 Delivery: Walk each row briskly. Pause briefly on PROCEDURAL — that's the one most teams don't have. Land the closing line slowly.
+➡ Transition: "Here's how those memory layers and patterns compose in our team."
+-->
+
+---
+
 <!-- _backgroundColor: "#0F172A" -->
 <!-- _color: "#F8FAFC" -->
 <!-- _class: dark -->
@@ -285,7 +379,7 @@ One agent hit a ceiling. Branching stories, news podcasts, per-reply safety — 
 **Unlocks**: 🎯 **responsive** · 🎨 **dynamic** · ➕ **A2A extensible**
 
 <!--
-🎤 SCRIPT · Slide 6 · The team (CENTERPIECE)
+🎤 SCRIPT · Slide 8 · The team (CENTERPIECE)
 ⏱ ~50 seconds · 5-min cut: KEEP
 
 "Branching adventures, daily podcasts, per-reply
@@ -340,7 +434,7 @@ registering one AgentDefinition."
 **Vocabulary** — *agent* · *subagent* · *team* · *orchestrator* — each role is precise. See appendix.
 
 <!--
-🎤 SCRIPT · Slide 7 · Why this shape (rationale)
+🎤 SCRIPT · Slide 9 · Why this shape (rationale)
 ⏱ ~30 seconds · 5-min cut: DEFAULT-CUT (keep for 6-min slot)
 
 "Every primitive on the previous slides was a decision.
@@ -379,7 +473,7 @@ We didn't adopt defaults."
 <small>Most kid-AI products ship **one** of these. We ship **all six**.</small>
 
 <!--
-🎤 SCRIPT · Slide 8 · What's good about it (moats)
+🎤 SCRIPT · Slide 10 · What's good about it (moats)
 ⏱ ~30 seconds · 5-min cut: KEEP
 
 "Three layers. Six specific bets.
@@ -417,7 +511,7 @@ The buddy's three starter prompts map to three specialists: **bedtime story** �
 > 🎬 **Live demo here — 15 seconds.** Open the app. Draw → buddy generates a story with their character.
 
 <!--
-🎤 SCRIPT · Slide 9 · Product proof + demo beat
+🎤 SCRIPT · Slide 11 · Product proof + demo beat
 ⏱ ~35 seconds · 5-min cut: KEEP
 
 "You can see the buddy here — Dianna in this case —
@@ -458,7 +552,7 @@ Pick ONE flow, not all four. Let it land.]"
 <small>*Add real numbers in Keynote: pilot users · sessions/week · feedback quotes.*</small>
 
 <!--
-🎤 SCRIPT · Slide 10 · Where we are
+🎤 SCRIPT · Slide 12 · Where we are
 ⏱ ~25 seconds · 5-min cut: KEEP
 
 "Two hundred seventy-two stories shipped across
@@ -494,7 +588,7 @@ We don't pitch features — we ship them."
 <small>Most pitches hide bugs. We name ours — that's how you know we *actually* run safety like infrastructure.</small>
 
 <!--
-🎤 SCRIPT · Slide 11 · Failures we owned
+🎤 SCRIPT · Slide 13 · Failures we owned
 ⏱ ~30 seconds · 5-min cut: DEFAULT-CUT (keep for 6-min slot)
 
 "And we own our bugs.
@@ -538,7 +632,7 @@ Most pitches hide bugs. We name ours."
 # *AI that grows up* ***with*** *kids — safely.*
 
 <!--
-🎤 SCRIPT · Slide 12 · Why this matters (CLOSING BOOKEND)
+🎤 SCRIPT · Slide 14 · Why this matters (CLOSING BOOKEND)
 ⏱ ~25 seconds · 5-min cut: KEEP
 
 "Why this matters.
@@ -593,7 +687,7 @@ Happy to take questions."
 <small>This slide is hidden by default. Reveal only if a judge probes the architecture.</small>
 
 <!--
-🎤 SCRIPT · Slide 13 · Appendix (Q&A backup, HIDDEN BY DEFAULT)
+🎤 SCRIPT · Slide 15 · Appendix (Q&A backup, HIDDEN BY DEFAULT)
 ⏱ Variable · Only reveal during Q&A
 
 This slide should be HIDDEN during the main presentation:
