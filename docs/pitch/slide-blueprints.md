@@ -3,7 +3,7 @@
 Per-slide component spec for building the deck in Apple Keynote.
 Keep this file open in your IDE alongside `keynote-deck.md` while assembling slides.
 
-> **Narrative arc:** Emotional hook (1–3) → product intro (4) → **agentic evolution: single agent (5–6) → agent team (7) → design decisions (8) → innovation moats (9)** → product proof + demo (10) → traction (11) → **failures we owned (12)** → bookend close (13). Plus appendix backup slide (14) hidden by default for Q&A.
+> **Narrative arc:** Three-moment hook (1–2) → **four problems (3) → four agent abilities that solve them (4)** → single-agent foundation (5) → **agent-team structure (6) → why this shape (7) → what's good about it (8)** → product proof + demo (9) → traction (10) → failures we owned (11) → bookend close (12). Plus appendix backup slide (13) hidden by default for Q&A.
 
 ---
 
@@ -25,7 +25,7 @@ Keep this file open in your IDE alongside `keynote-deck.md` while assembling sli
 | Body font | SF Pro Text (or Inter) — weight 400 | All body text |
 
 **Aspect ratio:** 16:9 widescreen
-**Slide count:** 13 main + 1 appendix (default-cut slides 3 + 8 + 12 for a 5-min slot → 10 visible; cut slides 3 + 6 + 8 + 12 for a ~4-min slot → 9 visible; cut slides 3 + 6 + 8 + 9 + 12 for a 3-min slot → 8 visible)
+**Slide count:** 12 main + 1 appendix (default-cut slides 7 + 11 for a 5-min slot → 10 visible; cut slides 7 + 8 + 11 for a ~4-min slot → 9 visible; cut slides 3 + 7 + 8 + 11 for a 3-min slot → 8 visible)
 **Total target time:** ~5:00 with handoff buffer
 
 ---
@@ -406,42 +406,41 @@ Land hard on punchline: *"Most pitches hide bugs. We name ours."*
 
 ---
 
-## Master timing — 5-min cut (10 visible slides, default-cut 3 + 8 + 12)
+## Master timing — 5-min cut (10 visible slides, default-cut 7 + 11)
 
 | # | Slide | Target |
 |---|---|---|
 | 1 | Title | 8s |
-| 2 | The moment | 25s |
-| ~~3~~ | ~~Today's AI fails (default-cut for 5-min)~~ | — |
-| 4 | Meet My Agent | 30s |
-| 5 | **Foundation: single agent** | 35s |
-| 6 | **Three properties** | 35s |
-| 7 | **Multi-agent team (centerpiece)** | 50s |
-| ~~8~~ | ~~Decisions, not defaults (default-cut for 5-min)~~ | — |
-| 9 | **Innovation moats** | 30s |
-| 10 | Product + demo beat | 35s |
-| 11 | Where we are | 25s |
-| ~~12~~ | ~~Failures we owned (default-cut for 5-min)~~ | — |
-| 13 | Why this matters | 25s |
-| | **Total** | **~4:58** |
+| 2 | Three moments | 28s |
+| 3 | Four problems | 28s |
+| 4 | **Our agent's abilities** (problem → ability) | 35s |
+| 5 | Foundation — single agent (4 SDK primitives) | 35s |
+| 6 | **The team** (1 proxy + 4 specialists + safety) ⭐ centerpiece | 50s |
+| ~~7~~ | ~~Why this shape (default-cut for 5-min)~~ | — |
+| 8 | **What's good about it** (moats) | 30s |
+| 9 | Product proof + demo beat | 35s |
+| 10 | Where we are | 25s |
+| ~~11~~ | ~~Failures we owned (default-cut for 5-min)~~ | — |
+| 12 | Why this matters | 25s |
+| | **Total** | **~4:59** |
 
-Leaves ~2 seconds buffer in a 5-min slot.
+Leaves ~1 second buffer in a 5-min slot. Tight — rehearse with a timer.
 
-## Master timing — 6-min cut (13 slides, add slides 3, 8 and 12 back)
+## Master timing — 6-min cut (11 visible slides, add slide 7 back)
 
-13 slides, ~6:23 total. Adds the "Today's AI fails" comparison, the "Decisions, not defaults" technical-depth slide, AND the "Failures we owned" anti-pitch slide. Use for a 6-minute slot, especially with technical-heavy judging panels.
+11 slides, ~5:29 total. Adds "Why this shape" between the team diagram and the moats — gives technical judges the rationale right after the architecture.
 
-## Master timing — 7-min technical cut (13 slides, expanded slide 8)
+## Master timing — 7-min technical cut (all 12 main slides + room for Q&A)
 
-If a technical judging panel is probing the design decisions, give slide 8 ~60 seconds instead of 30 — walk every row. Total ~6:53.
+12 slides, ~5:59 total. Adds "Failures we owned" too. Use for a technical-heavy panel that scores on engineering maturity.
 
-## Master timing — 4-min cut (drop slides 3 + 6 + 8 + 12)
+## Master timing — 4-min cut (drop slides 3 + 7 + 11)
 
-9 visible slides, ~4:23 total. Drops "Today's AI fails", "Three properties", "Decisions not defaults", and "Failures we owned". Single-agent foundation (slide 5) still hits the SDK/tools/MCP/skills story; innovation moats (slide 9) still names the differentiators.
+9 visible slides, ~4:31 total. Drops "Four problems" (forces slide 4 to carry the framing), "Why this shape", and "Failures we owned". Faster but loses the problem-statement clarity.
 
-## Master timing — 3-min cut (drop slides 3 + 6 + 8 + 9 + 12)
+## Master timing — 3-min cut (drop slides 3 + 7 + 8 + 11)
 
-8 visible slides, ~3:53 total. For a true 3-min cut, also compress slide 7 (multi-agent) to 35s by skipping the shared-context-bus walk-through. Total ~3:38.
+8 visible slides, ~4:01 total. For a true 3-min cut, also compress slide 6 (the team diagram) to 35s by skipping the shared-context-bus walk-through. Total ~3:46.
 
 ---
 
