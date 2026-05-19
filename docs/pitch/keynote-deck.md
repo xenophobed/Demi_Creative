@@ -525,15 +525,15 @@ every session through agent_repo."
 
 ---
 
-## What the system creates — *real AI outputs*
+## What the system creates — *three surfaces, one buddy*
 
 ![system creates h:380](assets/system-creates.png)
 
 | 📖 Image-to-Story | 🌟 Interactive Story | 🎙️ Kids Daily |
 |---|---|---|
-| Child draws a robot → buddy generates a 60-second story w/ their character | Branching adventure scene + 3 choices that change the ending | Today's news as a kid-safe podcast with the buddy as guest anchor |
+| Child draws → buddy generates a 60-second story w/ their character | Age + length + interests → branching adventure with choice-driven endings | 8 topic channels → today's news as a kid-safe podcast in the buddy's voice |
 
-<small>Real generated covers from `backend/data/uploads/` — *the same buddy produces all three surfaces*.</small>
+<small>Two real product surfaces · one generated cover for Image-to-Story · *same buddy across all three*.</small>
 
 <!--
 🎤 SCRIPT · Slide 12 · What the system creates (gallery)
