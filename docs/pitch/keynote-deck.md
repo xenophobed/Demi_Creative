@@ -494,15 +494,50 @@ how we replace any layer in isolation."
 
 ---
 
-## What the buddy creates — *three surfaces, one character*
+## The buddy — *three states, one identity*
 
-![real creative outputs h:410](assets/buddy-states.png)
+![buddy states h:410](assets/buddy-states.png)
 
-<small>**📖 The Singing Shells** — art story with illustrated cover · **🌟 Ember and the Golden Dragon** — interactive scene with 3 choices · **🎙️ Amazing Animals** — Kids Daily episode w/ transcript + audio. *Real outputs from the live app, end to end*.</small>
+<small>**Empty state** → **Customize** (name, avatar, animal-emoji, theme) → **Chat** (three starter prompts that route to specialists). Three React states. One persona, persisted across every session.</small>
 
 <!--
-🎤 SCRIPT · Slide 11 · What the buddy creates (real outputs)
-⏱ ~30 seconds · 5-min cut: KEEP
+🎤 SCRIPT · Slide 11 · The buddy (3-state strip)
+⏱ ~28 seconds · 5-min cut: KEEP
+
+"Here's the buddy — three states, one identity.
+
+EMPTY STATE — child arrives, no buddy yet.
+
+CUSTOMIZE — they name their buddy, pick an avatar
+emoji, choose a theme. Maybe three minutes of
+delight.
+
+CHAT — the buddy greets them with three starter
+prompts. Each prompt routes to a different
+specialist underneath.
+
+Three React states. One persona. Persisted across
+every session through agent_repo."
+
+🎬 Delivery: Point at each pane. The "delight" beat on customize is real — kids love this part more than the chat itself.
+➡ Transition: "And here's what their buddy actually creates."
+-->
+
+---
+
+## What the buddy creates — *three surfaces, one character*
+
+![real creative outputs h:430](assets/system-creates.png)
+
+| 📖 Image-to-Story | 🌟 Interactive Story | 🎙️ Kids Daily |
+|---|---|---|
+| **The Singing Shells of Coral Bay** — art story with illustrated cover + 2-page narrative | **Ember and the Golden Dragon's Cozy Cloud** — branching scene with 3 "what happens next?" cards | **Amazing Animals and How We Keep Them Safe** — Kids Daily episode w/ cover art + transcript + audio |
+
+<small>Same character — *Ember + the recurring crew* — across all three surfaces. **Real outputs from the live app, end to end.**</small>
+
+<!--
+🎤 SCRIPT · Slide 12 · What the buddy creates (real outputs)
+⏱ ~32 seconds · 5-min cut: KEEP
 
 "This is what the buddy actually creates.
 
@@ -515,9 +550,7 @@ plus an illustrated cover.
 MIDDLE — 'Ember and the Golden Dragon's Cozy
 Cloud.' An interactive story. Same Ember from the
 art story is now starring in a branching adventure.
-'Follow the golden stardust trail.' 'Climb the
-tallest tree.' 'Ask Shimmer to describe her cloud
-home.' Three choices change the ending.
+Three choices change the ending.
 
 RIGHT — 'Amazing Animals and How We Keep Them
 Safe.' A Kids Daily episode. Cover art, transcript,
@@ -526,42 +559,7 @@ audio playback. Ember again, as guest anchor.
 Three surfaces. Same character. Real outputs from
 the live app."
 
-🎬 Delivery: Point at each pane in order. Mention "Ember" by name on each one — that's the character-continuity moat made concrete.
-➡ Transition: "And here's how every kid gets to that experience."
--->
-
----
-
-## What the system creates — *three surfaces, one buddy*
-
-![system creates h:380](assets/system-creates.png)
-
-| 📖 Image-to-Story | 🌟 Interactive Story | 🎙️ Kids Daily |
-|---|---|---|
-| Child draws → buddy generates a 60-second story w/ their character | Age + length + interests → branching adventure with choice-driven endings | 8 topic channels → today's news as a kid-safe podcast in the buddy's voice |
-
-<small>Two real product surfaces · one generated cover for Image-to-Story · *same buddy across all three*.</small>
-
-<!--
-🎤 SCRIPT · Slide 12 · What the system creates (gallery)
-⏱ ~32 seconds · 5-min cut: KEEP
-
-"Three creative surfaces. Real AI outputs —
-these covers came straight out of the system.
-
-IMAGE-TO-STORY — child draws a robot, the buddy
-generates a sixty-second story with their character.
-
-INTERACTIVE STORY — branching adventure scene plus
-three choices that change the ending.
-
-KIDS DAILY — today's news as a kid-safe podcast
-with the buddy as guest anchor.
-
-Three surfaces, same buddy, same character
-continuity across all of them."
-
-🎬 Delivery: Point at each cover. Mention "Lightning the puppy" or whatever character anchored slide 4 — concrete continuity.
+🎬 Delivery: Point at each pane. Mention "Ember" by name on each one — character continuity is the moat made concrete.
 ➡ Transition: "And kids share what they make — safely."
 -->
 
