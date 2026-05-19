@@ -80,13 +80,10 @@ style: |
 🎤 SCRIPT · Slide 1 · Title
 ⏱ ~8 seconds · 5-min cut: KEEP
 
-"Good [morning/afternoon]. Kids Creative Workshop —
-an agentic app for kids, built on Claude Agent SDK.
+"Good morning, everyone. I'm here to tell you about Kids Creative Workshop. It's an agentic app for kids, built on the Claude Agent SDK. And before I get into how it works, I want to start with a moment."
 
-Let me start with a moment."
-
-🎬 Delivery: Warm and slow. Don't rush the subtitle. Pause, then click.
-➡ Transition: pivot directly to the emotional anchor on slide 2.
+🎬 Delivery: Warm and slow. Smile on "good morning." Pause briefly after "Claude Agent SDK." Then click forward.
+➡ Transition: pivots directly into the emotional moment on slide 2.
 -->
 
 ---
@@ -105,31 +102,26 @@ Let me start with a moment."
 
 <!--
 🎤 SCRIPT · Slide 2 · Three moments
-⏱ ~28 seconds · 5-min cut: KEEP
+⏱ ~30 seconds · 5-min cut: KEEP
 
-"Three moments — one buddy.
+"Picture three moments in a kid's day.
 
-[2-second pause]
+The first one: a five-year-old hands her drawing to her buddy, and watches it become a story — with her character, in her voice.
 
-A five-year-old hands her drawing to her buddy.
-It becomes a story — in her character, her voice.
+[pause for 2 seconds]
 
-[2-second pause]
+The second: that same character — the one she just invented — stars in the next adventure. Her choices, her ending.
 
-The same character stars in the next adventure —
-her choices, her ending.
+[pause for 2 seconds]
 
-[2-second pause]
+The third: tomorrow morning, today's news arrives as her own podcast. Kid-safe, in her buddy's voice.
 
-Tomorrow's news arrives as her podcast —
-kid-safe, in her buddy's voice.
-
-[3-second pause]
+[pause for 3 seconds]
 
 One buddy. Three kinds of moments. Her world, every time."
 
-🎬 Delivery: SLOW. Three product moments, three deliberate pauses. The cadence is the slide.
-➡ Transition: "But today's AI fails her on every one of those moments. Here's how."
+🎬 Delivery: Slow down a lot here. The pauses ARE the slide. Don't rush. If you feel the silence is awkward, it's probably the right length.
+➡ Transition: "But today's AI fails her on every single one of those moments. Here's how."
 -->
 
 ---
@@ -148,30 +140,24 @@ One buddy. Three kinds of moments. Her world, every time."
 
 <!--
 🎤 SCRIPT · Slide 3 · Four problems
-⏱ ~28 seconds · 5-min cut: KEEP
+⏱ ~30 seconds · 5-min cut: KEEP
 
 "Today's AI fails kids on four fronts.
 
-NOT PERSONALIZED ENOUGH — generic outputs.
-No memory of her characters, her voice, her age.
+First, it's not personalized enough. Outputs are generic. There's no memory of her characters, her voice, or her age.
 
-NOT HIGHLY CUSTOMIZED — every child gets the
-same prompt and same answer. No buddy identity.
-No per-child capability set.
+Second, it's not highly customized. Every child gets the same prompt and gets back the same answer. There's no buddy identity, no per-child capability set.
 
-NO SUITED NEWS FOR KIDS — today's news products
-are adult-first. No age-aware filter, no narrative
-voice for kids.
+Third, there's no news that's actually suited for kids. Today's news products are adult-first. No age-aware filter, no narrative voice for kids.
 
-NO LONG-TERM PERSISTENCE — each session resets.
-Lightning the puppy is forgotten by Monday.
+And fourth, there's no long-term persistence. Every session resets. Lightning the puppy that the kid drew last Friday? Forgotten by Monday.
 
-[brief pause]
+[pause briefly]
 
-Existing AI extracts. We collaborate."
+Existing AI extracts from kids. We want to collaborate with them."
 
-🎬 Delivery: Read each problem deliberately. The 4-card grid does the work; don't editorialize.
-➡ Transition: "Here's how our agent's abilities solve each one."
+🎬 Delivery: Number each problem clearly — "first," "second," "third," "fourth." That cadence helps the audience follow along with the 4-card grid on screen.
+➡ Transition: "Let me show you how our agent's abilities fix each one of these."
 -->
 
 ---
@@ -189,36 +175,22 @@ Existing AI extracts. We collaborate."
 
 <!--
 🎤 SCRIPT · Slide 4 · Our agent's abilities
-⏱ ~35 seconds · 5-min cut: KEEP
+⏱ ~40 seconds · 5-min cut: KEEP
 
-"Four problems. Four agent abilities — one for each.
+"So here's how we solve each one.
 
-NOT PERSONALIZED → PERSONA + CHARACTER MEMORY.
-The buddy is named and customized. Recurring
-characters — Lightning the puppy — are recalled
-across sessions through character_repo.
+For "not personalized enough" — we built persona and character memory. The buddy is named by the child, customized by the child, and recurring characters like Lightning the puppy get recalled across every session through our character repository.
 
-NOT HIGHLY CUSTOMIZED → PER-CHILD AGENT DEFINITION
-WITH SKILLS GATING. Age-aware capabilities for
-three to five, six to eight, nine to twelve. The
-buddy persona is shared as system context to
-every specialist.
+For "not highly customized" — each child gets their own agent definition, with skills gated by their age. Three to five, six to eight, nine to twelve — different capability sets for each. And the buddy's persona flows as system context to every specialist underneath.
 
-NO KID-NEWS → THE KIDS_DAILY SPECIALIST.
-Age-stratified prompts plus per-reply safety review.
-News arrives as a kid-safe podcast in the buddy's voice.
+For "no kid-news" — we have a dedicated kids-daily specialist. It uses age-stratified prompts, runs every reply through a safety review, and delivers the news as a kid-safe podcast in the buddy's own voice.
 
-NO PERSISTENCE → AGENT_REPO + CHARACTER_REPO +
-VECTOR SEARCH. The buddy survives every session.
-One buddy. For life.
+And for "no persistence" — we use an agent repository, a character repository, and vector search. The buddy survives every session. One buddy, for life.
 
-And kids feel three things immediately:
-interactive — the story streams as it writes itself.
-Proactive — the buddy suggests and recalls.
-Persistent — same buddy persona, every time."
+And kids feel three things right away: the experience is interactive — the story streams as it writes itself. It's proactive — the buddy suggests and recalls. And it's persistent — same buddy persona, every time."
 
-🎬 Delivery: Read each row tightly — problem then ability. The 1-to-1 mapping does the work.
-➡ Transition: "These abilities are built on four SDK primitives."
+🎬 Delivery: Walk problem-to-solution. The 1-to-1 mapping is the structure — say "for X, we built Y" for each row. End on the three feelings — those are what stick in the kid's memory.
+➡ Transition: "All of these abilities are built on a small set of SDK primitives. Let me show you."
 -->
 
 ---
@@ -238,36 +210,24 @@ Persistent — same buddy persona, every time."
 
 <!--
 🎤 SCRIPT · Slide 5 · Six agentic features
-⏱ ~40 seconds · 5-min cut: KEEP
+⏱ ~45 seconds · 5-min cut: KEEP
 
-"Six agentic features. One stack.
+"We've built six agentic features into one stack.
 
-INTERACTIVE — streaming SSE plus async-generator
-agents. The story writes itself token by token.
+The first is interactive. We use server-sent events with async-generator agents, so the story writes itself token by token, right there on the kid's screen.
 
-RESPONSIVE — Claude Haiku for speed, deterministic
-plus LLM-disambiguating intent routing, per-agent
-skill curation.
+The second is responsive. We use Claude Haiku for speed. Our intent routing combines deterministic keyword rules with LLM disambiguation, and each agent has its own curated set of skills.
 
-PROACTIVE — prompt engineering shapes the buddy's
-starter suggestions; vector DB recall surfaces
-recurring characters; character_repo proposes next
-moves.
+Third is proactive. Prompt engineering shapes the buddy's starter suggestions. Vector database recall surfaces recurring characters. And our character repository proposes the next move based on what the kid has done before.
 
-PERSISTENT — vector DB plus SQL repos hold the
-buddy across sessions. ChromaDB locally, pgvector
-in production.
+Fourth is persistent. Vector database plus SQL repositories hold the buddy across sessions. We use ChromaDB locally and pgvector in production.
 
-REACTIVE — every reply runs through the safety MCP
-tool. Age-aware thresholds: 0.90 for three to five,
-0.85 for six to twelve. Suggest-and-retry on fail.
+Fifth is reactive. Every reply runs through our safety MCP tool. We use age-aware thresholds — point-nine-zero for three to five year olds, point-eight-five for six to twelve. If a reply fails the safety check, we ask the model to suggest improvements and retry.
 
-AUTONOMOUS — this one's the next frontier.
-Multi-step planning, self-prompted explore loops,
-scheduled buddy initiatives. One ceiling away."
+And the sixth one — autonomous — is the next frontier. Multi-step planning, self-prompted explore loops, scheduled buddy initiatives. We're one ceiling away from this."
 
-🎬 Delivery: Walk row-by-row. Linger on REACTIVE (the safety story). Mark AUTONOMOUS as future explicitly so judges don't think you're claiming it.
-➡ Transition: "One agent hit a ceiling. So we extended to a team."
+🎬 Delivery: Walk row by row. Slow down on the reactive one — that's the safety story, the most important moat. When you say "autonomous," be clear it's future — say "this is what we're going to build next." Don't claim it as shipped.
+➡ Transition: "But one agent alone hit a ceiling pretty quickly. So we extended to a team."
 -->
 
 ---
@@ -285,33 +245,22 @@ scheduled buddy initiatives. One ceiling away."
 
 <!--
 🎤 SCRIPT · Slide 6 · Four architecture patterns
-⏱ ~30 seconds · 5-min cut: KEEP
+⏱ ~32 seconds · 5-min cut: KEEP
 
-"Four agent architecture patterns. We use all four.
+"There are four agent architecture patterns, and we use all four.
 
-PATTERN ONE — single agent. One agent, one job,
-linear inference. We use it for straight TTS via
-audio_narration.
+The first is the single agent. One agent, one job, linear inference. We use this for simple flows like our audio narration — it just turns text into speech, no orchestration needed.
 
-PATTERN TWO — sub-agent fan-out. The same task
-spawned in parallel for speed. Concurrent vision
-crops, parallel character_repo lookups.
+The second is sub-agent fan-out. The same task gets spawned in parallel for speed. We use this when we need concurrent vision crops, or when we want to look up multiple characters from our repository at once.
 
-PATTERN THREE — agent team. Multiple agents
-collaborate by ROLE, defined via AgentDefinition.
-This is our My Agent: proxy plus four role
-specialists plus safety_review.
+The third is the agent team. Multiple agents collaborate by role, each defined via an AgentDefinition. This is what our My Agent is — a proxy plus four role specialists plus a safety review subagent.
 
-PATTERN FOUR — multi-agent orchestrator. Agents
-are created DYNAMICALLY. A2A extensible. The proxy
-can register new AgentDefinitions at runtime.
+The fourth is the multi-agent orchestrator. Agents get created dynamically at runtime. This is what makes us extensible — the proxy can register new AgentDefinitions on the fly.
 
-Shared state within a team flows through
-build_my_agent_context. A2A extends to external
-teams as future work."
+Now within a team, shared state flows through what we call the agent context — the persona, the child ID, the recurring characters all reach every specialist. And in the future, we'll extend this with agent-to-agent bridges to external teams."
 
-🎬 Delivery: Read each pattern with its example. The "we use all four" claim is the punchline — most teams build one pattern and force-fit everything.
-➡ Transition: "Each agent in the team is wired to six memory layers."
+🎬 Delivery: Walk pattern by pattern with the concrete example. The "we use all four" line is the punchline — most teams pick one and force-fit everything else.
+➡ Transition: "And every agent in the team is wired to six memory layers."
 -->
 
 ---
@@ -331,37 +280,26 @@ teams as future work."
 
 <!--
 🎤 SCRIPT · Slide 7 · Six memory types
-⏱ ~32 seconds · 5-min cut: KEEP
+⏱ ~38 seconds · 5-min cut: KEEP
 
-"Six memory types. One buddy. Layered recall.
+"Memory is what makes a buddy actually feel like a buddy. We've broken it into six layers.
 
-SESSION memory — this-chat conversation history,
-stored in agent_chat_repository.
+Session memory — what was said in this conversation. We store it in the agent chat repository.
 
-WORKING memory — per-turn execution context.
-In-flight tool results, persona, recurring characters,
-passed to every specialist via build_my_agent_context.
+Working memory — the per-turn execution context. The in-flight tool results, the persona, the recurring characters. All passed to every specialist via the agent context builder.
 
-EPISODIC memory — past creations.
-Stories, interactive sessions, kids_daily episodes.
-Three tables.
+Episodic memory — the kid's past creations. Stories, interactive sessions, kids-daily episodes. Three tables.
 
-FACTUAL memory — buddy persona, child profile,
-preferences. Agent repo, preference repo, users table.
+Factual memory — buddy persona, child profile, preferences. That lives in the agent repository, the preference repository, and the users table.
 
-SEMANTIC memory — embeddings of characters, themes,
-narrative style. ChromaDB locally, pgvector in
-production, via the vector search MCP.
+Semantic memory — embeddings of characters, themes, narrative style. ChromaDB locally, pgvector in production, accessed via our vector search MCP.
 
-PROCEDURAL memory — how to generate each content type.
-Versioned markdown prompts, at-tool skills, and
-enabled_skills gating per agent.
+And procedural memory — how the buddy actually generates each kind of content. That's our versioned markdown prompts, our at-tool skills, and the enabled-skills gating on each agent.
 
-The buddy remembers, understands, acts, talks,
-and reasons in flight."
+So put it all together: the buddy remembers, understands, acts, talks, and reasons in flight."
 
-🎬 Delivery: Walk each row briskly. Pause briefly on PROCEDURAL — that's the one most teams don't have. Land the closing line slowly.
-➡ Transition: "Here's how those memory layers and patterns compose in our team."
+🎬 Delivery: Walk each layer briskly. Slow down on procedural memory — that's the one most teams don't have, and it's worth a beat. End on the closing line slowly: "remembers, understands, acts, talks, and reasons in flight."
+➡ Transition: "And here's how those memory layers and the four patterns compose together in our actual team."
 -->
 
 ---
@@ -380,44 +318,30 @@ One agent hit a ceiling. Branching stories, news podcasts, per-reply safety — 
 
 <!--
 🎤 SCRIPT · Slide 8 · The team (CENTERPIECE)
-⏱ ~50 seconds · 5-min cut: KEEP
+⏱ ~55 seconds · 5-min cut: KEEP
 
-"Branching adventures, daily podcasts, per-reply
-safety — each needed its own expertise. So we
-extended to an agent team. Still on Claude Agent SDK.
+"This is the architecture. Branching adventures, daily podcasts, per-reply safety — each one needed its own expertise. So we extended to an agent team. All still on the Claude Agent SDK.
 
-[point at proxy node — top of diagram]
+[point at the proxy node at the top]
 
-The child's message comes in. The proxy ORCHESTRATES —
-routes the intent with deterministic rules plus LLM
-disambiguation.
+When a child sends a message, the proxy receives it first. The proxy orchestrates everything — it routes the intent using a mix of deterministic rules and LLM disambiguation.
 
-[point at the four specialists]
+[point at the four specialists in the middle]
 
-Four specialists. Image story, interactive story,
-kids daily, audio narration. Each has its own prompt,
-tools, and skill set.
+Then it hands off to one of four specialists. Image story, interactive story, kids daily, or audio narration. Each one has its own prompt, its own tools, and its own skill set.
 
-[point at safety_review — pause for emphasis]
+[point at safety_review at the bottom — pause briefly]
 
-Every reply passes through safety_review. That subagent
-is the non-negotiable gate before anything reaches
-the child.
+But here's the part that earns the trust. Every reply passes through safety review. That subagent is the non-negotiable gate before anything ever reaches the child.
 
-[point at the shared context bus]
+[point at the shared context bus underneath]
 
-And underneath everything — SHARED CONTEXT. Persona,
-child ID, recurring characters — flows to every agent.
-So Lightning the puppy is the same dog in the story
-AS in the podcast.
+And underneath all of it — the shared context. Persona, child ID, recurring characters — they all flow to every agent. So Lightning the puppy in the story is the same Lightning in the podcast. The character continuity is built in at the architecture level.
 
-This unlocks responsive — right specialist in
-milliseconds. Dynamic — different experience per turn.
-And A2A extensible — new specialists plug in by
-registering one AgentDefinition."
+This unlocks three things. We're responsive — the right specialist runs in milliseconds. We're dynamic — different experience per turn, without changing the chat surface. And we're A2A extensible — adding a new specialist takes one AgentDefinition."
 
-🎬 Delivery: This is the CENTERPIECE. Walk top-to-bottom. PAUSE after "before anything reaches the child" — let it land.
-➡ Transition: "These weren't accidents — every primitive earned its place."
+🎬 Delivery: This is the centerpiece slide. Walk top to bottom, taking your time. Pause after "before it ever reaches the child" — that's the moment that earns judges' trust. Don't rush.
+➡ Transition: "None of these were accidents. Every primitive in this architecture earned its place."
 -->
 
 ---
@@ -428,29 +352,22 @@ registering one AgentDefinition."
 
 <!--
 🎤 SCRIPT · Slide 9 · Three-layer infrastructure
-⏱ ~28 seconds · 5-min cut: KEEP
+⏱ ~32 seconds · 5-min cut: KEEP
 
-"Three managed services, one HTTPS hop each.
+"Now let me show you the infrastructure. Three managed services, one HTTPS hop between each.
 
-VERCEL hosts the frontend — React SPA on a CDN.
-Static files, fast everywhere.
+At the top, Vercel hosts the frontend. It's a React single-page app served from a CDN — static files, fast everywhere.
 
-RAILWAY runs the FastAPI backend — Claude Agent SDK,
-seven MCP servers, auto-deploys from main.
+In the middle, Railway runs the FastAPI backend. That's where the Claude Agent SDK lives, along with our seven MCP servers. Railway auto-deploys whenever we push to main.
 
-SUPABASE is the database — Postgres plus pgvector
-for embeddings, plus Auth, plus Storage. Managed,
-always-on.
+At the bottom, Supabase is the database. Postgres plus pgvector for embeddings, plus auth, plus file storage. It's a managed service, always on.
 
-And AI APIs — Anthropic for Claude, OpenAI for TTS,
-ElevenLabs for premium voices, Tavily for kid-safe
-web search.
+And on the side, we use a handful of AI APIs — Anthropic for Claude, OpenAI for TTS, ElevenLabs for premium voices, and Tavily for kid-safe web search.
 
-Each service has one job. Each HTTPS hop is one
-boundary. No magic, no monorepo coupling."
+The thing I want you to take away is — each service does one job. Each HTTPS hop is one boundary. There's no magic, no monorepo coupling. We can replace any layer without touching the others."
 
-🎬 Delivery: Trace top to bottom. Pause on "each service does one thing" — judges score on architectural discipline.
-➡ Transition: "Inside the backend, the same principle holds."
+🎬 Delivery: Trace the diagram top to bottom as you speak. The closing line — "no magic, no monorepo coupling" — is what earns the architecture credit. Say it slowly.
+➡ Transition: "And inside the backend, the same discipline holds."
 -->
 
 ---
@@ -461,35 +378,28 @@ boundary. No magic, no monorepo coupling."
 
 <!--
 🎤 SCRIPT · Slide 10 · Backend layered architecture
-⏱ ~32 seconds · 5-min cut: KEEP
+⏱ ~35 seconds · 5-min cut: KEEP
 
-"Inside the backend, the same discipline.
+"Now inside the backend itself, we keep the same discipline. Seven layers, all talking in one direction.
 
-ROUTES parse the request — fourteen modules.
+At the top, routes parse the incoming request — we have fourteen route modules.
 
-DEPENDENCIES handle auth and quota — dependency
-injection, not inline checks.
+Below that, dependencies handle auth and quota — we use dependency injection, not inline checks.
 
-AGENTS orchestrate — proxy plus four specialists
-on Claude Agent SDK.
+Then the agents layer orchestrates the AI — that's our proxy plus four specialists, all on the Claude Agent SDK.
 
-MCP SERVERS are the tool layer — seven of them,
-typed envelopes, .handler calling convention.
+Below that, the MCP servers are the tool layer. Seven of them. Typed envelopes, with what we call the dot-handler calling convention.
 
-SERVICES hold business logic — fourteen of them,
-including the shared my_agent_context builder.
+Then services hold the business logic — fourteen modules, including the shared agent context builder.
 
-REPOSITORIES wrap database access — twenty repos,
-one per table.
+Repositories wrap database access — twenty of them, one per table.
 
-DATABASE is the adapter at the bottom — SQLite
-in dev, Postgres plus pgvector in production.
+And at the very bottom, the database adapter. SQLite in dev, Postgres plus pgvector in production.
 
-Each layer talks down. No layer talks up. That's
-how we replace any layer in isolation."
+The rule is simple: each layer talks down, no layer talks up. That's how we replace any single layer without touching the others."
 
-🎬 Delivery: Walk top-to-bottom. The "no layer talks up" line earns trust — it's the architectural discipline.
-➡ Transition: "Here's what the kid actually sees."
+🎬 Delivery: Walk through layer by layer. The closing line — "each layer talks down, no layer talks up" — is the architectural discipline. Land it slowly.
+➡ Transition: "OK, that's the system. Let me show you what the kid actually sees."
 -->
 
 ---
@@ -502,24 +412,19 @@ how we replace any layer in isolation."
 
 <!--
 🎤 SCRIPT · Slide 11 · The buddy (3-state strip)
-⏱ ~28 seconds · 5-min cut: KEEP
+⏱ ~30 seconds · 5-min cut: KEEP
 
-"Here's the buddy — three states, one identity.
+"Here's the buddy. Three states, one identity.
 
-EMPTY STATE — child arrives, no buddy yet.
+When the child first arrives, there's no buddy yet — just an empty state inviting them to create one.
 
-CUSTOMIZE — they name their buddy, pick an avatar
-emoji, choose a theme. Maybe three minutes of
-delight.
+Then they customize. They name their buddy, pick an avatar emoji, choose a theme. This whole step takes about three minutes, and honestly, kids love this part more than the chat itself.
 
-CHAT — the buddy greets them with three starter
-prompts. Each prompt routes to a different
-specialist underneath.
+Once that's done, they land on the chat screen. The buddy greets them with three starter prompts, and each prompt routes to a different specialist underneath — story, news, or adventure.
 
-Three React states. One persona. Persisted across
-every session through agent_repo."
+Three React states. One persona. And the buddy persists across every session through our agent repository."
 
-🎬 Delivery: Point at each pane. The "delight" beat on customize is real — kids love this part more than the chat itself.
+🎬 Delivery: Point at each pane on screen as you describe it. The "kids love this part more than the chat itself" line should feel like a real observation, not a brag — say it casually.
 ➡ Transition: "And here's what their buddy actually creates."
 -->
 
@@ -537,30 +442,20 @@ every session through agent_repo."
 
 <!--
 🎤 SCRIPT · Slide 12 · What the buddy creates (real outputs)
-⏱ ~32 seconds · 5-min cut: KEEP
+⏱ ~38 seconds · 5-min cut: KEEP
 
-"This is what the buddy actually creates.
+"These are real outputs from the live app. Let me walk you through them.
 
-LEFT — 'The Singing Shells of Coral Bay.' An art
-story. The child uploaded a drawing, and the buddy
-generated a sixty-second narrative with their
-character — Ember, the Squirrel, Fox Kit, Rabbit —
-plus an illustrated cover.
+On the left — 'The Singing Shells of Coral Bay.' This is an art story. The child uploaded a drawing, and the buddy turned it into a sixty-second narrative — with their character, Ember, and the rest of the crew. The cover illustration on the left was generated too.
 
-MIDDLE — 'Ember and the Golden Dragon's Cozy
-Cloud.' An interactive story. Same Ember from the
-art story is now starring in a branching adventure.
-Three choices change the ending.
+In the middle — 'Ember and the Golden Dragon's Cozy Cloud.' This is an interactive story. The same Ember from the art story is now starring in a branching adventure. Down at the bottom, you can see three choices the kid picks from — each one changes the ending.
 
-RIGHT — 'Amazing Animals and How We Keep Them
-Safe.' A Kids Daily episode. Cover art, transcript,
-audio playback. Ember again, as guest anchor.
+And on the right — 'Amazing Animals and How We Keep Them Safe.' This is a kids daily episode. Cover art, transcript on the side, audio playback. And there's Ember again, this time as the guest anchor.
 
-Three surfaces. Same character. Real outputs from
-the live app."
+Three different surfaces. Same character across all of them. This is character continuity made real — not just claimed."
 
-🎬 Delivery: Point at each pane. Mention "Ember" by name on each one — character continuity is the moat made concrete.
-➡ Transition: "And kids share what they make — safely."
+🎬 Delivery: Point at each pane in order. Say "Ember" by name on each one — that's what makes the character continuity concrete. The closing line — "made real, not just claimed" — is the moat.
+➡ Transition: "And kids share what they make — safely. Here's how."
 -->
 
 ---
@@ -582,29 +477,20 @@ hub_posts (id, agent_name, agent_avatar, agent_title, story_id, ...)
 
 <!--
 🎤 SCRIPT · Slide 13 · Community & sharing (COPPA at schema)
-⏱ ~28 seconds · 5-min cut: KEEP
+⏱ ~32 seconds · 5-min cut: KEEP
 
-"Kids share what they create. Safely.
+"OK, so kids share what they create. The question is — how do we do this safely?
 
-Most kid-AI products fail COPPA the same way —
-they JOIN posts back to the users table for a
-byline, and somewhere along the way a child's
-real name leaks.
+Here's where most kid-AI products fail COPPA. They join posts back to the users table to get the byline. And somewhere along the way, a child's real name leaks out.
 
-We don't have that risk because the SCHEMA
-doesn't allow it.
+We don't have that risk, because our schema doesn't allow it.
 
-The hub_posts table has agent_name, agent_avatar,
-agent_title — IMMUTABLE persona snapshot columns
-written once at post time. No read path JOINs
-users. The unsafe query can't even be expressed.
+The hub posts table has agent_name, agent_avatar, agent_title — immutable persona snapshot columns written once at post time. There's no read path that JOINs the users table. The unsafe query literally can't even be expressed.
 
-Safety isn't a code-review checklist for us.
-It's a schema invariant — verified by
-test_hub_coppa_invariant."
+Safety isn't a code review checklist for us. It's a schema invariant, and we have a contract test — test_hub_coppa_invariant — that fails if anyone ever tries to write that join."
 
-🎬 Delivery: Land hard on "the unsafe query can't even be expressed." This is the moat most kid-AI products don't have.
-➡ Transition: "And the architecture is built to extend."
+🎬 Delivery: This is the COPPA moat. The line "the unsafe query literally can't even be expressed" is the key claim — say it slowly. The test name at the end is the receipt.
+➡ Transition: "And the architecture is built to extend. Let me show you what that looks like in code."
 -->
 
 ---
@@ -629,28 +515,24 @@ proxy.register(AgentDefinition(
 
 <!--
 🎤 SCRIPT · Slide 14 · Open by design (extensibility)
-⏱ ~30 seconds · 5-min cut: KEEP
+⏱ ~32 seconds · 5-min cut: KEEP
 
-"This architecture is open by design.
+"This architecture is open by design. Let me show you.
 
-Want to add a new specialist? One AgentDefinition.
+If you want to add a brand new specialist to the buddy team, you write one AgentDefinition. That's it.
 
-You give it a model, a system prompt, the tools
-it can call, and the skills it's allowed to use.
+[gesture at the code on screen]
 
-Routing picks it up automatically — the proxy's
-intent classifier learns the new specialist's
-trigger phrases from its description.
+You give it a model — Haiku for speed. You give it a system prompt — that's a markdown file in our prompts folder. You give it a list of tools it can call. And you give it the skills it's allowed to use.
 
-Safety gate runs on every reply, regardless of
-which specialist generated it. Shared context flows
-in — persona, child_id, recurring characters.
+Once you register it, the routing picks it up automatically. The proxy's intent classifier reads the specialist's description and learns what trigger phrases route to it.
 
-A2A bridge in the future — external agent teams
-join the buddy's world through the same contract."
+The safety gate runs on every reply, no matter which specialist generated it. And the shared context — persona, child ID, recurring characters — flows in to the new specialist just like the others.
 
-🎬 Delivery: Read the code SLOWLY. Judges will read it themselves. After the code, the WORDS are the moat — "one AgentDefinition" is the product claim.
-➡ Transition: "And here's where we're headed."
+And in the future, we'll add an A2A bridge. That lets external agent teams join the buddy's world, using exactly the same contract."
+
+🎬 Delivery: Let the audience read the code on screen — don't rush. Then deliver the punchline — "one AgentDefinition" is the whole product claim, the moat. Slow on that.
+➡ Transition: "And here's where we're headed next."
 -->
 
 ---
@@ -661,29 +543,22 @@ join the buddy's world through the same contract."
 
 <!--
 🎤 SCRIPT · Slide 15 · Roadmap (Phase 1 → 4)
-⏱ ~25 seconds · 5-min cut: KEEP
+⏱ ~30 seconds · 5-min cut: KEEP
 
-"Two phases shipped. Two ahead.
+"This is our roadmap. Two phases shipped, two ahead.
 
-PHASE 1 — MVP. Single agent. Image-to-Story plus
-safety plus TTS. Ninety-two of ninety-two stories
-shipped.
+Phase one was the MVP. Single agent. Image-to-story, plus safety, plus text-to-speech. Ninety-two out of ninety-two stories shipped — all done.
 
-PHASE 2 — agent team. Multi-agent. Memory.
-Kids Daily. Community. Per-reply safety. One-eighty
-of one-eighty shipped.
+Phase two was the agent team. Multi-agent. Memory system. Kids Daily. Community. Per-reply safety. One hundred eighty out of one hundred eighty stories shipped — also done.
 
-PHASE 3 in design — video and dynamic picture books,
-parent dashboard, gamification.
+Phase three is in design right now — video and dynamic picture books, a parent dashboard, and gamification features.
 
-PHASE 4 is the vision — autonomous. Multi-step
-planning, scheduled buddy initiatives, A2A bridge
-to external agent teams.
+Phase four is the vision — autonomous. Multi-step planning, scheduled buddy initiatives, and an A2A bridge so external agent teams can join.
 
-We don't pitch features — we ship them."
+And here's the thing I want you to remember about us — we don't just pitch features. We ship them."
 
-🎬 Delivery: Tap each phase as you name it. Land on "we don't pitch features — we ship them" — it's the receipt.
-➡ Transition: "And here's the engineering rigor that makes that velocity possible."
+🎬 Delivery: Tap each phase card on screen as you name it. The closing line — "we don't pitch features, we ship them" — is the receipt. Land it slowly.
+➡ Transition: "And the engineering rigor behind that velocity is what I want to show you next."
 -->
 
 ---
@@ -704,26 +579,20 @@ We don't pitch features — we ship them."
 
 <!--
 🎤 SCRIPT · Slide 16 · Where we are
-⏱ ~25 seconds · 5-min cut: KEEP
+⏱ ~28 seconds · 5-min cut: KEEP
 
-"Two hundred seventy-two stories shipped across
-three milestones.
+"So where are we today?
 
-Phase 1 — MVP, single agent — done.
-Phase 2 — multi-agent team plus community — done.
-Phase 3 — video and parent dashboard — in design.
+Two hundred and seventy-two stories shipped across three milestones. Phase one — the MVP single-agent — done. Phase two — the multi-agent team plus community — done. Phase three — video and the parent dashboard — in design.
 
-Engineering rigor matters as much as features.
+Engineering rigor matters to us as much as features do.
 
-Seven hundred contract tests. Per-reply programmatic
-safety. A silent safety-bypass we caught and fixed
-in twenty-four hours. A merge train of seven PRs
-landed last week.
+We have over seven hundred contract tests. Per-reply programmatic safety on every output. We even caught and fixed a silent safety bypass in our own code in twenty-four hours. And we landed a merge train of seven pull requests just last week.
 
-We don't pitch features — we ship them."
+Like I said — we don't pitch features. We ship them."
 
-🎬 Delivery: Speak the numbers slowly. "Two hundred seventy-two" beats "272/272" by a long way out loud. If you have real pilot numbers, replace the placeholder.
-➡ Transition: "And we own our bugs too."
+🎬 Delivery: Speak the numbers out loud as words — "two hundred seventy-two" sounds bigger than "272." If you have real pilot users or feedback, swap them in for the test counts. The closing repeats slide 15's line — that's intentional, it lands the receipt.
+➡ Transition: "And we own our bugs too. Let me show you some."
 -->
 
 ---
@@ -740,27 +609,17 @@ We don't pitch features — we ship them."
 
 <!--
 🎤 SCRIPT · Slide 17 · Failures we owned
-⏱ ~30 seconds · 5-min cut: DEFAULT-CUT (keep for 6-min slot)
+⏱ ~35 seconds · 5-min cut: DEFAULT-CUT (keep for 6-min slot)
 
-"And we own our bugs.
+"This is the slide most pitches don't have. We want to show you the bugs we caught — because how a team catches its own bugs tells you more than any feature list.
 
-We tried the SDK subprocess for image-to-story.
-Railway killed it — out-of-memory under load.
-So we ported all three generation agents to direct
-API. Got half the memory back.
+First one. We tried running the SDK as a subprocess for image-to-story. Railway kept killing it — out of memory under load. So we ported all three generation agents to a direct API. Got half the memory back overnight.
 
-We tried calling check_content_safety directly.
-The wrapper isn't callable. The TypeError got
-swallowed. Every story shipped with a default
-0.9 score. We caught it ourselves and fixed it
-in twenty-four hours.
+Second one. We were calling check-content-safety the wrong way. Turns out the wrapper isn't callable directly. The TypeError got swallowed silently. Every story was shipping with a default safety score of point-nine — which looked fine, but wasn't real. We caught it ourselves, in our own code, and fixed it in twenty-four hours.
 
-We tried single agent plus a safety prompt.
-The model occasionally produced unsafe replies.
-So we built per-reply programmatic safety with
-suggest-and-retry.
+Third one. We tried using a single agent plus a safety prompt. The model occasionally produced replies that weren't safe enough. So we built the per-reply programmatic safety with suggest-and-retry that you saw earlier.
 
-Most pitches hide bugs. We name ours."
+Most pitches hide their bugs. We name ours."
 
 🎬 Delivery: Counter-intuitive slide. Speak each row in ~9 seconds. The 24-hour bypass story is the receipt — speak it slowly.
 ➡ Transition: "Here's why this matters."
@@ -784,34 +643,29 @@ Most pitches hide bugs. We name ours."
 
 <!--
 🎤 SCRIPT · Slide 18 · Why this matters (CLOSING BOOKEND)
-⏱ ~25 seconds · 5-min cut: KEEP
+⏱ ~30 seconds · 5-min cut: KEEP
 
-"Why this matters.
+"So here's why this matters.
 
-Agentic from day one — not a wrapper, not a prompt.
-Real SDK. Real tools. Real orchestration.
+We're agentic from day one. This isn't a wrapper, it isn't just a prompt. It's a real SDK, with real tools, and real orchestration underneath.
 
-272 stories shipped across three milestones —
-execution proof.
+We've shipped two hundred seventy-two stories across three milestones — that's our execution proof.
 
-Programmatic safety on every reply — non-negotiable,
-code-enforced, not vibes.
+We have programmatic safety on every reply — non-negotiable, code-enforced. No vibes.
 
-A community that protects child PII at the schema
-level — COPPA by construction.
+We've built a community that protects child PII at the schema level — COPPA by construction.
 
-A buddy that grows with the child — character
-continuity across image, story, podcast, and share.
+And we've built a buddy that genuinely grows with the child — character continuity across the image story, the interactive adventure, the podcast, and the share.
 
-[PAUSE]
+[pause for 2 seconds]
 
-AI that grows up WITH kids — safely.
+This is AI that grows up with kids — safely.
 
-[PAUSE — hold eye contact, don't fill the silence]
+[pause, hold eye contact for 2 more seconds]
 
-Happy to take questions."
+I'd love to take any questions you have."
 
-🎬 Delivery: Read the achievements briskly. PAUSE before the closing line. Deliver it SLOWLY, holding eye contact. Don't smile until you've said "happy to take questions."
+🎬 Delivery: Read each "we've..." line briskly so they stack. Then pause hard before the closing line. Deliver "AI that grows up with kids — safely" slowly, holding eye contact. Don't smile until you've finished asking for questions.
 ➡ End of pitch.
 -->
 
@@ -844,28 +698,18 @@ Happy to take questions."
 This slide should be HIDDEN during the main presentation:
 Keynote → right-click slide thumbnail → Skip Slide
 
-REVEAL only if a judge asks a deep technical question.
-Then jump straight to the relevant row.
+Only reveal it if a judge asks a deep technical question. Then jump straight to the row that answers them.
 
-Example responses you might say:
+Here are three example answers you might give out loud:
 
-If asked "what's the difference between agent and subagent?":
-"An agent is an AgentDefinition — model, system prompt,
-tools, and skills. A subagent is one of those registered
-under our proxy's agents dictionary. The SDK's Agent tool
-lets the proxy delegate to a subagent based on intent."
+If they ask "what's the difference between an agent and a subagent?":
+"An agent in our system is an AgentDefinition — it has a model, a system prompt, a set of tools, and a set of skills. A subagent is one of those registered underneath our proxy. The SDK's Agent tool is what lets the proxy delegate to a subagent based on the child's intent."
 
-If asked "why not just a bigger prompt?":
-"Quality degrades as specialty count grows in one prompt.
-And we'd lose per-reply safety as a separate subagent —
-which is the non-negotiable gate."
+If they ask "why didn't you just use a bigger prompt?":
+"Two reasons. First, quality degrades as you stuff more specialties into one prompt — the model loses focus. And second, we'd lose the per-reply safety subagent as a separate gate, which is non-negotiable for a kids product."
 
-If asked "how is your COPPA pattern different?":
-"Most teams enforce kid-PII rules in code review.
-We enforce them in the schema. The hub_posts table has
-agent_name, agent_avatar, agent_title as immutable
-snapshot columns. There's no read path that JOINs users.
-The unsafe query can't be expressed."
+If they ask "how is your COPPA pattern different from other kid-AI products?":
+"Most teams enforce their kid-PII rules in code review. We enforce them in the schema. The hub_posts table has agent_name, agent_avatar, and agent_title as immutable snapshot columns — written once at post time. No read path in our codebase JOINs the users table. The unsafe query literally can't be expressed in our schema."
 
-🎬 Don't read the whole table out loud — jump to the row that answers the question.
+🎬 Don't read the whole table out loud. Just jump to the row that answers the question and explain it conversationally.
 -->
