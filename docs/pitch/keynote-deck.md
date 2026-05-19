@@ -494,33 +494,40 @@ how we replace any layer in isolation."
 
 ---
 
-## The buddy — *three states, one identity*
+## What the buddy creates — *three surfaces, one character*
 
-![buddy states h:410](assets/buddy-states.png)
+![real creative outputs h:410](assets/buddy-states.png)
 
-<small>**Empty state** → **Customize** (name, avatar, animal-emoji, theme) → **Chat** (three starter prompts that route to specialists). Three React states. One persona, persisted across every session.</small>
+<small>**📖 The Singing Shells** — art story with illustrated cover · **🌟 Ember and the Golden Dragon** — interactive scene with 3 choices · **🎙️ Amazing Animals** — Kids Daily episode w/ transcript + audio. *Real outputs from the live app, end to end*.</small>
 
 <!--
-🎤 SCRIPT · Slide 11 · The buddy (3-state strip)
-⏱ ~28 seconds · 5-min cut: KEEP
+🎤 SCRIPT · Slide 11 · What the buddy creates (real outputs)
+⏱ ~30 seconds · 5-min cut: KEEP
 
-"Here's the buddy — three states, one identity.
+"This is what the buddy actually creates.
 
-EMPTY STATE — child arrives, no buddy yet.
+LEFT — 'The Singing Shells of Coral Bay.' An art
+story. The child uploaded a drawing, and the buddy
+generated a sixty-second narrative with their
+character — Ember, the Squirrel, Fox Kit, Rabbit —
+plus an illustrated cover.
 
-CUSTOMIZE — they name their buddy, pick an avatar
-emoji, choose a theme. Maybe three minutes of
-delight.
+MIDDLE — 'Ember and the Golden Dragon's Cozy
+Cloud.' An interactive story. Same Ember from the
+art story is now starring in a branching adventure.
+'Follow the golden stardust trail.' 'Climb the
+tallest tree.' 'Ask Shimmer to describe her cloud
+home.' Three choices change the ending.
 
-CHAT — the buddy greets them with three starter
-prompts. Each prompt routes to a different
-specialist underneath.
+RIGHT — 'Amazing Animals and How We Keep Them
+Safe.' A Kids Daily episode. Cover art, transcript,
+audio playback. Ember again, as guest anchor.
 
-Three React states. One persona. Persisted across
-every session through agent_repo."
+Three surfaces. Same character. Real outputs from
+the live app."
 
-🎬 Delivery: Point at each pane. The "delight" beat on customize is real — kids love this part more than the chat itself.
-➡ Transition: "And here's what their buddy actually creates."
+🎬 Delivery: Point at each pane in order. Mention "Ember" by name on each one — that's the character-continuity moat made concrete.
+➡ Transition: "And here's how every kid gets to that experience."
 -->
 
 ---
