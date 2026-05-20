@@ -27,13 +27,15 @@ from ...services.database.connection import DatabaseManager, db_manager
 from ...services.database.artifact_repository import (
     ArtifactRepository, ArtifactRelationRepository,
     StoryArtifactLinkRepository, RunRepository,
-    AgentStepRepository, RunArtifactLinkRepository
+    AgentStepRepository, RunArtifactLinkRepository,
+    ArtifactCharacterLinkRepository,
 )
 from ...services.models.artifact_models import (
     Artifact, ArtifactCreate, ArtifactType, LifecycleState,
     Run, RunCreate, AgentStep, StoryArtifactRole,
     StoryArtifactLink, StoryArtifactLinkCreate,
-    ArtifactLineage, RunWithArtifacts
+    ArtifactLineage, RunWithArtifacts,
+    ArtifactCharacterLink, ArtifactCharacterLinkCreate,
 )
 from ...services.provenance_tracker import ProvenanceTracker
 
@@ -529,3 +531,43 @@ async def link_story_artifact(
         raise HTTPException(status_code=400, detail=str(e))
 
     raise HTTPException(status_code=500, detail="Failed to create link")
+
+
+@router.get(
+    "/stories/{story_id}/character-links",
+    response_model=List[ArtifactCharacterLink],
+)
+async def list_story_character_artifact_links(
+    story_id: str,
+    user: UserData = Depends(get_current_user),
+    db: DatabaseManager = Depends(get_db),
+):
+    """List artifact-to-character provenance links for a story."""
+    repo = ArtifactCharacterLinkRepository(db)
+    return await repo.list_by_story(story_id)
+
+
+@router.post(
+    "/{artifact_id}/character-links",
+    response_model=ArtifactCharacterLink,
+)
+async def link_artifact_character(
+    artifact_id: str,
+    link_data: ArtifactCharacterLinkCreate,
+    user: UserData = Depends(get_current_user),
+    db: DatabaseManager = Depends(get_db),
+):
+    """Link a story text artifact to a character record."""
+    repo = ArtifactCharacterLinkRepository(db)
+    link_data.artifact_id = artifact_id
+
+    try:
+        link_id = await repo.upsert(link_data)
+        links = await repo.list_by_artifact(artifact_id)
+        for link in links:
+            if link.link_id == link_id:
+                return link
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    raise HTTPException(status_code=500, detail="Failed to create character link")

@@ -9,9 +9,12 @@ import useAuthStore from "@/store/useAuthStore";
 import useChildStore from "@/store/useChildStore";
 import useDailyTaskStore from "@/store/useDailyTaskStore";
 import { authService } from "@/api/services/authService";
+import { libraryService } from "@/api/services/libraryService";
+import { achievementService } from "@/api/services/achievementService";
 import type { UpdateProfileRequest, ReferralStatus } from "@/types/auth";
 import AvatarDisplay from "@/components/common/AvatarDisplay";
 import StarPiggyBank from "@/components/daily/StarPiggyBank";
+import AchievementBadges from "@/components/profile/AchievementBadges";
 import CharacterGallery from "./CharacterGallery";
 import PreferenceSummary from "./PreferenceSummary";
 import { useMemoryApi } from "@/hooks/useMemoryApi";
@@ -118,9 +121,15 @@ function ProfilePage() {
 
   // Fetch user stats
   const { data: stats, isLoading: statsLoading } = useQuery({
-    queryKey: ["user-stats"],
-    queryFn: () => authService.getUserStats(),
+    queryKey: ["library-counts"],
+    queryFn: () => libraryService.getCounts(),
     enabled: isAuthenticated,
+  });
+
+  const { data: achievements, isLoading: achievementsLoading } = useQuery({
+    queryKey: ["achievements", childId],
+    queryFn: () => achievementService.getForChild(childId as string),
+    enabled: isAuthenticated && Boolean(childId),
   });
 
   const handleSaveProfile = async () => {
@@ -357,6 +366,19 @@ function ProfilePage() {
         transition={{ delay: 0.12 }}
       >
         <StarBoard />
+      </motion.section>
+
+      <motion.section
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.13 }}
+      >
+        <AchievementBadges
+          items={achievements?.items ?? []}
+          availableDefinitions={achievements?.available_definitions ?? []}
+          ageGroup={currentChild?.age_group}
+          isLoading={achievementsLoading}
+        />
       </motion.section>
 
       {/* Referral Section */}

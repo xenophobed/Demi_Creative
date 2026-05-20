@@ -86,6 +86,71 @@ def validate_story_length(story_text: str, age_group: str) -> dict:
     }
 
 
+def _ensure_terminal_punctuation(text: str) -> str:
+    """Finish repaired English prose with sentence punctuation."""
+    cleaned = text.strip()
+    if not cleaned:
+        return cleaned
+    if cleaned[-1] not in ".!?":
+        return f"{cleaned}."
+    return cleaned
+
+
+def _trim_story_to_max_words(story_text: str, min_words: int, max_words: int) -> str:
+    """Trim an over-long story while preferring a sentence boundary."""
+    words = story_text.split()
+    if len(words) <= max_words:
+        return _ensure_terminal_punctuation(story_text)
+
+    candidate = " ".join(words[:max_words]).strip()
+    sentence_end = max(candidate.rfind("."), candidate.rfind("!"), candidate.rfind("?"))
+    if sentence_end > 0:
+        sentence_candidate = candidate[: sentence_end + 1].strip()
+        if count_words(sentence_candidate) >= min_words:
+            return sentence_candidate
+    return _ensure_terminal_punctuation(candidate)
+
+
+def repair_story_length(story_text: str, age_group: str) -> tuple[str, dict]:
+    """Repair story text so it fits the age-group word-count contract.
+
+    This is a delivery-time guardrail for occasional model drift. It trims
+    over-long stories and adds simple, age-neutral closing beats to short
+    stories, then returns the repaired text plus fresh validation metadata.
+    """
+    min_words, max_words = AGE_GROUP_WORD_RANGES.get(
+        age_group, AGE_GROUP_WORD_RANGES["6-8"]
+    )
+    length_info = validate_story_length(story_text, age_group)
+    if length_info["in_range"]:
+        return story_text, {**length_info, "repaired": False}
+
+    if length_info["word_count"] > max_words:
+        repaired = _trim_story_to_max_words(story_text, min_words, max_words)
+    else:
+        repaired = _ensure_terminal_punctuation(story_text)
+        if not repaired:
+            repaired = "Once upon a time, a child's drawing opened a bright little doorway to a kind adventure."
+
+        expansion_sentences = [
+            "The hero looked closely at the colors in the picture and noticed one more clue waiting to be discovered.",
+            "With a brave smile, the friends worked together, listened to each other, and found a gentle way forward.",
+            "Every shape in the drawing seemed to help, from the smallest dot to the tallest line.",
+            "By the end of the adventure, the hero felt proud, curious, and ready to create something new.",
+            "The picture stayed special because it reminded everyone that imagination can turn simple marks into a whole world.",
+        ]
+        index = 0
+        while count_words(repaired) < min_words:
+            repaired = f"{repaired} {expansion_sentences[index % len(expansion_sentences)]}"
+            index += 1
+            if count_words(repaired) > max_words:
+                repaired = _trim_story_to_max_words(repaired, min_words, max_words)
+                break
+
+    repaired_info = validate_story_length(repaired, age_group)
+    return repaired, {**repaired_info, "repaired": True}
+
+
 from ..mcp_servers import (
     analyze_children_drawing,
     check_content_safety,
@@ -797,8 +862,19 @@ Return your response as JSON:
         yield {"type": "tool_result", "data": {"status": "completed"}}
 
     # Build result
+    repaired_story, length_info = repair_story_length(
+        story_data.get("story", ""),
+        age_group,
+    )
+    if length_info["repaired"]:
+        logger.info(
+            "Repaired direct image-to-story length for age group %s to %d words",
+            age_group,
+            length_info["word_count"],
+        )
+
     result_data = {
-        "story": story_data.get("story", ""),
+        "story": repaired_story,
         "themes": story_data.get("themes", []),
         "concepts": story_data.get("concepts", []),
         "moral": story_data.get("moral"),

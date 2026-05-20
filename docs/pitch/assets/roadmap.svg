@@ -72,5 +72,5 @@
   <text x="590" y="160" text-anchor="middle" fill="#1E293B" font-size="11" font-weight="700">we are here ↓</text>
 
   <!-- Caption (title is on the slide itself) -->
-  <text x="580" y="370" text-anchor="middle" fill="#64748B" font-size="14">272 stories shipped · 700+ contract tests · multi-agent in production</text>
+  <text x="580" y="370" text-anchor="middle" fill="#64748B" font-size="14">292 tracked work items · 700+ contract tests · multi-agent in production</text>
 </svg>

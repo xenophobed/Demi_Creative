@@ -11,12 +11,12 @@ import { useStreamVisualizationContext } from '@/providers/StreamVisualizationPr
 import useAuthStore from '@/store/useAuthStore'
 import useDailyTaskStore from '@/store/useDailyTaskStore'
 import { libraryService, type LibraryItem } from '@/api/services/libraryService'
-import { StoryCard } from '@/components/story/StoryDisplay'
 import InspirationDaily from '@/components/daily/InspirationDaily'
 import { fetchDailyInspiration, toDailyContent } from '@/api/services/inspirationService'
 import TearAnimation from '@/components/daily/TearAnimation'
 import StarFlyAnimation from '@/components/daily/StarFlyAnimation'
 import { useNavRef } from '@/contexts/NavRefContext'
+import { resolveMediaUrl } from '@/utils/mediaUrl'
 
 const TIPS = [
   { icon: '🎨', tip: 'The more colorful and detailed your artwork, the more magical your story! Try drawing your favorite animals, characters, or imaginary worlds~' },
@@ -28,9 +28,80 @@ function getItemRoute(item: LibraryItem): string {
   switch (item.type) {
     case 'art-story': return `/story/${item.id}`
     case 'interactive': return `/interactive?session=${item.id}`
+    case 'kids-daily':
+    case 'kids-news':
     case 'morning-show': return `/kids-daily/${item.id}`
     default: return `/kids-daily/${item.id}`
   }
+}
+
+function getItemTypeLabel(item: LibraryItem): string {
+  switch (item.type) {
+    case 'art-story': return 'Art Story'
+    case 'interactive': return 'Interactive'
+    case 'kids-daily':
+    case 'kids-news':
+    case 'morning-show': return 'Kids News'
+    default: return 'Kids News'
+  }
+}
+
+function RecentCreationCard({
+  item,
+  onClick,
+}: {
+  item: LibraryItem
+  onClick: () => void
+}) {
+  const imageUrl = item.thumbnail_url || item.image_url
+  const fallbackIcon =
+    item.type === 'interactive' ? '🎭' : item.type === 'art-story' ? '🎨' : '📰'
+
+  return (
+    <motion.div
+      className="card-kid cursor-pointer"
+      onClick={onClick}
+      whileHover={{ scale: 1.02 }}
+      whileTap={{ scale: 0.98 }}
+    >
+      <div className="flex gap-4">
+        <div className="flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden bg-gradient-to-br from-primary/20 to-secondary/20 flex items-center justify-center">
+          {imageUrl ? (
+            <img src={resolveMediaUrl(imageUrl) || ''} alt="" className="w-full h-full object-cover" />
+          ) : (
+            <span className="text-3xl">{fallbackIcon}</span>
+          )}
+        </div>
+
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-primary/10 text-primary">
+              {getItemTypeLabel(item)}
+            </span>
+          </div>
+          <h3 className="font-bold text-gray-800 mb-1 truncate">{item.title}</h3>
+          <p className="text-gray-500 text-sm line-clamp-2">{item.preview}</p>
+          <p className="text-gray-400 text-xs mt-2">
+            {new Date(item.created_at).toLocaleDateString('zh-CN', {
+              month: 'short',
+              day: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+            })}
+          </p>
+        </div>
+
+        <div className="flex-shrink-0 flex items-center text-gray-400">
+          <motion.span
+            animate={{ x: [0, 4, 0] }}
+            transition={{ duration: 1.5, repeat: Infinity }}
+          >
+            →
+          </motion.span>
+        </div>
+      </div>
+    </motion.div>
+  )
 }
 
 interface StarPosition {
@@ -389,13 +460,9 @@ function HomePage() {
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.6 + index * 0.1 }}
               >
-                <StoryCard
-                  title={item.title}
-                  preview={item.preview}
-                  createdAt={item.created_at}
-                  imageUrl={item.image_url}
+                <RecentCreationCard
+                  item={item}
                   onClick={() => navigate(getItemRoute(item))}
-                  className="relative"
                 />
               </motion.div>
             ))}

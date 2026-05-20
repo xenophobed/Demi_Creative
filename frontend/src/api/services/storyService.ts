@@ -478,14 +478,25 @@ export const storyService = {
     if (!response.ok) {
       if (response.status === 429) {
         const errorData = await response.json();
-        throw new Error(
-          `Rate limited: ${errorData.message || errorData.detail || "Too many requests"}. Retry after ${errorData.retry_after || 60} seconds.`,
+        throw Object.assign(
+          new Error(
+            errorData.message ||
+              errorData.detail ||
+              "Too many Kids Daily listens right now.",
+          ),
+          {
+            status: 429,
+            retry_after: errorData.retry_after || 60,
+          },
         );
       }
       if (response.status === 400) {
         const errorData = await response.json();
-        throw new Error(
-          errorData.detail || "Subscription required or invalid request.",
+        throw Object.assign(
+          new Error(errorData.detail || "Subscription required or invalid request."),
+          {
+            status: 400,
+          },
         );
       }
       throw new Error(`HTTP error! status: ${response.status}`);

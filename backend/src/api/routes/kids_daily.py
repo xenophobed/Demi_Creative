@@ -560,6 +560,20 @@ async def _build_episode(
         }
     )
 
+    try:
+        await preference_repo.update_from_news(
+            child_id=child_id,
+            category=request.category.value,
+            key_concepts=[k.model_dump() for k in key_concepts],
+            user_id=user.user_id,
+        )
+    except Exception:
+        logger.warning(
+            "Preference update failed for kids daily episode %s",
+            episode_id,
+            exc_info=True,
+        )
+
     # --- Provenance tracking (#141) — never blocks content delivery ---
     try:
         tracker = ProvenanceTracker(db_manager)
@@ -570,7 +584,7 @@ async def _build_episode(
             input_data={"category": request.category.value, "age_group": request.age_group.value})
         text_art_id = await tracker.record_artifact(
             step1_id, ArtifactType.TEXT, run_id=run_id,
-            artifact_payload=episode.kid_content[:500],
+            artifact_payload=episode.kid_content,
             description="Kids Daily converted news text",
             safety_score=safety_score,
             agent_name="kids_daily",
@@ -582,7 +596,26 @@ async def _build_episode(
                 },
             ),
         )
-        await tracker.complete_step(step1_id, output_data={"text_artifact_id": text_art_id})
+        script_art_id = await tracker.record_artifact(
+            step1_id, ArtifactType.JSON, run_id=run_id,
+            artifact_payload=dialogue_script.model_dump_json(),
+            description="Kids Daily dialogue script",
+            safety_score=safety_score,
+            agent_name="kids_daily",
+            input_artifact_ids=[text_art_id],
+            metadata=ArtifactMetadata(
+                custom={
+                    "script_format": "dialogue",
+                    "line_count": len(dialogue_script.lines),
+                    "is_degraded": is_degraded,
+                    "degraded_reason": degraded_reason,
+                },
+            ),
+        )
+        await tracker.complete_step(step1_id, output_data={
+            "text_artifact_id": text_art_id,
+            "script_artifact_id": script_art_id,
+        })
 
         # Step 2: TTS generation
         step2_id = await tracker.start_step(run_id, "tts_generation", 2,
@@ -595,7 +628,7 @@ async def _build_episode(
                 description=f"Kids Daily TTS audio segment {idx_str}",
                 mime_type="audio/mpeg",
                 agent_name="tts_generation",
-                input_artifact_ids=[text_art_id],
+                input_artifact_ids=[script_art_id],
             )
             audio_art_ids.append(aid)
         await tracker.complete_step(step2_id, output_data={"audio_count": len(audio_art_ids)})
@@ -610,6 +643,7 @@ async def _build_episode(
                 artifact_url=ill.url,
                 description=ill.description,
                 agent_name="illustration_generation",
+                input_artifact_ids=[script_art_id],
             )
             illust_art_ids.append(iid)
         await tracker.complete_step(step3_id, output_data={"illustration_count": len(illust_art_ids)})
@@ -619,6 +653,12 @@ async def _build_episode(
         await artifact_repo.update_lifecycle_state(text_art_id, "candidate")
         await artifact_repo.update_lifecycle_state(text_art_id, "published")
         await tracker.link_to_story(episode_id, text_art_id, StoryArtifactRole.STORY_TEXT)
+
+        await artifact_repo.update_lifecycle_state(script_art_id, "candidate")
+        await artifact_repo.update_lifecycle_state(script_art_id, "published")
+        await tracker.link_to_story(
+            episode_id, script_art_id, StoryArtifactRole.STORY_TEXT, is_primary=False
+        )
 
         for aid in audio_art_ids:
             await artifact_repo.update_lifecycle_state(aid, "candidate")
@@ -632,7 +672,7 @@ async def _build_episode(
             await tracker.link_to_story(episode_id, iid, role, is_primary=(idx == 0), position=idx)
 
         await tracker.complete_run(run_id, result_summary={
-            "artifacts_created": 1 + len(audio_art_ids) + len(illust_art_ids),
+            "artifacts_created": 2 + len(audio_art_ids) + len(illust_art_ids),
             "episode_id": episode_id,
         })
     except Exception:
@@ -689,9 +729,17 @@ async def generate_kids_daily_on_demand(
 
     # 2. Rate limit: max N on-demand generations per child per hour
     since = (datetime.now() - timedelta(hours=1)).isoformat()
-    recent_count = await story_repo.count_recent_on_demand(request.child_id, since)
+    recent_count = await story_repo.count_recent_on_demand(
+        request.child_id,
+        since,
+        user.user_id,
+    )
     if recent_count >= _ON_DEMAND_MAX_PER_HOUR:
-        oldest_ts = await story_repo.get_oldest_recent_on_demand_ts(request.child_id, since)
+        oldest_ts = await story_repo.get_oldest_recent_on_demand_ts(
+            request.child_id,
+            since,
+            user.user_id,
+        )
         retry_after = 3600  # fallback
         if oldest_ts:
             try:
@@ -756,9 +804,17 @@ async def generate_kids_daily_on_demand_stream(
 
     # 2. Rate limit
     since = (datetime.now() - timedelta(hours=1)).isoformat()
-    recent_count = await story_repo.count_recent_on_demand(request.child_id, since)
+    recent_count = await story_repo.count_recent_on_demand(
+        request.child_id,
+        since,
+        user.user_id,
+    )
     if recent_count >= _ON_DEMAND_MAX_PER_HOUR:
-        oldest_ts = await story_repo.get_oldest_recent_on_demand_ts(request.child_id, since)
+        oldest_ts = await story_repo.get_oldest_recent_on_demand_ts(
+            request.child_id,
+            since,
+            user.user_id,
+        )
         retry_after = 3600
         if oldest_ts:
             try:
@@ -1029,7 +1085,7 @@ async def convert_news(
                 input_data={"category": request.category.value, "age_group": request.age_group.value})
             text_art_id = await tracker.record_artifact(
                 step1_id, ArtifactType.TEXT, run_id=run_id,
-                artifact_payload=result.get("kid_content", "")[:500],
+                artifact_payload=result.get("kid_content", ""),
                 description="Converted news text for kids",
                 safety_score=result.get("safety_score"),
                 agent_name="kids_daily",

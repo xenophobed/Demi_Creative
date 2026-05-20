@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import Card from "@/components/common/Card";
@@ -181,10 +181,12 @@ function BouncingDots() {
 function GeneratingOverlay({
   icon,
   topic,
+  message,
   onCancel,
 }: {
   icon: string;
   topic: string;
+  message?: string | null;
   onCancel: () => void;
 }) {
   const [msgIndex, setMsgIndex] = useState(0);
@@ -232,7 +234,7 @@ function GeneratingOverlay({
           exit={{ opacity: 0, y: -8 }}
           transition={{ duration: 0.3 }}
         >
-          {LOADING_MESSAGES[msgIndex]}
+          {message || LOADING_MESSAGES[msgIndex]}
           <BouncingDots />
         </motion.div>
       </AnimatePresence>
@@ -266,6 +268,14 @@ function KidsDailyPage() {
   const [generatingTopic, setGeneratingTopic] = useState<NewsCategory | null>(
     null,
   );
+  const [generationMessage, setGenerationMessage] = useState<string | null>(
+    null,
+  );
+  const [subscribedTopics, setSubscribedTopics] = useState<Set<NewsCategory>>(
+    () => new Set(),
+  );
+  const [subscriptionsLoading, setSubscriptionsLoading] = useState(false);
+  const [togglingTopic, setTogglingTopic] = useState<NewsCategory | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [rateLimitRetry, setRateLimitRetry] = useState<{
     topic: NewsCategory;
@@ -273,36 +283,127 @@ function KidsDailyPage() {
   } | null>(null);
   const retryTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const subscribedCount = subscribedTopics.size;
+  const subscribedTopicList = useMemo(
+    () => new Set(subscribedTopics),
+    [subscribedTopics],
+  );
+
+  const loadSubscriptions = useCallback(async () => {
+    if (!childId) return;
+    setSubscriptionsLoading(true);
+    try {
+      const response = await storyService.getSubscriptions(childId);
+      setSubscribedTopics(new Set(response.items.map((item) => item.topic)));
+    } catch {
+      setError("We couldn't load your news clubs yet. Try refreshing in a moment.");
+    } finally {
+      setSubscriptionsLoading(false);
+    }
+  }, [childId]);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    void loadSubscriptions();
+  }, [isAuthenticated, loadSubscriptions]);
+
+  const ensureSubscribed = useCallback(
+    async (topic: NewsCategory) => {
+      if (!childId || subscribedTopicList.has(topic)) return;
+      try {
+        await storyService.subscribeTopic({ child_id: childId, topic });
+      } catch (err: unknown) {
+        const status = (err as { response?: { status?: number } })?.response
+          ?.status;
+        if (status !== 409) throw err;
+      }
+      setSubscribedTopics((prev) => new Set(prev).add(topic));
+    },
+    [childId, subscribedTopicList],
+  );
+
+  const handleToggleSubscription = useCallback(
+    async (topic: NewsCategory) => {
+      if (!childId || generatingTopic || togglingTopic) return;
+      setError(null);
+      setTogglingTopic(topic);
+      try {
+        if (subscribedTopicList.has(topic)) {
+          await storyService.unsubscribeTopic(childId, topic);
+          setSubscribedTopics((prev) => {
+            const next = new Set(prev);
+            next.delete(topic);
+            return next;
+          });
+        } else {
+          await storyService.subscribeTopic({ child_id: childId, topic });
+          setSubscribedTopics((prev) => new Set(prev).add(topic));
+        }
+      } catch (err: unknown) {
+        const status = (err as { response?: { status?: number } })?.response
+          ?.status;
+        if (status === 409) {
+          setSubscribedTopics((prev) => new Set(prev).add(topic));
+        } else {
+          setError("That news club change did not stick. Please try again.");
+        }
+      } finally {
+        setTogglingTopic(null);
+      }
+    },
+    [childId, generatingTopic, subscribedTopicList, togglingTopic],
+  );
 
   const handleListenNow = useCallback(
     async (topic: NewsCategory) => {
       if (!childId || generatingTopic) return;
       setError(null);
       setGeneratingTopic(topic);
+      setGenerationMessage("Joining the news club...");
 
       const controller = new AbortController();
       abortRef.current = controller;
 
       try {
-        const result = await storyService.generateMorningShowOnDemand(
+        await ensureSubscribed(topic);
+
+        let episodeId: string | null = null;
+        await storyService.generateMorningShowOnDemandStream(
           { child_id: childId, category: topic, age_group: ageGroup },
+          {
+            onStatus: (data) => {
+              setGenerationMessage(data.message || "Making your episode...");
+            },
+            onResult: (data) => {
+              episodeId = data?.episode?.episode_id ?? null;
+            },
+            onError: (data) => {
+              throw new Error(data.message || "Episode generation failed.");
+            },
+          },
           controller.signal,
         );
-        navigate(`/kids-daily/${result.episode.episode_id}`);
+
+        if (episodeId) {
+          navigate(`/kids-daily/${episodeId}`);
+        } else {
+          setError("The episode finished, but we could not open it yet.");
+        }
       } catch (err: unknown) {
         if (controller.signal.aborted) return; // user cancelled — do nothing
 
         const status = (err as { response?: { status?: number } })?.response
-          ?.status;
+          ?.status ?? (err as { status?: number })?.status;
         const data = (
           err as {
             response?: { data?: { message?: string; retry_after?: number } };
           }
         )?.response?.data;
+        const retryAfter =
+          data?.retry_after ?? (err as { retry_after?: number })?.retry_after;
 
-        if (status === 429 && data?.retry_after) {
+        if (status === 429 && retryAfter) {
           // Per-topic rate limit (3/hour)
-          const retryAfter = data.retry_after;
           setRateLimitRetry({ topic, seconds: retryAfter });
           if (retryTimerRef.current) clearInterval(retryTimerRef.current);
           retryTimerRef.current = setInterval(() => {
@@ -319,6 +420,8 @@ function KidsDailyPage() {
           setError(
             "You've used all your listens for today - come back tomorrow!",
           );
+        } else if (status === 400) {
+          setError("Follow this news club first, then tap Listen Now.");
         } else if (status === 502) {
           setError(
             "Our story-makers are taking a quick break — try again in a moment! 🌟",
@@ -329,15 +432,17 @@ function KidsDailyPage() {
       } finally {
         abortRef.current = null;
         setGeneratingTopic(null);
+        setGenerationMessage(null);
       }
     },
-    [childId, ageGroup, generatingTopic, navigate],
+    [childId, ageGroup, generatingTopic, ensureSubscribed, navigate],
   );
 
   const handleCancelGeneration = useCallback(() => {
     abortRef.current?.abort();
     abortRef.current = null;
     setGeneratingTopic(null);
+    setGenerationMessage(null);
   }, []);
 
   if (!isAuthenticated) {
@@ -406,6 +511,8 @@ function KidsDailyPage() {
             const theme = TOPIC_THEME[item.topic];
             const isGenerating = generatingTopic === item.topic;
             const isRateLimited = rateLimitRetry?.topic === item.topic;
+            const isSubscribed = subscribedTopicList.has(item.topic);
+            const isToggling = togglingTopic === item.topic;
 
             return (
               <motion.div
@@ -454,15 +561,43 @@ function KidsDailyPage() {
                         <span className="text-xs font-semibold text-amber-700 bg-amber-100 px-3 py-1 rounded-full">
                           Retry in {rateLimitRetry!.seconds}s
                         </span>
+                      ) : isSubscribed ? (
+                        <span className="text-xs font-semibold text-emerald-700 bg-emerald-100 px-3 py-1 rounded-full">
+                          Following
+                        </span>
                       ) : (
                         <span className="text-xs text-gray-600 bg-white/70 px-3 py-1 rounded-full border border-white/80">
-                          Ready to listen
+                          Tap Follow or Listen
                         </span>
                       )}
                     </div>
 
-                    {/* Row 4: Listen Now button — per-topic gradient */}
-                    <div className="mt-auto">
+                    {/* Row 4: Follow + Listen Now actions */}
+                    <div className="mt-auto grid grid-cols-[96px_1fr] gap-2">
+                      <motion.button
+                        className={`h-12 flex items-center justify-center rounded-2xl text-sm font-bold border transition-colors ${
+                          isSubscribed
+                            ? "bg-white/80 text-gray-700 border-white"
+                            : `${theme.followBtn} bg-white/70`
+                        } ${
+                          isToggling || subscriptionsLoading
+                            ? "cursor-wait opacity-70"
+                            : ""
+                        }`}
+                        disabled={
+                          generatingTopic !== null ||
+                          isToggling ||
+                          subscriptionsLoading
+                        }
+                        onClick={() => handleToggleSubscription(item.topic)}
+                        whileTap={!isToggling ? { scale: 0.95 } : {}}
+                      >
+                        {isToggling
+                          ? "..."
+                          : isSubscribed
+                            ? "Following"
+                            : "Follow"}
+                      </motion.button>
                       <motion.button
                         className={`h-12 w-full flex items-center justify-center gap-2 rounded-2xl text-base font-bold border transition-colors ${
                           isGenerating
@@ -505,6 +640,7 @@ function KidsDailyPage() {
                       <GeneratingOverlay
                         icon={item.icon}
                         topic={item.label}
+                        message={generationMessage}
                         onCancel={handleCancelGeneration}
                       />
                     )}
@@ -517,7 +653,8 @@ function KidsDailyPage() {
       </div>
 
       <div className="text-center pb-4 text-xs text-gray-500">
-        Pick any card and tap Listen — fresh stories every time. ✨
+        Following {subscribedCount} news club{subscribedCount === 1 ? "" : "s"}
+        . Pick any card and tap Listen — fresh stories every time. ✨
       </div>
     </div>
   );

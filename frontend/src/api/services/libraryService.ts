@@ -15,6 +15,7 @@ export interface LibraryItem {
   title: string
   preview: string
   image_url: string | null
+  thumbnail_url?: string | null
   audio_url: string | null
   created_at: string
   is_favorited: boolean
@@ -37,6 +38,13 @@ export interface LibraryResponse {
   total: number
   limit: number
   offset: number
+}
+
+export interface LibraryCountsResponse {
+  art_story_count: number
+  interactive_count: number
+  news_count: number
+  total: number
 }
 
 export interface FavoriteResponse {
@@ -70,6 +78,11 @@ export interface RichStatsResponse {
   streak_days: number
 }
 
+export interface RichStatsOptions {
+  childId?: string | null
+  parentDashboard?: boolean
+}
+
 // ---- API ----
 
 const LIBRARY_BASE = '/library'
@@ -85,6 +98,14 @@ export const libraryService = {
     offset?: number
   }): Promise<LibraryResponse> {
     const response = await apiClient.get<LibraryResponse>(LIBRARY_BASE, { params })
+    return response.data
+  },
+
+  /**
+   * GET /api/v1/library/counts — Profile stat counts from library-visible data
+   */
+  async getCounts(): Promise<LibraryCountsResponse> {
+    const response = await apiClient.get<LibraryCountsResponse>(`${LIBRARY_BASE}/counts`)
     return response.data
   },
 
@@ -126,9 +147,16 @@ export const libraryService = {
   /**
    * GET /api/v1/library/stats-rich — Rich growth dashboard metrics (#356)
    */
-  async getRichStats(groupBy: StatsGroupBy = 'week'): Promise<RichStatsResponse> {
+  async getRichStats(
+    groupBy: StatsGroupBy = 'week',
+    options: RichStatsOptions = {},
+  ): Promise<RichStatsResponse> {
     const response = await apiClient.get<RichStatsResponse>(`${LIBRARY_BASE}/stats-rich`, {
-      params: { group_by: groupBy },
+      params: {
+        group_by: groupBy,
+        ...(options.childId ? { child_id: options.childId } : {}),
+        ...(options.parentDashboard ? { parent_dashboard: true } : {}),
+      },
     })
     return response.data
   },

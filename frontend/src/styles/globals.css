@@ -692,6 +692,140 @@
   border: 1px solid rgba(167, 243, 208, 0.3);
 }
 
+.story-video-panel {
+  @apply rounded-xl p-4 sm:p-5 space-y-4;
+  background: rgba(255, 255, 255, 0.62);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(210, 190, 165, 0.28);
+  box-shadow: 0 10px 30px rgba(75, 85, 99, 0.08);
+}
+
+.story-video-panel-copy {
+  @apply space-y-1;
+}
+
+.story-video-eyebrow {
+  @apply text-xs font-bold uppercase tracking-wide text-secondary-dark;
+}
+
+.story-video-panel h2 {
+  @apply text-xl font-bold text-gray-800;
+  font-family: 'Georgia', 'Noto Serif SC', serif;
+}
+
+.story-video-actions {
+  @apply flex flex-col sm:flex-row gap-3;
+}
+
+.story-video-actions button {
+  @apply rounded-full;
+}
+
+.story-video-status {
+  @apply rounded-lg p-3 text-sm font-semibold space-y-2;
+  background: rgba(243, 244, 246, 0.74);
+  color: #374151;
+}
+
+.story-video-status.completed {
+  background: rgba(220, 252, 231, 0.78);
+  color: #166534;
+}
+
+.story-video-status.failed {
+  background: rgba(254, 242, 242, 0.82);
+  color: #991b1b;
+}
+
+.story-video-status p {
+  @apply text-xs font-medium;
+}
+
+.story-video-status button {
+  @apply text-xs font-bold underline underline-offset-4;
+}
+
+.story-video-progress {
+  @apply h-2 rounded-full overflow-hidden bg-white/80;
+}
+
+.story-video-progress div {
+  @apply h-full rounded-full bg-secondary transition-all duration-500;
+}
+
+.story-video-player {
+  @apply w-full rounded-lg bg-gray-900;
+  aspect-ratio: 16 / 9;
+}
+
+.dynamic-picture-book {
+  @apply space-y-3;
+}
+
+.picture-book-stage {
+  @apply grid gap-4 overflow-hidden rounded-lg p-4;
+  background: linear-gradient(135deg, rgba(255, 251, 235, 0.84), rgba(236, 253, 245, 0.72));
+  border: 1px solid rgba(210, 190, 165, 0.24);
+}
+
+@media (min-width: 768px) {
+  .picture-book-stage {
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+    align-items: stretch;
+  }
+}
+
+.picture-book-art {
+  @apply w-full h-full object-cover rounded-lg;
+  min-height: 15rem;
+  max-height: 24rem;
+}
+
+.picture-book-page {
+  @apply min-h-64 rounded-lg p-5 flex flex-col justify-center;
+  background: rgba(255, 255, 255, 0.62);
+  border: 1px solid rgba(255, 255, 255, 0.74);
+}
+
+.picture-book-kicker {
+  @apply text-xs font-bold uppercase tracking-wide text-primary-dark mb-2;
+}
+
+.picture-book-page h2 {
+  @apply text-2xl font-bold text-gray-800 mb-4;
+  font-family: 'Georgia', 'Noto Serif SC', serif;
+  overflow-wrap: break-word;
+}
+
+.picture-book-text {
+  @apply text-base leading-8 text-gray-700;
+  font-family: 'Georgia', 'Noto Serif SC', serif;
+}
+
+.picture-book-text p + p {
+  @apply mt-3;
+}
+
+.picture-book-controls {
+  @apply flex items-center justify-center gap-3;
+}
+
+.picture-book-controls button {
+  @apply inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/80 text-gray-700 shadow-sm transition-colors;
+}
+
+.picture-book-controls button:hover:not(:disabled) {
+  @apply bg-white text-primary;
+}
+
+.picture-book-controls button:disabled {
+  @apply cursor-not-allowed opacity-40;
+}
+
+.picture-book-controls span {
+  @apply min-w-12 text-center text-sm font-bold text-gray-500;
+}
+
 /* Book Container — warm parchment with soft edges, no harsh white */
 .book-container {
   @apply relative overflow-hidden;

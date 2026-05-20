@@ -5,6 +5,9 @@ import uuid
 
 import pytest
 
+from backend.src.api.models import EpisodeIllustration
+from backend.src.services.database import preference_repo, story_repo
+
 
 @pytest.mark.asyncio
 class TestKidsDailyEndpoints:
@@ -141,3 +144,122 @@ class TestKidsDailyEndpoints:
             payload = tracked.json()
             assert payload["status"] == "tracked"
             assert payload["topic_score"] > 0
+
+    async def test_subscribe_updates_kids_daily_preferences(self, test_client):
+        child_id = f"child-ms-{uuid.uuid4().hex[:8]}"
+
+        async with test_client as client:
+            response = await client.post(
+                "/api/v1/subscriptions",
+                json={"child_id": child_id, "topic": "space"},
+            )
+
+            assert response.status_code == 201
+
+        profile = await preference_repo.get_profile(child_id, user_id="test_user")
+        assert "space" in profile["themes"]
+        assert profile["kids_daily"]["topic_stats"]["space"]["subscribed"] == 1
+
+    async def test_listen_now_after_subscribe_saves_episode_and_memory(
+        self, test_client, monkeypatch
+    ):
+        child_id = f"child-ms-{uuid.uuid4().hex[:8]}"
+
+        async def fake_fetch_news_text(topic: str):
+            assert topic == "science"
+            return "Science headline: students found a gentle way to clean rivers."
+
+        async def fake_generate_episode(**kwargs):
+            assert kwargs["category"] == "science"
+            return {
+                "kid_title": "River Helpers",
+                "kid_content": "Kids learned how cleaner rivers help plants and animals.",
+                "why_care": "Clean water keeps neighborhoods healthy.",
+                "key_concepts": [{"term": "clean water", "explanation": "Water without trash", "emoji": "water"}],
+                "interactive_questions": [],
+                "dialogue_script": {
+                    "lines": [
+                        {
+                            "role": "curious_kid",
+                            "text": "What happened?",
+                            "timestamp_start": 0.0,
+                            "timestamp_end": 2.0,
+                        },
+                        {
+                            "role": "fun_expert",
+                            "text": "Students helped a river stay clean.",
+                            "timestamp_start": 2.0,
+                            "timestamp_end": 5.0,
+                        },
+                    ],
+                    "total_duration": 5.0,
+                },
+                "safety_score": 0.95,
+                "used_mock": False,
+            }
+
+        async def fake_audio(*args, **kwargs):
+            return {}
+
+        async def fake_illustrations(*args, **kwargs):
+            return [
+                EpisodeIllustration(
+                    url="/data/uploads/fake.svg",
+                    description="A cheerful river scene",
+                    display_order=0,
+                    animation_type="pan",
+                )
+            ]
+
+        monkeypatch.setattr(
+            "backend.src.api.routes.kids_daily.fetch_news_text",
+            fake_fetch_news_text,
+        )
+        monkeypatch.setattr(
+            "backend.src.api.routes.kids_daily.generate_kids_daily_episode",
+            fake_generate_episode,
+        )
+        monkeypatch.setattr(
+            "backend.src.api.routes.kids_daily.generate_multi_speaker_audio",
+            fake_audio,
+        )
+        monkeypatch.setattr(
+            "backend.src.api.routes.kids_daily._generate_illustrations",
+            fake_illustrations,
+        )
+
+        async with test_client as client:
+            sub = await client.post(
+                "/api/v1/subscriptions",
+                json={"child_id": child_id, "topic": "science"},
+            )
+            assert sub.status_code == 201
+
+            response = await client.post(
+                "/api/v1/kids-daily/generate-now",
+                json={
+                    "child_id": child_id,
+                    "age_group": "6-8",
+                    "category": "science",
+                },
+            )
+
+            assert response.status_code == 200
+            data = response.json()
+            episode_id = data["episode"]["episode_id"]
+
+            saved = await story_repo.get_by_id(episode_id)
+            assert saved is not None
+            assert saved["story_type"] == "kids_daily"
+            assert saved["analysis"]["source"] == "on_demand"
+
+            library = await client.get(
+                "/api/v1/library",
+                params={"type": "kids-daily", "limit": 100},
+            )
+            assert library.status_code == 200
+            assert episode_id in [item["id"] for item in library.json()["items"]]
+
+        profile = await preference_repo.get_profile(child_id, user_id="test_user")
+        assert "science" in profile["themes"]
+        assert "clean water" in profile["concepts"]

@@ -34,9 +34,10 @@ from ...services.database import session_repo, story_repo, preference_repo, char
 from ...services.tts_service import generate_story_audio_file
 from ...services.user_service import UserData
 from ...services.provenance_tracker import ProvenanceTracker
+from ...services.database.artifact_repository import ArtifactCharacterLinkRepository
 from ...services.models.artifact_models import (
     ArtifactType, WorkflowType, StoryArtifactRole,
-    ArtifactMetadata,
+    ArtifactMetadata, ArtifactCharacterLinkCreate,
 )
 from ...agents.interactive_story_agent import (
     generate_story_opening,
@@ -235,7 +236,7 @@ async def start_interactive_story(
         # --- Provenance tracking (Issue #138) ---
         try:
             run_id = await tracker.start_run(
-                session.session_id, WorkflowType.INTERACTIVE_STORY,
+                None, WorkflowType.INTERACTIVE_STORY,
                 session_id=session.session_id,
             )
             step_id = await tracker.start_step(
@@ -446,7 +447,7 @@ async def start_interactive_story_stream(
                     # --- Provenance tracking (Issue #138) ---
                     try:
                         run_id = await tracker.start_run(
-                            session.session_id, WorkflowType.INTERACTIVE_STORY,
+                            None, WorkflowType.INTERACTIVE_STORY,
                             session_id=session.session_id,
                         )
                         step_id = await tracker.start_step(
@@ -629,7 +630,7 @@ async def choose_story_branch_stream(
                     # --- Provenance tracking (Issue #138) ---
                     try:
                         run_id = await tracker.start_run(
-                            session_id, WorkflowType.INTERACTIVE_STORY,
+                            None, WorkflowType.INTERACTIVE_STORY,
                             session_id=session_id,
                         )
                         step_id = await tracker.start_step(
@@ -826,7 +827,7 @@ async def choose_story_branch(
         segment_number = len(session.segments) + 1
         try:
             run_id = await tracker.start_run(
-                session_id, WorkflowType.INTERACTIVE_STORY,
+                None, WorkflowType.INTERACTIVE_STORY,
                 session_id=session_id,
             )
             step_id = await tracker.start_step(
@@ -1292,6 +1293,7 @@ async def save_interactive_story(
             logger.debug("store_story_embedding skipped (non-critical)", exc_info=True)
 
         # Sync detected characters to characters table (#160, #289)
+        saved_character_rows = []
         for char_data in story_data.get("characters", []):
             try:
                 name = char_data.get("character_name") or char_data.get("name", "")
@@ -1315,7 +1317,7 @@ async def save_interactive_story(
                             traits = raw_traits
                         elif isinstance(raw_traits, str):
                             traits = [t.strip() for t in raw_traits.split(",") if t.strip()]
-                    await character_repo.upsert_character(
+                    character_row = await character_repo.upsert_character(
                         user_id=user.user_id,
                         child_id=session.child_id,
                         name=name,
@@ -1323,6 +1325,8 @@ async def save_interactive_story(
                         visual_features=visual_features,
                         traits=traits,
                     )
+                    if character_row:
+                        saved_character_rows.append(character_row)
             except Exception:
                 pass  # Non-critical
 
@@ -1356,6 +1360,24 @@ async def save_interactive_story(
             art_repo = tracker._artifact_repo
             await art_repo.update_lifecycle_state(text_artifact_id, "candidate")
             await art_repo.update_lifecycle_state(text_artifact_id, "published")
+            await tracker.link_to_story(
+                story_id, text_artifact_id, StoryArtifactRole.STORY_TEXT,
+            )
+
+            character_link_repo = ArtifactCharacterLinkRepository(db_manager)
+            for idx, character_row in enumerate(saved_character_rows):
+                character_id = character_row.get("id")
+                if not character_id:
+                    continue
+                await character_link_repo.upsert(
+                    ArtifactCharacterLinkCreate(
+                        artifact_id=text_artifact_id,
+                        character_id=character_id,
+                        story_id=story_id,
+                        relationship="features",
+                        role="main_character" if idx == 0 else "supporting_character",
+                    )
+                )
 
             # Link audio artifacts from segments if available
             for seg in session.segments:

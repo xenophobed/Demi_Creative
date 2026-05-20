@@ -45,6 +45,11 @@ from .hub_reaction_repository import (
     hub_reaction_repo,
     ReactionData,
 )
+from .achievement_repository import (
+    AchievementRepository,
+    AchievementData,
+    achievement_repo,
+)
 
 __all__ = [
     "CursorResult",
@@ -94,4 +99,7 @@ __all__ = [
     "HubReactionRepository",
     "hub_reaction_repo",
     "ReactionData",
+    "AchievementRepository",
+    "AchievementData",
+    "achievement_repo",
 ]

@@ -341,6 +341,7 @@ if os.getenv("STORAGE_BACKEND", "local").lower() != "supabase":
 from .api.routes import (
     admin_artifacts,
     admin_hub,
+    achievements,
     agents,
     artifacts,
     audio,
@@ -374,6 +375,7 @@ app.include_router(subscriptions.router)
 app.include_router(artifacts.router)
 app.include_router(admin_artifacts.router)
 app.include_router(admin_hub.router)
+app.include_router(achievements.router)
 app.include_router(library.router)
 app.include_router(memory.router)
 app.include_router(usage.router)

@@ -2,18 +2,29 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
+import { BookOpen, Film } from "lucide-react";
 import Button from "@/components/common/Button";
 import Loading from "@/components/common/Loading";
 import AgeAwareContent from "@/components/common/AgeAwareContent";
 import BookContainer from "@/components/story/BookContainer";
+import DynamicPictureBook from "@/components/story/DynamicPictureBook";
 import StoryDisplay from "@/components/story/StoryDisplay";
 import TabbedMetadata from "@/components/story/TabbedMetadata";
 import useStoryStore from "@/store/useStoryStore";
 import useChildStore from "@/store/useChildStore";
 import useAuthStore from "@/store/useAuthStore";
 import storyService from "@/api/services/storyService";
+import videoService from "@/api/services/videoService";
+import type { VideoStatus } from "@/types/api";
 import { resolveMediaUrl } from "@/utils/mediaUrl";
 import ShareToHubModal from "@/components/hub/ShareToHubModal";
+
+type StoryVideoUiState =
+  | "idle"
+  | "queued"
+  | "generating"
+  | "completed"
+  | "failed";
 
 function deriveStoryTitleFromText(storyText: string | undefined): string {
   if (!storyText) return "Your Story";
@@ -69,6 +80,12 @@ function StoryPage() {
   // On-demand audio state (for 9-12 age group)
   const [onDemandAudioUrl, setOnDemandAudioUrl] = useState<string | null>(null);
   const [isAudioGenerating, setIsAudioGenerating] = useState(false);
+  const [videoJobId, setVideoJobId] = useState<string | null>(null);
+  const [videoStatus, setVideoStatus] = useState<StoryVideoUiState>("idle");
+  const [videoProgress, setVideoProgress] = useState(0);
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [videoError, setVideoError] = useState<string | null>(null);
+  const [showPictureBook, setShowPictureBook] = useState(false);
 
   // Only use currentStory if it matches the URL's storyId
   const currentUserId = user?.user_id ?? "anonymous";
@@ -110,6 +127,90 @@ function StoryPage() {
       setIsAudioGenerating(false);
     }
   }, [story, isAudioGenerating]);
+
+  const applyProviderStatus = useCallback(
+    (status: VideoStatus): StoryVideoUiState => {
+      if (status === "pending") return "queued";
+      if (status === "processing") return "generating";
+      if (status === "completed") return "completed";
+      return "failed";
+    },
+    [],
+  );
+
+  const handleStartVideo = useCallback(async () => {
+    if (!story || videoStatus === "queued" || videoStatus === "generating") return;
+
+    setVideoStatus("queued");
+    setVideoProgress(0);
+    setVideoUrl(null);
+    setVideoError(null);
+    setShowPictureBook(false);
+
+    try {
+      const result = await videoService.generateVideo({
+        story_id: story.story_id,
+        style: "storybook",
+        include_audio: Boolean(story.audio_url || onDemandAudioUrl),
+        duration_seconds: 10,
+      });
+
+      setVideoJobId(result.job_id);
+      setVideoStatus(applyProviderStatus(result.status));
+
+      if (result.status === "completed") {
+        const completed = await videoService.getVideoStatus(result.job_id);
+        setVideoProgress(completed.progress_percent ?? 100);
+        setVideoError(completed.error_message ?? null);
+        if (completed.video_url) {
+          setVideoUrl(resolveMediaUrl(completed.video_url));
+        }
+      }
+    } catch (err) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Video generation is unavailable right now.";
+      setVideoJobId(null);
+      setVideoStatus("failed");
+      setVideoError(message);
+    }
+  }, [applyProviderStatus, onDemandAudioUrl, story, videoStatus]);
+
+  useEffect(() => {
+    if (!videoJobId || !["queued", "generating"].includes(videoStatus)) return;
+
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const result = await videoService.getVideoStatus(videoJobId);
+        if (cancelled) return;
+
+        setVideoStatus(applyProviderStatus(result.status));
+        setVideoProgress(result.progress_percent ?? 0);
+        setVideoError(result.error_message ?? null);
+        if (result.video_url) {
+          setVideoUrl(resolveMediaUrl(result.video_url));
+        }
+      } catch (err) {
+        if (cancelled) return;
+        const message =
+          err instanceof Error
+            ? err.message
+            : "We could not check the video status.";
+        setVideoStatus("failed");
+        setVideoError(message);
+      }
+    };
+
+    void poll();
+    const interval = window.setInterval(poll, 5000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [applyProviderStatus, videoJobId, videoStatus]);
 
   const handleNewStory = () => {
     reset();
@@ -239,6 +340,82 @@ function StoryPage() {
           </BookContainer>
         }
       />
+
+      <motion.section
+        className="story-video-panel"
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.2 }}
+        aria-label="Story video generation"
+      >
+        <div className="story-video-panel-copy">
+          <p className="story-video-eyebrow">Story movie</p>
+          <h2>Turn this story into a little video</h2>
+        </div>
+
+        <div className="story-video-actions">
+          <Button
+            variant="secondary"
+            size="md"
+            onClick={handleStartVideo}
+            isLoading={videoStatus === "queued" || videoStatus === "generating"}
+            leftIcon={<Film size={18} aria-hidden="true" />}
+          >
+            {videoStatus === "completed" ? "Make Again" : "Make Video"}
+          </Button>
+          <Button
+            variant="outline"
+            size="md"
+            onClick={() => setShowPictureBook((current) => !current)}
+            leftIcon={<BookOpen size={18} aria-hidden="true" />}
+          >
+            {showPictureBook ? "Hide Picture Book" : "Picture Book"}
+          </Button>
+        </div>
+
+        {videoStatus !== "idle" && (
+          <div className={`story-video-status ${videoStatus}`} role="status">
+            <span>
+              {videoStatus === "queued" && "Queued for video magic"}
+              {videoStatus === "generating" && "Making your story video"}
+              {videoStatus === "completed" && "Your video is ready"}
+              {videoStatus === "failed" && "Video is not available right now"}
+            </span>
+            {(videoStatus === "queued" || videoStatus === "generating") && (
+              <div
+                className="story-video-progress"
+                aria-label={`Video generation ${videoProgress}% complete`}
+              >
+                <div style={{ width: `${Math.max(videoProgress, 8)}%` }} />
+              </div>
+            )}
+            {videoError && <p>{videoError}</p>}
+            {videoStatus === "failed" && (
+              <button type="button" onClick={() => setShowPictureBook(true)}>
+                Open picture-book mode
+              </button>
+            )}
+          </div>
+        )}
+
+        {videoStatus === "completed" && videoUrl && (
+          <video
+            className="story-video-player"
+            src={videoUrl}
+            controls
+            playsInline
+            preload="metadata"
+          />
+        )}
+
+        {showPictureBook && (
+          <DynamicPictureBook
+            story={story.story}
+            title={storyTitle || `Story #${story.story_id.slice(0, 6)}`}
+            imageUrl={imageUrl}
+          />
+        )}
+      </motion.section>
 
       {/* Tabbed metadata section */}
       <TabbedMetadata

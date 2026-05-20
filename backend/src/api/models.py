@@ -1161,7 +1161,7 @@ class RichStatsPeriod(BaseModel):
 class RichStatsResponse(BaseModel):
     """Rich growth dashboard stats (#356)."""
     periods: List[RichStatsPeriod] = Field(..., description="Per-period growth metrics")
-    streak_days: int = Field(0, description="Current consecutive creation days")
+    streak_days: int = Field(0, description="Deprecated compatibility field; always 0")
 
 
 class PaginatedNewsResponse(BaseModel):

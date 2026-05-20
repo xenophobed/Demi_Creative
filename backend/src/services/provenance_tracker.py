@@ -73,7 +73,7 @@ class ProvenanceTracker:
 
     async def start_run(
         self,
-        story_id: str,
+        story_id: Optional[str],
         workflow_type: WorkflowType,
         session_id: Optional[str] = None,
     ) -> str:

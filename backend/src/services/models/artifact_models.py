@@ -69,6 +69,7 @@ class WorkflowType(str, Enum):
     IMAGE_TO_STORY = "image_to_story"
     INTERACTIVE_STORY = "interactive_story"
     KIDS_DAILY = "kids_daily"
+    MORNING_SHOW = "morning_show"
 
 
 class AgentStepStatus(str, Enum):
@@ -377,6 +378,41 @@ class StoryArtifactLinkCreate(BaseModel):
     })
 
 
+class ArtifactCharacterLink(BaseModel):
+    """
+    Associates a generated artifact with a character memory record.
+
+    This is used for story text provenance so recurring characters can be
+    traced back to the artifact that introduced or featured them.
+    """
+    link_id: str = Field(..., description="Unique UUID identifier")
+    artifact_id: str = Field(..., description="Artifact UUID")
+    character_id: int = Field(..., description="Characters table row id")
+    story_id: Optional[str] = Field(None, description="Story UUID, when applicable")
+    relationship: str = Field(
+        default="features", description="Relationship between artifact and character"
+    )
+    role: Optional[str] = Field(None, description="Character role in the artifact")
+    created_at: datetime = Field(..., description="Creation timestamp")
+
+    @field_validator("created_at", mode="before")
+    @classmethod
+    def parse_datetime(cls, v):
+        """Parse ISO 8601 datetime strings"""
+        if isinstance(v, str):
+            return datetime.fromisoformat(v.replace("Z", "+00:00"))
+        return v
+
+
+class ArtifactCharacterLinkCreate(BaseModel):
+    """Input model for linking an artifact to a character record."""
+    artifact_id: str
+    character_id: int
+    story_id: Optional[str] = None
+    relationship: str = "features"
+    role: Optional[str] = None
+
+
 # ============================================================================
 # Run and Agent Step Models
 # ============================================================================
@@ -387,7 +423,7 @@ class Run(BaseModel):
     Tracks a generation run (image→story, branching narrative, etc).
     """
     run_id: str = Field(..., description="Unique UUID identifier")
-    story_id: str = Field(..., description="Story UUID")
+    story_id: Optional[str] = Field(None, description="Story UUID")
     session_id: Optional[str] = Field(
         None, description="Session UUID (for interactive stories)"
     )
@@ -425,7 +461,7 @@ class RunCreate(BaseModel):
     """
     Input model for creating runs.
     """
-    story_id: str
+    story_id: Optional[str] = None
     session_id: Optional[str] = None
     workflow_type: WorkflowType
 
@@ -691,6 +727,9 @@ class StoryLineage(BaseModel):
     )
     story_artifacts: List[StoryArtifactLink] = Field(
         default_factory=list, description="Direct story-artifact links"
+    )
+    character_links: List[ArtifactCharacterLink] = Field(
+        default_factory=list, description="Artifact-to-character provenance links"
     )
     total_artifacts: int = Field(default=0, description="Total artifacts across all runs")
     total_runs: int = Field(default=0, description="Total runs for this story")

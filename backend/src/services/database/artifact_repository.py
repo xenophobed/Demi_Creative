@@ -20,6 +20,7 @@ from typing import Optional, List, Dict, Any
 from .connection import DatabaseManager
 from ...services.models.artifact_models import (
     Artifact, ArtifactCreate, ArtifactRelation, ArtifactRelationCreate,
+    ArtifactCharacterLink, ArtifactCharacterLinkCreate,
     StoryArtifactLink, StoryArtifactLinkCreate, Run, RunCreate,
     AgentStep, AgentStepCreate, AgentStepComplete, RunArtifactLink,
     RunArtifactLinkCreate, ArtifactLineage, RunWithArtifacts,
@@ -1036,6 +1037,136 @@ class StoryArtifactLinkRepository:
 
 
 # ============================================================================
+# Artifact Character Link Repository
+# ============================================================================
+
+class ArtifactCharacterLinkRepository:
+    """Repository for artifact-to-character provenance links."""
+
+    def __init__(self, db: DatabaseManager):
+        self.db = db
+
+    async def upsert(self, link_data: ArtifactCharacterLinkCreate) -> str:
+        """Create or update a link between an artifact and a character row."""
+        artifact = await self.db.fetchone(
+            "SELECT artifact_id FROM artifacts WHERE artifact_id = ?",
+            (link_data.artifact_id,),
+        )
+        if not artifact:
+            raise ValueError(f"Artifact {link_data.artifact_id} not found")
+
+        character = await self.db.fetchone(
+            "SELECT id FROM characters WHERE id = ?",
+            (link_data.character_id,),
+        )
+        if not character:
+            raise ValueError(f"Character {link_data.character_id} not found")
+
+        if link_data.story_id:
+            story = await self.db.fetchone(
+                "SELECT story_id FROM stories WHERE story_id = ?",
+                (link_data.story_id,),
+            )
+            if not story:
+                raise ValueError(f"Story {link_data.story_id} not found")
+
+        existing = await self.db.fetchone(
+            """
+            SELECT link_id FROM artifact_character_links
+            WHERE artifact_id = ? AND character_id = ? AND relationship = ?
+            """,
+            (
+                link_data.artifact_id,
+                link_data.character_id,
+                link_data.relationship,
+            ),
+        )
+
+        if existing:
+            await self.db.execute(
+                """
+                UPDATE artifact_character_links
+                SET story_id = ?, role = ?
+                WHERE link_id = ?
+                """,
+                (link_data.story_id, link_data.role, existing["link_id"]),
+            )
+            await self.db.commit()
+            return existing["link_id"]
+
+        link_id = str(uuid.uuid4())
+        now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+        await self.db.execute(
+            """
+            INSERT INTO artifact_character_links (
+                link_id, artifact_id, character_id, story_id,
+                relationship, role, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                link_id,
+                link_data.artifact_id,
+                link_data.character_id,
+                link_data.story_id,
+                link_data.relationship,
+                link_data.role,
+                now,
+            ),
+        )
+        await self.db.commit()
+        return link_id
+
+    async def list_by_artifact(self, artifact_id: str) -> List[ArtifactCharacterLink]:
+        """List character links for an artifact."""
+        rows = await self.db.fetchall(
+            """
+            SELECT * FROM artifact_character_links
+            WHERE artifact_id = ?
+            ORDER BY created_at ASC
+            """,
+            (artifact_id,),
+        )
+        return [self._row_to_link(row) for row in rows]
+
+    async def list_by_story(self, story_id: str) -> List[ArtifactCharacterLink]:
+        """List character links associated with a story."""
+        rows = await self.db.fetchall(
+            """
+            SELECT * FROM artifact_character_links
+            WHERE story_id = ?
+            ORDER BY created_at ASC
+            """,
+            (story_id,),
+        )
+        return [self._row_to_link(row) for row in rows]
+
+    async def list_by_character(self, character_id: int) -> List[ArtifactCharacterLink]:
+        """List artifact links for a character record."""
+        rows = await self.db.fetchall(
+            """
+            SELECT * FROM artifact_character_links
+            WHERE character_id = ?
+            ORDER BY created_at ASC
+            """,
+            (character_id,),
+        )
+        return [self._row_to_link(row) for row in rows]
+
+    def _row_to_link(self, row: Dict[str, Any]) -> ArtifactCharacterLink:
+        """Convert database row to ArtifactCharacterLink model."""
+        return ArtifactCharacterLink(
+            link_id=row["link_id"],
+            artifact_id=row["artifact_id"],
+            character_id=row["character_id"],
+            story_id=row["story_id"],
+            relationship=row["relationship"],
+            role=row["role"],
+            created_at=row["created_at"],
+        )
+
+
+# ============================================================================
 # Run Repository
 # ============================================================================
 
@@ -1152,6 +1283,23 @@ class RunRepository:
             ORDER BY created_at DESC
             """,
             (story_id,),
+        )
+
+        return [self._row_to_run(row) for row in results]
+
+    async def list_by_session(self, session_id: str) -> List[Run]:
+        """
+        List all runs for an interactive story session.
+
+        Session-scoped runs may exist before a final story row is saved.
+        """
+        results = await self.db.fetchall(
+            """
+            SELECT * FROM runs
+            WHERE session_id = ?
+            ORDER BY created_at DESC
+            """,
+            (session_id,),
         )
 
         return [self._row_to_run(row) for row in results]

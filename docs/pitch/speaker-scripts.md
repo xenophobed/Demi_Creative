@@ -142,9 +142,9 @@
 >
 > *When a child sends a message, the proxy receives it first. The proxy orchestrates everything — it routes the intent using a mix of deterministic rules and LLM disambiguation.*
 >
-> *[point at the four specialists in the middle]*
+> *[point at the specialists and tools in the middle]*
 >
-> *Then it hands off to one of four specialists. Image story, interactive story, kids daily, or audio narration. Each one has its own prompt, its own tools, and its own skill set.*
+> *Then it hands off to the right capability. Image story, interactive story, and Kids Daily are product specialists; audio narration is a reusable TTS tool. Each one has its own prompt or typed interface, its own tools, and its own skill set.*
 >
 > *[point at safety_review at the bottom — pause briefly]*
 >
@@ -152,7 +152,7 @@
 >
 > *[point at the shared context bus underneath]*
 >
-> *And underneath all of it — the shared context. Persona, child ID, recurring characters — they all flow to every agent. So Lightning the puppy in the story is the same Lightning in the podcast. The character continuity is built in at the architecture level.*
+> *And underneath all of it is shared context. Persona, tone, style, skills, topics, goals, child ID, age, and recurring characters all flow through the same orchestration path. So Lightning the puppy in the story is the same Lightning in the podcast. The character continuity is built in at the architecture level through character memory and vector recall.*
 >
 > *This unlocks three things. We're responsive — the right specialist runs in milliseconds. We're dynamic — different experience per turn, without changing the chat surface. And we're A2A extensible — adding a new specialist takes one AgentDefinition."*
 
@@ -262,7 +262,7 @@
 >
 > *Once you register it, the routing picks it up automatically. The proxy's intent classifier reads the specialist's description and learns what trigger phrases route to it.*
 >
-> *The safety gate runs on every reply, no matter which specialist generated it. And the shared context — persona, child ID, recurring characters — flows in to the new specialist just like the others.*
+> *The safety gate runs on every reply, no matter which specialist generated it. And the shared context — persona, tone, child ID, age, and recurring characters — flows in to the new specialist just like the others.*
 >
 > *And in the future, we'll add an A2A bridge. That lets external agent teams join the buddy's world, using exactly the same contract."*
 

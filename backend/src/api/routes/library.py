@@ -220,6 +220,63 @@ def _sort_items(items: List[LibraryItem], sort: LibrarySortOrder) -> None:
         items.sort(key=lambda x: x.created_at, reverse=True)
 
 
+async def _get_visible_library_counts(user_id: str) -> dict[str, int]:
+    """Return counts using the same type and safety rules as library browsing."""
+    stories = await story_repo.list_by_user(user_id, limit=10000, offset=0)
+    art_story_count = 0
+    news_count = 0
+
+    for story in stories:
+        item_type = _resolve_story_type(story)
+        if item_type not in (LibraryItemType.ART_STORY, LibraryItemType.KIDS_DAILY):
+            continue
+        if (
+            story.get("safety_score") is not None
+            and story["safety_score"] < SAFETY_THRESHOLD
+        ):
+            continue
+        if item_type == LibraryItemType.KIDS_DAILY:
+            news_count += 1
+        else:
+            art_story_count += 1
+
+    sessions = await session_repo.list_by_user(user_id, limit=10000, offset=0)
+    interactive_count = len(sessions)
+
+    return {
+        "art_story_count": art_story_count,
+        "interactive_count": interactive_count,
+        "news_count": news_count,
+        "total": art_story_count + interactive_count + news_count,
+    }
+
+
+async def _ensure_owned_child_scope(user: UserData, child_id: Optional[str]) -> None:
+    """Ensure a requested child profile belongs to the current account."""
+    if not child_id:
+        return
+
+    if getattr(user, "default_child_id", None) == child_id:
+        return
+
+    owned = await db_manager.fetchone(
+        """
+        SELECT 1 FROM stories WHERE user_id = ? AND child_id = ?
+        UNION
+        SELECT 1 FROM sessions WHERE user_id = ? AND child_id = ?
+        LIMIT 1
+        """,
+        (user.user_id, child_id, user.user_id, child_id),
+    )
+    if owned:
+        return
+
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="Child profile not found",
+    )
+
+
 # ============================================================================
 # GET /api/v1/library — Unified library endpoint (#58)
 # ============================================================================
@@ -330,6 +387,24 @@ async def get_library(
 
 
 # ============================================================================
+# GET /api/v1/library/counts — Profile stat counts (#524)
+# ============================================================================
+
+
+@router.get(
+    "/counts",
+    responses={401: {"model": ErrorResponse}},
+    summary="Get library-visible counts",
+    description="Returns profile stat counts using library type and safety rules",
+)
+async def get_library_counts(
+    user: UserData = Depends(get_current_user),
+):
+    """Return counts for profile stat cards, kept in sync with My Library."""
+    return await _get_visible_library_counts(user.user_id)
+
+
+# ============================================================================
 # GET /api/v1/library/stats — Creation stats endpoint (#133)
 # ============================================================================
 
@@ -402,14 +477,31 @@ async def get_rich_stats(
     group_by: LibraryStatsGroupBy = Query(
         LibraryStatsGroupBy.WEEK, description="Group by week or month"
     ),
+    child_id: Optional[str] = Query(
+        None, description="Optional child profile scope for parent dashboard views"
+    ),
+    parent_dashboard: bool = Query(
+        False, description="Require parent role for parent-facing dashboard entrypoint"
+    ),
     user: UserData = Depends(get_current_user),
 ):
     """Rich growth metrics aggregated per time period (#356).
 
     Uses existing DB data — no schema changes needed.
     """
+    if parent_dashboard and getattr(user, "role", "child") != "parent":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Parent dashboard requires parent role",
+        )
+
+    await _ensure_owned_child_scope(user, child_id)
+
     fmt = "%Y-%m" if group_by == LibraryStatsGroupBy.MONTH else "%Y-W%W"
     period_expr = date_format_sql("created_at", fmt, db_manager.dialect)
+    child_filter = " AND child_id = ?" if child_id else ""
+    story_params = (user.user_id, child_id) if child_id else (user.user_id,)
+    session_params = (user.user_id, child_id) if child_id else (user.user_id,)
 
     # 1) Stories: count, word_count sum, themes, story_type per period
     stories_query = f"""
@@ -420,11 +512,11 @@ async def get_rich_stats(
             GROUP_CONCAT(themes, '||') AS all_themes,
             GROUP_CONCAT(story_type, '||') AS all_types
         FROM stories
-        WHERE user_id = ?
+        WHERE user_id = ?{child_filter}
         GROUP BY period
         ORDER BY period
     """
-    story_rows = await db_manager.fetchall(stories_query, (user.user_id,))
+    story_rows = await db_manager.fetchall(stories_query, story_params)
 
     # 2) Sessions: count, completed count per period
     sessions_query = f"""
@@ -433,11 +525,11 @@ async def get_rich_stats(
             COUNT(*) AS total_sessions,
             SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS completed_sessions
         FROM sessions
-        WHERE user_id = ?
+        WHERE user_id = ?{child_filter}
         GROUP BY period
         ORDER BY period
     """
-    session_rows = await db_manager.fetchall(sessions_query, (user.user_id,))
+    session_rows = await db_manager.fetchall(sessions_query, session_params)
 
     # Build lookup from sessions
     session_map: dict = {}
@@ -512,34 +604,8 @@ async def get_rich_stats(
             story_type_breakdown={"interactive": sess["total_sessions"]},
         )
 
-    # 3) Streak: consecutive days with any creation (from daily_usage)
-    streak_query = """
-        SELECT DISTINCT usage_date
-        FROM daily_usage
-        WHERE user_id = ? AND count > 0
-        ORDER BY usage_date DESC
-    """
-    usage_rows = await db_manager.fetchall(streak_query, (user.user_id,))
-
-    streak = 0
-    if usage_rows:
-        from datetime import date, timedelta
-
-        today = date.today()
-        expected = today
-        for row in usage_rows:
-            try:
-                d = date.fromisoformat(row["usage_date"])
-            except (ValueError, TypeError):
-                break
-            if d == expected:
-                streak += 1
-                expected = d - timedelta(days=1)
-            elif d < expected:
-                break
-
     sorted_periods = sorted(all_periods.values(), key=lambda x: x.period)
-    return RichStatsResponse(periods=sorted_periods, streak_days=streak)
+    return RichStatsResponse(periods=sorted_periods, streak_days=0)
 
 
 # ============================================================================

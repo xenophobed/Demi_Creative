@@ -326,9 +326,9 @@ One agent hit a ceiling. Branching stories, news podcasts, per-reply safety — 
 
 When a child sends a message, the proxy receives it first. The proxy orchestrates everything — it routes the intent using a mix of deterministic rules and LLM disambiguation.
 
-[point at the four specialists in the middle]
+[point at the specialists and tools in the middle]
 
-Then it hands off to one of four specialists. Image story, interactive story, kids daily, or audio narration. Each one has its own prompt, its own tools, and its own skill set.
+Then it hands off to the right capability. Image story, interactive story, and Kids Daily are product specialists; audio narration is a reusable TTS tool. Each one has its own prompt or typed interface, its own tools, and its own skill set.
 
 [point at safety_review at the bottom — pause briefly]
 
@@ -336,7 +336,7 @@ But here's the part that earns the trust. Every reply passes through safety revi
 
 [point at the shared context bus underneath]
 
-And underneath all of it — the shared context. Persona, child ID, recurring characters — they all flow to every agent. So Lightning the puppy in the story is the same Lightning in the podcast. The character continuity is built in at the architecture level.
+And underneath all of it is shared context. Persona, tone, style, skills, topics, goals, child ID, age, and recurring characters all flow through the same orchestration path. So Lightning the puppy in the story is the same Lightning in the podcast. The character continuity is built in at the architecture level through character memory and vector recall.
 
 This unlocks three things. We're responsive — the right specialist runs in milliseconds. We're dynamic — different experience per turn, without changing the chat surface. And we're A2A extensible — adding a new specialist takes one AgentDefinition."
 
@@ -527,7 +527,7 @@ You give it a model — Haiku for speed. You give it a system prompt — that's 
 
 Once you register it, the routing picks it up automatically. The proxy's intent classifier reads the specialist's description and learns what trigger phrases route to it.
 
-The safety gate runs on every reply, no matter which specialist generated it. And the shared context — persona, child ID, recurring characters — flows in to the new specialist just like the others.
+The safety gate runs on every reply, no matter which specialist generated it. And the shared context — persona, tone, child ID, age, and recurring characters — flows in to the new specialist just like the others.
 
 And in the future, we'll add an A2A bridge. That lets external agent teams join the buddy's world, using exactly the same contract."
 
@@ -583,7 +583,7 @@ And here's the thing I want you to remember about us — we don't just pitch fea
 
 "So where are we today?
 
-Two hundred and seventy-two stories shipped across three milestones. Phase one — the MVP single-agent — done. Phase two — the multi-agent team plus community — done. Phase three — video and the parent dashboard — in design.
+Two hundred and ninety-two tracked work items across the product backlog. Phase one — the MVP single-agent — done. Phase two — the multi-agent team plus community — done. Phase three — video, parent dashboard, and achievement surfaces — moving into build.
 
 Engineering rigor matters to us as much as features do.
 
@@ -632,7 +632,7 @@ Most pitches hide their bugs. We name ours."
 # Why this matters
 
 - **Agentic from day one** — not a wrapper, not a prompt. Real SDK, real tools, real orchestration.
-- **272 stories shipped** across 3 milestones — *execution proof*
+- **292 tracked work items** across shipped and planned milestones — *execution proof*
 - **Programmatic safety on every reply** — non-negotiable, code-enforced, not vibes
 - **Community that protects child PII at the schema level** — COPPA by construction
 - **A buddy that grows with the child** — character continuity across image, story, podcast, share
@@ -649,7 +649,7 @@ Most pitches hide their bugs. We name ours."
 
 We're agentic from day one. This isn't a wrapper, it isn't just a prompt. It's a real SDK, with real tools, and real orchestration underneath.
 
-We've shipped two hundred seventy-two stories across three milestones — that's our execution proof.
+We've tracked two hundred ninety-two work items across shipped and planned milestones — that's our execution proof.
 
 We have programmatic safety on every reply — non-negotiable, code-enforced. No vibes.
 
@@ -677,9 +677,9 @@ I'd love to take any questions you have."
 |---|---|
 | **Agent** | `AgentDefinition(model="haiku", system_prompt=..., tools=[...], enabled_skills=[...])` — one specialist w/ a curated capability set |
 | **Subagent** | An agent registered under the proxy's `agents=` dict · invoked via the SDK's `Agent` tool delegation |
-| **Agent team** | Proxy + 4 subagents (image_story · interactive_story · kids_daily · audio_narration) + safety_review · all share the context bus |
+| **Agent team** | Proxy + 3 product subagents (image_story · interactive_story · kids_daily) + audio_narration tool + safety_review · all share the context bus |
 | **Orchestrator** | The proxy ("My Agent") — routes intent · composes specialist outputs · runs safety_review on every reply |
-| **Why this shape** | Bigger prompt → quality degrades w/ specialty count · prompt chaining → no shared state · agent team → shared context + parallel specialty + A2A extensibility |
+| **Why this shape** | Bigger prompt → quality degrades w/ specialty count · prompt chaining → no shared state · agent team → shared context + parallel specialty + future A2A extensibility |
 | **SDK** | `claude_agent_sdk` — `ClaudeSDKClient` + `AgentDefinition`s + custom MCP servers via `@tool` |
 | **Intent routing** | `_classify_intent(utterance, age)` — deterministic keyword rules + LLM disambiguation · age 3-5 vague `"story?"` → image_story by default |
 | **Per-reply safety** | `enforce_chat_safety()` after every proxy reply · age-aware threshold · `suggest_content_improvements` retry · `safety_blocked` SSE telemetry on fail |
