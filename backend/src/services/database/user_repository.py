@@ -341,6 +341,16 @@ class UserRepository:
         await self._db.commit()
         return cursor.rowcount > 0
 
+    async def update_consent_status(self, user_id: str, consent_status: str) -> bool:
+        """Update the parent-consent workflow status for a user."""
+        now = datetime.now().isoformat()
+        cursor = await self._db.execute(
+            "UPDATE users SET consent_status = ?, updated_at = ? WHERE user_id = ?",
+            (consent_status, now, user_id),
+        )
+        await self._db.commit()
+        return cursor.rowcount > 0
+
     async def delete_user(self, user_id: str) -> bool:
         """
         Delete a user

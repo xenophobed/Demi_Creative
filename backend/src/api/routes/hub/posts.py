@@ -108,6 +108,11 @@ def _to_response(post) -> HubPostResponse:
 
 
 def _require_onboarded(user: UserData) -> None:
+    if user.role == "child" and user.consent_status == "pending_parent_consent":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": "PARENT_APPROVAL_REQUIRED"},
+        )
     if user.onboarded_at is None:
         raise HTTPException(
             status_code=status.HTTP_412_PRECONDITION_FAILED,

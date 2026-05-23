@@ -6,7 +6,11 @@ User authentication and management service
 
 import hashlib
 import base64
+import hmac
+import json
+import os
 import secrets
+import time
 from datetime import datetime, timedelta
 from typing import Optional, Tuple
 from dataclasses import dataclass
@@ -174,6 +178,10 @@ class UserService:
         referral_code: Optional[str] = None,
         role: str = "parent",
         parent_email: Optional[str] = None,
+        child_id: Optional[str] = None,
+        child_name: Optional[str] = None,
+        child_age_group: Optional[str] = None,
+        child_interests: Optional[list[str]] = None,
     ) -> AuthResult:
         """
         User registration
@@ -186,6 +194,10 @@ class UserService:
             referral_code: Referral code from share link (optional)
             role: Account role. Parent is the primary supported setup path.
             parent_email: Required when role is child.
+            child_id: Initial child profile id for parent-owned setup.
+            child_name: Initial child profile nickname.
+            child_age_group: Initial child profile age group.
+            child_interests: Initial child profile interests.
 
         Returns:
             AuthResult: Registration result
@@ -246,6 +258,15 @@ class UserService:
             referred_by=referred_by
         )
 
+        if role == "parent" and child_id:
+            await self._repo.update_onboarding_fields(
+                user.user_id,
+                default_child_id=child_id,
+            )
+            fresh_user = await self._repo.get_by_id(user.user_id)
+            if fresh_user:
+                user = fresh_user
+
         # Create referral record if valid referrer found
         if referrer_user_id:
             try:
@@ -265,6 +286,101 @@ class UserService:
             user=user,
             token=token
         )
+
+    def _approval_secret(self) -> bytes:
+        secret = (
+            os.getenv("PARENT_APPROVAL_SECRET")
+            or os.getenv("SECRET_KEY")
+            or "dev-parent-approval-secret"
+        )
+        return secret.encode("utf-8")
+
+    @staticmethod
+    def _b64encode(data: bytes) -> str:
+        return base64.urlsafe_b64encode(data).decode("ascii").rstrip("=")
+
+    @staticmethod
+    def _b64decode(data: str) -> bytes:
+        padded = data + "=" * (-len(data) % 4)
+        return base64.urlsafe_b64decode(padded.encode("ascii"))
+
+    def create_parent_approval_token(
+        self,
+        user_id: str,
+        parent_email: str,
+        *,
+        expires_in_seconds: int = 72 * 3600,
+    ) -> str:
+        """Create a signed, expiring token for parent approval."""
+        payload = {
+            "sub": user_id,
+            "parent_email": parent_email.lower(),
+            "exp": int(time.time()) + expires_in_seconds,
+            "purpose": "parent_approval",
+        }
+        payload_bytes = json.dumps(
+            payload,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("utf-8")
+        body = self._b64encode(payload_bytes)
+        signature = hmac.new(
+            self._approval_secret(),
+            body.encode("ascii"),
+            hashlib.sha256,
+        ).digest()
+        return f"{body}.{self._b64encode(signature)}"
+
+    def _decode_parent_approval_token(self, token: str) -> tuple[Optional[dict], Optional[str]]:
+        try:
+            body, signature = token.split(".", 1)
+        except ValueError:
+            return None, "Invalid approval token"
+
+        expected = hmac.new(
+            self._approval_secret(),
+            body.encode("ascii"),
+            hashlib.sha256,
+        ).digest()
+        try:
+            provided = self._b64decode(signature)
+        except Exception:
+            return None, "Invalid approval token"
+
+        if not hmac.compare_digest(expected, provided):
+            return None, "Invalid approval token"
+
+        try:
+            payload = json.loads(self._b64decode(body).decode("utf-8"))
+        except Exception:
+            return None, "Invalid approval token"
+
+        if payload.get("purpose") != "parent_approval":
+            return None, "Invalid approval token"
+        if int(payload.get("exp", 0)) < int(time.time()):
+            return None, "Approval token has expired"
+
+        return payload, None
+
+    async def approve_parent_approval_token(self, token: str) -> AuthResult:
+        """Approve a child-started account from a signed parent token."""
+        payload, error = self._decode_parent_approval_token(token)
+        if error:
+            return AuthResult(success=False, error=error)
+
+        user = await self._repo.get_by_id(payload["sub"])
+        if not user:
+            return AuthResult(success=False, error="User not found")
+        if user.role != "child":
+            return AuthResult(success=False, error="Only child-started accounts require approval")
+        if not user.parent_email or user.parent_email.lower() != payload["parent_email"]:
+            return AuthResult(success=False, error="Approval token does not match account")
+        if user.consent_status != "pending_parent_consent":
+            return AuthResult(success=False, error="Account is not pending parent approval")
+
+        await self._repo.update_consent_status(user.user_id, "approved")
+        approved_user = await self._repo.get_by_id(user.user_id)
+        return AuthResult(success=True, user=approved_user or user)
 
     async def qualify_and_maybe_upgrade(self, referred_user_id: str) -> bool:
         """Qualify a referral and auto-upgrade the referrer if threshold reached.

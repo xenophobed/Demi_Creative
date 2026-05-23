@@ -761,6 +761,26 @@ class UserRegisterRequest(BaseModel):
         None,
         description="Required when a child starts registration without a parent account.",
     )
+    child_id: Optional[str] = Field(
+        None,
+        min_length=1,
+        max_length=100,
+        description="Configured child profile id for parent-owned setup.",
+    )
+    child_name: Optional[str] = Field(
+        None,
+        max_length=80,
+        description="Parent-provided child profile nickname.",
+    )
+    child_age_group: Optional[AgeGroup] = Field(
+        None,
+        description="Parent-selected age group for the initial child profile.",
+    )
+    child_interests: List[str] = Field(
+        default_factory=list,
+        max_length=8,
+        description="Parent-selected interests for the initial child profile.",
+    )
 
     @field_validator('email')
     @classmethod
@@ -790,6 +810,26 @@ class UserRegisterRequest(BaseModel):
         if self.role == "child" and not self.parent_email:
             raise ValueError("A parent/guardian email is required for child sign-up")
         return self
+
+
+class ParentApprovalTokenRequest(BaseModel):
+    """Approve a child-started account with a signed parent token."""
+    token: str = Field(..., min_length=20, description="Signed parent approval token")
+
+
+class ParentApprovalResponse(BaseModel):
+    """Parent approval result."""
+    status: str = Field(..., description="Approval operation status")
+    user_id: str = Field(..., description="Approved child user id")
+    consent_status: str = Field(..., description="Updated consent status")
+
+
+class ParentApprovalStatusResponse(BaseModel):
+    """Pending approval resend/status response."""
+    status: str = Field(..., description="Approval status")
+    parent_email: Optional[str] = Field(None, description="Parent/guardian email")
+    approval_token: Optional[str] = Field(None, description="Development/test approval token")
+    approval_url: Optional[str] = Field(None, description="Development/test approval URL")
 
 
 class UserLoginRequest(BaseModel):

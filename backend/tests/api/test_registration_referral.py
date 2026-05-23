@@ -97,6 +97,73 @@ class TestRegistrationWithReferralCode:
         assert result.user.consent_status == "pending_parent_consent"
 
     @pytest.mark.asyncio
+    async def test_parent_registration_stores_default_child_id(self, service):
+        result = await service["svc"].register(
+            username="parent_with_child",
+            email="parent_with_child@test.com",
+            password="password123",
+            child_id="child_alpha",
+            child_name="Ada",
+            child_age_group="6-8",
+            child_interests=["Space", "Music"],
+        )
+
+        assert result.success is True
+        assert result.user.role == "parent"
+        assert result.user.default_child_id == "child_alpha"
+
+        stored = await service["user_repo"].get_by_id(result.user.user_id)
+        assert stored.default_child_id == "child_alpha"
+
+    @pytest.mark.asyncio
+    async def test_parent_approval_token_approves_child_signup(self, service):
+        result = await service["svc"].register(
+            username="child_pending",
+            email="child_pending@test.com",
+            password="password123",
+            role="child",
+            parent_email="Parent@Test.com",
+        )
+
+        token = service["svc"].create_parent_approval_token(
+            result.user.user_id,
+            result.user.parent_email,
+        )
+        approved = await service["svc"].approve_parent_approval_token(token)
+
+        assert approved.success is True
+        assert approved.user.consent_status == "approved"
+
+        stored = await service["user_repo"].get_by_id(result.user.user_id)
+        assert stored.consent_status == "approved"
+
+    @pytest.mark.asyncio
+    async def test_parent_approval_token_rejects_invalid_or_expired(self, service):
+        result = await service["svc"].register(
+            username="child_expired",
+            email="child_expired@test.com",
+            password="password123",
+            role="child",
+            parent_email="parent@test.com",
+        )
+
+        invalid = await service["svc"].approve_parent_approval_token("not-a-token")
+        assert invalid.success is False
+        assert invalid.error == "Invalid approval token"
+
+        expired_token = service["svc"].create_parent_approval_token(
+            result.user.user_id,
+            result.user.parent_email,
+            expires_in_seconds=-1,
+        )
+        expired = await service["svc"].approve_parent_approval_token(expired_token)
+        assert expired.success is False
+        assert expired.error == "Approval token has expired"
+
+        stored = await service["user_repo"].get_by_id(result.user.user_id)
+        assert stored.consent_status == "pending_parent_consent"
+
+    @pytest.mark.asyncio
     async def test_register_with_valid_referral_code(self, service, referrer):
         result = await service["svc"].register(
             username="referred1", email="referred1@test.com",

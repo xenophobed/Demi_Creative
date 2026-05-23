@@ -34,6 +34,7 @@ class SupabaseClaims:
     referral_code: Optional[str] = None  # From signUp metadata (#424)
     role: str = "parent"
     parent_email: Optional[str] = None
+    child_id: Optional[str] = None
 
 
 def get_jwt_secret() -> Optional[str]:
@@ -158,6 +159,7 @@ def _extract_claims(payload: dict) -> Optional[SupabaseClaims]:
     requested_role = user_meta.get("role") or "parent"
     role = requested_role if requested_role in {"parent", "child"} else "parent"
     parent_email = user_meta.get("parent_email")
+    child_id = user_meta.get("child_id")
 
     return SupabaseClaims(
         sub=sub,
@@ -166,4 +168,5 @@ def _extract_claims(payload: dict) -> Optional[SupabaseClaims]:
         referral_code=referral_code,
         role=role,
         parent_email=parent_email,
+        child_id=child_id,
     )

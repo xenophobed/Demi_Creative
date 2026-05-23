@@ -11,6 +11,7 @@ interface ChildState {
 
   // Actions
   setCurrentChild: (child: ChildProfile) => void
+  configureChildProfile: (child: ChildProfile) => void
   updateChildProfile: (updates: Partial<ChildProfile>) => void
   setAgeGroup: (ageGroup: AgeGroup) => void
   setInterests: (interests: string[]) => void
@@ -24,7 +25,7 @@ interface ChildState {
 }
 
 // Generate simple unique ID
-function generateChildId(): string {
+export function generateChildId(): string {
   return `child_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
 }
 
@@ -51,6 +52,11 @@ const useChildStore = create<ChildState>()(
       defaultChildId: generateChildId(),
 
       setCurrentChild: (child) => set({ currentChild: child }),
+
+      configureChildProfile: (child) => set({
+        currentChild: child,
+        defaultChildId: child.child_id,
+      }),
 
       updateChildProfile: (updates) => {
         const current = get().currentChild

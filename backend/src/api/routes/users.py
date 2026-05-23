@@ -18,6 +18,9 @@ from ..models import (
     AuthResponse,
     ChangePasswordRequest,
     ErrorResponse,
+    ParentApprovalResponse,
+    ParentApprovalStatusResponse,
+    ParentApprovalTokenRequest,
     PublicUserResponse,
     ReferralStatusResponse,
     TokenResponse,
@@ -161,6 +164,10 @@ async def register(request: UserRegisterRequest):
         referral_code=request.referral_code,
         role=request.role,
         parent_email=request.parent_email,
+        child_id=request.child_id,
+        child_name=request.child_name,
+        child_age_group=request.child_age_group.value if request.child_age_group else None,
+        child_interests=request.child_interests,
     )
 
     if not result.success:
@@ -180,6 +187,67 @@ async def register(request: UserRegisterRequest):
             token_type=result.token.token_type,
             expires_in=result.token.expires_in,
         ),
+    )
+
+
+@router.post(
+    "/parent-approval/approve",
+    response_model=ParentApprovalResponse,
+    summary="Approve a child-started account",
+    description="Validates a signed parent approval token and marks the child account approved.",
+)
+async def approve_parent_started_consent(request: ParentApprovalTokenRequest):
+    result = await user_service.approve_parent_approval_token(request.token)
+    if not result.success or not result.user:
+        detail = result.error or "Invalid approval token"
+        status_code = (
+            status.HTTP_410_GONE
+            if "expired" in detail.lower()
+            else status.HTTP_400_BAD_REQUEST
+        )
+        raise HTTPException(status_code=status_code, detail=detail)
+
+    return ParentApprovalResponse(
+        status="approved",
+        user_id=result.user.user_id,
+        consent_status=result.user.consent_status,
+    )
+
+
+@router.post(
+    "/me/parent-approval/resend",
+    response_model=ParentApprovalStatusResponse,
+    summary="Resend parent approval for a child-started account",
+)
+async def resend_parent_approval(
+    request: Request,
+    user: UserData = Depends(get_current_user),
+):
+    if user.role != "child":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only child-started accounts can request parent approval",
+        )
+    if not user.parent_email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Parent email is required before approval can be sent",
+        )
+    if user.consent_status != "pending_parent_consent":
+        return ParentApprovalStatusResponse(
+            status=user.consent_status,
+            parent_email=user.parent_email,
+        )
+
+    token = user_service.create_parent_approval_token(user.user_id, user.parent_email)
+    base_url = _resolve_frontend_base_url(request)
+    approval_url = f"{base_url}/parent-approval?token={token}"
+
+    return ParentApprovalStatusResponse(
+        status="pending_parent_consent",
+        parent_email=user.parent_email,
+        approval_token=token,
+        approval_url=approval_url,
     )
 
 
