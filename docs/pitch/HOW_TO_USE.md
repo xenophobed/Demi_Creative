@@ -5,7 +5,27 @@
 ## What's in here
 
 - `keynote-deck.md` — the deck source, written in [Marp](https://marp.app) (markdown that compiles to PPTX/PDF/HTML)
-- `slide-blueprints.md` — **per-slide build sheet** (layout · components · style · timing · speaker beat · why-this-slide-exists). Open this alongside the deck while building in Keynote.
+- `keynote-deck.pptx` — Marp-compiled deck. **Slides are flat images — text is NOT editable.** Best for a final, locked presentation.
+- `keynote-deck-editable.pptx` — **fully editable** deck (real text boxes + tables). Open in PowerPoint or Keynote and edit any word or move any element. Built by `build_editable_pptx.py`.
+- `build_editable_pptx.py` — the python-pptx generator for the editable deck.
+- `slide-blueprints.md` — **per-slide build sheet** (layout · components · style · timing · speaker beat · why-this-slide-exists).
+- `speaker-scripts.md` — all 19 speaker scripts in natural spoken English, for rehearsal.
+
+## Two PPTX files — which one?
+
+| File | Text editable? | Use when |
+|---|---|---|
+| `keynote-deck.pptx` | ❌ No (Marp rasterises each slide to an image) | You want the exact Marp-rendered look, locked |
+| `keynote-deck-editable.pptx` | ✅ Yes — real text boxes & tables | You want to tweak wording, layout, colours in Keynote/PowerPoint |
+
+### Regenerate the editable deck after editing content
+
+```bash
+source backend/venv/bin/activate    # python-pptx + Pillow live here
+python docs/pitch/build_editable_pptx.py
+```
+
+It re-reads speaker notes from `keynote-deck.md`, re-converts the SVG diagrams to PNG (via macOS `qlmanage`), and rewrites `keynote-deck-editable.pptx`. Note: the editable deck's *slide text* is defined inside `build_editable_pptx.py` — edit there, or just edit the `.pptx` directly in Keynote.
 
 ## One-time setup
 
