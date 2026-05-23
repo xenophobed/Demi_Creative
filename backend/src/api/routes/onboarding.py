@@ -21,7 +21,7 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from ..deps import get_current_user
+from ..deps import get_current_user, require_owned_child_profile
 from ..models import CompleteOnboardingRequest, UserResponse
 from ...services.database import agent_repo, user_repo
 from ...services.user_service import UserData
@@ -58,6 +58,8 @@ async def complete_onboarding(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={"code": "PARENT_CONSENT_REQUIRED"},
         )
+
+    await require_owned_child_profile(user, request.child_id)
 
     agent = await agent_repo.get_agent(user.user_id, request.child_id)
     if agent is None:

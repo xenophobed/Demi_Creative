@@ -43,7 +43,12 @@ from ...services.tts_service import generate_multi_speaker_audio
 from ...services.user_service import UserData
 from ...utils.text import count_words
 from ...paths import AUDIO_DIR, UPLOAD_DIR
-from ..deps import check_generation_quota, get_current_user, has_visible_hub_post
+from ..deps import (
+    check_generation_quota,
+    get_current_user,
+    has_visible_hub_post,
+    require_owned_child_profile,
+)
 from ...services.database import usage_repo
 from ..models import (
     DialogueScript,
@@ -694,6 +699,7 @@ async def generate_kids_daily(
     request: KidsDailyRequest,
     user: UserData = Depends(check_generation_quota),
 ):
+    await require_owned_child_profile(user, request.child_id)
     result = await _build_episode(request, user)
     await usage_repo.increment(user.user_id, "kids_daily")
     return result
@@ -715,6 +721,7 @@ async def generate_kids_daily_on_demand(
     user: UserData = Depends(check_generation_quota),
 ):
     """On-demand generation: fetches live headlines and builds an episode."""
+    await require_owned_child_profile(user, request.child_id)
     topic = request.category.value
 
     # 1. Verify the child has an active subscription for this category
@@ -790,6 +797,7 @@ async def generate_kids_daily_on_demand_stream(
     user: UserData = Depends(check_generation_quota),
 ):
     """On-demand SSE streaming generation: fetches live headlines and streams progress."""
+    await require_owned_child_profile(user, request.child_id)
     topic = request.category.value
 
     # 1. Verify subscription
@@ -918,6 +926,7 @@ async def generate_kids_daily_stream(
     request: KidsDailyRequest,
     user: UserData = Depends(check_generation_quota),
 ):
+    await require_owned_child_profile(user, request.child_id)
     if not request.news_url and not request.news_text:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -982,6 +991,7 @@ async def convert_news(
     user: UserData = Depends(get_current_user),
 ):
     """Convert news article to kid-friendly text content. Requires authentication."""
+    await require_owned_child_profile(user, request.child_id)
     if not request.news_url and not request.news_text:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

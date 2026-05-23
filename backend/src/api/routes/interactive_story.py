@@ -29,7 +29,12 @@ from ..models import (
     AgeGroup,
     SessionStatus as SessionStatusEnum
 )
-from ..deps import get_current_user, get_session_for_owner, check_generation_quota
+from ..deps import (
+    get_current_user,
+    get_session_for_owner,
+    check_generation_quota,
+    require_owned_child_profile,
+)
 from ...services.database import session_repo, story_repo, preference_repo, character_repo, db_manager, usage_repo
 from ...services.tts_service import generate_story_audio_file
 from ...services.user_service import UserData
@@ -176,6 +181,7 @@ async def start_interactive_story(
     }
     ```
     """
+    await require_owned_child_profile(user, request.child_id)
     tracker = ProvenanceTracker(db_manager)
     run_id = None
 
@@ -366,6 +372,8 @@ async def start_interactive_story_stream(
     data: {"status": "completed"}
     ```
     """
+    await require_owned_child_profile(user, request.child_id)
+
     async def event_generator() -> AsyncGenerator[str, None]:
         session = None
         opening_data = None

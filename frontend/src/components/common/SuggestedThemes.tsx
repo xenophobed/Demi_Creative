@@ -145,7 +145,8 @@ export default function SuggestedThemes({
   mode = "tag",
 }: SuggestedThemesProps) {
   const { isAuthenticated } = useAuthStore();
-  const { defaultChildId } = useChildStore();
+  const { currentChild, defaultChildId } = useChildStore();
+  const childId = currentChild?.child_id || defaultChildId;
   const [personalizedThemes, setPersonalizedThemes] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [hasFetched, setHasFetched] = useState(false);
@@ -153,7 +154,7 @@ export default function SuggestedThemes({
   useEffect(() => {
     let cancelled = false;
 
-    if (!isAuthenticated || !defaultChildId) {
+    if (!isAuthenticated || !childId) {
       setPersonalizedThemes([]);
       setHasFetched(true);
       return () => {
@@ -165,7 +166,7 @@ export default function SuggestedThemes({
     setHasFetched(false);
 
     memoryService
-      .getRecommendations(defaultChildId, limit)
+      .getRecommendations(childId, limit)
       .then((res) => {
         if (!cancelled)
           setPersonalizedThemes(uniqueThemes(res.recommendations));
@@ -183,7 +184,7 @@ export default function SuggestedThemes({
     return () => {
       cancelled = true;
     };
-  }, [isAuthenticated, defaultChildId, limit]);
+  }, [isAuthenticated, childId, limit]);
 
   const suggestions = useMemo(() => {
     if (mode === "prompt") {

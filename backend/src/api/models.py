@@ -805,11 +805,80 @@ class UserRegisterRequest(BaseModel):
             raise ValueError("Username can only contain letters, numbers, underscores, and hyphens")
         return v.lower()
 
+    @field_validator('child_name')
+    @classmethod
+    def validate_child_name(cls, v):
+        if v is None or v == "":
+            return None
+        return _validate_child_nickname(v)
+
     @model_validator(mode="after")
     def validate_child_signup_parent_email(self):
         if self.role == "child" and not self.parent_email:
             raise ValueError("A parent/guardian email is required for child sign-up")
         return self
+
+
+_NICKNAME_EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
+_NICKNAME_PHONE_RE = re.compile(r"(?:\+?\d[\s().-]*){7,}")
+
+
+def _validate_child_nickname(value: str) -> str:
+    nickname = value.strip()
+    if not nickname:
+        raise ValueError("Child nickname is required")
+    if _NICKNAME_EMAIL_RE.search(nickname) or _NICKNAME_PHONE_RE.search(nickname):
+        raise ValueError("Child nickname cannot include email addresses or phone numbers")
+    return nickname
+
+
+class ChildProfileCreateRequest(BaseModel):
+    """Create a child profile under the current parent account."""
+    name: str = Field(..., min_length=1, max_length=80)
+    age_group: AgeGroup = Field(default=AgeGroup.AGE_6_8)
+    interests: List[str] = Field(default_factory=list, max_length=8)
+    avatar: Optional[str] = Field(default=None, max_length=120)
+    child_id: Optional[str] = Field(default=None, min_length=1, max_length=100)
+    is_default: bool = Field(default=False)
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v):
+        return _validate_child_nickname(v)
+
+
+class ChildProfileUpdateRequest(BaseModel):
+    """Patch editable child profile fields."""
+    name: Optional[str] = Field(default=None, min_length=1, max_length=80)
+    age_group: Optional[AgeGroup] = None
+    interests: Optional[List[str]] = Field(default=None, max_length=8)
+    avatar: Optional[str] = Field(default=None, max_length=120)
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v):
+        if v is None:
+            return None
+        return _validate_child_nickname(v)
+
+
+class ChildProfileResponse(BaseModel):
+    """Child profile API response."""
+    child_id: str
+    user_id: str
+    name: str
+    age_group: str
+    interests: List[str] = Field(default_factory=list)
+    avatar: Optional[str] = None
+    is_default: bool = False
+    archived_at: Optional[datetime] = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class ChildProfileListResponse(BaseModel):
+    """GET /child-profiles response envelope."""
+    items: List[ChildProfileResponse] = Field(default_factory=list)
 
 
 class ParentApprovalTokenRequest(BaseModel):

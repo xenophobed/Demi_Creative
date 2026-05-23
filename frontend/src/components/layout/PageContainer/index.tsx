@@ -10,6 +10,7 @@ import useGenerationNavigator from '@/hooks/useGenerationNavigator'
 import AvatarDisplay from '@/components/common/AvatarDisplay'
 import useAuthStore from '@/store/useAuthStore'
 import useDailyTaskStore from '@/store/useDailyTaskStore'
+import useChildStore from '@/store/useChildStore'
 import { authService } from '@/api/services/authService'
 import { performFullLogout } from '@/utils/logout'
 import { NavRefProvider, useNavRef } from '@/contexts/NavRefContext'
@@ -28,9 +29,23 @@ function PageContainerInner() {
   const { isAuthenticated, user } = useAuthStore()
   const { setProfileAvatarEl } = useNavRef()
   const totalStars = useDailyTaskStore((s) => s.totalStars)
+  const {
+    childProfiles,
+    currentChild,
+    loadChildProfiles,
+    switchActiveChild,
+  } = useChildStore()
   const [mobileOpen, setMobileOpen] = useState(false)
+  const activeProfiles = childProfiles.filter((child) => !child.archived_at)
 
   useGenerationNavigator()
+
+  useEffect(() => {
+    if (!isAuthenticated || user?.role !== 'parent') return
+    loadChildProfiles().catch((err) => {
+      console.error('Failed to hydrate child profiles:', err)
+    })
+  }, [isAuthenticated, user?.role, loadChildProfiles])
 
   // RequireOnboarded gate (#444): when an authenticated user has not yet
   // finished onboarding (no users.onboarded_at), funnel them to /my-agent
@@ -110,6 +125,11 @@ function PageContainerInner() {
               {/* Auth section */}
               {isAuthenticated ? (
                 <div className="flex items-center gap-3 ml-2 pl-4 border-l border-gray-200">
+                  <ActiveChildSwitcher
+                    profiles={activeProfiles}
+                    activeChildId={currentChild?.child_id ?? null}
+                    onSelect={switchActiveChild}
+                  />
                   <Link to="/profile">
                     <div ref={setProfileAvatarEl} className="relative">
                       <motion.div
@@ -270,6 +290,12 @@ function PageContainerInner() {
               <div className="border-t border-gray-200 px-3 py-4">
                 {isAuthenticated ? (
                   <div className="flex flex-col gap-2">
+                    <ActiveChildSwitcher
+                      profiles={activeProfiles}
+                      activeChildId={currentChild?.child_id ?? null}
+                      onSelect={switchActiveChild}
+                      compact={false}
+                    />
                     <Link
                       to="/profile"
                       onClick={handleCloseMobile}
@@ -358,6 +384,43 @@ function PageContainerInner() {
         </p>
       </footer>
     </div>
+  )
+}
+
+function ActiveChildSwitcher({
+  profiles,
+  activeChildId,
+  onSelect,
+  compact = true,
+}: {
+  profiles: Array<{ child_id: string; name: string; avatar?: string | null }>
+  activeChildId: string | null
+  onSelect: (childId: string) => void
+  compact?: boolean
+}) {
+  if (profiles.length <= 1) return null
+
+  return (
+    <label
+      className={
+        compact
+          ? 'flex items-center gap-1 text-xs font-bold text-gray-500'
+          : 'flex flex-col gap-1 rounded-btn bg-gray-50 px-3 py-2 text-xs font-bold text-gray-500'
+      }
+    >
+      <span>{compact ? 'Child' : 'Creating as'}</span>
+      <select
+        value={activeChildId ?? ''}
+        onChange={(event) => onSelect(event.target.value)}
+        className="max-w-[130px] rounded-lg border border-gray-200 bg-white px-2 py-1 text-sm font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary/40"
+      >
+        {profiles.map((child) => (
+          <option key={child.child_id} value={child.child_id}>
+            {child.avatar ? `${child.avatar} ` : ''}{child.name}
+          </option>
+        ))}
+      </select>
+    </label>
   )
 }
 

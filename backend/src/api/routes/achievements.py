@@ -10,7 +10,7 @@ from ...services.achievement_service import (
     achievement_service,
 )
 from ...services.user_service import UserData
-from ..deps import get_current_user
+from ..deps import get_current_user, require_owned_child_profile
 
 
 router = APIRouter(prefix="/api/v1/achievements", tags=["Achievements"])
@@ -27,6 +27,7 @@ async def award_achievement(
     response: Response,
     user: UserData = Depends(get_current_user),
 ):
+    await require_owned_child_profile(user, request.child_id)
     try:
         result = await achievement_service.award(
             user_id=user.user_id,
@@ -50,4 +51,5 @@ async def list_achievements(
     child_id: str,
     user: UserData = Depends(get_current_user),
 ):
+    await require_owned_child_profile(user, child_id, include_archived=True)
     return await achievement_service.list_for_child(user.user_id, child_id)

@@ -17,6 +17,7 @@ from ..services.database import (
     story_repo,
     usage_repo,
     user_repo,
+    child_profile_repo,
 )
 from ..services.database.session_repository import SessionData
 from ..services.database.sql_compat import insert_or_ignore
@@ -169,6 +170,44 @@ async def get_current_user(authorization: Optional[str] = Header(None)) -> UserD
         )
 
     return user
+
+
+async def require_owned_child_profile(
+    user: UserData,
+    child_id: str,
+    *,
+    include_archived: bool = False,
+) -> None:
+    """Validate that a child_id belongs to the authenticated account.
+
+    Parent-owned Phase 3 flows use child_profiles as the canonical ownership
+    source. Child-started legacy accounts can still operate on their own
+    default_child_id when they do not yet have a parent-owned profile row.
+    """
+    if not child_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "CHILD_PROFILE_REQUIRED"},
+        )
+
+    profile = await child_profile_repo.get_for_user(
+        user.user_id,
+        child_id,
+        include_archived=include_archived,
+    )
+    if profile is not None:
+        return
+
+    if (
+        getattr(user, "role", "child") == "child"
+        and getattr(user, "default_child_id", None) == child_id
+    ):
+        return
+
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail={"code": "CHILD_PROFILE_NOT_FOUND"},
+    )
 
 
 async def _get_or_create_supabase_user(claims) -> Optional[UserData]:

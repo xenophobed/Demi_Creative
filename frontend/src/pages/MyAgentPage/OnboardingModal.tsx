@@ -16,6 +16,7 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { AxiosError } from "axios";
 import { ANIMAL_EMOJIS } from "@/lib/avatars";
 import { CURATED_TITLES, customTitleAllowed } from "@/lib/agentTitles";
@@ -164,14 +165,14 @@ export default function OnboardingModal({
     }
   };
 
-  return (
+  const modal = (
     <div
       role="dialog"
       aria-modal="true"
       aria-labelledby="onboarding-title"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 py-8"
+      className="fixed inset-0 z-[120] flex items-center justify-center bg-black/40 px-4 py-8"
     >
-      <div className="w-full max-w-lg rounded-lg bg-white p-6 shadow-xl">
+      <div className="relative z-[121] w-full max-w-lg rounded-lg bg-white p-6 shadow-xl">
         <header className="flex flex-col gap-1">
           <p className="text-xs uppercase tracking-wide text-primary-dark">
             Step {stepIdx + 1} of {steps.length}
@@ -389,4 +390,6 @@ export default function OnboardingModal({
       </div>
     </div>
   );
+
+  return createPortal(modal, document.body);
 }

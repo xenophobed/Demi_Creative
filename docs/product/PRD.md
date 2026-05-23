@@ -738,6 +738,35 @@ Profile page displays creation counts for each content type, replacing the curre
 - [x] Each stat card is clickable, navigating to library with corresponding tab filter
 - [x] Gracefully displays "0" when count is zero
 
+#### Profile Tabs & Parent/Child Organization [Phase 3]
+
+##### Feature Description
+The profile page should be reorganized into tabbed aspects so parents and children can find the right surface without scrolling through unrelated account, memory, reward, and referral controls. The page remains a single `/profile` route, but it uses tabs to separate account-level settings from child-scoped growth and memory data.
+
+##### Tabs
+| Tab | Primary Audience | Contents |
+|---|---|---|
+| Overview | Parent + child | Active child summary, creation stats, achievements, star collection |
+| Children | Parent | Child profile list, active child switcher, add/edit child profile entrypoints |
+| Memory | Parent + older children | Character gallery, preference summary, selective memory deletion |
+| Rewards | Child | Star jar, badges, streaks, age-adapted achievement surfaces |
+| Account | Parent | Display name/avatar, referral invite, membership/quota details, privacy controls |
+
+##### Behavior
+- The selected tab is reflected in the URL (`/profile?tab=children`) so profile sections can be linked directly.
+- Parent-only controls are hidden or disabled for child-role accounts.
+- Child-scoped tabs read from the active child profile rather than only `users.default_child_id`.
+- Mobile renders tabs as a horizontally scrollable segmented control; desktop renders tabs as compact top navigation.
+
+##### Acceptance Criteria
+- [ ] `/profile` renders tab navigation with stable URL query state
+- [ ] Overview tab shows active child, stats, achievements, and stars without unrelated account controls
+- [ ] Children tab is visible to parent-role users and lists all child profiles on the account
+- [ ] Memory tab scopes characters/preferences to the active child profile
+- [ ] Account tab contains display name/avatar, referral, and privacy controls
+- [ ] Child-role users cannot access parent-only child management actions
+- [ ] Mobile tab labels do not truncate or overlap
+
 #### Homepage Recent Stories & Tips
 
 ##### Feature Description
@@ -1335,6 +1364,42 @@ The flow has these steps:
 | Child-started setup | Child account email + parent/guardian email | `child` | `pending_parent_consent` | Protected features that require adult consent stay blocked until parent approval is implemented. |
 
 For MVP, the product should steer users toward parent-owned registration. Child-started signup exists to capture intent safely, not to bypass adult approval.
+
+##### Child Profile Selection & Switching [Phase 3]
+
+Parent-owned registration creates the first child profile, but the child still needs an explicit entry point to choose *who is creating today*. The system must support multiple child profiles under one parent account and keep every child-scoped surface bound to the selected profile.
+
+###### Child Profile Model
+| Field | Description | Notes |
+|---|---|---|
+| `child_id` | Stable profile id within the parent account | Server-generated or accepted from trusted registration setup |
+| `user_id` | Parent account owner | Required ownership boundary |
+| `name` | Child-facing nickname | No real full name required; safety/PII validation applies |
+| `age_group` | `3-5`, `6-8`, `9-12` | Drives age adaptation across creation flows |
+| `interests` | Initial interest tags | Seed memory and recommendations |
+| `avatar` | Optional child profile avatar | Whitelisted emoji/avatar only in v1 |
+| `is_default` | Parent-selected default profile | Used when no active child session is set |
+
+###### Entry Points
+- **After parent registration**: route to child profile confirmation, then My Agent setup for that child.
+- **After parent login**: if the account has multiple child profiles, show "Who's creating today?" before creation surfaces.
+- **Navigation/Profile**: always expose the active child profile and a switcher.
+- **Parent dashboard/Profile Children tab**: parent can add/edit/archive child profiles and set the default.
+
+###### Active Child Contract
+- Frontend stores the active child profile in `useChildStore`.
+- Backend persists child profiles and validates ownership on every child-scoped endpoint.
+- `users.default_child_id` remains a compatibility pointer, but the canonical profile data lives in a `child_profiles` table.
+- My Agent, Library, Kids Daily, Interactive Story, Image-to-Story, Achievements, Memory, and Parent Dashboard all use the same active child profile contract.
+
+###### Acceptance Criteria
+- [ ] Parent accounts can create at least one child profile after registration
+- [ ] Parent accounts can add a second child profile from `/profile?tab=children`
+- [ ] A "Who's creating today?" picker appears when a parent account has multiple active child profiles and no active child is selected
+- [ ] Selecting a child updates the active child profile used by My Agent, Library, Kids Daily, Interactive Story, Image-to-Story, Achievements, and Memory
+- [ ] Backend rejects child-scoped requests for profiles not owned by the authenticated parent account
+- [ ] Child-role accounts cannot create sibling profiles or change parent-owned profile settings
+- [ ] Archived child profiles no longer appear in pickers but remain available for historical content scoping
 
 ##### Age-Gated Onboarding Variants
 

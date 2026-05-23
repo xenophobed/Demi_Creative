@@ -56,7 +56,12 @@ from ...services.models.artifact_models import (
 from ...services.provenance_tracker import ProvenanceTracker
 from ...services.user_service import UserData
 from ...utils.audio_strategy import get_audio_strategy
-from ..deps import check_generation_quota, get_current_user, get_story_for_owner
+from ..deps import (
+    check_generation_quota,
+    get_current_user,
+    get_story_for_owner,
+    require_owned_child_profile,
+)
 from ..models import (
     AgeGroup,
     ArtTheme,
@@ -470,6 +475,7 @@ async def create_story_from_image(
       -F "enable_audio=true"
     ```
     """
+    await require_owned_child_profile(user, child_id)
     try:
         # 1. Validate image
         validate_image_file(image)
@@ -1024,6 +1030,15 @@ async def create_story_from_image_stream(
     - `complete`: Generation complete
     - `error`: Error message
     """
+    try:
+        await require_owned_child_profile(user, child_id)
+    except HTTPException as e:
+
+        async def error_generator():
+            yield f"event: error\ndata: {json.dumps({'error': 'ChildProfileError', 'message': e.detail}, ensure_ascii=False)}\n\n"
+
+        return StreamingResponse(error_generator(), media_type="text/event-stream")
+
     # Validate image
     try:
         validate_image_file(image)

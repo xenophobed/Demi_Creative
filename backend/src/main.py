@@ -345,6 +345,7 @@ from .api.routes import (
     agents,
     artifacts,
     audio,
+    child_profiles,
     hub,
     image_to_story,
     inspiration_daily,
@@ -363,6 +364,7 @@ from .api.routes import (
 app.include_router(image_to_story.router)
 app.include_router(interactive_story.router)
 app.include_router(audio.router)
+app.include_router(child_profiles.router)
 app.include_router(video.router)
 app.include_router(voice.router)
 app.include_router(users.router)

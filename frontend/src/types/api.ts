@@ -508,10 +508,33 @@ export interface StoryHistoryItem {
 // Child profile
 export interface ChildProfile {
   child_id: string;
+  user_id?: string;
   name: string;
   age_group: AgeGroup;
   interests: string[];
-  avatar?: string;
+  avatar?: string | null;
+  is_default?: boolean;
+  archived_at?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface ChildProfileListResponse {
+  items: ChildProfile[];
+}
+
+export interface ChildProfileCreateRequest {
+  name: string;
+  age_group: AgeGroup;
+  interests?: string[];
+  avatar?: string | null;
+}
+
+export interface ChildProfileUpdateRequest {
+  name?: string;
+  age_group?: AgeGroup;
+  interests?: string[];
+  avatar?: string | null;
 }
 
 // Upload status

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
 import Button from "@/components/common/Button";
@@ -17,9 +17,63 @@ import StarPiggyBank from "@/components/daily/StarPiggyBank";
 import AchievementBadges from "@/components/profile/AchievementBadges";
 import CharacterGallery from "./CharacterGallery";
 import PreferenceSummary from "./PreferenceSummary";
+import ChildrenTab from "./ChildrenTab";
 import { useMemoryApi } from "@/hooks/useMemoryApi";
 import type { MemoryPreferenceCategory } from "@/types/api";
 import { ANIMAL_EMOJIS } from "@/lib/avatars";
+
+const PROFILE_TABS = [
+  { id: "overview", label: "Overview" },
+  { id: "children", label: "Children" },
+  { id: "memory", label: "Memory" },
+  { id: "rewards", label: "Rewards" },
+  { id: "account", label: "Account" },
+] as const;
+
+type ProfileTabId = (typeof PROFILE_TABS)[number]["id"];
+
+function isProfileTabId(value: string | null): value is ProfileTabId {
+  return PROFILE_TABS.some((tab) => tab.id === value);
+}
+
+interface ProfileTabsProps {
+  activeTab: ProfileTabId;
+  onSelect: (tab: ProfileTabId) => void;
+}
+
+function ProfileTabs({ activeTab, onSelect }: ProfileTabsProps) {
+  return (
+    <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+      <div
+        className="flex min-w-max gap-2 border-b border-gray-200"
+        role="tablist"
+        aria-label="Profile sections"
+      >
+        {PROFILE_TABS.map((tab) => {
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              id={`profile-tab-trigger-${tab.id}`}
+              key={tab.id}
+              type="button"
+              role="tab"
+              aria-selected={isActive}
+              aria-controls={`profile-tab-panel-${tab.id}`}
+              className={`whitespace-nowrap border-b-2 px-4 py-3 text-sm font-bold transition-colors ${
+                isActive
+                  ? "border-primary text-primary"
+                  : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-800"
+              }`}
+              onClick={() => onSelect(tab.id)}
+            >
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 function StarBoard() {
   const totalStars = useDailyTaskStore((s) => s.totalStars);
@@ -67,9 +121,15 @@ function StarBoard() {
 
 function ProfilePage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { isAuthenticated, user, setUser } = useAuthStore();
   const { currentChild, defaultChildId } = useChildStore();
   const childId = currentChild?.child_id || defaultChildId || null;
+  const tabParam = searchParams.get("tab");
+  const activeTab: ProfileTabId = isProfileTabId(tabParam)
+    ? tabParam
+    : "overview";
+  const isParent = user?.role === "parent";
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState<UpdateProfileRequest>({
     display_name: user?.display_name || "",
@@ -110,6 +170,15 @@ function ProfilePage() {
   }, [isAuthenticated, navigate]);
 
   useEffect(() => {
+    const tabParam = searchParams.get("tab");
+    if (tabParam && !isProfileTabId(tabParam)) {
+      const next = new URLSearchParams(searchParams);
+      next.delete("tab");
+      setSearchParams(next, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
+
+  useEffect(() => {
     if (!isAuthenticated) return;
     setReferralLoading(true);
     authService
@@ -143,6 +212,16 @@ function ProfilePage() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleSelectTab = (tab: ProfileTabId) => {
+    const next = new URLSearchParams(searchParams);
+    if (tab === "overview") {
+      next.delete("tab");
+    } else {
+      next.set("tab", tab);
+    }
+    setSearchParams(next);
   };
 
   const formatDate = (dateStr: string) => {
@@ -223,94 +302,22 @@ function ProfilePage() {
                 </p>
               )}
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              className="w-full sm:w-auto"
-              onClick={() => {
-                setEditForm({
-                  display_name: user?.display_name || "",
-                  avatar_url: user?.avatar_url || "",
-                });
-                setIsEditing(!isEditing);
-              }}
-            >
-              {isEditing ? "Cancel" : "Edit Profile"}
-            </Button>
           </div>
-
-          {/* Inline Edit Form */}
-          {isEditing && (
-            <motion.div
-              className="mt-4 pt-4 border-t border-gray-100 space-y-3"
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-            >
-              <div>
-                <label className="block text-sm font-medium text-gray-600 mb-1">
-                  Display Name
-                </label>
-                <input
-                  type="text"
-                  value={editForm.display_name || ""}
-                  onChange={(e) =>
-                    setEditForm({ ...editForm, display_name: e.target.value })
-                  }
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-                  placeholder="Your display name"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-600 mb-2">
-                  Choose Your Avatar
-                </label>
-                <div className="flex items-center gap-3 mb-3">
-                  <AvatarDisplay
-                    avatarUrl={editForm.avatar_url || undefined}
-                    size="md"
-                  />
-                  <span className="text-sm text-gray-500">
-                    {editForm.avatar_url?.startsWith("emoji:")
-                      ? "Tap an animal to change"
-                      : "Pick your favorite animal!"}
-                  </span>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {ANIMAL_EMOJIS.map((emoji) => {
-                    const emojiValue = `emoji:${emoji}`;
-                    const isSelected = editForm.avatar_url === emojiValue;
-                    return (
-                      <motion.button
-                        key={emoji}
-                        type="button"
-                        className={`w-10 h-10 rounded-lg text-xl flex items-center justify-center transition-all ${
-                          isSelected
-                            ? "border-2 border-primary bg-primary/10 shadow-md"
-                            : "border border-gray-200 hover:border-gray-300 hover:shadow-sm"
-                        }`}
-                        onClick={() =>
-                          setEditForm({ ...editForm, avatar_url: emojiValue })
-                        }
-                        whileHover={{ scale: 1.15, y: -2 }}
-                        whileTap={{ scale: 0.9 }}
-                      >
-                        {emoji}
-                      </motion.button>
-                    );
-                  })}
-                </div>
-              </div>
-              <Button size="sm" onClick={handleSaveProfile} isLoading={saving}>
-                Save Changes
-              </Button>
-            </motion.div>
-          )}
         </Card>
       </motion.div>
 
+      <ProfileTabs activeTab={activeTab} onSelect={handleSelectTab} />
+
+      {activeTab === "overview" && (
+        <div
+          id="profile-tab-panel-overview"
+          role="tabpanel"
+          aria-labelledby="profile-tab-trigger-overview"
+          className="space-y-6"
+        >
       {/* Stats Cards */}
       <motion.div
-        className="grid grid-cols-3 gap-4"
+        className="grid grid-cols-1 gap-4 sm:grid-cols-3"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1 }}
@@ -359,6 +366,40 @@ function ProfilePage() {
         </TiltCard>
       </motion.div>
 
+      {/* Kids Daily settings shortcut */}
+      <motion.section
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.15 }}
+      >
+        <Card className="flex flex-wrap items-center justify-between gap-3 p-4">
+          <div>
+            <h2 className="text-base font-bold text-gray-800">
+              Kids Daily Preferences
+            </h2>
+            <p className="text-sm text-gray-500">
+              Manage topic channels for Kids Daily episodes.
+            </p>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => navigate("/kids-daily")}
+          >
+            Manage Channels
+          </Button>
+        </Card>
+      </motion.section>
+        </div>
+      )}
+
+      {activeTab === "rewards" && (
+        <div
+          id="profile-tab-panel-rewards"
+          role="tabpanel"
+          aria-labelledby="profile-tab-trigger-rewards"
+          className="space-y-6"
+        >
       {/* Star Collection Board */}
       <motion.section
         initial={{ opacity: 0, y: 20 }}
@@ -379,6 +420,114 @@ function ProfilePage() {
           ageGroup={currentChild?.age_group}
           isLoading={achievementsLoading}
         />
+      </motion.section>
+        </div>
+      )}
+
+      {activeTab === "account" && (
+        <div
+          id="profile-tab-panel-account"
+          role="tabpanel"
+          aria-labelledby="profile-tab-trigger-account"
+          className="space-y-6"
+        >
+      <motion.section
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1 }}
+      >
+        <Card className="p-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-lg font-bold text-gray-800">
+                Account Details
+              </h2>
+              <p className="mt-1 text-sm text-gray-500">
+                Update your display name and avatar.
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full sm:w-auto"
+              onClick={() => {
+                setEditForm({
+                  display_name: user?.display_name || "",
+                  avatar_url: user?.avatar_url || "",
+                });
+                setIsEditing(!isEditing);
+              }}
+            >
+              {isEditing ? "Cancel" : "Edit Profile"}
+            </Button>
+          </div>
+
+          {isEditing && (
+            <motion.div
+              className="mt-4 space-y-3 border-t border-gray-100 pt-4"
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+            >
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-600">
+                  Display Name
+                </label>
+                <input
+                  type="text"
+                  value={editForm.display_name || ""}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, display_name: e.target.value })
+                  }
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  placeholder="Your display name"
+                />
+              </div>
+              <div>
+                <label className="mb-2 block text-sm font-medium text-gray-600">
+                  Choose Your Avatar
+                </label>
+                <div className="mb-3 flex items-center gap-3">
+                  <AvatarDisplay
+                    avatarUrl={editForm.avatar_url || undefined}
+                    size="md"
+                  />
+                  <span className="text-sm text-gray-500">
+                    {editForm.avatar_url?.startsWith("emoji:")
+                      ? "Tap an animal to change"
+                      : "Pick your favorite animal!"}
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {ANIMAL_EMOJIS.map((emoji) => {
+                    const emojiValue = `emoji:${emoji}`;
+                    const isSelected = editForm.avatar_url === emojiValue;
+                    return (
+                      <motion.button
+                        key={emoji}
+                        type="button"
+                        className={`flex h-10 w-10 items-center justify-center rounded-lg text-xl transition-all ${
+                          isSelected
+                            ? "border-2 border-primary bg-primary/10 shadow-md"
+                            : "border border-gray-200 hover:border-gray-300 hover:shadow-sm"
+                        }`}
+                        onClick={() =>
+                          setEditForm({ ...editForm, avatar_url: emojiValue })
+                        }
+                        whileHover={{ scale: 1.15, y: -2 }}
+                        whileTap={{ scale: 0.9 }}
+                      >
+                        {emoji}
+                      </motion.button>
+                    );
+                  })}
+                </div>
+              </div>
+              <Button size="sm" onClick={handleSaveProfile} isLoading={saving}>
+                Save Changes
+              </Button>
+            </motion.div>
+          )}
+        </Card>
       </motion.section>
 
       {/* Referral Section */}
@@ -476,27 +625,27 @@ function ProfilePage() {
         </Card>
       </motion.section>
 
-      {/* Kids Daily settings shortcut */}
-      <motion.section
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.15 }}
-      >
-        <Card className="p-4 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 className="text-base font-bold text-gray-800">
-              Kids Daily Preferences
-            </h2>
-            <p className="text-sm text-gray-500">
-              Manage topic channels for Kids Daily episodes.
-            </p>
-          </div>
-          <Button size="sm" variant="outline" onClick={() => navigate("/kids-daily")}>
-            Manage Channels
-          </Button>
-        </Card>
-      </motion.section>
+        </div>
+      )}
 
+      {activeTab === "children" && (
+        <div
+          id="profile-tab-panel-children"
+          role="tabpanel"
+          aria-labelledby="profile-tab-trigger-children"
+          className="space-y-6"
+        >
+          <ChildrenTab isParent={isParent} />
+        </div>
+      )}
+
+      {activeTab === "memory" && (
+        <div
+          id="profile-tab-panel-memory"
+          role="tabpanel"
+          aria-labelledby="profile-tab-trigger-memory"
+          className="space-y-6"
+        >
       {/* Memory load error */}
       {memoryError && (
         <motion.section
@@ -635,6 +784,8 @@ function ProfilePage() {
           )}
         </Card>
       </motion.section>
+        </div>
+      )}
     </div>
   );
 }

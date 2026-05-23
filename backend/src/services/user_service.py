@@ -15,7 +15,13 @@ from datetime import datetime, timedelta
 from typing import Optional, Tuple
 from dataclasses import dataclass
 
-from .database import user_repo, referral_repo, db_manager, UserData
+from .database import (
+    ChildProfileRepository,
+    UserData,
+    db_manager,
+    referral_repo,
+    user_repo,
+)
 
 
 @dataclass
@@ -259,6 +265,15 @@ class UserService:
         )
 
         if role == "parent" and child_id:
+            child_profiles = ChildProfileRepository(self._db)
+            await child_profiles.create(
+                user_id=user.user_id,
+                child_id=child_id,
+                name=child_name or display_name or username,
+                age_group=child_age_group or "6-8",
+                interests=child_interests or [],
+                is_default=True,
+            )
             await self._repo.update_onboarding_fields(
                 user.user_id,
                 default_child_id=child_id,
