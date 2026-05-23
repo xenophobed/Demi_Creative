@@ -17,10 +17,6 @@ export interface RegisterRequest {
   referral_code?: string
   role?: 'parent' | 'child'
   parent_email?: string
-  child_id?: string
-  child_name?: string
-  child_age_group?: '3-5' | '6-8' | '9-12'
-  child_interests?: string[]
 }
 
 // User profile returned from API

@@ -6,8 +6,6 @@ import Card from '@/components/common/Card'
 import { authService } from '@/api/services/authService'
 import { getErrorMessage } from '@/api/client'
 import useAuthStore from '@/store/useAuthStore'
-import useChildStore, { DEFAULT_INTERESTS, generateChildId } from '@/store/useChildStore'
-import type { AgeGroup } from '@/types/api'
 
 type AuthMode = 'login' | 'register'
 type RegistrationRole = 'parent' | 'child'
@@ -46,7 +44,6 @@ function LoginPage() {
   const [searchParams] = useSearchParams()
   const referralCode = searchParams.get('ref') || undefined
   const { setAuth } = useAuthStore()
-  const configureChildProfile = useChildStore((state) => state.configureChildProfile)
 
   // Form mode
   const [mode, setMode] = useState<AuthMode>('login')
@@ -60,10 +57,6 @@ function LoginPage() {
   const [displayName, setDisplayName] = useState('')
   const [registrationRole, setRegistrationRole] = useState<RegistrationRole>('parent')
   const [parentEmail, setParentEmail] = useState('')
-  const [childId, setChildId] = useState(() => generateChildId())
-  const [childName, setChildName] = useState('Little Artist')
-  const [childAgeGroup, setChildAgeGroup] = useState<AgeGroup>('6-8')
-  const [childInterests, setChildInterests] = useState<string[]>(['Space', 'Animals'])
 
   // UI state
   const [isLoading, setIsLoading] = useState(false)
@@ -86,9 +79,6 @@ function LoginPage() {
       if (registrationRole === 'child') {
         if (!parentEmail.trim()) return 'Please enter a parent or guardian email'
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(parentEmail)) return 'Please enter a valid parent or guardian email'
-      } else {
-        if (!childName.trim()) return 'Please enter a child profile nickname'
-        if (!childAgeGroup) return 'Please select an age group'
       }
       if (!password) return 'Please enter a password'
       if (password.length < 6) return 'Password must be at least 6 characters'
@@ -132,10 +122,6 @@ function LoginPage() {
           parent_email: registrationRole === 'child'
             ? parentEmail.trim().toLowerCase()
             : undefined,
-          child_id: registrationRole === 'parent' ? childId : undefined,
-          child_name: registrationRole === 'parent' ? childName.trim() : undefined,
-          child_age_group: registrationRole === 'parent' ? childAgeGroup : undefined,
-          child_interests: registrationRole === 'parent' ? childInterests : undefined,
         })
 
         if ('pendingConfirmation' in result) {
@@ -150,16 +136,11 @@ function LoginPage() {
       // Store auth data
       setAuth(response.user, response.token.access_token)
 
-      if (mode === 'register' && response.user.role === 'parent') {
-        configureChildProfile({
-          child_id: response.user.default_child_id || childId,
-          name: childName.trim() || 'Little Artist',
-          age_group: childAgeGroup,
-          interests: childInterests,
-        })
-      }
-
-      navigate(mode === 'register' ? '/my-agent' : '/')
+      navigate(
+        mode === 'register' && response.user.role === 'parent'
+          ? '/profile?tab=children'
+          : '/',
+      )
     } catch (err: any) {
       if (err?.code === 'EMAIL_CONFIRMATION_REQUIRED') {
         setEmailConfirmation(true)
@@ -210,7 +191,6 @@ function LoginPage() {
     setPassword('')
     setConfirmPassword('')
     setParentEmail('')
-    setChildId(generateChildId())
   }
 
   return (
@@ -481,73 +461,6 @@ function LoginPage() {
                   <p className="mt-1 text-xs text-gray-500">
                     A parent or guardian must approve before protected features are enabled.
                   </p>
-                </motion.div>
-              )}
-
-              {/* Child profile setup (parent-owned register only) */}
-              {mode === 'register' && registrationRole === 'parent' && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="space-y-3 rounded-lg border border-primary/20 bg-primary/5 p-3"
-                >
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Child Profile Nickname
-                    </label>
-                    <input
-                      type="text"
-                      value={childName}
-                      onChange={(e) => setChildName(e.target.value)}
-                      placeholder="Little Artist"
-                      className="input-kid"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Age Group
-                    </label>
-                    <select
-                      value={childAgeGroup}
-                      onChange={(e) => setChildAgeGroup(e.target.value as AgeGroup)}
-                      className="input-kid"
-                    >
-                      <option value="3-5">3-5</option>
-                      <option value="6-8">6-8</option>
-                      <option value="9-12">9-12</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Interests
-                    </label>
-                    <div className="grid grid-cols-2 gap-2">
-                      {DEFAULT_INTERESTS.slice(0, 8).map((interest) => {
-                        const selected = childInterests.includes(interest)
-                        return (
-                          <button
-                            key={interest}
-                            type="button"
-                            onClick={() => {
-                              setChildInterests((current) => (
-                                selected
-                                  ? current.filter((item) => item !== interest)
-                                  : [...current, interest].slice(0, 5)
-                              ))
-                            }}
-                            className={`rounded-lg border px-3 py-2 text-sm transition-colors ${
-                              selected
-                                ? 'border-primary bg-primary/10 text-gray-900'
-                                : 'border-gray-200 bg-white text-gray-600 hover:border-primary/40'
-                            }`}
-                          >
-                            {interest}
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </div>
                 </motion.div>
               )}
 
