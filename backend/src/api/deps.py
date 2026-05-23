@@ -193,6 +193,8 @@ async def _get_or_create_supabase_user(claims) -> Optional[UserData]:
     # Generate a unique referral code (same logic as user_repo._generate_referral_code)
     alphabet = string.ascii_lowercase + string.digits
     referral_code = ''.join(secrets.choice(alphabet) for _ in range(8))
+    role = claims.role if claims.role in {"parent", "child"} else "parent"
+    consent_status = "not_required" if role == "parent" else "pending_parent_consent"
 
     now = datetime.now().isoformat()
     await db_manager.execute(
@@ -200,6 +202,7 @@ async def _get_or_create_supabase_user(claims) -> Optional[UserData]:
             "users",
             ["user_id", "username", "email", "password_hash", "display_name",
              "is_active", "is_verified", "role",
+             "parent_email", "consent_status",
              "membership_tier", "referral_code",
              "created_at", "updated_at"],
             db_manager.dialect,
@@ -212,7 +215,9 @@ async def _get_or_create_supabase_user(claims) -> Optional[UserData]:
             username,
             1,
             1 if claims.email_confirmed else 0,
-            "child",
+            role,
+            claims.parent_email,
+            consent_status,
             "free",
             referral_code,
             now,

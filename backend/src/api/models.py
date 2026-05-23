@@ -753,6 +753,14 @@ class UserRegisterRequest(BaseModel):
         max_length=8,
         description="Referral code from share link (optional)"
     )
+    role: Literal["parent", "child"] = Field(
+        default="parent",
+        description="Who is setting up the account. Parent is the primary supported path.",
+    )
+    parent_email: Optional[str] = Field(
+        None,
+        description="Required when a child starts registration without a parent account.",
+    )
 
     @field_validator('email')
     @classmethod
@@ -761,12 +769,27 @@ class UserRegisterRequest(BaseModel):
             raise ValueError("Invalid email format")
         return v.lower()
 
+    @field_validator('parent_email')
+    @classmethod
+    def validate_parent_email(cls, v):
+        if v is None or v == "":
+            return None
+        if "@" not in v or "." not in v:
+            raise ValueError("Invalid parent email format")
+        return v.lower()
+
     @field_validator('username')
     @classmethod
     def validate_username(cls, v):
         if not v.replace("_", "").replace("-", "").isalnum():
             raise ValueError("Username can only contain letters, numbers, underscores, and hyphens")
         return v.lower()
+
+    @model_validator(mode="after")
+    def validate_child_signup_parent_email(self):
+        if self.role == "child" and not self.parent_email:
+            raise ValueError("A parent/guardian email is required for child sign-up")
+        return self
 
 
 class UserLoginRequest(BaseModel):
@@ -800,6 +823,8 @@ class UserResponse(BaseModel):
     is_active: bool = Field(..., description="Whether active")
     is_verified: bool = Field(..., description="Whether verified")
     role: str = Field(default="child", description="User role: 'child' or 'parent'")
+    parent_email: Optional[str] = Field(None, description="Parent/guardian email for child-started accounts")
+    consent_status: str = Field(default="not_required", description="Parent consent status")
     membership_tier: str = Field(default="free", description="Membership tier: 'free' or 'plus'")
     referral_code: str = Field(default="", description="User's unique referral code")
     created_at: datetime = Field(..., description="Registered at")

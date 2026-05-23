@@ -113,6 +113,8 @@ def _user_to_response(user: UserData, *, has_agent: bool = False) -> UserRespons
         is_active=user.is_active,
         is_verified=user.is_verified,
         role=user.role,
+        parent_email=getattr(user, "parent_email", None),
+        consent_status=getattr(user, "consent_status", None) or "not_required",
         membership_tier=getattr(user, 'membership_tier', 'free') or 'free',
         referral_code=getattr(user, 'referral_code', '') or '',
         created_at=datetime.fromisoformat(user.created_at),
@@ -157,6 +159,8 @@ async def register(request: UserRegisterRequest):
         password=request.password,
         display_name=request.display_name,
         referral_code=request.referral_code,
+        role=request.role,
+        parent_email=request.parent_email,
     )
 
     if not result.success:

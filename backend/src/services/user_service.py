@@ -171,7 +171,9 @@ class UserService:
         email: str,
         password: str,
         display_name: Optional[str] = None,
-        referral_code: Optional[str] = None
+        referral_code: Optional[str] = None,
+        role: str = "parent",
+        parent_email: Optional[str] = None,
     ) -> AuthResult:
         """
         User registration
@@ -182,6 +184,8 @@ class UserService:
             password: Password
             display_name: Display name
             referral_code: Referral code from share link (optional)
+            role: Account role. Parent is the primary supported setup path.
+            parent_email: Required when role is child.
 
         Returns:
             AuthResult: Registration result
@@ -197,6 +201,18 @@ class UserService:
         # Validate password strength
         if len(password) < 6:
             return AuthResult(success=False, error="Password must be at least 6 characters")
+
+        if role not in {"parent", "child"}:
+            return AuthResult(success=False, error="Role must be 'parent' or 'child'")
+
+        if role == "child":
+            if not parent_email:
+                return AuthResult(
+                    success=False,
+                    error="Parent email is required for child sign-up",
+                )
+            if "@" not in parent_email or "." not in parent_email:
+                return AuthResult(success=False, error="Invalid parent email format")
 
         # Check if username already exists
         if await self._repo.check_username_exists(username):
@@ -222,6 +238,11 @@ class UserService:
             email=email,
             password_hash=password_hash,
             display_name=display_name,
+            role=role,
+            parent_email=parent_email.lower() if parent_email else None,
+            consent_status=(
+                "not_required" if role == "parent" else "pending_parent_consent"
+            ),
             referred_by=referred_by
         )
 

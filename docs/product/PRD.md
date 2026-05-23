@@ -937,9 +937,9 @@ A pluggable multi-provider TTS engine supporting expressive voice narration, sce
 ### 4.1 First-Time Use
 
 ```
-Step 1: Parent registers an account
+Step 1: Parent registers an account as the parent/guardian owner
   ↓
-Step 2: Creates child profile (age, interests)
+Step 2: Creates or confirms a child profile (age, interests, buddy identity)
   ↓
 Step 3: Child uploads first drawing
   ↓
@@ -1313,6 +1313,8 @@ The existing tear-to-claim-star mechanic (Epic #371) is preserved:
 
 #### 3.11.2 First-Login Onboarding
 
+Registration is parent-owned by default. The primary path is a parent/guardian creating the account, then configuring one child profile inside that account. Child-started registration is allowed only when a parent/guardian email is supplied, and the account remains in `pending_parent_consent` until a parent approves.
+
 After successful login or registration, a returning user with `onboarded_at = NULL` is redirected to `/my-agent`, where an onboarding modal opens automatically.
 
 The flow has these steps:
@@ -1321,9 +1323,18 @@ The flow has these steps:
 2. **Name + nickname** — the child names the buddy, optionally enters their own nickname for in-app display.
 3. **Avatar** — the child picks one of the 20 animal emojis from the existing avatar set (shared with `/profile`).
 4. **Title** — the child picks from a curated list of 20 buddy titles (e.g. "Story Wizard", "Brave Lion"); free-text titles are allowed for ages 9–12 only and must pass safety check.
-5. **Parent-consent gate** — before completion, the parent confirms they're OK with the buddy being shown publicly when stories are shared.
+5. **Parent-consent gate** — before completion, a parent-role account confirms they're OK with the buddy being shown publicly when stories are shared. Child-role accounts cannot self-consent.
 
-`POST /api/v1/me/onboarding/complete` requires both an agent and parent consent before flipping `users.onboarded_at`.
+`POST /api/v1/me/onboarding/complete` requires a parent-role account, an agent, and parent consent before flipping `users.onboarded_at`.
+
+##### Registration Ownership
+
+| Setup path | Required fields | Account role | Consent state | Notes |
+|---|---|---|---|---|
+| Parent / guardian setup | Parent email, password | `parent` | `not_required` | Primary supported path. Parent can access parent dashboard and configure child profiles. |
+| Child-started setup | Child account email + parent/guardian email | `child` | `pending_parent_consent` | Protected features that require adult consent stay blocked until parent approval is implemented. |
+
+For MVP, the product should steer users toward parent-owned registration. Child-started signup exists to capture intent safely, not to bypass adult approval.
 
 ##### Age-Gated Onboarding Variants
 
@@ -1692,7 +1703,7 @@ Phase 3 turns the existing foundations for video, growth metrics, and rewards in
 **Current foundation**:
 - `GET /api/v1/library/stats-rich` provides richer Library metrics.
 - `GrowthTimeline` already visualizes creation frequency.
-- Parent role and parent consent are represented in user models and onboarding.
+- Parent role, parent email, consent status, and parent consent are represented in user models and onboarding.
 
 **In scope**:
 - Create a parent-facing dashboard entrypoint that summarizes creation frequency, content mix, favorite themes, and recent safe creations.

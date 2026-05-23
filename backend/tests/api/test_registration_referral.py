@@ -67,7 +67,34 @@ class TestRegistrationWithReferralCode:
             password="password123"
         )
         assert result.success is True
+        assert result.user.role == "parent"
+        assert result.user.consent_status == "not_required"
         assert result.user.referred_by is None
+
+    @pytest.mark.asyncio
+    async def test_child_signup_requires_parent_email(self, service):
+        result = await service["svc"].register(
+            username="child_no_parent",
+            email="child_no_parent@test.com",
+            password="password123",
+            role="child",
+        )
+        assert result.success is False
+        assert result.error == "Parent email is required for child sign-up"
+
+    @pytest.mark.asyncio
+    async def test_child_signup_stores_parent_consent_pending(self, service):
+        result = await service["svc"].register(
+            username="child_with_parent",
+            email="child_with_parent@test.com",
+            password="password123",
+            role="child",
+            parent_email="Parent@Test.com",
+        )
+        assert result.success is True
+        assert result.user.role == "child"
+        assert result.user.parent_email == "parent@test.com"
+        assert result.user.consent_status == "pending_parent_consent"
 
     @pytest.mark.asyncio
     async def test_register_with_valid_referral_code(self, service, referrer):

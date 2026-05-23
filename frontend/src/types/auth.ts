@@ -15,6 +15,8 @@ export interface RegisterRequest {
   password: string
   display_name?: string
   referral_code?: string
+  role?: 'parent' | 'child'
+  parent_email?: string
 }
 
 // User profile returned from API
@@ -27,6 +29,8 @@ export interface User {
   is_active: boolean
   is_verified: boolean
   role: 'child' | 'parent'
+  parent_email?: string | null
+  consent_status?: 'not_required' | 'pending_parent_consent' | 'approved'
   created_at: string
   last_login_at: string | null
   membership_tier: 'free' | 'plus'

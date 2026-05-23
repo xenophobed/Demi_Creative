@@ -124,6 +124,8 @@ CREATE TABLE IF NOT EXISTS users (
     is_active INTEGER DEFAULT 1,
     is_verified INTEGER DEFAULT 0,
     role TEXT DEFAULT 'child',
+    parent_email TEXT,
+    consent_status TEXT DEFAULT 'not_required',
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     last_login_at TEXT
@@ -537,6 +539,7 @@ async def init_schema(db: "DatabaseManager") -> None:
     await _migrate_add_user_id(db)
     await _migrate_add_story_type(db)
     await _migrate_add_user_role(db)
+    await _migrate_add_parent_registration_columns(db)
     await _migrate_backfill_word_counts(db)
     await _migrate_characters_user_id(db)
     await _migrate_add_styled_image_url(db)
@@ -623,6 +626,31 @@ async def _migrate_add_user_role(db: "DatabaseManager") -> None:
     """Migration: Add role column to users table (#232)."""
     if not await column_exists(db, "users", "role"):
         await db.execute("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'child'")
+        await db.commit()
+
+
+async def _migrate_add_parent_registration_columns(db: "DatabaseManager") -> None:
+    """Migration: Add parent-owned registration fields."""
+    changed = False
+    if not await column_exists(db, "users", "parent_email"):
+        await db.execute("ALTER TABLE users ADD COLUMN parent_email TEXT")
+        changed = True
+    if not await column_exists(db, "users", "consent_status"):
+        await db.execute(
+            "ALTER TABLE users ADD COLUMN consent_status TEXT DEFAULT 'not_required'"
+        )
+        changed = True
+    if changed:
+        await db.execute(
+            """
+            UPDATE users
+            SET consent_status = CASE
+                WHEN role = 'parent' THEN 'not_required'
+                ELSE 'pending_parent_consent'
+            END
+            WHERE consent_status IS NULL OR consent_status = ''
+            """
+        )
         await db.commit()
 
 

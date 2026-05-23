@@ -74,6 +74,8 @@ export const authService = {
           data: {
             display_name: data.display_name || data.username,
             username: data.username,
+            role: data.role ?? 'parent',
+            ...(data.parent_email ? { parent_email: data.parent_email } : {}),
             ...(data.referral_code ? { referral_code: data.referral_code } : {}),
           },
         },
@@ -97,7 +99,10 @@ export const authService = {
     }
 
     // Legacy flow
-    const response = await apiClient.post<AuthResponse>(`${AUTH_BASE}/register`, data)
+    const response = await apiClient.post<AuthResponse>(`${AUTH_BASE}/register`, {
+      ...data,
+      role: data.role ?? 'parent',
+    })
     return response.data
   },
 

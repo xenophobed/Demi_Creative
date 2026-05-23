@@ -27,6 +27,8 @@ class UserData:
     is_active: bool = True
     is_verified: bool = False
     role: str = "child"
+    parent_email: Optional[str] = None
+    consent_status: str = "not_required"
     membership_tier: str = "free"
     referral_code: str = ""
     referred_by: Optional[str] = None
@@ -63,6 +65,8 @@ class UserRepository:
         password_hash: str,
         display_name: Optional[str] = None,
         role: str = "child",
+        parent_email: Optional[str] = None,
+        consent_status: Optional[str] = None,
         referred_by: Optional[str] = None,
     ) -> UserData:
         """
@@ -74,6 +78,8 @@ class UserRepository:
             password_hash: Hashed password
             display_name: Display name (defaults to username)
             role: User role
+            parent_email: Parent/guardian email for child self-signup
+            consent_status: Parent consent state for the account
             referred_by: Referral code used during registration
 
         Returns:
@@ -82,15 +88,21 @@ class UserRepository:
         user_id = str(uuid.uuid4())
         now = datetime.now().isoformat()
         referral_code = await self._generate_referral_code()
+        resolved_consent_status = (
+            consent_status
+            if consent_status is not None
+            else ("not_required" if role == "parent" else "pending_parent_consent")
+        )
 
         await self._db.execute(
             """
             INSERT INTO users (
                 user_id, username, email, password_hash, display_name,
                 is_active, is_verified, role,
+                parent_email, consent_status,
                 membership_tier, referral_code, referred_by,
                 created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 user_id,
@@ -101,6 +113,8 @@ class UserRepository:
                 1,
                 0,
                 role,
+                parent_email,
+                resolved_consent_status,
                 "free",
                 referral_code,
                 referred_by,
@@ -119,6 +133,8 @@ class UserRepository:
             is_active=True,
             is_verified=False,
             role=role,
+            parent_email=parent_email,
+            consent_status=resolved_consent_status,
             membership_tier="free",
             referral_code=referral_code,
             referred_by=referred_by,
@@ -568,6 +584,10 @@ class UserRepository:
             is_active=bool(row.get('is_active', 1)),
             is_verified=bool(row.get('is_verified', 0)),
             role=row.get('role', 'child'),
+            parent_email=row.get('parent_email'),
+            consent_status=row.get('consent_status') or (
+                "not_required" if row.get('role', 'child') == "parent" else "pending_parent_consent"
+            ),
             membership_tier=row.get('membership_tier', 'free'),
             referral_code=row.get('referral_code', ''),
             referred_by=row.get('referred_by'),

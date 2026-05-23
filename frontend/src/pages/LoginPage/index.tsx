@@ -8,6 +8,7 @@ import { getErrorMessage } from '@/api/client'
 import useAuthStore from '@/store/useAuthStore'
 
 type AuthMode = 'login' | 'register'
+type RegistrationRole = 'parent' | 'child'
 
 /** Map raw auth errors to child/parent-friendly messages. */
 function friendlyAuthError(raw: string, mode: AuthMode): string {
@@ -54,6 +55,8 @@ function LoginPage() {
   const [password, setPassword] = useState(isDev ? '$!$Ymd@2022' : '')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [displayName, setDisplayName] = useState('')
+  const [registrationRole, setRegistrationRole] = useState<RegistrationRole>('parent')
+  const [parentEmail, setParentEmail] = useState('')
 
   // UI state
   const [isLoading, setIsLoading] = useState(false)
@@ -73,6 +76,10 @@ function LoginPage() {
       if (!username.trim()) return 'Please enter a username'
       if (!email.trim()) return 'Please enter your email'
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return 'Please enter a valid email'
+      if (registrationRole === 'child') {
+        if (!parentEmail.trim()) return 'Please enter a parent or guardian email'
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(parentEmail)) return 'Please enter a valid parent or guardian email'
+      }
       if (!password) return 'Please enter a password'
       if (password.length < 6) return 'Password must be at least 6 characters'
       if (password !== confirmPassword) return 'Passwords do not match'
@@ -111,6 +118,10 @@ function LoginPage() {
           password,
           display_name: displayName.trim() || undefined,
           referral_code: referralCode,
+          role: registrationRole,
+          parent_email: registrationRole === 'child'
+            ? parentEmail.trim().toLowerCase()
+            : undefined,
         })
 
         if ('pendingConfirmation' in result) {
@@ -176,6 +187,7 @@ function LoginPage() {
     setConfirmationNotice(null)
     setPassword('')
     setConfirmPassword('')
+    setParentEmail('')
   }
 
   return (
@@ -380,6 +392,72 @@ function LoginPage() {
                       autoComplete="email"
                     />
                   </div>
+                </motion.div>
+              )}
+
+              {/* Account setup role (register only) */}
+              {mode === 'register' && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="space-y-2"
+                >
+                  <label className="block text-sm font-medium text-gray-700">
+                    Who is setting this up?
+                  </label>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    {([
+                      ['parent', 'Parent / guardian', 'Manage child profiles and consent'],
+                      ['child', 'Kid with parent email', 'Parent approval required'],
+                    ] as const).map(([value, label, helper]) => {
+                      const selected = registrationRole === value
+                      return (
+                        <button
+                          key={value}
+                          type="button"
+                          onClick={() => setRegistrationRole(value)}
+                          className={`rounded-lg border px-3 py-2 text-left transition-colors ${
+                            selected
+                              ? 'border-primary bg-primary/10 text-gray-900'
+                              : 'border-gray-200 bg-white text-gray-600 hover:border-primary/40'
+                          }`}
+                        >
+                          <span className="block text-sm font-semibold">{label}</span>
+                          <span className="block text-xs text-gray-500">{helper}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </motion.div>
+              )}
+
+              {/* Parent email (child-started register only) */}
+              {mode === 'register' && registrationRole === 'child' && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                >
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Parent / Guardian Email
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                      📬
+                    </span>
+                    <input
+                      type="email"
+                      value={parentEmail}
+                      onChange={(e) => setParentEmail(e.target.value)}
+                      placeholder="parent@email.com"
+                      className="input-kid pl-10"
+                      autoComplete="email"
+                    />
+                  </div>
+                  <p className="mt-1 text-xs text-gray-500">
+                    A parent or guardian must approve before protected features are enabled.
+                  </p>
                 </motion.div>
               )}
 

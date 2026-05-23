@@ -47,6 +47,12 @@ async def complete_onboarding(
     request: CompleteOnboardingRequest,
     user: UserData = Depends(get_current_user),
 ):
+    if getattr(user, "role", "child") != "parent":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": "PARENT_ROLE_REQUIRED"},
+        )
+
     if not request.parent_consent:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
