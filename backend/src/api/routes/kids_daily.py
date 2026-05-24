@@ -31,6 +31,10 @@ from ...agents.kids_daily_agent import (
 from ...mcp_servers import fetch_article_text as _raw_fetch_article
 fetch_article_text = getattr(_raw_fetch_article, "handler", _raw_fetch_article)
 from ...services.database import db_manager, preference_repo, story_repo, subscription_repo
+from ...services.achievement_service import (
+    FIRST_KIDS_DAILY_LISTEN,
+    achievement_service,
+)
 from ...services.news_headline_fetcher import fetch_news_text
 from ...services.provenance_tracker import ProvenanceTracker
 from ...services.models.artifact_models import (
@@ -1492,6 +1496,9 @@ async def track_kids_daily_engagement(
     updates = {"is_new": False}
     if request.event_type.value == "complete" or request.progress >= 0.8:
         updates["is_played"] = True
+        await achievement_service.award_event_safely(
+            user.user_id, trusted_child_id, FIRST_KIDS_DAILY_LISTEN
+        )
     elif request.event_type.value == "abandon" and request.progress < 0.5:
         updates["is_played"] = False
 

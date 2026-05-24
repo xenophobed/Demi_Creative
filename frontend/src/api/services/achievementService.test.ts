@@ -1,3 +1,5 @@
+/* @vitest-environment node */
+
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import apiClient from "../client";
 import { achievementService } from "./achievementService";

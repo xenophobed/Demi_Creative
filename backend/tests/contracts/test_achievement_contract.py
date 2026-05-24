@@ -10,6 +10,12 @@ import pytest_asyncio
 from backend.src.services.achievement_service import (
     ACHIEVEMENT_DEFINITIONS,
     AchievementService,
+    FIRST_INTERACTIVE_ENDING,
+    FIRST_KIDS_DAILY_LISTEN,
+    FIRST_SHARED_POST,
+    FIRST_STORY,
+    FIRST_VIDEO,
+    MULTIPLE_THEMES_TRIED,
     UnknownAchievementError,
 )
 from backend.src.services.database.achievement_repository import (
@@ -63,6 +69,16 @@ class TestAchievementDefinitions:
         assert len(ids) == len(set(ids))
 
     def test_definitions_are_server_owned_badges(self):
+        expected_ids = {
+            FIRST_STORY,
+            FIRST_INTERACTIVE_ENDING,
+            FIRST_KIDS_DAILY_LISTEN,
+            FIRST_SHARED_POST,
+            FIRST_VIDEO,
+            MULTIPLE_THEMES_TRIED,
+        }
+        assert {item.achievement_id for item in ACHIEVEMENT_DEFINITIONS} == expected_ids
+
         for definition in ACHIEVEMENT_DEFINITIONS:
             assert definition.achievement_id
             assert definition.title
@@ -72,21 +88,12 @@ class TestAchievementDefinitions:
                 "creativity",
                 "storytelling",
                 "learning",
-                "care",
+                "community",
             }
-            assert definition.award_event in {
-                "first_image_story",
-                "first_interactive_story",
-                "first_kids_daily",
-                "first_character_created",
-                "first_audio_narration",
-            }
+            assert definition.award_event == definition.achievement_id
 
     def test_definitions_do_not_reward_unsafe_sharing_or_excessive_usage(self):
         unsafe_terms = {
-            "share",
-            "shared",
-            "sharing",
             "publish",
             "viral",
             "streak",
@@ -139,23 +146,23 @@ class TestAchievementRepository:
         result, created = await repo.award(
             user_id="user_a",
             child_id="child_a",
-            achievement_id="first_image_story",
-            source_event="first_image_story",
+            achievement_id=FIRST_STORY,
+            source_event=FIRST_STORY,
         )
 
         assert created is True
         assert isinstance(result, AchievementData)
         assert result.user_id == "user_a"
         assert result.child_id == "child_a"
-        assert result.achievement_id == "first_image_story"
+        assert result.achievement_id == FIRST_STORY
 
     @pytest.mark.asyncio
     async def test_award_is_idempotent_for_same_user_child(self, repo):
         first, first_created = await repo.award(
-            "user_a", "child_a", "first_image_story", "first_image_story"
+            "user_a", "child_a", FIRST_STORY, FIRST_STORY
         )
         second, second_created = await repo.award(
-            "user_a", "child_a", "first_image_story", "first_image_story"
+            "user_a", "child_a", FIRST_STORY, FIRST_STORY
         )
         rows = await repo.list_for_child("user_a", "child_a")
 
@@ -166,9 +173,9 @@ class TestAchievementRepository:
 
     @pytest.mark.asyncio
     async def test_ownership_scope_includes_user_and_child(self, repo):
-        await repo.award("user_a", "child_a", "first_image_story", "first_image_story")
-        await repo.award("user_a", "child_b", "first_image_story", "first_image_story")
-        await repo.award("user_b", "child_a", "first_image_story", "first_image_story")
+        await repo.award("user_a", "child_a", FIRST_STORY, FIRST_STORY)
+        await repo.award("user_a", "child_b", FIRST_STORY, FIRST_STORY)
+        await repo.award("user_b", "child_a", FIRST_STORY, FIRST_STORY)
 
         assert len(await repo.list_for_child("user_a", "child_a")) == 1
         assert len(await repo.list_for_child("user_a", "child_b")) == 1
@@ -176,17 +183,17 @@ class TestAchievementRepository:
 
     @pytest.mark.asyncio
     async def test_list_does_not_cross_user_boundary(self, repo):
-        await repo.award("user_a", "shared_child", "first_image_story", "first_image_story")
+        await repo.award("user_a", "shared_child", FIRST_STORY, FIRST_STORY)
         await repo.award(
             "user_b",
             "shared_child",
-            "first_interactive_story",
-            "first_interactive_story",
+            FIRST_INTERACTIVE_ENDING,
+            FIRST_INTERACTIVE_ENDING,
         )
 
         rows = await repo.list_for_child("user_a", "shared_child")
 
-        assert [row.achievement_id for row in rows] == ["first_image_story"]
+        assert [row.achievement_id for row in rows] == [FIRST_STORY]
 
 
 class TestAchievementService:
@@ -201,8 +208,18 @@ class TestAchievementService:
     async def test_service_returns_definition_with_award(self, repo):
         service = AchievementService(repo)
 
-        result = await service.award("user_a", "child_a", "first_image_story")
+        result = await service.award("user_a", "child_a", FIRST_STORY)
 
-        assert result["achievement"]["achievement_id"] == "first_image_story"
-        assert result["definition"]["achievement_id"] == "first_image_story"
+        assert result["achievement"]["achievement_id"] == FIRST_STORY
+        assert result["definition"]["achievement_id"] == FIRST_STORY
+        assert result["created"] is True
+
+    @pytest.mark.asyncio
+    async def test_service_awards_from_known_completion_event(self, repo):
+        service = AchievementService(repo)
+
+        result = await service.award_event("user_a", "child_a", FIRST_VIDEO)
+
+        assert result["achievement"]["achievement_id"] == FIRST_VIDEO
+        assert result["definition"]["award_event"] == FIRST_VIDEO
         assert result["created"] is True

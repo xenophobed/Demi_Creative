@@ -1,12 +1,12 @@
 import {
-  BookOpen,
   GitBranch,
   Image,
   LucideIcon,
   Medal,
   Newspaper,
-  Sparkles,
-  Volume2,
+  Palette,
+  Share2,
+  Video,
 } from "lucide-react";
 import Card from "@/components/common/Card";
 import type {
@@ -23,19 +23,19 @@ interface AchievementBadgesProps {
 }
 
 const iconMap: Record<string, LucideIcon> = {
-  "book-open": BookOpen,
   "git-branch": GitBranch,
   image: Image,
   newspaper: Newspaper,
-  sparkles: Sparkles,
-  "volume-2": Volume2,
+  palette: Palette,
+  "share-2": Share2,
+  video: Video,
 };
 
-function getAgeCopy(ageGroup?: AgeGroup | null) {
+export function getAchievementAgeCopy(ageGroup?: AgeGroup | null) {
   if (ageGroup === "3-5") {
     return {
       title: "My Badges",
-      empty: "New badges will appear after creative play.",
+      empty: "New picture badges will appear after creative play.",
       progress: "creative moments",
     };
   }
@@ -59,7 +59,7 @@ export default function AchievementBadges({
   ageGroup,
   isLoading = false,
 }: AchievementBadgesProps) {
-  const copy = getAgeCopy(ageGroup);
+  const copy = getAchievementAgeCopy(ageGroup);
   const earnedIds = new Set(items.map((item) => item.achievement_id));
   const definitions =
     availableDefinitions.length > 0

@@ -46,6 +46,11 @@ from ...services.database import (
     story_repo,
     usage_repo,
 )
+from ...services.achievement_service import (
+    FIRST_STORY,
+    MULTIPLE_THEMES_TRIED,
+    achievement_service,
+)
 from ...services.models.artifact_models import (
     ArtifactMetadata,
     ArtifactType,
@@ -697,6 +702,13 @@ async def create_story_from_image(
         await usage_repo.increment(
             user.user_id, "image_to_story"
         )  # quota tracking (#314)
+        await achievement_service.award_event_safely(
+            user.user_id, safe_child_id, FIRST_STORY
+        )
+        if len({theme for theme in result.get("themes", []) if theme}) > 1:
+            await achievement_service.award_event_safely(
+                user.user_id, safe_child_id, MULTIPLE_THEMES_TRIED
+            )
 
         # Store story embedding for dedup detection (#290)
         try:
@@ -1250,6 +1262,13 @@ async def create_story_from_image_stream(
                     await usage_repo.increment(
                         user.user_id, "image_to_story"
                     )  # quota tracking (#314)
+                    await achievement_service.award_event_safely(
+                        user.user_id, safe_child_id, FIRST_STORY
+                    )
+                    if len({theme for theme in result_data.get("themes", []) if theme}) > 1:
+                        await achievement_service.award_event_safely(
+                            user.user_id, safe_child_id, MULTIPLE_THEMES_TRIED
+                        )
 
                     # Store story embedding for dedup detection (#290)
                     try:
