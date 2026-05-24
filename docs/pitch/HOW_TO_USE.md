@@ -123,7 +123,7 @@ Each script follows a consistent shape:
 
 Tips:
 - **Don't read robotically.** Memorize the first sentence of each slide; paraphrase the rest. The transitions matter most — those are the glue.
-- **Numbers out loud sound bigger.** "Two hundred seventy-two" beats "272 slash 272."
+- **Numbers out loud sound bigger.** "Three hundred thirteen shipped out of three hundred fifteen" beats "313 slash 315."
 - **Pauses are content.** When the script says `[PAUSE]`, take 2-3 seconds. Silence is more uncomfortable for you than for the audience.
 
 ## Why Marp instead of building in Keynote directly

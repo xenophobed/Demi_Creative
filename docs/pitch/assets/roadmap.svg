@@ -25,7 +25,7 @@
     <text x="200" y="216" text-anchor="middle" fill="#D1FAE5" font-size="13">Single agent</text>
     <text x="200" y="234" text-anchor="middle" fill="#D1FAE5" font-size="13">Image-to-Story</text>
     <text x="200" y="252" text-anchor="middle" fill="#D1FAE5" font-size="13">Safety · TTS</text>
-    <text x="200" y="278" text-anchor="middle" fill="#FFFFFF" font-size="14" font-weight="700">92/92 stories</text>
+    <text x="200" y="278" text-anchor="middle" fill="#FFFFFF" font-size="14" font-weight="700">95/95 issues</text>
   </g>
 
   <!-- Phase 2 -->
@@ -36,18 +36,18 @@
     <text x="460" y="216" text-anchor="middle" fill="#D1FAE5" font-size="13">Multi-agent + memory</text>
     <text x="460" y="234" text-anchor="middle" fill="#D1FAE5" font-size="13">Kids Daily · Community</text>
     <text x="460" y="252" text-anchor="middle" fill="#D1FAE5" font-size="13">Per-reply safety</text>
-    <text x="460" y="278" text-anchor="middle" fill="#FFFFFF" font-size="14" font-weight="700">180/180 stories</text>
+    <text x="460" y="278" text-anchor="middle" fill="#FFFFFF" font-size="14" font-weight="700">188/188 issues</text>
   </g>
 
   <!-- Phase 3 -->
   <g>
     <rect x="600" y="120" width="240" height="180" rx="14" fill="url(#design)" opacity="0.92"/>
     <text x="720" y="155" text-anchor="middle" fill="#FFFFFF" font-size="14" font-weight="700">PHASE 3</text>
-    <text x="720" y="186" text-anchor="middle" fill="#FFFFFF" font-size="22" font-weight="700">🔜 Next</text>
+    <text x="720" y="186" text-anchor="middle" fill="#FFFFFF" font-size="22" font-weight="700">🚧 Nearly done</text>
     <text x="720" y="216" text-anchor="middle" fill="#FCE7F3" font-size="13">Video / dynamic books</text>
     <text x="720" y="234" text-anchor="middle" fill="#FCE7F3" font-size="13">Parent dashboard</text>
     <text x="720" y="252" text-anchor="middle" fill="#FCE7F3" font-size="13">Gamification</text>
-    <text x="720" y="278" text-anchor="middle" fill="#FFFFFF" font-size="14" font-weight="700">in design</text>
+    <text x="720" y="278" text-anchor="middle" fill="#FFFFFF" font-size="14" font-weight="700">30/32 issues</text>
   </g>
 
   <!-- Phase 4 -->
@@ -58,7 +58,7 @@
     <text x="980" y="216" text-anchor="middle" fill="#EDE9FE" font-size="13">Autonomous</text>
     <text x="980" y="234" text-anchor="middle" fill="#EDE9FE" font-size="13">Multi-step planning</text>
     <text x="980" y="252" text-anchor="middle" fill="#EDE9FE" font-size="13">Scheduled initiatives</text>
-    <text x="980" y="278" text-anchor="middle" fill="#FFFFFF" font-size="14" font-weight="700">A2A external teams</text>
+    <text x="980" y="278" text-anchor="middle" fill="#FFFFFF" font-size="14" font-weight="700">future A2A teams</text>
   </g>
 
   <!-- Status dots on the timeline -->
@@ -69,8 +69,8 @@
 
   <!-- Today marker between Phase 2 and 3 -->
   <line x1="590" y1="170" x2="590" y2="230" stroke="#1E293B" stroke-width="2" stroke-dasharray="3,3"/>
-  <text x="590" y="160" text-anchor="middle" fill="#1E293B" font-size="11" font-weight="700">we are here ↓</text>
+  <text x="590" y="160" text-anchor="middle" fill="#1E293B" font-size="11" font-weight="700">phase 3 wrap-up ↓</text>
 
   <!-- Caption (title is on the slide itself) -->
-  <text x="580" y="370" text-anchor="middle" fill="#64748B" font-size="14">292 tracked work items · 700+ contract tests · multi-agent in production</text>
+  <text x="580" y="370" text-anchor="middle" fill="#64748B" font-size="14">313/315 tracked work items shipped · 700+ contract tests · multi-agent in production</text>
 </svg>

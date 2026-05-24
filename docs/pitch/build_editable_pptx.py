@@ -243,7 +243,7 @@ add_table(s, [
     ["Not personalized enough",
      "**Persona + character memory** — buddy is named & customized; recurring characters recalled across sessions (`character_repo`)"],
     ["Not highly customized",
-     "**Per-child `AgentDefinition` + skills gating** — age-aware capabilities (3–5 / 6–8 / 9–12); persona shared as system context to every specialist"],
+     "**Persisted buddy persona + skills gating** — age-aware capabilities (3–5 / 6–8 / 9–12); persona shared as system context to every specialist"],
     ["No suited news for kids",
      "**`kids_daily` specialist** — age-stratified prompts + per-reply safety review; news arrives as a kid-safe podcast in the buddy's voice"],
     ["No long-term persistence",
@@ -273,15 +273,15 @@ set_notes(s, 5)
 # SLIDE 6 — Four architecture patterns
 # ════════════════════════════════════════════════════════════════════════
 s = new_slide()
-heading(s, "Four agent architecture patterns — we use all four")
+heading(s, "Four agent architecture patterns — two shipped, two ready next")
 add_table(s, [
     ["#", "Pattern", "What it does", "Where we use it"],
-    ["1", "🤖 Single agent", "One agent, one job · linear inference", "Straight TTS via `audio_narration`"],
-    ["2", "🔀 Sub-agent fan-out", "Same task spawned in parallel for speed", "Concurrent vision crops · parallel `character_repo` lookups"],
-    ["3", "👥 Agent team", "Multiple agents collaborate by **role** · via `AgentDefinition`", "**My Agent**: proxy + 4 role specialists + `safety_review`"],
-    ["4", "🎼 Multi-agent orchestrator", "Agents created **dynamically** · A2A extensible", "Proxy registers new `AgentDefinition`s at runtime"],
+    ["1", "🤖 Single agent/tool", "One callable, one job · linear inference", "TTS via reusable `audio_narration` tool"],
+    ["2", "👥 Static agent team", "Multiple specialists collaborate by role", "**My Agent**: proxy + 3 product specialists + TTS tool + `safety_review`"],
+    ["3", "🔀 Sub-agent fan-out (future)", "Same task spawned in parallel for speed", "Candidate path for parallel vision crops and richer memory search"],
+    ["4", "🎼 Dynamic orchestrator (future)", "Agents registered dynamically · A2A extensible", "Future `AgentDefinition` registration / A2A bridge"],
 ], top=1.6, height=4.4, col_widths=[0.5, 2.7, 4.3, 4.43])
-caption(s, "Shared state flows through build_my_agent_context(). A2A extends to external teams (future).")
+caption(s, "Shared state flows through build_my_agent_context(); recurring characters use character_repo + vector memory. A2A is future work.")
 set_notes(s, 6)
 
 # ════════════════════════════════════════════════════════════════════════
@@ -306,7 +306,7 @@ set_notes(s, 7)
 # ════════════════════════════════════════════════════════════════════════
 s = new_slide(DARK_BG)
 textbox(s, Inches(0.7), Inches(0.4), Inches(12.0), Inches(0.9),
-        [("The team — one proxy, four specialists, one safety gate", 30, PINK_DARK, True)])
+        [("The team — one proxy, three specialists, one reusable tool, one safety gate", 30, PINK_DARK, True)])
 add_image(s, svg_to_png("architecture.svg"), max_w=11.0, max_h=5.0, top=1.5)
 textbox(s, Inches(0.7), Inches(6.7), Inches(12.0), Inches(0.5),
         [("Built on Claude Agent SDK + custom MCP tool servers.", 14, RGBColor(0x94, 0xA3, 0xB8), False)])
@@ -362,7 +362,7 @@ heading(s, "Community & sharing — COPPA by schema, not by policy")
 add_table(s, [
     ["Where most products fail", "What we do"],
     ["Posts JOIN to `users.name` for byline",
-     "`hub_posts.agent_name` is a **snapshot column** — written at post time, never JOINed"],
+     "`agent_name_snapshot`, `agent_avatar_id_snapshot`, and `agent_title_snapshot` are **snapshot columns** — written at post time, never JOINed"],
     ["`users.email` accidentally leaks via API",
      "Read paths can't reach `users` at all — schema doesn't allow it"],
     ["Safety is a code-review checklist",
@@ -376,18 +376,22 @@ set_notes(s, 13)
 # SLIDE 14 — Open by design (code block)
 # ════════════════════════════════════════════════════════════════════════
 s = new_slide()
-heading(s, "Open by design — one AgentDefinition adds a specialist")
+heading(s, "Open by design — static team today, AgentDefinition extensions next")
 code = (
-    '# Adding a "music_story" specialist to the agent team:\n'
-    'proxy.register(AgentDefinition(\n'
+    '# Today: proxy builds a fixed specialist map in _build_subagents().\n'
+    'subagents = {\n'
+    '    "image_story": image_story_agent,\n'
+    '    "interactive_story": interactive_story_agent,\n'
+    '    "kids_daily": kids_daily_agent,\n'
+    '}\n\n'
+    '# Future: adding a "music_story" specialist via AgentDefinition.\n'
+    'AgentDefinition(\n'
     '    name="music_story",\n'
     '    model="haiku",\n'
     '    system_prompt=Path("prompts/music-story.md").read_text(),\n'
     '    tools=["music_generator", "vector_search"],\n'
     '    enabled_skills=["compose"],\n'
-    '))\n\n'
-    '# Routing picks it up automatically. Safety gate runs on every reply.\n'
-    '# Shared context (persona, child_id, recurring chars) flows in.'
+    ')'
 )
 box = s.shapes.add_textbox(Inches(1.0), Inches(1.9), Inches(11.3), Inches(3.6))
 box.fill.solid()
@@ -412,7 +416,7 @@ set_notes(s, 14)
 # SLIDE 15 — Roadmap
 # ════════════════════════════════════════════════════════════════════════
 s = new_slide()
-heading(s, "Roadmap — two phases shipped, two ahead")
+heading(s, "Roadmap — three phases shipped or nearly shipped, one vision")
 add_image(s, svg_to_png("roadmap.svg"), max_w=12.0, max_h=4.8, top=1.7)
 set_notes(s, 15)
 
@@ -423,9 +427,9 @@ s = new_slide()
 heading(s, "Where we are")
 add_table(s, [
     ["Milestone", "Status"],
-    ["Phase 1 — MVP: single agent + image-to-story + safety + TTS", "✅ 92/92 shipped"],
-    ["Phase 2 — multi-agent team + memory + news + community", "✅ 180/180 shipped"],
-    ["Phase 3 — video · parent dashboard · gamification", "🔜 In design"],
+    ["Phase 1 — MVP: single agent + image-to-story + safety + TTS", "✅ 95/95 shipped"],
+    ["Phase 2 — multi-agent team + memory + news + community", "✅ 188/188 shipped"],
+    ["Phase 3 — video · parent dashboard · gamification", "🚧 30/32 shipped"],
 ], top=1.7, height=2.6, col_widths=[9.0, 2.93])
 textbox(s, Inches(0.7), Inches(4.7), Inches(12.0), Inches(1.4), [
     ("Engineering rigor: 700+ contract tests · per-reply programmatic safety (age-aware) · "
@@ -464,7 +468,7 @@ textbox(s, Inches(0.9), Inches(0.7), Inches(11.5), Inches(1.0),
         [("Why this matters", 44, PINK, True)])
 textbox(s, Inches(0.9), Inches(1.9), Inches(11.5), Inches(3.2), [
     ("Agentic from day one — not a wrapper, not a prompt. Real SDK, real tools, real orchestration.", 21, SLATE, False),
-    ("272 stories shipped across 3 milestones — execution proof.", 21, SLATE, False),
+    ("313 shipped / 315 tracked work items across milestones — execution proof.", 21, SLATE, False),
     ("Programmatic safety on every reply — non-negotiable, code-enforced, not vibes.", 21, SLATE, False),
     ("Community that protects child PII at the schema level — COPPA by construction.", 21, SLATE, False),
     ("A buddy that grows with the child — character continuity across image, story, podcast, share.", 21, SLATE, False),
@@ -480,13 +484,13 @@ s = new_slide()
 heading(s, "Appendix — technical deep-dive (backup for Q&A)")
 add_table(s, [
     ["Topic", "One-line answer"],
-    ["Agent", "`AgentDefinition(model, system_prompt, tools, enabled_skills)` — one specialist w/ a curated capability set"],
-    ["Subagent", "An agent registered under the proxy's `agents=` dict · invoked via the SDK's Agent tool delegation"],
+    ["Specialist", "Static proxy entry with its own prompt, tools, and skill gates; AgentDefinition registration is future work"],
+    ["Subagent", "A specialist in the proxy's map · invoked through explicit intent routing and SDK delegation"],
     ["Agent team", "Proxy + 3 product subagents + audio_narration tool + safety_review · all share the context bus"],
     ["Orchestrator", "The proxy — routes intent · composes specialist outputs · runs safety_review on every reply"],
     ["Why this shape", "Bigger prompt degrades w/ specialty count · prompt chaining = no shared state · agent team = shared context + parallel specialty"],
     ["Per-reply safety", "`enforce_chat_safety()` after every reply · age-aware threshold · suggest-improvements retry · `safety_blocked` telemetry"],
-    ["COPPA pattern", "`hub_posts.agent_name/avatar/title` — immutable snapshot columns; no read path JOINs `users`"],
+    ["COPPA pattern", "`hub_posts.agent_name_snapshot/avatar_id_snapshot/title_snapshot` — immutable snapshot columns; no read path JOINs `users`"],
     ["Tech stack", "FastAPI + Pydantic v2 · SQLite (dev) / Postgres + pgvector (prod) · React 18 + TS + Tailwind"],
 ], top=1.5, height=5.0, col_widths=[2.4, 9.53])
 set_notes(s, 19)

@@ -85,17 +85,15 @@
 ## Slide 6 — Four architecture patterns
 *~26 seconds · 5-min cut: KEEP*
 
-> "Four agent architecture patterns — and we use all four.
+> "Four agent architecture patterns — two shipped, two ready next.
 >
-> Single agent — one job, linear inference. We use it for text-to-speech.
+> Single agent or tool — one job, linear inference. We use it for text-to-speech.
 >
-> Sub-agent fan-out — the same task in parallel, for speed.
+> Static agent team — our My Agent proxy routes to image story, interactive story, Kids Daily, a reusable audio tool, and safety review.
 >
-> Agent team — multiple agents collaborating by role, each an AgentDefinition. That's our My Agent.
+> Sub-agent fan-out and dynamic orchestration are future extension paths.
 >
-> Multi-agent orchestrator — agents created dynamically at runtime. That's what makes us extensible.
->
-> Shared state flows to every specialist through the agent context. A2A to external teams is future work."
+> Shared context carries persona and style; recurring characters come from character memory. A2A to external teams is future work."
 
 ---
 
@@ -139,7 +137,7 @@
 >
 > [point at the context bus]
 >
-> And underneath, shared context — persona, characters — flows to every agent. Same character in the story and the podcast.
+> And underneath, shared context — persona, tone, style, skills, topics, and goals — flows to every specialist. Recurring characters come from the character repository and vector memory, so the same character can show up in the story and the podcast.
 >
 > This unlocks responsive, dynamic, and A2A-extensible."
 
@@ -171,7 +169,7 @@
 >
 > Agents orchestrate the AI. MCP servers are the tool layer — seven of them.
 >
-> Services hold business logic. Repositories wrap database access — twenty of them.
+> Services hold business logic — seventeen modules today. Repositories wrap database access — nineteen of them.
 >
 > And the database adapter — SQLite in dev, Postgres in production.
 >
@@ -227,9 +225,9 @@
 
 > "This architecture is open by design.
 >
-> Adding a new specialist takes one AgentDefinition — a model, a prompt, its tools, its skills.
+> Today, the proxy builds a static specialist map. That keeps routing explicit and easy to test.
 >
-> Register it, and routing picks it up automatically. The safety gate still runs on every reply. Shared context still flows in.
+> The next extension is AgentDefinition registration — a model, a prompt, its tools, its skills. The safety gate still runs on every reply. Shared context still flows in.
 >
 > And in the future, an A2A bridge lets external agent teams join — through the same contract."
 
@@ -238,13 +236,13 @@
 ## Slide 15 — Roadmap (Phase 1 → 4)
 *~30 seconds · 5-min cut: KEEP*
 
-> "Our roadmap — two phases shipped, two ahead.
+> "Our roadmap — two phases shipped, one nearly complete, one vision.
 >
 > Phase one, the MVP — single agent, image-to-story, safety, TTS. Done.
 >
 > Phase two, the agent team — multi-agent, memory, Kids Daily, community. Done.
 >
-> Phase three, in design — video, parent dashboard, gamification.
+> Phase three, nearly complete — video, parent dashboard, achievements surfaced.
 >
 > Phase four, the vision — autonomous.
 >
@@ -255,7 +253,7 @@
 ## Slide 16 — Where we are
 *~22 seconds · 5-min cut: KEEP*
 
-> "Where we are today. Two hundred ninety-two tracked work items — phases one and two done, phase three moving into build.
+> "Where we are today. Three hundred thirteen shipped work items out of three hundred fifteen tracked across milestones — phases one and two done, phase three nearly complete.
 >
 > The engineering rigor: over seven hundred contract tests, per-reply safety, a silent safety bug we caught and fixed in twenty-four hours.
 >
@@ -285,7 +283,7 @@
 >
 > Agentic from day one — real SDK, real tools, real orchestration. Not a wrapper.
 >
-> 292 tracked work items across shipped and planned milestones — execution proof.
+> Three hundred thirteen shipped work items out of three hundred fifteen tracked across milestones — execution proof.
 >
 > Programmatic safety on every reply — code-enforced, not vibes.
 >
@@ -314,12 +312,12 @@
 > Here are three example answers you might give out loud:
 >
 > If they ask "what's the difference between an agent and a subagent?":
-> "An agent in our system is an AgentDefinition — it has a model, a system prompt, a set of tools, and a set of skills. A subagent is one of those registered underneath our proxy. The SDK's Agent tool is what lets the proxy delegate to a subagent based on the child's intent."
+> "Today, a specialist in our system is a static entry in the proxy's specialist map — it has its own prompt, tools, and skill gates. A subagent is one of those specialists invoked by the proxy based on the child's intent. AgentDefinition registration is the future extension path for new specialists."
 >
 > If they ask "why didn't you just use a bigger prompt?":
 > "Two reasons. First, quality degrades as you stuff more specialties into one prompt — the model loses focus. And second, we'd lose the per-reply safety subagent as a separate gate, which is non-negotiable for a kids product."
 >
 > If they ask "how is your COPPA pattern different from other kid-AI products?":
-> "Most teams enforce their kid-PII rules in code review. We enforce them in the schema. The hub_posts table has agent_name, agent_avatar, and agent_title as immutable snapshot columns — written once at post time. No read path in our codebase JOINs the users table. The unsafe query literally can't be expressed in our schema."
+> "Most teams enforce their kid-PII rules in code review. We enforce them in the schema. The hub_posts table has agent_name_snapshot, agent_avatar_id_snapshot, and agent_title_snapshot as immutable snapshot columns — written once at post time. No read path in our codebase JOINs the users table. The unsafe query literally can't be expressed in our schema."
 
 ---
