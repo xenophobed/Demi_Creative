@@ -14,7 +14,12 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from ...paths import AUDIO_DIR
-from ...services.database import favorite_repo, session_repo, story_repo
+from ...services.database import (
+    child_profile_repo,
+    favorite_repo,
+    session_repo,
+    story_repo,
+)
 from ...services.database.artifact_repository import StoryArtifactLinkRepository
 from ...services.database.connection import db_manager
 from ...services.database.sql_compat import date_format_sql
@@ -32,6 +37,8 @@ from ..models import (
     LibraryStatsGroupBy,
     LibraryStatsPeriod,
     LibraryStatsResponse,
+    ParentDashboardRecentCreation,
+    ParentDashboardTheme,
     RichStatsPeriod,
     RichStatsResponse,
 )
@@ -256,6 +263,10 @@ async def _ensure_owned_child_scope(user: UserData, child_id: Optional[str]) -> 
     if not child_id:
         return
 
+    profile = await child_profile_repo.get_for_user(user.user_id, child_id)
+    if profile is not None:
+        return
+
     if getattr(user, "default_child_id", None) == child_id:
         return
 
@@ -275,6 +286,114 @@ async def _ensure_owned_child_scope(user: UserData, child_id: Optional[str]) -> 
         status_code=status.HTTP_404_NOT_FOUND,
         detail="Child profile not found",
     )
+
+
+def _parse_theme_list(value) -> list[str]:
+    if not value:
+        return []
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+            if isinstance(parsed, list):
+                return [
+                    str(item).strip()
+                    for item in parsed
+                    if str(item).strip()
+                ]
+        except (json.JSONDecodeError, ValueError, TypeError):
+            return [part.strip() for part in value.split(",") if part.strip()]
+    return []
+
+
+async def _get_parent_dashboard_themes(
+    user_id: str,
+    child_id: Optional[str],
+) -> list[ParentDashboardTheme]:
+    child_filter = " AND child_id = ?" if child_id else ""
+    rows = await db_manager.fetchall(
+        f"""
+        SELECT themes
+        FROM stories
+        WHERE user_id = ?
+          AND (safety_score IS NULL OR safety_score >= ?)
+          {child_filter}
+        """,
+        (user_id, SAFETY_THRESHOLD, child_id) if child_id else (user_id, SAFETY_THRESHOLD),
+    )
+
+    counts: dict[str, int] = {}
+    for row in rows:
+        for theme in _parse_theme_list(row.get("themes")):
+            counts[theme] = counts.get(theme, 0) + 1
+
+    return [
+        ParentDashboardTheme(theme=theme, count=count)
+        for theme, count in sorted(counts.items(), key=lambda item: (-item[1], item[0]))[:5]
+    ]
+
+
+async def _get_parent_dashboard_recent_creations(
+    user_id: str,
+    child_id: Optional[str],
+) -> list[ParentDashboardRecentCreation]:
+    child_filter = " AND child_id = ?" if child_id else ""
+    story_params = (
+        (user_id, SAFETY_THRESHOLD, child_id)
+        if child_id
+        else (user_id, SAFETY_THRESHOLD)
+    )
+    story_rows = await db_manager.fetchall(
+        f"""
+        SELECT story_id, story_text, story_type, image_url, created_at
+        FROM stories
+        WHERE user_id = ?
+          AND (safety_score IS NULL OR safety_score >= ?)
+          {child_filter}
+        ORDER BY created_at DESC
+        LIMIT 5
+        """,
+        story_params,
+    )
+
+    session_params = (user_id, child_id) if child_id else (user_id,)
+    session_rows = await db_manager.fetchall(
+        f"""
+        SELECT session_id, story_title, created_at
+        FROM sessions
+        WHERE user_id = ?{child_filter}
+        ORDER BY created_at DESC
+        LIMIT 5
+        """,
+        session_params,
+    )
+
+    items: list[ParentDashboardRecentCreation] = []
+    for row in story_rows:
+        story_type = row.get("story_type") or "image_to_story"
+        items.append(
+            ParentDashboardRecentCreation(
+                id=row["story_id"],
+                type=_resolve_story_type({"story_type": story_type}).value,
+                title=_extract_title(row.get("story_text") or ""),
+                created_at=row["created_at"],
+                thumbnail_url=row.get("image_url"),
+            )
+        )
+    for row in session_rows:
+        items.append(
+            ParentDashboardRecentCreation(
+                id=row["session_id"],
+                type=LibraryItemType.INTERACTIVE.value,
+                title=row.get("story_title") or "Interactive Story",
+                created_at=row["created_at"],
+                thumbnail_url=None,
+            )
+        )
+
+    items.sort(key=lambda item: item.created_at, reverse=True)
+    return items[:5]
 
 
 # ============================================================================
@@ -500,7 +619,6 @@ async def get_rich_stats(
     fmt = "%Y-%m" if group_by == LibraryStatsGroupBy.MONTH else "%Y-W%W"
     period_expr = date_format_sql("created_at", fmt, db_manager.dialect)
     child_filter = " AND child_id = ?" if child_id else ""
-    story_params = (user.user_id, child_id) if child_id else (user.user_id,)
     session_params = (user.user_id, child_id) if child_id else (user.user_id,)
 
     # 1) Stories: count, word_count sum, themes, story_type per period
@@ -512,10 +630,17 @@ async def get_rich_stats(
             GROUP_CONCAT(themes, '||') AS all_themes,
             GROUP_CONCAT(story_type, '||') AS all_types
         FROM stories
-        WHERE user_id = ?{child_filter}
+        WHERE user_id = ?
+          AND (safety_score IS NULL OR safety_score >= ?)
+          {child_filter}
         GROUP BY period
         ORDER BY period
     """
+    story_params = (
+        (user.user_id, SAFETY_THRESHOLD, child_id)
+        if child_id
+        else (user.user_id, SAFETY_THRESHOLD)
+    )
     story_rows = await db_manager.fetchall(stories_query, story_params)
 
     # 2) Sessions: count, completed count per period
@@ -605,7 +730,21 @@ async def get_rich_stats(
         )
 
     sorted_periods = sorted(all_periods.values(), key=lambda x: x.period)
-    return RichStatsResponse(periods=sorted_periods, streak_days=0)
+    top_themes: list[ParentDashboardTheme] = []
+    recent_creations: list[ParentDashboardRecentCreation] = []
+    if parent_dashboard:
+        top_themes = await _get_parent_dashboard_themes(user.user_id, child_id)
+        recent_creations = await _get_parent_dashboard_recent_creations(
+            user.user_id,
+            child_id,
+        )
+
+    return RichStatsResponse(
+        periods=sorted_periods,
+        streak_days=0,
+        top_themes=top_themes,
+        recent_creations=recent_creations,
+    )
 
 
 # ============================================================================

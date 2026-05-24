@@ -1292,10 +1292,33 @@ class RichStatsPeriod(BaseModel):
     story_type_breakdown: Dict[str, int] = Field(default_factory=dict, description="Count per story type")
 
 
+class ParentDashboardTheme(BaseModel):
+    """Parent dashboard theme summary without child/user identifiers (#532)."""
+    theme: str = Field(..., description="Theme label")
+    count: int = Field(..., description="Number of safe creations using this theme")
+
+
+class ParentDashboardRecentCreation(BaseModel):
+    """Parent-safe recent creation summary (#532)."""
+    id: str = Field(..., description="Creation identifier")
+    type: str = Field(..., description="Library content type")
+    title: str = Field(..., description="Display title")
+    created_at: str = Field(..., description="Creation timestamp")
+    thumbnail_url: Optional[str] = Field(None, description="Optional thumbnail URL")
+
+
 class RichStatsResponse(BaseModel):
     """Rich growth dashboard stats (#356)."""
     periods: List[RichStatsPeriod] = Field(..., description="Per-period growth metrics")
     streak_days: int = Field(0, description="Deprecated compatibility field; always 0")
+    top_themes: List[ParentDashboardTheme] = Field(
+        default_factory=list,
+        description="Parent dashboard safe theme summary",
+    )
+    recent_creations: List[ParentDashboardRecentCreation] = Field(
+        default_factory=list,
+        description="Parent dashboard recent safe creations",
+    )
 
 
 class PaginatedNewsResponse(BaseModel):

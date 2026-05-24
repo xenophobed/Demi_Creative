@@ -11,7 +11,12 @@ from datetime import datetime, timedelta
 
 from backend.src.api.deps import get_current_user
 from backend.src.main import app
-from backend.src.services.database import story_repo, session_repo, db_manager
+from backend.src.services.database import (
+    child_profile_repo,
+    story_repo,
+    session_repo,
+    db_manager,
+)
 from backend.src.services.database.schema import init_schema
 from backend.src.services.database.user_repository import UserData
 
@@ -329,12 +334,25 @@ class TestRichStatsParentDashboardAccess:
             ),
         )
         await db_manager.commit()
+        await db_manager.execute(
+            "DELETE FROM child_profiles WHERE user_id = ? AND child_id IN (?, ?, ?)",
+            (self.parent_user_id, "child_alpha", "child_beta", "child_empty"),
+        )
+        await db_manager.commit()
 
         self.story_ids = []
         for user_id, child_id, label in [
             (self.parent_user_id, "child_alpha", "alpha"),
             (self.parent_user_id, "child_beta", "beta"),
         ]:
+            await child_profile_repo.create(
+                user_id=user_id,
+                child_id=child_id,
+                name=label.title(),
+                age_group="9-12",
+                interests=[],
+                is_default=child_id == "child_alpha",
+            )
             sid = f"parent-rich-{label}-{uuid.uuid4().hex[:8]}"
             self.story_ids.append(sid)
             await story_repo.create(
@@ -355,6 +373,34 @@ class TestRichStatsParentDashboardAccess:
                 }
             )
 
+        await child_profile_repo.create(
+            user_id=self.parent_user_id,
+            child_id="child_empty",
+            name="Empty",
+            age_group="6-8",
+            interests=[],
+        )
+
+        unsafe_id = f"parent-rich-unsafe-{uuid.uuid4().hex[:8]}"
+        self.story_ids.append(unsafe_id)
+        await story_repo.create(
+            {
+                "story_id": unsafe_id,
+                "user_id": self.parent_user_id,
+                "child_id": "child_alpha",
+                "age_group": "9-12",
+                "story": {
+                    "text": "Unsafe dashboard fixture should stay hidden.",
+                    "word_count": 6,
+                },
+                "educational_value": {"themes": ["unsafe"]},
+                "characters": [],
+                "safety_score": 0.4,
+                "story_type": "image_to_story",
+                "created_at": now,
+            }
+        )
+
         yield
 
         if self.previous_override is None:
@@ -363,6 +409,15 @@ class TestRichStatsParentDashboardAccess:
             app.dependency_overrides[get_current_user] = self.previous_override
         for sid in self.story_ids:
             await db_manager.execute("DELETE FROM stories WHERE story_id = ?", (sid,))
+        for child_id in ("child_alpha", "child_beta", "child_empty"):
+            await db_manager.execute(
+                "DELETE FROM child_profiles WHERE user_id = ? AND child_id = ?",
+                (self.parent_user_id, child_id),
+            )
+        await db_manager.execute(
+            "UPDATE users SET default_child_id = NULL WHERE user_id = ?",
+            (self.parent_user_id,),
+        )
         await db_manager.commit()
 
     def _override_user(self, *, role: str = "parent") -> None:
@@ -408,6 +463,9 @@ class TestRichStatsParentDashboardAccess:
         data = resp.json()
         assert sum(p["creation_count"] for p in data["periods"]) == 1
         assert data["streak_days"] == 0
+        assert data["top_themes"] == [{"theme": "alpha", "count": 1}]
+        assert [item["id"] for item in data["recent_creations"]] == [self.story_ids[0]]
+        assert data["recent_creations"][0]["title"].startswith("alpha creativity")
 
     async def test_parent_dashboard_rejects_unowned_child_scope(self, test_client):
         self._override_user(role="parent")
@@ -419,3 +477,18 @@ class TestRichStatsParentDashboardAccess:
             )
 
         assert resp.status_code == 404
+
+    async def test_parent_dashboard_loads_empty_owned_child_profile(self, test_client):
+        self._override_user(role="parent")
+
+        async with test_client as client:
+            resp = await client.get(
+                "/api/v1/library/stats-rich",
+                params={"parent_dashboard": True, "child_id": "child_empty"},
+            )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["periods"] == []
+        assert data["top_themes"] == []
+        assert data["recent_creations"] == []
