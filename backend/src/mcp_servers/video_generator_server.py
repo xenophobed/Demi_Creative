@@ -454,11 +454,32 @@ async def combine_video_audio(args: Dict[str, Any]) -> Dict[str, Any]:
         }
 
 
+# Expose directly callable async functions for in-process use while preserving
+# the MCP tool objects for agent tool registration.
+_generate_painting_video_tool = generate_painting_video
+_check_video_status_tool = check_video_status
+_combine_video_audio_tool = combine_video_audio
+
+generate_painting_video = getattr(
+    _generate_painting_video_tool, "handler", _generate_painting_video_tool
+)
+check_video_status = getattr(
+    _check_video_status_tool, "handler", _check_video_status_tool
+)
+combine_video_audio = getattr(
+    _combine_video_audio_tool, "handler", _combine_video_audio_tool
+)
+
+
 # Create MCP Server
 video_server = create_sdk_mcp_server(
     name="video-generation",
     version="1.0.0",
-    tools=[generate_painting_video, check_video_status, combine_video_audio]
+    tools=[
+        _generate_painting_video_tool,
+        _check_video_status_tool,
+        _combine_video_audio_tool,
+    ]
 )
 
 

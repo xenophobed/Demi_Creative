@@ -48,6 +48,25 @@ def load_job_from_file(job_id: str) -> Optional[dict]:
     return None
 
 
+async def get_owned_video_job_or_404(job_id: str, user: UserData) -> tuple[dict, dict]:
+    """Load a video job and verify it is bound to a story owned by the user."""
+    job_data = load_job_from_file(job_id)
+    if not job_data or not job_data.get("story_id"):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Video job is not linked to an owned story",
+        )
+
+    story = await get_story_for_owner(job_data["story_id"], user.user_id)
+    return job_data, story
+
+
+async def call_mcp_tool(tool_ref, payload: dict) -> dict:
+    """Invoke either a raw async tool function or an SDK-wrapped MCP tool."""
+    handler = getattr(tool_ref, "handler", tool_ref)
+    return await handler(payload)
+
+
 @router.post(
     "/generate",
     response_model=VideoJobResponse,
@@ -86,7 +105,7 @@ async def generate_video(
 
     # 3. Call video generation tool
     try:
-        result = await generate_painting_video({
+        result = await call_mcp_tool(generate_painting_video, {
             "image_path": image_path,
             "style": request.style.value,
             "duration_seconds": request.duration_seconds,
@@ -128,7 +147,7 @@ async def generate_video(
                 audio_path = str(DATA_DIR / audio_url.removeprefix("/data/"))
 
                 if video_path and Path(audio_path).exists():
-                    combine_result = await combine_video_audio({
+                    combine_result = await call_mcp_tool(combine_video_audio, {
                         "video_path": video_path,
                         "audio_path": audio_path,
                         "output_filename": f"combined_{job_id}.mp4"
@@ -178,12 +197,10 @@ async def get_video_status(
     Check video generation job status (requires authentication + story ownership)
     """
     try:
-        # Verify ownership via the job's story_id
-        job_data_check = load_job_from_file(job_id)
-        if job_data_check and job_data_check.get("story_id"):
-            await get_story_for_owner(job_data_check["story_id"], user.user_id)
+        # Verify ownership before asking the provider or exposing any video URL.
+        job_data_check, owned_story = await get_owned_video_job_or_404(job_id, user)
 
-        result = await check_video_status({"job_id": job_id})
+        result = await call_mcp_tool(check_video_status, {"job_id": job_id})
         result_data = json.loads(result["content"][0]["text"])
 
         if not result_data.get("success"):
@@ -193,7 +210,7 @@ async def get_video_status(
             )
 
         # Load job details to get combined video URL
-        job_data = load_job_from_file(job_id)
+        job_data = load_job_from_file(job_id) or job_data_check
         video_url = result_data.get("video_url")
 
         # Prefer combined video
@@ -211,9 +228,8 @@ async def get_video_status(
         if result_data["status"] == VideoStatus.COMPLETED.value and job_data:
             story_id = job_data.get("story_id")
             if story_id:
-                story = await get_story_for_owner(story_id, user.user_id)
                 await achievement_service.award_event_safely(
-                    user.user_id, story.get("child_id"), FIRST_VIDEO
+                    user.user_id, owned_story.get("child_id"), FIRST_VIDEO
                 )
 
         return VideoJobStatusResponse(
@@ -252,17 +268,7 @@ async def get_video_info(
     """
     Get video metadata (requires authentication + story ownership)
     """
-    job_data = load_job_from_file(video_id)
-
-    if not job_data:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Video not found: {video_id}"
-        )
-
-    # Verify ownership via the job's story_id
-    if job_data.get("story_id"):
-        await get_story_for_owner(job_data["story_id"], user.user_id)
+    job_data, _story = await get_owned_video_job_or_404(video_id, user)
 
     if job_data.get("status") != "completed":
         raise HTTPException(
