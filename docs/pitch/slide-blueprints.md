@@ -223,10 +223,10 @@ Keep this file open in your IDE alongside `keynote-deck.md` while assembling sli
 **Speaker beat:** Walk the diagram top-to-bottom. About 10 seconds per element:
 1. *"We extended — same SDK, new shape."*
 2. *"The proxy ORCHESTRATES — routes the child's intent to the right specialist."*
-3. *"Four specialists, each with their own prompt, tools, and skills."*
+3. *"Three product specialists, each with their own prompt, tools, and skills — plus a reusable audio tool."*
 4. *"Every reply passes through safety_review — that subagent is the non-negotiable gate."* **(pause here)**
-5. *"And underneath everything — SHARED CONTEXT. Persona, child_id, recurring characters — flows to every agent. So Lightning the puppy is the same dog in the story AS in the podcast."*
-6. *"Two more properties unlocked: responsive (right specialist in milliseconds) and dynamic (different experience per turn). And A2A extensible — new specialists plug in by registering one AgentDefinition."*
+5. *"And underneath everything — SHARED CONTEXT. Persona, tone, style, skills, topics, goals, child_id, and age flow to every specialist. Recurring characters come from character_repo and vector memory, so Lightning the puppy is the same dog in the story AS in the podcast."*
+6. *"Two more properties unlocked: responsive (right specialist in milliseconds) and dynamic (different experience per turn). A2A and dynamic registration are future extension paths."*
 
 **Why this slide exists:** **THE moat.** Multi-agent orchestration with shared state is hard. Doing it for kids with per-reply safety is harder. If a judge remembers only one technical slide, this is it.
 
@@ -246,7 +246,7 @@ Keep this file open in your IDE alongside `keynote-deck.md` while assembling sli
 | Table headers | `Decision` · `Alternative we rejected` · `What we chose` · `Why` | Violet #7C3AED · 18px · weight 700 | Row 1 |
 | Row — Prompts | `Prompts` / `Python f-strings inline in code` / `Markdown files in backend/src/prompts/` / `Versioned · code-reviewable · age-stratified per file` | Slate body · 17px · bold "Prompts" · code styling for file paths | Row 2 |
 | Row — Tools | `Tools` / `Direct API calls in agent loops` / `Custom MCP servers · typed JSON envelopes · .handler calling convention` / `Composable · testable · independently versionable` | Slate body · 17px · bold "Tools" · code styling for .handler | Row 3 |
-| Row — Skills | `Skills` / `Hardcoded behaviors per agent class` / `enabled_skills field on AgentDefinition · _enabled(agent, skill) runs server-side` / `Per-age gating · A2A plug-in · single registration` | Slate body · 17px · bold "Skills" · code styling | Row 4 |
+| Row — Skills | `Skills` / `Hardcoded behaviors per agent class` / `enabled_skills on the persisted buddy + server-side _enabled(agent, skill)` / `Per-age gating today · AgentDefinition plug-in path later` | Slate body · 17px · bold "Skills" · code styling | Row 4 |
 | Row — Multi-agent | `Multi-agent` / `Bigger prompt + conditional branching` / `Proxy + 3 product subagents + audio tool + shared context bus` / `Specialty isolation · safety_review on EVERY reply · responsive routing` | Slate body · 17px · bold "Multi-agent" · "EVERY" emphasized | Row 5 |
 | Vocabulary footer | `Vocabulary — agent · subagent · team · orchestrator — each role is precise. See appendix.` | Slate body · 18px · italic on the four vocabulary words | Below table · 24px gap |
 
@@ -257,8 +257,8 @@ Keep this file open in your IDE alongside `keynote-deck.md` while assembling sli
 **Speaker beat:** Walk it row-by-row, ~7 seconds per row:
 1. *"Prompts could have been Python f-strings. We chose markdown in git — versioned and code-reviewable."*
 2. *"Tools could have been direct API calls. We chose MCP servers with typed envelopes — composable and testable."*
-3. *"Skills could have been hardcoded. We chose enabled_skills as a field on AgentDefinition — per-age gating, A2A extensible."*
-4. *"Multi-agent could have been a bigger prompt with branching. We chose a proxy plus 4 subagents — specialty isolated, safety_review runs on EVERY reply."*
+3. *"Skills could have been hardcoded. We chose persisted enabled skills with server-side gates — per-age gating today, dynamic plug-ins later."*
+4. *"Multi-agent could have been a bigger prompt with branching. We chose a proxy plus 3 product specialists and a reusable audio tool — specialty isolated, safety_review runs on EVERY reply."*
 
 Close: *"We didn't adopt defaults. Each row is a trade-off we made deliberately."* Point at the vocabulary footer: *"And we use precise terms — agent, subagent, team, orchestrator. Each role is distinct."*
 
@@ -285,7 +285,7 @@ Close: *"We didn't adopt defaults. Each row is a trade-off we made deliberately.
 | **Row 1 / col 1** | `Multi-agent + shared state on Claude Agent SDK — proxy + 3 product specialists, a TTS tool, and a shared context bus` | Slate body · 17px · bold "Multi-agent + shared state" | Cell |
 | **Row 1 / col 2** | `Per-reply programmatic safety — age-aware thresholds (0.90 for 3-5, 0.85 for 6-12), suggest-then-retry` | Slate body · 17px · bold "Per-reply programmatic safety" | Cell |
 | **Row 1 / col 3** | `Character continuity across surfaces — Lightning the puppy in image, story, podcast, and community` | Slate body · 17px · bold "Character continuity across surfaces" | Cell |
-| **Row 2 / col 1** | `A2A extensible — new specialists plug in via one AgentDefinition registration` | Slate body · 17px · bold "A2A extensible" | Cell |
+| **Row 2 / col 1** | `Future A2A extension — new specialists can plug in via AgentDefinition registration after the static team` | Slate body · 17px · bold "Future A2A extension" | Cell |
 | **Row 2 / col 2** | `COPPA at the schema level — persona-snapshot columns; the unsafe JOIN can't be expressed` | Slate body · 17px · bold "COPPA at the schema level" · italic accent on "can't be expressed" | Cell |
 | **Row 2 / col 3** | `One buddy, N specialists, one identity — child sees one persona; system orchestrates the rest` | Slate body · 17px · bold "One buddy, N specialists, one identity" | Cell |
 | Punchline | `Most kid-AI products ship one of these. We ship all six.` | Slate muted #64748B · 20px · italic · **bold "one"** and **bold "all six"** | Bottom-center · 40px from edge |
@@ -298,7 +298,7 @@ Close: *"We didn't adopt defaults. Each row is a trade-off we made deliberately.
 **Timing:** ~30 seconds
 
 **Speaker beat:** Walk it column-by-column, ~7 seconds per cell:
-1. *"Agentic stack: multi-agent with shared state on the SDK — A2A extensible, so new specialists plug in by registering a single AgentDefinition."*
+1. *"Agentic stack: multi-agent with shared state on the SDK today — A2A and dynamic AgentDefinition registration are the next extension path."*
 2. *"Safety architecture: per-reply programmatic safety with age-aware thresholds — and COPPA enforced AT THE SCHEMA LEVEL. The unsafe JOIN can't even be expressed."*
 3. *"Kid experience: character continuity across surfaces — same Lightning the puppy from her drawing shows up in her interactive story, her podcast, her community feed. One buddy, many specialists, one identity."*
 
@@ -345,7 +345,7 @@ Land hard on: *"Most ship one of these. We ship all six."* Pause. Then move.
 | Component | Content | Style | Position |
 |---|---|---|---|
 | H2 heading | `Where we are` | Violet #7C3AED · 36px · weight 700 | Top-left |
-| Progress table | 3 rows: Phase 1 MVP ✅ 92/92 (single agent) · Phase 2 ✅ 180/180 (multi-agent team) · Phase 3 🔜 In design | Violet headers · 20px body · ✅/🔜 emoji · bold counts | Center · full-width minus 80px |
+| Progress table | 3 rows: Phase 1 MVP ✅ 95/95 (single agent) · Phase 2 ✅ 188/188 (multi-agent team) · Phase 3 🚧 30/32 (video, parent dashboard, gamification) | Violet headers · 20px body · ✅/🚧 emoji · bold counts | Center · full-width minus 80px |
 | Engineering rigor line | `Engineering rigor: 700+ contract tests · per-reply programmatic safety (age-aware) · silent safety-bypass caught + fixed in 1 day · merge-train of 7 PRs landed last week` | Slate body · 18px · bold "Engineering rigor:" | Below table · 30px gap |
 | Real-numbers line | `Add real numbers in Keynote: pilot users · sessions/week · feedback quotes.` | Slate muted #64748B · 16px · italic | Bottom · centered |
 
@@ -353,7 +353,7 @@ Land hard on: *"Most ship one of these. We ship all six."* Pause. Then move.
 
 **Timing:** ~25 seconds
 
-**Speaker beat:** *"292 tracked work items across shipped and planned milestones. We don't pitch features — we ship them. And the engineering rigor line — programmatic per-reply safety, caught and fixed a silent safety-bypass in one day, landed a 7-PR merge train last week — that's how we treat production AI for kids."*
+**Speaker beat:** *"313 shipped work items out of 315 tracked across milestones. We don't pitch features — we ship them. And the engineering rigor line — programmatic per-reply safety, caught and fixed a silent safety-bypass in one day, landed a 7-PR merge train last week — that's how we treat production AI for kids."*
 
 **Why this slide exists:** Execution velocity + engineering rigor are the contest-judged proxies for "this team can ship." Both deserve their own line.
 
@@ -404,7 +404,7 @@ Land hard on punchline: *"Most pitches hide bugs. We name ours."*
 | Component | Content | Style | Position |
 |---|---|---|---|
 | H1 heading | `Why this matters` | Pink #DB2777 · 56px · weight 800 | Top-left |
-| 5 achievements | Agentic from day one · 292 tracked work items · Programmatic safety on every reply · COPPA at schema level · Buddy that grows with the child | Slate body · 22px · 1.5 line-height · **bold lead phrase** + supporting clause | Center-left · 40px gap below H1 |
+| 5 achievements | Agentic from day one · 313 shipped / 315 tracked work items · Programmatic safety on every reply · COPPA at schema level · Buddy that grows with the child | Slate body · 22px · 1.5 line-height · **bold lead phrase** + supporting clause | Center-left · 40px gap below H1 |
 | Closing bookend | `AI that grows up *with* kids — safely.` | Pink #DB2777 · 56px · weight 800 · italic accent on "with" | Bottom-center · 50px from edge |
 
 **Visuals:** None. The gradient + typography is the visual.

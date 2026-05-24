@@ -162,7 +162,7 @@ Existing AI extracts from kids. We collaborate with them."
 | Problem | Our agent's ability |
 |---|---|
 | Not personalized enough | **Persona + character memory** — buddy is named & customized; recurring characters recalled across sessions (`character_repo`) |
-| Not highly customized | **Per-child `AgentDefinition` + skills gating** — age-aware capabilities (3–5 / 6–8 / 9–12); buddy persona shared as system context to every specialist |
+| Not highly customized | **Per-child buddy profile + skills gating** — age-aware capabilities (3–5 / 6–8 / 9–12); buddy persona shared as system context to every specialist |
 | No suited news for kids | **`kids_daily` specialist** — age-stratified prompts + per-reply safety review; news arrives as a kid-safe podcast in the buddy's voice |
 | No long-term persistence | **`agent_repo` + `character_repo` + vector search** — buddy persona and recurring characters survive every session; one buddy, for life |
 
@@ -227,34 +227,32 @@ And autonomous — that's next: multi-step planning, scheduled buddy initiatives
 
 ---
 
-## Four agent architecture patterns — *we use all four*
+## Four agent architecture patterns — *two shipped, two ready next*
 
 | # | Pattern | What it does | Where we use it |
 |---|---|---|---|
-| 1 | **🤖 Single agent** | One agent, one job · linear inference | Straight TTS via `audio_narration` |
-| 2 | **🔀 Sub-agent fan-out** | Same task spawned in parallel for speed | Concurrent vision crops · parallel `character_repo` lookups |
-| 3 | **👥 Agent team** | Multiple agents collaborate by **role** · defined via `AgentDefinition` | **My Agent**: proxy + 4 role specialists + `safety_review` |
-| 4 | **🎼 Multi-agent orchestrator** | Agents created **dynamically** · A2A extensible to external teams | Proxy registers new `AgentDefinition`s at runtime |
+| 1 | **🤖 Single agent/tool** | One callable, one job · linear inference | TTS via the reusable `audio_narration` tool |
+| 2 | **👥 Static agent team** | Multiple specialists collaborate by role | **My Agent** proxy routes to 3 product specialists + TTS tool + `safety_review` |
+| 3 | **🔀 Sub-agent fan-out** *(future)* | Same task spawned in parallel for speed | Candidate path for parallel vision crops and richer memory search |
+| 4 | **🎼 Dynamic orchestrator** *(future)* | Agents registered dynamically · A2A extensible to external teams | Future `AgentDefinition` registration / A2A bridge |
 
-<small>**Shared state** within a team flows through `build_my_agent_context()` — persona, child_id, recurring characters reach every specialist. **A2A** extends to external agent teams (future).</small>
+<small>**Shared state** within the shipped team flows through `build_my_agent_context()` — persona, tone, style, skills, topics, goals, child_id, and age. Recurring characters flow through `character_repo` and vector memory. **A2A** remains future work.</small>
 
 <!--
 🎤 SCRIPT · Slide 6 · Four architecture patterns
 ⏱ ~26 seconds · 5-min cut: KEEP
 
-"Four agent architecture patterns — and we use all four.
+"Four agent architecture patterns — two shipped, two ready next.
 
-Single agent — one job, linear inference. We use it for text-to-speech.
+Single agent or tool — one job, linear inference. We use it for text-to-speech.
 
-Sub-agent fan-out — the same task in parallel, for speed.
+Static agent team — our My Agent proxy routes to image story, interactive story, Kids Daily, a reusable audio tool, and safety review.
 
-Agent team — multiple agents collaborating by role, each an AgentDefinition. That's our My Agent.
+Sub-agent fan-out and dynamic orchestration are future extension paths.
 
-Multi-agent orchestrator — agents created dynamically at runtime. That's what makes us extensible.
+Shared context carries persona and style; recurring characters come from character memory. A2A to external teams is future work."
 
-Shared state flows to every specialist through the agent context. A2A to external teams is future work."
-
-🎬 Walk pattern by pattern. "We use all four" is the punchline.
+🎬 Walk pattern by pattern. Land the shipped-versus-future split clearly.
 ➡ Next: "And every agent is wired to six memory layers."
 -->
 
@@ -303,7 +301,7 @@ Put it together: the buddy remembers, understands, acts, talks, and reasons in f
 <!-- _color: "#F8FAFC" -->
 <!-- _class: dark -->
 
-## The team — *one proxy, four specialists, one safety gate*
+## The team — *one proxy, three specialists, one tool, one safety gate*
 
 One agent hit a ceiling. Branching stories, news podcasts, per-reply safety — each needed its own expertise. We extended to an **agent team** — still on Claude Agent SDK.
 
@@ -381,7 +379,7 @@ Routes parse requests. Dependencies handle auth and quota.
 
 Agents orchestrate the AI. MCP servers are the tool layer — seven of them.
 
-Services hold business logic. Repositories wrap database access — twenty of them.
+Services hold business logic — seventeen modules today. Repositories wrap database access — nineteen of them.
 
 And the database adapter — SQLite in dev, Postgres in production.
 
@@ -453,12 +451,12 @@ Three surfaces, same character. Continuity made real — not just claimed."
 
 | Where most products fail | What we do |
 |---|---|
-| Posts JOIN to `users.name` for byline | `hub_posts.agent_name` is a **snapshot column** — written at post time, never JOINed |
+| Posts JOIN to `users.name` for byline | `agent_name_snapshot`, `agent_avatar_id_snapshot`, and `agent_title_snapshot` are **snapshot columns** — written at post time, never JOINed |
 | `users.email` accidentally leaks via API | Read paths can't reach `users` at all — schema doesn't allow it |
 | Safety is a code-review checklist | Safety is a CHECK constraint + invariant test |
 
 ```
-hub_posts (id, agent_name, agent_avatar, agent_title, story_id, ...)
+hub_posts (id, agent_name_snapshot, agent_avatar_id_snapshot, agent_title_snapshot, story_id, ...)
                               ▲ immutable persona snapshot — no user JOIN
 ```
 
@@ -482,23 +480,27 @@ The unsafe query can't even be expressed. Safety is a schema invariant — with 
 
 ---
 
-## Open by design — *one AgentDefinition adds a specialist*
+## Open by design — *static team today, AgentDefinition extensions next*
 
 ```python
-# Adding a "music_story" specialist to the agent team:
-proxy.register(AgentDefinition(
+# Today: the proxy builds a fixed specialist map in _build_subagents().
+subagents = {
+    "image_story": image_story_agent,
+    "interactive_story": interactive_story_agent,
+    "kids_daily": kids_daily_agent,
+}
+
+# Future: adding a "music_story" specialist via AgentDefinition.
+AgentDefinition(
     name="music_story",
     model="haiku",
     system_prompt=Path("prompts/music-story.md").read_text(),
     tools=["music_generator", "vector_search"],
     enabled_skills=["compose"],
-))
-
-# Routing picks it up automatically. Safety gate runs on every reply.
-# Shared context (persona, child_id, recurring chars) flows in.
+)
 ```
 
-<small>**A2A bridge** (future) extends to external agent teams — partner specialists join the buddy's team via the same registration contract.</small>
+<small>Today, routing is explicit and safety-gated. **A2A bridge** and dynamic `AgentDefinition` registration are future extension work.</small>
 
 <!--
 🎤 SCRIPT · Slide 14 · Open by design (extensibility)
@@ -506,19 +508,19 @@ proxy.register(AgentDefinition(
 
 "This architecture is open by design.
 
-Adding a new specialist takes one AgentDefinition — a model, a prompt, its tools, its skills.
+Today, the proxy builds a static specialist map. That keeps routing explicit and easy to test.
 
-Register it, and routing picks it up automatically. The safety gate still runs on every reply. Shared context still flows in.
+The next extension is AgentDefinition registration: a model, a prompt, tools, and skills. The safety gate still runs on every reply. Shared context still flows in.
 
 And in the future, an A2A bridge lets external agent teams join — through the same contract."
 
-🎬 Let the audience read the code. "One AgentDefinition" is the moat — slow on that.
+🎬 Let the audience read the code. Land the split between today's static team and tomorrow's dynamic extension.
 ➡ Next: "And here's where we're headed."
 -->
 
 ---
 
-## Roadmap — *two phases shipped, two ahead*
+## Roadmap — *three phases shipped or nearly shipped, one vision*
 
 ![roadmap h:380](assets/roadmap.svg)
 
@@ -526,13 +528,13 @@ And in the future, an A2A bridge lets external agent teams join — through the 
 🎤 SCRIPT · Slide 15 · Roadmap (Phase 1 → 4)
 ⏱ ~30 seconds · 5-min cut: KEEP
 
-"Our roadmap — two phases shipped, two ahead.
+"Our roadmap — two phases shipped, one nearly complete, one vision.
 
 Phase one, the MVP — single agent, image-to-story, safety, TTS. Done.
 
 Phase two, the agent team — multi-agent, memory, Kids Daily, community. Done.
 
-Phase three, in design — video, parent dashboard, gamification.
+Phase three, nearly complete — video, parent dashboard, gamification.
 
 Phase four, the vision — autonomous.
 
@@ -548,9 +550,9 @@ We don't pitch features. We ship them."
 
 | Milestone | Status |
 |---|---|
-| **Phase 1** MVP — Single agent + image-to-story + safety + TTS | ✅ **92/92** shipped |
-| **Phase 2** Multi-agent team + memory + news + community | ✅ **180/180** shipped |
-| **Phase 3** Video · parent dashboard · gamification | 🔜 In design |
+| **Phase 1** MVP — Single agent + image-to-story + safety + TTS | ✅ **95/95** shipped |
+| **Phase 2** Multi-agent team + memory + news + community | ✅ **188/188** shipped |
+| **Phase 3** Video · parent dashboard · gamification | 🚧 **30/32** shipped |
 
 <br>
 
@@ -562,7 +564,7 @@ We don't pitch features. We ship them."
 🎤 SCRIPT · Slide 16 · Where we are
 ⏱ ~22 seconds · 5-min cut: KEEP
 
-"Where we are today. Two hundred ninety-two tracked work items — phases one and two done, phase three moving into build.
+"Where we are today. Three hundred thirteen shipped work items out of three hundred fifteen tracked across milestones — phases one and two done, phase three nearly complete.
 
 The engineering rigor: over seven hundred contract tests, per-reply safety, a silent safety bug we caught and fixed in twenty-four hours.
 
@@ -609,7 +611,7 @@ Most pitches hide bugs. We name ours."
 # Why this matters
 
 - **Agentic from day one** — not a wrapper, not a prompt. Real SDK, real tools, real orchestration.
-- **292 tracked work items** across shipped and planned milestones — *execution proof*
+- **313 shipped / 315 tracked work items** across milestones — *execution proof*
 - **Programmatic safety on every reply** — non-negotiable, code-enforced, not vibes
 - **Community that protects child PII at the schema level** — COPPA by construction
 - **A buddy that grows with the child** — character continuity across image, story, podcast, share
@@ -626,7 +628,7 @@ Most pitches hide bugs. We name ours."
 
 Agentic from day one — real SDK, real tools, real orchestration. Not a wrapper.
 
-292 tracked work items across shipped and planned milestones — execution proof.
+Three hundred thirteen shipped work items out of three hundred fifteen tracked across milestones — execution proof.
 
 Programmatic safety on every reply — code-enforced, not vibes.
 
@@ -652,16 +654,16 @@ I'd love to take your questions."
 
 | Topic | One-line answer |
 |---|---|
-| **Agent** | `AgentDefinition(model="haiku", system_prompt=..., tools=[...], enabled_skills=[...])` — one specialist w/ a curated capability set |
-| **Subagent** | An agent registered under the proxy's `agents=` dict · invoked via the SDK's `Agent` tool delegation |
+| **Specialist** | Static proxy entry with its own prompt, tools, and skill gates; future `AgentDefinition` registration can make this dynamic |
+| **Subagent** | A specialist in the proxy's map · invoked through explicit intent routing and SDK delegation |
 | **Agent team** | Proxy + 3 product subagents (image_story · interactive_story · kids_daily) + audio_narration tool + safety_review · all share the context bus |
 | **Orchestrator** | The proxy ("My Agent") — routes intent · composes specialist outputs · runs safety_review on every reply |
 | **Why this shape** | Bigger prompt → quality degrades w/ specialty count · prompt chaining → no shared state · agent team → shared context + parallel specialty + future A2A extensibility |
-| **SDK** | `claude_agent_sdk` — `ClaudeSDKClient` + `AgentDefinition`s + custom MCP servers via `@tool` |
+| **SDK** | `claude_agent_sdk` — `ClaudeSDKClient` + custom MCP servers via `@tool`; dynamic `AgentDefinition` registration is future extension work |
 | **Intent routing** | `_classify_intent(utterance, age)` — deterministic keyword rules + LLM disambiguation · age 3-5 vague `"story?"` → image_story by default |
 | **Per-reply safety** | `enforce_chat_safety()` after every proxy reply · age-aware threshold · `suggest_content_improvements` retry · `safety_blocked` SSE telemetry on fail |
-| **Shared state** | `build_my_agent_context(user_id, child_id)` passes persona + recurring characters to every specialist's system prompt |
-| **COPPA pattern** | `hub_posts.agent_name`, `agent_avatar`, `agent_title` — immutable snapshot columns; no read path JOINs `users` |
+| **Shared state** | `build_my_agent_context(user_id, child_id)` passes persona, tone, style, skills, topics, goals, child_id, and age; recurring characters flow through `character_repo` and vector memory |
+| **COPPA pattern** | `hub_posts.agent_name_snapshot`, `agent_avatar_id_snapshot`, `agent_title_snapshot` — immutable snapshot columns; no read path JOINs `users` |
 | **Streaming** | SSE event types: `status` · `progress` · `tool_use` · `tool_result` · `launch_flow` · `safety_blocked` · `result` · `complete` |
 | **Testing** | 700+ contract tests · per-MCP-tool + per-agent + per-route contracts · pytest, `pytest-asyncio` |
 | **Tech stack** | FastAPI + Pydantic v2 · SQLite (dev) / Postgres + pgvector (prod) · React 18 + TypeScript + Tailwind + TanStack Query |
@@ -680,13 +682,13 @@ Only reveal it if a judge asks a deep technical question. Then jump straight to 
 Here are three example answers you might give out loud:
 
 If they ask "what's the difference between an agent and a subagent?":
-"An agent in our system is an AgentDefinition — it has a model, a system prompt, a set of tools, and a set of skills. A subagent is one of those registered underneath our proxy. The SDK's Agent tool is what lets the proxy delegate to a subagent based on the child's intent."
+"Today, a specialist in our system is a static entry in the proxy's specialist map — it has its own prompt, tools, and skill gates. A subagent is one of those specialists invoked by the proxy based on the child's intent. AgentDefinition registration is the future extension path for new specialists."
 
 If they ask "why didn't you just use a bigger prompt?":
 "Two reasons. First, quality degrades as you stuff more specialties into one prompt — the model loses focus. And second, we'd lose the per-reply safety subagent as a separate gate, which is non-negotiable for a kids product."
 
 If they ask "how is your COPPA pattern different from other kid-AI products?":
-"Most teams enforce their kid-PII rules in code review. We enforce them in the schema. The hub_posts table has agent_name, agent_avatar, and agent_title as immutable snapshot columns — written once at post time. No read path in our codebase JOINs the users table. The unsafe query literally can't be expressed in our schema."
+"Most teams enforce their kid-PII rules in code review. We enforce them in the schema. The hub_posts table has agent_name_snapshot, agent_avatar_id_snapshot, and agent_title_snapshot as immutable snapshot columns — written once at post time. No read path in our codebase JOINs the users table. The unsafe query literally can't be expressed in our schema."
 
 🎬 Don't read the whole table out loud. Just jump to the row that answers the question and explain it conversationally.
 -->
