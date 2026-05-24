@@ -15,6 +15,13 @@ import { authService } from '@/api/services/authService'
 import { performFullLogout } from '@/utils/logout'
 import { NavRefProvider, useNavRef } from '@/contexts/NavRefContext'
 
+const CHILD_SELECTION_PATHS = new Set([
+  '/upload',
+  '/interactive',
+  '/kids-daily',
+  '/my-agent',
+])
+
 function PageContainer() {
   return (
     <NavRefProvider>
@@ -37,6 +44,12 @@ function PageContainerInner() {
   } = useChildStore()
   const [mobileOpen, setMobileOpen] = useState(false)
   const activeProfiles = childProfiles.filter((child) => !child.archived_at)
+  const shouldPickActiveChild =
+    isAuthenticated &&
+    user?.role === 'parent' &&
+    activeProfiles.length > 1 &&
+    !currentChild &&
+    CHILD_SELECTION_PATHS.has(location.pathname)
 
   useGenerationNavigator()
 
@@ -352,7 +365,14 @@ function PageContainerInner() {
             exit={{ opacity: 0, y: -20 }}
             transition={{ duration: 0.3 }}
           >
-            <Outlet />
+            {shouldPickActiveChild ? (
+              <ActiveChildPicker
+                profiles={activeProfiles}
+                onSelect={switchActiveChild}
+              />
+            ) : (
+              <Outlet />
+            )}
           </motion.div>
         </AnimatePresence>
       </main>
@@ -387,6 +407,77 @@ function PageContainerInner() {
   )
 }
 
+function ActiveChildPicker({
+  profiles,
+  onSelect,
+}: {
+  profiles: Array<{
+    child_id: string
+    name: string
+    age_group?: string
+    interests?: string[]
+    avatar?: string | null
+  }>
+  onSelect: (childId: string) => void
+}) {
+  return (
+    <section className="mx-auto max-w-2xl rounded-card border border-gray-200 bg-white/90 p-6 shadow-card backdrop-blur">
+      <div className="mb-5">
+        <p className="text-sm font-bold uppercase tracking-wide text-primary">
+          Who's creating today?
+        </p>
+        <h1 className="mt-1 text-2xl font-bold text-gray-800">
+          Pick the active child profile
+        </h1>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        {profiles.map((child) => (
+          <button
+            key={child.child_id}
+            type="button"
+            className="min-h-[120px] rounded-card border border-gray-200 bg-white p-4 text-left transition hover:border-primary/50 hover:shadow-card focus:outline-none focus:ring-2 focus:ring-primary/40"
+            onClick={() => onSelect(child.child_id)}
+          >
+            <div className="flex items-center gap-3">
+              <span className="flex h-11 w-11 items-center justify-center rounded-full bg-primary/10 text-2xl">
+                {avatarLabel(child)}
+              </span>
+              <div className="min-w-0">
+                <h2 className="truncate text-base font-bold text-gray-800">
+                  {child.name}
+                </h2>
+                {child.age_group && (
+                  <p className="text-sm text-gray-500">{child.age_group}</p>
+                )}
+              </div>
+            </div>
+            {child.interests && child.interests.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {child.interests.slice(0, 3).map((interest) => (
+                  <span
+                    key={interest}
+                    className="rounded-lg bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-600"
+                  >
+                    {interest}
+                  </span>
+                ))}
+              </div>
+            )}
+          </button>
+        ))}
+      </div>
+
+      <Link
+        to="/profile?tab=children"
+        className="mt-5 inline-flex text-sm font-bold text-primary hover:text-primary/80"
+      >
+        Manage child profiles
+      </Link>
+    </section>
+  )
+}
+
 function ActiveChildSwitcher({
   profiles,
   activeChildId,
@@ -404,7 +495,7 @@ function ActiveChildSwitcher({
     <label
       className={
         compact
-          ? 'flex items-center gap-1 text-xs font-bold text-gray-500'
+          ? 'flex flex-col gap-0.5 rounded-btn bg-gray-50 px-2.5 py-1.5 text-xs font-bold leading-tight text-gray-500'
           : 'flex flex-col gap-1 rounded-btn bg-gray-50 px-3 py-2 text-xs font-bold text-gray-500'
       }
     >
@@ -412,16 +503,28 @@ function ActiveChildSwitcher({
       <select
         value={activeChildId ?? ''}
         onChange={(event) => onSelect(event.target.value)}
-        className="max-w-[130px] rounded-lg border border-gray-200 bg-white px-2 py-1 text-sm font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary/40"
+        className="max-w-[120px] rounded-lg border border-gray-200 bg-white px-2 py-1 text-sm font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary/40"
       >
+        {!activeChildId && (
+          <option value="" disabled>
+            Pick child
+          </option>
+        )}
         {profiles.map((child) => (
           <option key={child.child_id} value={child.child_id}>
-            {child.avatar ? `${child.avatar} ` : ''}{child.name}
+            {avatarLabel(child)} {child.name}
           </option>
         ))}
       </select>
     </label>
   )
+}
+
+function avatarLabel(child: { avatar?: string | null }) {
+  if (child.avatar?.startsWith('emoji:')) {
+    return child.avatar.replace('emoji:', '')
+  }
+  return '🎨'
 }
 
 function NavLink({

@@ -274,6 +274,8 @@ function selectActiveChild(
     : null
   if (preferred) return preferred
 
+  if (!preferredId) return null
+
   const serverDefault = activeProfiles.find((profile) => profile.is_default)
   if (serverDefault) return serverDefault
 

@@ -321,9 +321,9 @@ One agent hit a ceiling. Branching stories, news podcasts, per-reply safety — 
 
 A child's message hits the proxy first. It orchestrates — routes intent with deterministic rules plus LLM disambiguation.
 
-[point at the specialists and tools in the middle]
+[point at the specialists]
 
-Then it hands off to the right capability. Image story, interactive story, and Kids Daily are product specialists; audio narration is a reusable TTS tool. Each one has its own prompt or typed interface, its own tools, and its own skill set.
+Then the right capability runs — image story, interactive story, and Kids Daily are specialists; audio narration is a reusable TTS tool. Each has its own prompt and tools.
 
 [point at safety_review — pause]
 
@@ -331,7 +331,7 @@ Every reply passes through safety review before it reaches the child. That's the
 
 [point at the context bus]
 
-And underneath all of it is shared context. Persona, tone, style, skills, topics, goals, child ID, age, and recurring characters all flow through the same orchestration path. So Lightning the puppy in the story is the same Lightning in the podcast. The character continuity is built in at the architecture level through character memory and vector recall.
+And underneath, shared context — persona, characters — flows to every agent. Same character in the story and the podcast.
 
 This unlocks responsive, dynamic, and A2A-extensible."
 

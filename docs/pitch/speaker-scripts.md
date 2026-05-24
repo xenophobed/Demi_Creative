@@ -10,7 +10,6 @@
 > "Good morning. This is Kids Creative Workshop — an agentic app for kids, built on the Claude Agent SDK. Let me start with a moment."
 
 ---
-
 ## Slide 2 — Three moments
 *~22 seconds · 5-min cut: KEEP*
 

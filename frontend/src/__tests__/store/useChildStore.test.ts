@@ -110,6 +110,17 @@ describe("useChildStore child profile hydration", () => {
     expect(useChildStore.getState().defaultChildId).toBe("child-1");
   });
 
+  it("leaves multi-child parent accounts unselected until the parent chooses", () => {
+    useChildStore.getState().setChildProfiles([
+      profile("child-1", { is_default: true }),
+      profile("child-2", { name: "Bea" }),
+    ]);
+
+    expect(useChildStore.getState().currentChild).toBeNull();
+    expect(useChildStore.getState().activeChildId).toBeNull();
+    expect(useChildStore.getState().defaultChildId).toBe("child-1");
+  });
+
   it("falls back to the server default when the persisted active child is gone", () => {
     useChildStore.setState({ activeChildId: "archived-child" });
 
