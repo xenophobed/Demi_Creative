@@ -9,6 +9,12 @@ from backend.src.services.database import child_profile_repo, db_manager
 
 
 async def _ensure_owned_child(child_id: str) -> None:
+    existing = await child_profile_repo.get_for_user(
+        "test_user", child_id, include_archived=True
+    )
+    if existing is not None:
+        return
+
     await db_manager.execute(
         """
         INSERT OR IGNORE INTO users (
