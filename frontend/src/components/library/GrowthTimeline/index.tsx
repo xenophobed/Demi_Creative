@@ -8,9 +8,14 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
-import { TrendingUp } from 'lucide-react'
+import { BookOpen, Sparkles, TrendingUp } from 'lucide-react'
 import { libraryService } from '@/api/services/libraryService'
-import type { StatsGroupBy, RichStatsPeriod } from '@/api/services/libraryService'
+import type {
+  ParentDashboardRecentCreation,
+  ParentDashboardTheme,
+  RichStatsPeriod,
+  StatsGroupBy,
+} from '@/api/services/libraryService'
 import useAuthStore from '@/store/useAuthStore'
 
 // ---- Metric Card ----
@@ -211,6 +216,70 @@ function EmptyState({ isParentDashboard }: { isParentDashboard?: boolean }) {
   )
 }
 
+function ParentThemeList({ themes }: { themes: ParentDashboardTheme[] }) {
+  if (themes.length === 0) return null
+
+  return (
+    <section className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm">
+      <div className="mb-3 flex items-center gap-2">
+        <Sparkles size={16} className="text-amber-500" />
+        <p className="text-xs font-medium text-gray-400 uppercase tracking-wide">
+          Favorite Themes
+        </p>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {themes.map((theme) => (
+          <span
+            key={theme.theme}
+            className="rounded-full bg-amber-50 px-3 py-1.5 text-sm font-medium text-amber-800"
+          >
+            {theme.theme}
+          </span>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function formatCreationType(type: string): string {
+  if (type === 'art-story') return 'Art Story'
+  if (type === 'interactive') return 'Interactive Story'
+  if (type === 'kids-daily') return 'Kids Daily'
+  if (type === 'kids-news') return 'Kids News'
+  return 'Creation'
+}
+
+function ParentRecentCreations({
+  items,
+}: {
+  items: ParentDashboardRecentCreation[]
+}) {
+  if (items.length === 0) return null
+
+  return (
+    <section className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm">
+      <div className="mb-3 flex items-center gap-2">
+        <BookOpen size={16} className="text-emerald-500" />
+        <p className="text-xs font-medium text-gray-400 uppercase tracking-wide">
+          Recent Safe Creations
+        </p>
+      </div>
+      <div className="divide-y divide-gray-100">
+        {items.map((item) => (
+          <div key={`${item.type}-${item.id}`} className="py-2 first:pt-0 last:pb-0">
+            <p className="truncate text-sm font-semibold text-gray-700">
+              {item.title}
+            </p>
+            <p className="mt-0.5 text-xs text-gray-400">
+              {formatCreationType(item.type)}
+            </p>
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
 // ---- Main Component ----
 
 export default function GrowthTimeline({
@@ -229,6 +298,8 @@ export default function GrowthTimeline({
   })
 
   const periods = data?.periods ?? []
+  const topThemes = data?.top_themes ?? []
+  const recentCreations = data?.recent_creations ?? []
 
   // Aggregate latest period for headline metrics
   const latest = periods.length > 0 ? periods[periods.length - 1] : null
@@ -348,6 +419,13 @@ export default function GrowthTimeline({
             </p>
             <ContentMixBar breakdown={allMix} />
           </div>
+
+          {isParentDashboard && (
+            <>
+              <ParentThemeList themes={topThemes} />
+              <ParentRecentCreations items={recentCreations} />
+            </>
+          )}
         </div>
       )}
     </motion.div>

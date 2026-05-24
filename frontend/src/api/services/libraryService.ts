@@ -73,9 +73,24 @@ export interface RichStatsPeriod {
   story_type_breakdown: Record<string, number>
 }
 
+export interface ParentDashboardTheme {
+  theme: string
+  count: number
+}
+
+export interface ParentDashboardRecentCreation {
+  id: string
+  type: LibraryItemType
+  title: string
+  created_at: string
+  thumbnail_url?: string | null
+}
+
 export interface RichStatsResponse {
   periods: RichStatsPeriod[]
   streak_days: number
+  top_themes: ParentDashboardTheme[]
+  recent_creations: ParentDashboardRecentCreation[]
 }
 
 export interface RichStatsOptions {
