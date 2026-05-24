@@ -15,16 +15,54 @@ import useChildStore from "@/store/useChildStore";
 import useAuthStore from "@/store/useAuthStore";
 import storyService from "@/api/services/storyService";
 import videoService from "@/api/services/videoService";
-import type { VideoStatus } from "@/types/api";
+import type { StoryVideosResponse, VideoStatus } from "@/types/api";
 import { resolveMediaUrl } from "@/utils/mediaUrl";
 import ShareToHubModal from "@/components/hub/ShareToHubModal";
 
-type StoryVideoUiState =
+export type StoryVideoUiState =
   | "idle"
   | "queued"
   | "generating"
   | "completed"
   | "failed";
+
+export function applyProviderStatusToStoryVideo(
+  status: VideoStatus,
+): StoryVideoUiState {
+  if (status === "pending") return "queued";
+  if (status === "processing") return "generating";
+  if (status === "completed") return "completed";
+  return "failed";
+}
+
+export function getStoryVideoStatusMessage(status: StoryVideoUiState): string {
+  if (status === "queued") return "Queued for video magic";
+  if (status === "generating") return "Making your story video";
+  if (status === "completed") return "Your video is ready";
+  if (status === "failed") return "Video is not available right now";
+  return "";
+}
+
+export function shouldRenderPictureBookFallback(
+  userRequestedFallback: boolean,
+  videoStatus: StoryVideoUiState,
+): boolean {
+  return userRequestedFallback || videoStatus === "failed";
+}
+
+export function findLatestCompletedStoryVideoUrl(
+  response: StoryVideosResponse | undefined,
+): string | null {
+  const completed = [...(response?.videos ?? [])]
+    .filter((video) => video.status === "completed" && video.video_url)
+    .sort((a, b) => {
+      const left = a.created_at ? Date.parse(a.created_at) : 0;
+      const right = b.created_at ? Date.parse(b.created_at) : 0;
+      return right - left;
+    });
+
+  return completed[0]?.video_url ?? null;
+}
 
 function deriveStoryTitleFromText(storyText: string | undefined): string {
   if (!storyText) return "Your Story";
@@ -128,15 +166,24 @@ function StoryPage() {
     }
   }, [story, isAudioGenerating]);
 
-  const applyProviderStatus = useCallback(
-    (status: VideoStatus): StoryVideoUiState => {
-      if (status === "pending") return "queued";
-      if (status === "processing") return "generating";
-      if (status === "completed") return "completed";
-      return "failed";
-    },
-    [],
-  );
+  const { data: storyVideos } = useQuery({
+    queryKey: ["story-videos", story?.story_id],
+    queryFn: () => videoService.getVideosByStory(story!.story_id),
+    enabled: isAuthenticated && !!story?.story_id,
+    retry: 1,
+  });
+
+  useEffect(() => {
+    if (videoStatus !== "idle") return;
+
+    const completedVideoUrl = findLatestCompletedStoryVideoUrl(storyVideos);
+    if (!completedVideoUrl) return;
+
+    setVideoStatus("completed");
+    setVideoProgress(100);
+    setVideoUrl(resolveMediaUrl(completedVideoUrl));
+    setVideoError(null);
+  }, [storyVideos, videoStatus]);
 
   const handleStartVideo = useCallback(async () => {
     if (!story || videoStatus === "queued" || videoStatus === "generating") return;
@@ -156,7 +203,7 @@ function StoryPage() {
       });
 
       setVideoJobId(result.job_id);
-      setVideoStatus(applyProviderStatus(result.status));
+      setVideoStatus(applyProviderStatusToStoryVideo(result.status));
 
       if (result.status === "completed") {
         const completed = await videoService.getVideoStatus(result.job_id);
@@ -174,8 +221,9 @@ function StoryPage() {
       setVideoJobId(null);
       setVideoStatus("failed");
       setVideoError(message);
+      setShowPictureBook(true);
     }
-  }, [applyProviderStatus, onDemandAudioUrl, story, videoStatus]);
+  }, [onDemandAudioUrl, story, videoStatus]);
 
   useEffect(() => {
     if (!videoJobId || !["queued", "generating"].includes(videoStatus)) return;
@@ -186,11 +234,15 @@ function StoryPage() {
         const result = await videoService.getVideoStatus(videoJobId);
         if (cancelled) return;
 
-        setVideoStatus(applyProviderStatus(result.status));
+        const nextStatus = applyProviderStatusToStoryVideo(result.status);
+        setVideoStatus(nextStatus);
         setVideoProgress(result.progress_percent ?? 0);
         setVideoError(result.error_message ?? null);
         if (result.video_url) {
           setVideoUrl(resolveMediaUrl(result.video_url));
+        }
+        if (nextStatus === "failed") {
+          setShowPictureBook(true);
         }
       } catch (err) {
         if (cancelled) return;
@@ -200,6 +252,7 @@ function StoryPage() {
             : "We could not check the video status.";
         setVideoStatus("failed");
         setVideoError(message);
+        setShowPictureBook(true);
       }
     };
 
@@ -210,7 +263,7 @@ function StoryPage() {
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [applyProviderStatus, videoJobId, videoStatus]);
+  }, [videoJobId, videoStatus]);
 
   const handleNewStory = () => {
     reset();
@@ -376,10 +429,7 @@ function StoryPage() {
         {videoStatus !== "idle" && (
           <div className={`story-video-status ${videoStatus}`} role="status">
             <span>
-              {videoStatus === "queued" && "Queued for video magic"}
-              {videoStatus === "generating" && "Making your story video"}
-              {videoStatus === "completed" && "Your video is ready"}
-              {videoStatus === "failed" && "Video is not available right now"}
+              {getStoryVideoStatusMessage(videoStatus)}
             </span>
             {(videoStatus === "queued" || videoStatus === "generating") && (
               <div
@@ -408,7 +458,7 @@ function StoryPage() {
           />
         )}
 
-        {showPictureBook && (
+        {shouldRenderPictureBookFallback(showPictureBook, videoStatus) && (
           <DynamicPictureBook
             story={story.story}
             title={storyTitle || `Story #${story.story_id.slice(0, 6)}`}
