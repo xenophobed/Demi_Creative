@@ -11,6 +11,7 @@ const StoryPage = lazy(() => import("./pages/StoryPage"));
 const LibraryPage = lazy(() => import("./pages/LibraryPage"));
 const InteractiveStoryPage = lazy(() => import("./pages/InteractiveStoryPage"));
 const LoginPage = lazy(() => import("./pages/LoginPage"));
+const ParentApprovalPage = lazy(() => import("./pages/ParentApprovalPage"));
 const ProfilePage = lazy(() => import("./pages/ProfilePage"));
 const MyAgentPage = lazy(() => import("./pages/MyAgentPage"));
 const ContentHubPage = lazy(() => import("./pages/ContentHubPage"));
@@ -33,6 +34,7 @@ function App() {
         <Routes>
           {/* Auth routes (no page container) */}
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/parent-approval" element={<ParentApprovalPage />} />
 
           {/* Main app routes */}
           <Route path="/" element={<PageContainer />}>

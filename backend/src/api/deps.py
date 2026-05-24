@@ -266,6 +266,24 @@ async def _get_or_create_supabase_user(claims) -> Optional[UserData]:
     )
     await db_manager.commit()
 
+    if role == "parent" and claims.child_id:
+        age_group = (
+            claims.child_age_group
+            if claims.child_age_group in {"3-5", "6-8", "9-12"}
+            else "6-8"
+        )
+        try:
+            await child_profile_repo.create(
+                user_id=claims.sub,
+                child_id=claims.child_id,
+                name=claims.child_name or username,
+                age_group=age_group,
+                interests=claims.child_interests or [],
+                is_default=True,
+            )
+        except Exception:
+            pass
+
     # Handle referral if a referral_code was passed during registration (#424)
     if getattr(claims, "referral_code", None):
         try:

@@ -35,6 +35,9 @@ class SupabaseClaims:
     role: str = "parent"
     parent_email: Optional[str] = None
     child_id: Optional[str] = None
+    child_name: Optional[str] = None
+    child_age_group: Optional[str] = None
+    child_interests: Optional[list[str]] = None
 
 
 def get_jwt_secret() -> Optional[str]:
@@ -160,6 +163,11 @@ def _extract_claims(payload: dict) -> Optional[SupabaseClaims]:
     role = requested_role if requested_role in {"parent", "child"} else "parent"
     parent_email = user_meta.get("parent_email")
     child_id = user_meta.get("child_id")
+    child_name = user_meta.get("child_name")
+    child_age_group = user_meta.get("child_age_group")
+    child_interests = user_meta.get("child_interests")
+    if not isinstance(child_interests, list):
+        child_interests = []
 
     return SupabaseClaims(
         sub=sub,
@@ -169,4 +177,7 @@ def _extract_claims(payload: dict) -> Optional[SupabaseClaims]:
         role=role,
         parent_email=parent_email,
         child_id=child_id,
+        child_name=child_name,
+        child_age_group=child_age_group,
+        child_interests=[str(item) for item in child_interests],
     )

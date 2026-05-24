@@ -17,8 +17,10 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import useChildStore from "@/store/useChildStore";
 import useAuthStore from "@/store/useAuthStore";
+import { authService } from "@/api/services/authService";
 import { useAgent } from "@/hooks/useAgent";
 import AgentChatPanel from "./AgentChatPanel";
 import OnboardingModal from "./OnboardingModal";
@@ -28,17 +30,34 @@ import SignInPrompt from "@/components/common/SignInPrompt";
 
 export default function MyAgentPage() {
   const currentChild = useChildStore((s) => s.currentChild);
+  const childProfiles = useChildStore((s) => s.childProfiles);
+  const childProfilesLoading = useChildStore((s) => s.isLoading);
+  const loadChildProfiles = useChildStore((s) => s.loadChildProfiles);
   const defaultChildId = useChildStore((s) => s.defaultChildId);
   const childId = currentChild?.child_id ?? defaultChildId;
   const ageGroup = currentChild?.age_group;
 
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
-  const onboardedAt = useAuthStore((s) => s.user?.onboarded_at);
+  const user = useAuthStore((s) => s.user);
+  const onboardedAt = user?.onboarded_at;
+  const isPendingChildApproval =
+    user?.role === "child" && user?.consent_status === "pending_parent_consent";
 
   const { data: existing, isLoading } = useAgent(childId);
 
   const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
+  const [approvalNotice, setApprovalNotice] = useState<string | null>(null);
+  const [approvalBusy, setApprovalBusy] = useState(false);
+
+  useEffect(() => {
+    if (!isAuthenticated || user?.role !== "parent" || childProfiles.length > 0) {
+      return;
+    }
+    loadChildProfiles().catch((err) => {
+      console.error("Failed to load child profiles:", err);
+    });
+  }, [childProfiles.length, isAuthenticated, loadChildProfiles, user?.role]);
 
   useEffect(() => {
     if (isLoading) return;
@@ -60,6 +79,23 @@ export default function MyAgentPage() {
       : "Meet your creative buddy";
   }, [currentChild?.name]);
 
+  const handleResendParentApproval = async () => {
+    setApprovalBusy(true);
+    setApprovalNotice(null);
+    try {
+      const response = await authService.resendParentApproval();
+      setApprovalNotice(
+        response.approval_url
+          ? `Approval link refreshed: ${response.approval_url}`
+          : "Approval request refreshed.",
+      );
+    } catch {
+      setApprovalNotice("We could not resend approval right now. Try again later.");
+    } finally {
+      setApprovalBusy(false);
+    }
+  };
+
   // --- State 1: Guest ---------------------------------------------------
   if (!isAuthenticated) {
     return (
@@ -78,6 +114,70 @@ export default function MyAgentPage() {
           title="Sign in to meet your buddy"
           description="Once you sign in, we'll walk you through naming your creative buddy and picking its animal — takes under a minute."
         />
+      </div>
+    );
+  }
+
+  if (isPendingChildApproval) {
+    return (
+      <div className="mx-auto flex max-w-3xl flex-col gap-6 px-4 py-8">
+        <header className="flex flex-col gap-1">
+          <h1 className="text-2xl font-semibold text-gray-900">
+            Parent approval needed
+          </h1>
+          <p className="text-sm text-gray-600">
+            A parent or guardian needs to approve this account before the buddy
+            and sharing setup can continue.
+          </p>
+        </header>
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-6">
+          <p className="text-sm text-amber-900">
+            Approval is pending for {user?.parent_email ?? "your parent or guardian"}.
+          </p>
+          {approvalNotice && (
+            <p className="mt-3 break-all text-xs text-amber-800">
+              {approvalNotice}
+            </p>
+          )}
+          <button
+            type="button"
+            onClick={handleResendParentApproval}
+            disabled={approvalBusy}
+            className="mt-4 rounded-md bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-60"
+          >
+            {approvalBusy ? "Sending..." : "Resend approval request"}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (user?.role === "parent" && childProfiles.length === 0 && childProfilesLoading) {
+    return (
+      <div className="mx-auto flex max-w-3xl flex-col gap-6 px-4 py-8">
+        <p className="text-gray-500">Loading child profile...</p>
+      </div>
+    );
+  }
+
+  if (user?.role === "parent" && childProfiles.length === 0) {
+    return (
+      <div className="mx-auto flex max-w-3xl flex-col gap-6 px-4 py-8">
+        <header className="flex flex-col gap-1">
+          <h1 className="text-2xl font-semibold text-gray-900">
+            Set up a child profile
+          </h1>
+          <p className="text-sm text-gray-600">
+            Create a nickname-based profile first so your child's buddy can use
+            the right age group and interests.
+          </p>
+        </header>
+        <Link
+          to="/profile?tab=children"
+          className="inline-flex w-fit rounded-md bg-violet-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-violet-700"
+        >
+          Add child profile
+        </Link>
       </div>
     );
   }
