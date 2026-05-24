@@ -1738,23 +1738,25 @@ Switch all agents from `ClaudeSDKClient` to direct `anthropic.AsyncAnthropic()` 
 
 ## 3.14 Phase 3 Productization — Video, Parent Dashboard, and Achievements [Phase 3]
 
-Phase 3 turns the existing foundations for video, growth metrics, and rewards into coherent product surfaces. Several building blocks already exist: a video MCP server and `/api/v1/video` routes, artifact support for video, the Library growth timeline, parent role/consent primitives, and Daily Inspiration reward components. The Phase 3 backlog should focus on integration, safety, age adaptation, and honest product positioning rather than rebuilding those foundations.
+Phase 3 turns the existing foundations for video, growth metrics, and rewards into coherent product surfaces. The epic is tracked in #531, with delivery split across story video (#534), dynamic picture-book fallback (#533), parent creativity dashboard (#532), achievement infrastructure (#536), child-safe achievement surfaces (#537), and pitch/roadmap alignment (#522 / PR #554).
+
+**Delivery status**: Phase 3 product surfaces are implemented through the child work above. Remaining positioning changes should keep shipped capabilities, in-progress polish, and future A2A/autonomous work clearly separated.
 
 ### 3.14.1 Story Video and Dynamic Picture Book
 
 **User value**: Children can transform a completed story into a short animated picture-book moment they can rewatch, share safely, or keep in My Library.
 
-**Current foundation**:
+**Implemented surface**:
 - `backend/src/mcp_servers/video_generator_server.py` provides `generate_painting_video`, `check_video_status`, and video/audio combination tooling.
 - `backend/src/api/routes/video.py` exposes authenticated video generation and status endpoints.
 - Artifact models already include `video` and `final_video` roles.
 
-**In scope**:
-- Add an eligible-story video CTA from `StoryPage` and Library detail surfaces.
-- Show video job states: queued, generating, completed, failed, and retryable.
-- Store and display completed video artifacts alongside story/audio artifacts.
-- Provide a lower-cost dynamic picture-book fallback using existing images, audio, and CSS/JS animation when provider video is unavailable or too expensive.
-- Respect `prefers-reduced-motion` and provide a non-animated reading fallback.
+**Shipped behavior**:
+- Eligible completed stories expose video generation from child-facing story surfaces.
+- Video job states cover queued, generating, completed, failed, and retryable flows without losing the original story.
+- Completed video artifacts are displayed alongside story/audio artifacts with ownership checks.
+- A lower-cost dynamic picture-book fallback uses existing images, audio, and CSS/JS animation when provider video is unavailable or too expensive.
+- Motion-sensitive users can rely on reduced-motion and non-animated reading fallbacks.
 
 **Out of scope**:
 - Open-ended video editing.
@@ -1765,16 +1767,16 @@ Phase 3 turns the existing foundations for video, growth metrics, and rewards in
 
 **User value**: Parents can understand a child's creative habits without turning the app into surveillance or ranking.
 
-**Current foundation**:
+**Implemented surface**:
 - `GET /api/v1/library/stats-rich` provides richer Library metrics.
 - `GrowthTimeline` already visualizes creation frequency.
 - Parent role, parent email, consent status, and parent consent are represented in user models and onboarding.
 
-**In scope**:
-- Create a parent-facing dashboard entrypoint that summarizes creation frequency, content mix, favorite themes, and recent safe creations.
-- Keep dashboard insights descriptive, not competitive: no leaderboards, no productivity scores, no pressure streaks.
-- Gate visibility to parent role, or to ages 9-12 where child-facing growth view is already allowed.
-- Provide empty states that guide parents toward healthy creative prompts rather than more screen time.
+**Shipped behavior**:
+- Parent-facing dashboard entrypoints summarize creation frequency, content mix, favorite themes, and recent safe creations.
+- Dashboard insights stay descriptive, not competitive: no leaderboards, no productivity scores, no pressure streaks.
+- Visibility is scoped to parent role or age-appropriate child-facing growth views.
+- Empty states guide families toward healthy creative prompts rather than more screen time.
 
 **Out of scope**:
 - Behavioral scoring.
@@ -1785,15 +1787,15 @@ Phase 3 turns the existing foundations for video, growth metrics, and rewards in
 
 **User value**: Children receive gentle encouragement for breadth, completion, and creativity without addictive streak pressure.
 
-**Current foundation**:
+**Implemented surface**:
 - `StarPiggyBank`, `MysteryBagOverlay`, Daily Inspiration rewards, and streaming celebration effects already exist.
 - Library and artifact metadata provide enough signal for first-pass achievement rules.
 
-**In scope**:
-- Define a small badge catalog based on healthy creative actions: first story, first interactive ending, first Kids Daily listen, first shared post, first video, and trying multiple themes.
-- Keep rewards age-aware: visual-first for ages 3-5, simple progress for ages 6-8, optional reflective goals for ages 9-12.
-- Avoid daily-use pressure; achievements should reward completed creative acts, not login streaks.
-- Add a server-owned achievement source of truth before exposing persistent badges in the UI.
+**Shipped behavior**:
+- The badge catalog rewards healthy creative actions such as first story, first interactive ending, first Kids Daily listen, first shared post, first video, and trying multiple themes.
+- Rewards are age-aware: visual-first for ages 3-5, simple progress for ages 6-8, optional reflective goals for ages 9-12.
+- Achievements reward completed creative acts rather than daily-use pressure or infinite streaks.
+- Persistent badges are backed by a server-owned achievement source of truth.
 
 **Out of scope**:
 - Competitive rankings.
@@ -1809,27 +1811,28 @@ Phase 3 turns the existing foundations for video, growth metrics, and rewards in
 - Distinguish "foundation shipped" from "productized experience shipped."
 - Update stale milestone counts and codebase module counts.
 - Treat A2A, runtime dynamic specialist registration, and autonomous buddy initiatives as future-facing unless implemented.
+- Track final pitch-deck source alignment in #522 / PR #554.
 
 ### Phase 3 Acceptance Criteria
 
-- [ ] Story video generation is reachable from at least one child-facing completed-story surface.
-- [ ] Video job status is visible and handles provider failure without losing the original story.
-- [ ] Completed videos appear in Library or story detail surfaces with ownership checks.
-- [ ] Dynamic picture-book fallback works when full video generation is unavailable.
-- [ ] Parent dashboard exposes descriptive growth metrics without PII leakage or cross-child ranking.
-- [ ] Achievement badges are backed by server-side state and reward healthy creative completion.
-- [ ] Age adaptation is applied across video, dashboard, and achievements.
-- [ ] Pitch and PRD language accurately distinguish shipped, in-progress, and future Phase 3 capabilities.
+- [x] Story video generation is reachable from at least one child-facing completed-story surface.
+- [x] Video job status is visible and handles provider failure without losing the original story.
+- [x] Completed videos appear in Library or story detail surfaces with ownership checks.
+- [x] Dynamic picture-book fallback works when full video generation is unavailable.
+- [x] Parent dashboard exposes descriptive growth metrics without PII leakage or cross-child ranking.
+- [x] Achievement badges are backed by server-side state and reward healthy creative completion.
+- [x] Age adaptation is applied across video, dashboard, and achievements.
+- [x] Pitch and PRD language accurately distinguish shipped, in-progress, and future Phase 3 capabilities.
 
-### Candidate Backlog
+### Tracked Delivery
 
-1. **Epic: Phase 3 productization — video, parent dashboard, and achievements** (`type:epic`, `domain:video`, `phase:3`)
-2. **Productize story video generation from completed stories** (`type:story`, `domain:video`, `P1`)
-3. **Add dynamic picture-book fallback for video-unavailable states** (`type:story`, `domain:video`, `P1`)
-4. **Create parent creativity dashboard entrypoint** (`type:story`, `domain:library`, `P1`)
-5. **Add server-owned achievement badge model** (`type:story`, `domain:gamification`, `P1`)
-6. **Render child-safe achievement surfaces** (`type:story`, `domain:gamification`, `P2`)
-7. **Align pitch deck and Phase 3 docs with shipped implementation** (`type:chore`, `domain:my-agent`, `P1`)
+1. **#531 Epic: Phase 3 productization — video, parent dashboard, and achievements** (`type:epic`, `domain:video`, `phase:3`)
+2. **#534 Productize story video generation from completed stories** (`type:story`, `domain:video`, `P1`) — closed
+3. **#533 Add dynamic picture-book fallback for video-unavailable states** (`type:story`, `domain:video`, `P1`) — closed
+4. **#532 Create parent creativity dashboard entrypoint** (`type:story`, `domain:library`, `P1`) — closed
+5. **#536 Add server-owned achievement badge model** (`type:story`, `domain:gamification`, `P1`) — closed
+6. **#537 Render child-safe achievement surfaces** (`type:story`, `domain:gamification`, `P2`) — closed
+7. **#522 Align pitch deck and Phase 3 docs with shipped implementation** (`type:chore`, `domain:my-agent`, `P1`) — PR #554
 
 ---
 
