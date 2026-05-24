@@ -16,6 +16,7 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { AxiosError } from "axios";
 import { ANIMAL_EMOJIS } from "@/lib/avatars";
 import { CURATED_TITLES, customTitleAllowed } from "@/lib/agentTitles";
@@ -68,7 +69,9 @@ export default function OnboardingModal({
   onClose,
 }: Props) {
   const upsert = useUpsertAgent();
+  const user = useAuthStore((s) => s.user);
   const setUser = useAuthStore((s) => s.setUser);
+  const canGrantParentConsent = user?.role === "parent";
 
   const steps = useMemo(() => stepsForAge(ageGroup), [ageGroup]);
   const [stepIdx, setStepIdx] = useState(0);
@@ -112,6 +115,10 @@ export default function OnboardingModal({
 
   const handleConsent = async () => {
     setError(null);
+    if (!canGrantParentConsent) {
+      setError("Ask a parent or guardian to approve this buddy before sharing.");
+      return;
+    }
     setBusy(true);
     try {
       // 1. Upsert the buddy (safety-checked server-side).
@@ -158,14 +165,14 @@ export default function OnboardingModal({
     }
   };
 
-  return (
+  const modal = (
     <div
       role="dialog"
       aria-modal="true"
       aria-labelledby="onboarding-title"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 py-8"
+      className="fixed inset-0 z-[120] flex items-center justify-center bg-black/40 px-4 py-8"
     >
-      <div className="w-full max-w-lg rounded-lg bg-white p-6 shadow-xl">
+      <div className="relative z-[121] w-full max-w-lg rounded-lg bg-white p-6 shadow-xl">
         <header className="flex flex-col gap-1">
           <p className="text-xs uppercase tracking-wide text-primary-dark">
             Step {stepIdx + 1} of {steps.length}
@@ -294,21 +301,34 @@ export default function OnboardingModal({
 
           {currentStep === "consent" && (
             <div className="flex flex-col gap-3 text-sm text-gray-700">
-              <p className="font-medium">For the parent / guardian</p>
-              <p>
-                This buddy is the name and animal your child picks to show on
-                stories they share publicly in Content Hub. We never show your
-                child's real name, email, or username — only the buddy.
-              </p>
-              <p>
-                You can change the buddy any time from "My Agent". Past stories
-                keep the buddy that posted them, so your child's creative
-                timeline stays consistent.
-              </p>
-              <p className="text-xs text-gray-500">
-                Note: We re-check the buddy's name and title for safety every
-                time it's edited.
-              </p>
+              {canGrantParentConsent ? (
+                <>
+                  <p className="font-medium">For the parent / guardian</p>
+                  <p>
+                    This buddy is the name and animal your child picks to show on
+                    stories they share publicly in Content Hub. We never show your
+                    child's real name, email, or username — only the buddy.
+                  </p>
+                  <p>
+                    You can change the buddy any time from "My Agent". Past stories
+                    keep the buddy that posted them, so your child's creative
+                    timeline stays consistent.
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    Note: We re-check the buddy's name and title for safety every
+                    time it's edited.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="font-medium">Parent approval needed</p>
+                  <p>
+                    A parent or guardian needs to approve this buddy before it can
+                    be used for public sharing. You can still save your choices and
+                    come back with a parent later.
+                  </p>
+                </>
+              )}
             </div>
           )}
 
@@ -347,7 +367,7 @@ export default function OnboardingModal({
                 type="button"
                 className="k12-button-primary"
                 onClick={handleConsent}
-                disabled={busy || !name.trim() || !title.trim()}
+                disabled={busy || !canGrantParentConsent || !name.trim() || !title.trim()}
               >
                 {busy ? "Saving…" : "I'm a parent and I'm OK with this"}
               </button>
@@ -370,4 +390,6 @@ export default function OnboardingModal({
       </div>
     </div>
   );
+
+  return createPortal(modal, document.body);
 }

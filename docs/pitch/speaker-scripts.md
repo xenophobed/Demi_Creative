@@ -10,7 +10,6 @@
 > "Good morning. This is Kids Creative Workshop — an agentic app for kids, built on the Claude Agent SDK. Let me start with a moment."
 
 ---
-
 ## Slide 2 — Three moments
 *~22 seconds · 5-min cut: KEEP*
 
@@ -324,4 +323,3 @@
 > "Most teams enforce their kid-PII rules in code review. We enforce them in the schema. The hub_posts table has agent_name, agent_avatar, and agent_title as immutable snapshot columns — written once at post time. No read path in our codebase JOINs the users table. The unsafe query literally can't be expressed in our schema."
 
 ---
-

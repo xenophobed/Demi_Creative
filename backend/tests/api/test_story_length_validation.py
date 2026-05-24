@@ -11,6 +11,7 @@ import pytest
 
 from backend.src.agents.image_to_story_agent import (
     validate_story_length,
+    repair_story_length,
     AGE_GROUP_WORD_RANGES,
 )
 
@@ -155,3 +156,32 @@ class TestValidateStoryLength:
         result = validate_story_length(_make_story(300), "3-5")
         assert result["needs_retry"] is False
         assert result["degraded_length"] is True
+
+
+class TestRepairStoryLength:
+    """Unit tests for delivery-time story length repair."""
+
+    def test_repairs_short_story_to_age_range(self):
+        repaired, info = repair_story_length("Tiny story.", "6-8")
+
+        assert info["repaired"] is True
+        assert info["in_range"] is True
+        assert 200 <= info["word_count"] <= 400
+        assert repaired.startswith("Tiny story.")
+
+    def test_repairs_long_story_to_age_range(self):
+        repaired, info = repair_story_length(_make_story(500), "3-5")
+
+        assert info["repaired"] is True
+        assert info["in_range"] is True
+        assert 100 <= info["word_count"] <= 200
+        assert repaired.endswith(".")
+
+    def test_in_range_story_is_unchanged(self):
+        story = _make_story(220)
+
+        repaired, info = repair_story_length(story, "6-8")
+
+        assert repaired == story
+        assert info["repaired"] is False
+        assert info["in_range"] is True

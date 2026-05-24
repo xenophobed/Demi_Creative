@@ -2,7 +2,7 @@
  * GrowthTimeline — Rich growth dashboard for creative development (#356)
  *
  * Replaces the flat creation-count bar chart with meaningful metrics:
- * word count trend, theme diversity, completion rate, content mix, and streak.
+ * word count trend, theme diversity, completion rate, and content mix.
  */
 
 import { useState } from 'react'
@@ -21,12 +21,14 @@ function MetricCard({
   value,
   sub,
   trend,
+  showTrend,
 }: {
   icon: string
   label: string
   value: string | number
   sub?: string
   trend?: 'up' | 'down' | 'flat'
+  showTrend?: boolean
 }) {
   const trendIcon = trend === 'up' ? '↑' : trend === 'down' ? '↓' : ''
   const trendColor = trend === 'up' ? 'text-emerald-500' : trend === 'down' ? 'text-red-400' : ''
@@ -43,7 +45,9 @@ function MetricCard({
       </div>
       <div className="flex items-baseline gap-1.5">
         <span className="text-2xl font-bold text-gray-800">{value}</span>
-        {trend && <span className={`text-sm font-semibold ${trendColor}`}>{trendIcon}</span>}
+        {showTrend !== false && trend && (
+          <span className={`text-sm font-semibold ${trendColor}`}>{trendIcon}</span>
+        )}
       </div>
       {sub && <p className="text-xs text-gray-400 mt-0.5">{sub}</p>}
     </motion.div>
@@ -174,23 +178,6 @@ function ContentMixBar({ breakdown }: { breakdown: Record<string, number> }) {
   )
 }
 
-// ---- Streak Badge ----
-
-function StreakBadge({ days }: { days: number }) {
-  if (days < 1) return null
-  return (
-    <motion.div
-      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gradient-to-r from-orange-400 to-amber-400 text-white text-sm font-bold shadow-md"
-      initial={{ scale: 0.8, opacity: 0 }}
-      animate={{ scale: 1, opacity: 1 }}
-      transition={{ type: 'spring', stiffness: 300, damping: 20 }}
-    >
-      <span>🔥</span>
-      <span>{days}-day streak!</span>
-    </motion.div>
-  )
-}
-
 // ---- Trend helper ----
 
 function getTrend(periods: RichStatsPeriod[], key: keyof RichStatsPeriod): 'up' | 'down' | 'flat' {
@@ -204,7 +191,7 @@ function getTrend(periods: RichStatsPeriod[], key: keyof RichStatsPeriod): 'up' 
 
 // ---- Empty State ----
 
-function EmptyState() {
+function EmptyState({ isParentDashboard }: { isParentDashboard?: boolean }) {
   return (
     <motion.div
       className="flex flex-col items-center justify-center py-16 text-center"
@@ -213,10 +200,12 @@ function EmptyState() {
     >
       <TrendingUp size={48} className="text-gray-300 mx-auto mb-4" />
       <h3 className="text-lg font-semibold text-gray-600 mb-2">
-        Your growth story starts here!
+        {isParentDashboard ? "Creativity insights will appear here" : "Your growth story starts here!"}
       </h3>
       <p className="text-sm text-gray-400 max-w-xs">
-        Create your first story, and watch your creative journey unfold over time.
+        {isParentDashboard
+          ? "Try an open-ended drawing or story prompt when your child feels ready."
+          : "Create your first story, and watch your creative journey unfold over time."}
       </p>
     </motion.div>
   )
@@ -224,17 +213,22 @@ function EmptyState() {
 
 // ---- Main Component ----
 
-export default function GrowthTimeline() {
+export default function GrowthTimeline({
+  childId,
+  isParentDashboard = false,
+}: {
+  childId?: string | null
+  isParentDashboard?: boolean
+}) {
   const [groupBy, setGroupBy] = useState<StatsGroupBy>('week')
   const userId = useAuthStore((state) => state.user?.user_id ?? 'anonymous')
 
   const { data, isLoading } = useQuery({
-    queryKey: ['library-stats-rich', userId, groupBy],
-    queryFn: () => libraryService.getRichStats(groupBy),
+    queryKey: ['library-stats-rich', userId, childId ?? 'all-children', isParentDashboard, groupBy],
+    queryFn: () => libraryService.getRichStats(groupBy, { childId, parentDashboard: isParentDashboard }),
   })
 
   const periods = data?.periods ?? []
-  const streak = data?.streak_days ?? 0
 
   // Aggregate latest period for headline metrics
   const latest = periods.length > 0 ? periods[periods.length - 1] : null
@@ -248,6 +242,7 @@ export default function GrowthTimeline() {
       allMix[type] = (allMix[type] || 0) + count
     }
   }
+  const contentTypeCount = Object.keys(allMix).length
 
   return (
     <motion.div
@@ -255,12 +250,13 @@ export default function GrowthTimeline() {
       animate={{ opacity: 1, y: 0 }}
       className="space-y-4"
     >
-      {/* Header with toggle + streak */}
+      {/* Header with toggle */}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-2">
           <TrendingUp size={18} className="text-primary" />
-          <span className="text-sm font-semibold text-gray-700">Growth Dashboard</span>
-          <StreakBadge days={streak} />
+          <span className="text-sm font-semibold text-gray-700">
+            {isParentDashboard ? "Parent Creativity Dashboard" : "Growth Dashboard"}
+          </span>
         </div>
         <div className="flex bg-gray-100 rounded-lg p-0.5">
           {(['week', 'month'] as StatsGroupBy[]).map((option) => (
@@ -285,17 +281,18 @@ export default function GrowthTimeline() {
           <div className="w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
         </div>
       ) : periods.length === 0 ? (
-        <EmptyState />
+        <EmptyState isParentDashboard={isParentDashboard} />
       ) : (
         <div className="space-y-4">
           {/* Metric cards grid */}
           <div className="grid grid-cols-2 gap-3">
             <MetricCard
               icon="✍️"
-              label="Total Words"
+              label="Story Words"
               value={totalWords.toLocaleString()}
               sub={latest ? `${latest.total_words.toLocaleString()} this ${groupBy}` : undefined}
               trend={getTrend(periods, 'total_words')}
+              showTrend={!isParentDashboard}
             />
             <MetricCard
               icon="🎨"
@@ -303,20 +300,32 @@ export default function GrowthTimeline() {
               value={latest?.unique_themes ?? 0}
               sub={`this ${groupBy}`}
               trend={getTrend(periods, 'unique_themes')}
+              showTrend={!isParentDashboard}
             />
-            <MetricCard
-              icon="🎭"
-              label="Completion"
-              value={latest ? `${Math.round(latest.completion_rate * 100)}%` : '—'}
-              sub="interactive stories"
-              trend={getTrend(periods, 'completion_rate')}
-            />
+            {isParentDashboard ? (
+              <MetricCard
+                icon="🎭"
+                label="Formats Tried"
+                value={contentTypeCount}
+                sub="creative modes"
+                showTrend={false}
+              />
+            ) : (
+              <MetricCard
+                icon="🎭"
+                label="Completion"
+                value={latest ? `${Math.round(latest.completion_rate * 100)}%` : '—'}
+                sub="interactive stories"
+                trend={getTrend(periods, 'completion_rate')}
+              />
+            )}
             <MetricCard
               icon="📚"
               label="Creations"
               value={totalCreations}
               sub={latest ? `${latest.creation_count} this ${groupBy}` : undefined}
               trend={getTrend(periods, 'creation_count')}
+              showTrend={!isParentDashboard}
             />
           </div>
 

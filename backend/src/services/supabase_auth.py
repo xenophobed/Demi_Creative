@@ -32,6 +32,12 @@ class SupabaseClaims:
     email: str
     email_confirmed: bool
     referral_code: Optional[str] = None  # From signUp metadata (#424)
+    role: str = "parent"
+    parent_email: Optional[str] = None
+    child_id: Optional[str] = None
+    child_name: Optional[str] = None
+    child_age_group: Optional[str] = None
+    child_interests: Optional[list[str]] = None
 
 
 def get_jwt_secret() -> Optional[str]:
@@ -153,10 +159,25 @@ def _extract_claims(payload: dict) -> Optional[SupabaseClaims]:
         user_meta.get("email_verified", False)
 
     referral_code = user_meta.get("referral_code")
+    requested_role = user_meta.get("role") or "parent"
+    role = requested_role if requested_role in {"parent", "child"} else "parent"
+    parent_email = user_meta.get("parent_email")
+    child_id = user_meta.get("child_id")
+    child_name = user_meta.get("child_name")
+    child_age_group = user_meta.get("child_age_group")
+    child_interests = user_meta.get("child_interests")
+    if not isinstance(child_interests, list):
+        child_interests = []
 
     return SupabaseClaims(
         sub=sub,
         email=email,
         email_confirmed=email_confirmed,
         referral_code=referral_code,
+        role=role,
+        parent_email=parent_email,
+        child_id=child_id,
+        child_name=child_name,
+        child_age_group=child_age_group,
+        child_interests=[str(item) for item in child_interests],
     )

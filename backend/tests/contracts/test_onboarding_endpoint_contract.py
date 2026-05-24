@@ -42,6 +42,24 @@ _TEST_USER_A = UserData(
     avatar_url=None,
     is_active=True,
     is_verified=True,
+    role="parent",
+    created_at="",
+    updated_at="",
+    last_login_at=None,
+)
+
+_CHILD_USER = UserData(
+    user_id="onboarding_child",
+    username="onboarding_child",
+    email="ob_child@test.com",
+    password_hash="h",
+    display_name="OnboardingChild",
+    avatar_url=None,
+    is_active=True,
+    is_verified=True,
+    role="child",
+    parent_email="parent@test.com",
+    consent_status="pending_parent_consent",
     created_at="",
     updated_at="",
     last_login_at=None,
@@ -50,6 +68,10 @@ _TEST_USER_A = UserData(
 
 async def _override_current_user() -> UserData:
     return _TEST_USER_A
+
+
+async def _override_child_user() -> UserData:
+    return _CHILD_USER
 
 
 # ---------------------------------------------------------------------------
@@ -85,7 +107,7 @@ async def test_db():
             _TEST_USER_A.display_name,
             1,
             1,
-            "child",
+            "parent",
             "free",
             "OBCODE",
             None,
@@ -143,6 +165,16 @@ class TestParentConsentGate:
         )
         assert r.status_code == 400
         assert r.json()["detail"]["code"] == "PARENT_CONSENT_REQUIRED"
+
+    @pytest.mark.asyncio
+    async def test_child_account_cannot_self_consent(self, auth_client):
+        app.dependency_overrides[get_current_user] = _override_child_user
+        r = await auth_client.post(
+            "/api/v1/me/onboarding/complete",
+            json={"parent_consent": True, "child_id": "child_001"},
+        )
+        assert r.status_code == 403
+        assert r.json()["detail"]["code"] == "PARENT_ROLE_REQUIRED"
 
 
 # ---------------------------------------------------------------------------
@@ -226,7 +258,8 @@ class TestIdempotency:
 
 class TestAuthRequired:
     @pytest.mark.asyncio
-    async def test_missing_auth_returns_401(self, anon_client):
+    async def test_missing_auth_returns_401(self, anon_client, monkeypatch):
+        monkeypatch.setenv("ENVIRONMENT", "development")
         r = await anon_client.post(
             "/api/v1/me/onboarding/complete",
             json={"parent_consent": True, "child_id": "child_001"},

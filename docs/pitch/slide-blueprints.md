@@ -208,14 +208,14 @@ Keep this file open in your IDE alongside `keynote-deck.md` while assembling sli
 | H2 heading | `Extending to a team — responsive + dynamic` | Pink-on-dark #F472B6 · 36px · weight 700 · italic accent on "responsive + dynamic" | Top-left |
 | Intro line | `One agent hit a ceiling. Branching stories, news podcasts, per-reply safety — each needed its own expertise.` | Light slate #F8FAFC · 22px | Below H2 |
 | Bridge line | `We extended to an agent team — still on Claude Agent SDK.` | Light slate #F8FAFC · 22px · italic | Below intro |
-| **Diagram** | Boxes-and-arrows: My Agent (proxy, labeled "orchestrator / intent routing") fans out to 4 specialists (image_story, interactive_story, kids_daily, audio_narration). All feed into safety_review labeled "runs on EVERY reply". Below them: horizontal "shared context bus" labeled "persona · child_id · age · characters" | **REBUILD WITH NATIVE KEYNOTE SHAPES** after import. Rounded rectangles, white outline, violet-on-dark connector lines, the shared context bus as a horizontal pill underneath. | Center · full-width · ~60% slide height |
+| **Diagram** | Boxes-and-arrows: My Agent (proxy, labeled "orchestrator / intent routing") fans out to 3 product specialists (image_story, interactive_story, kids_daily) plus an audio_narration TTS tool. All feed into safety_review labeled "runs on EVERY reply". Below them: horizontal "shared context bus" labeled "persona · child_id · age · characters · preferences" | **REBUILD WITH NATIVE KEYNOTE SHAPES** after import. Rounded rectangles, white outline, violet-on-dark connector lines, the shared context bus as a horizontal pill underneath. | Center · full-width · ~60% slide height |
 | Unlocks line | `🎯 responsive · 🎨 dynamic · ➕ A2A extensible` | Pink-on-dark #F472B6 · 28px · weight 700 · separators in slate muted | Below diagram · centered |
 
 **Visuals:** The diagram IS the slide. The ASCII version in `keynote-deck.md` is a placeholder. After import, **you MUST rebuild this** in Keynote with native shapes:
 1. **Proxy node** in center top — rounded rectangle, slightly larger, label "My Agent (proxy)" and a small "intent routing" caption
-2. **4 specialists** fanning out below — same-size rounded rectangles, labeled with the agent names
+2. **3 product specialists + audio tool** fanning out below — same-size rounded rectangles, labeled with the agent/tool names
 3. **safety_review** node below the specialists, with arrows from each specialist into it
-4. **Shared context bus** — a thin horizontal pill underneath everything, labeled "shared context: persona · child_id · age · characters"
+4. **Shared context bus** — a thin horizontal pill underneath everything, labeled "shared context: persona · tone · child_id · age · characters · preferences"
 5. Use **violet-on-dark connector lines** (#C4B5FD on #0F172A) for arrows
 
 **Timing:** ~50 seconds — the longest slide; this is the centerpiece
@@ -247,7 +247,7 @@ Keep this file open in your IDE alongside `keynote-deck.md` while assembling sli
 | Row — Prompts | `Prompts` / `Python f-strings inline in code` / `Markdown files in backend/src/prompts/` / `Versioned · code-reviewable · age-stratified per file` | Slate body · 17px · bold "Prompts" · code styling for file paths | Row 2 |
 | Row — Tools | `Tools` / `Direct API calls in agent loops` / `Custom MCP servers · typed JSON envelopes · .handler calling convention` / `Composable · testable · independently versionable` | Slate body · 17px · bold "Tools" · code styling for .handler | Row 3 |
 | Row — Skills | `Skills` / `Hardcoded behaviors per agent class` / `enabled_skills field on AgentDefinition · _enabled(agent, skill) runs server-side` / `Per-age gating · A2A plug-in · single registration` | Slate body · 17px · bold "Skills" · code styling | Row 4 |
-| Row — Multi-agent | `Multi-agent` / `Bigger prompt + conditional branching` / `Proxy + 4 subagents + shared context bus` / `Specialty isolation · safety_review on EVERY reply · responsive routing` | Slate body · 17px · bold "Multi-agent" · "EVERY" emphasized | Row 5 |
+| Row — Multi-agent | `Multi-agent` / `Bigger prompt + conditional branching` / `Proxy + 3 product subagents + audio tool + shared context bus` / `Specialty isolation · safety_review on EVERY reply · responsive routing` | Slate body · 17px · bold "Multi-agent" · "EVERY" emphasized | Row 5 |
 | Vocabulary footer | `Vocabulary — agent · subagent · team · orchestrator — each role is precise. See appendix.` | Slate body · 18px · italic on the four vocabulary words | Below table · 24px gap |
 
 **Visuals:** None. The 4×4 table IS the slide.
@@ -282,7 +282,7 @@ Close: *"We didn't adopt defaults. Each row is a trade-off we made deliberately.
 | **Column header 1 — Agentic stack** | 🤖 emoji + bold "Agentic stack" | Violet #7C3AED · 24px · weight 700 · emoji 32px | Top of left column |
 | **Column header 2 — Safety architecture** | 🛡️ emoji + bold "Safety architecture" | Violet #7C3AED · 24px · weight 700 · emoji 32px | Top of middle column |
 | **Column header 3 — Kid experience** | 🌟 emoji + bold "Kid experience" | Violet #7C3AED · 24px · weight 700 · emoji 32px | Top of right column |
-| **Row 1 / col 1** | `Multi-agent + shared state on Claude Agent SDK — proxy + 4 specialists + a shared context bus` | Slate body · 17px · bold "Multi-agent + shared state" | Cell |
+| **Row 1 / col 1** | `Multi-agent + shared state on Claude Agent SDK — proxy + 3 product specialists, a TTS tool, and a shared context bus` | Slate body · 17px · bold "Multi-agent + shared state" | Cell |
 | **Row 1 / col 2** | `Per-reply programmatic safety — age-aware thresholds (0.90 for 3-5, 0.85 for 6-12), suggest-then-retry` | Slate body · 17px · bold "Per-reply programmatic safety" | Cell |
 | **Row 1 / col 3** | `Character continuity across surfaces — Lightning the puppy in image, story, podcast, and community` | Slate body · 17px · bold "Character continuity across surfaces" | Cell |
 | **Row 2 / col 1** | `A2A extensible — new specialists plug in via one AgentDefinition registration` | Slate body · 17px · bold "A2A extensible" | Cell |
@@ -353,7 +353,7 @@ Land hard on: *"Most ship one of these. We ship all six."* Pause. Then move.
 
 **Timing:** ~25 seconds
 
-**Speaker beat:** *"272 stories shipped across 3 milestones. We don't pitch features — we ship them. And the engineering rigor line — programmatic per-reply safety, caught and fixed a silent safety-bypass in one day, landed a 7-PR merge train last week — that's how we treat production AI for kids."*
+**Speaker beat:** *"292 tracked work items across shipped and planned milestones. We don't pitch features — we ship them. And the engineering rigor line — programmatic per-reply safety, caught and fixed a silent safety-bypass in one day, landed a 7-PR merge train last week — that's how we treat production AI for kids."*
 
 **Why this slide exists:** Execution velocity + engineering rigor are the contest-judged proxies for "this team can ship." Both deserve their own line.
 
@@ -404,7 +404,7 @@ Land hard on punchline: *"Most pitches hide bugs. We name ours."*
 | Component | Content | Style | Position |
 |---|---|---|---|
 | H1 heading | `Why this matters` | Pink #DB2777 · 56px · weight 800 | Top-left |
-| 5 achievements | Agentic from day one · 272 stories shipped · Programmatic safety on every reply · COPPA at schema level · Buddy that grows with the child | Slate body · 22px · 1.5 line-height · **bold lead phrase** + supporting clause | Center-left · 40px gap below H1 |
+| 5 achievements | Agentic from day one · 292 tracked work items · Programmatic safety on every reply · COPPA at schema level · Buddy that grows with the child | Slate body · 22px · 1.5 line-height · **bold lead phrase** + supporting clause | Center-left · 40px gap below H1 |
 | Closing bookend | `AI that grows up *with* kids — safely.` | Pink #DB2777 · 56px · weight 800 · italic accent on "with" | Bottom-center · 50px from edge |
 
 **Visuals:** None. The gradient + typography is the visual.
@@ -428,7 +428,7 @@ Land hard on punchline: *"Most pitches hide bugs. We name ours."*
 | 5 | **Six agentic features** (capability × stack) | 35s |
 | 6 | **Four architecture patterns** | 28s |
 | 7 | **Six memory types** | 30s |
-| 8 | **The team** (1 proxy + 4 specialists + safety) ⭐ centerpiece | 40s |
+| 8 | **The team** (1 proxy + 3 specialists + TTS tool + safety) ⭐ centerpiece | 40s |
 | ~~9~~ | ~~Why this shape (default-cut for 5-min)~~ | — |
 | 10 | **What's good about it** (moats) | 28s |
 | 11 | Product proof + demo beat | 32s |

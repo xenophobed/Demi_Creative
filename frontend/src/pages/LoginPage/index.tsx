@@ -6,8 +6,11 @@ import Card from '@/components/common/Card'
 import { authService } from '@/api/services/authService'
 import { getErrorMessage } from '@/api/client'
 import useAuthStore from '@/store/useAuthStore'
+import useChildStore, { DEFAULT_INTERESTS, generateChildId } from '@/store/useChildStore'
+import type { AgeGroup } from '@/types/api'
 
 type AuthMode = 'login' | 'register'
+type RegistrationRole = 'parent' | 'child'
 
 /** Map raw auth errors to child/parent-friendly messages. */
 function friendlyAuthError(raw: string, mode: AuthMode): string {
@@ -54,10 +57,19 @@ function LoginPage() {
   const [password, setPassword] = useState(isDev ? '$!$Ymd@2022' : '')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [displayName, setDisplayName] = useState('')
+  const [registrationRole, setRegistrationRole] = useState<RegistrationRole>('parent')
+  const [parentEmail, setParentEmail] = useState('')
+  const [childName, setChildName] = useState('')
+  const [childAgeGroup, setChildAgeGroup] = useState<AgeGroup>('6-8')
+  const [childInterests, setChildInterests] = useState<string[]>(['Animals', 'Space'])
 
   // UI state
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [pendingParentApproval, setPendingParentApproval] = useState<{
+    parentEmail: string
+    approvalUrl?: string | null
+  } | null>(null)
   const [confirmationPending, setConfirmationPending] = useState(false)
   const [emailConfirmation, setEmailConfirmation] = useState(false)
   const [confirmationEmail, setConfirmationEmail] = useState('')
@@ -73,6 +85,12 @@ function LoginPage() {
       if (!username.trim()) return 'Please enter a username'
       if (!email.trim()) return 'Please enter your email'
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return 'Please enter a valid email'
+      if (registrationRole === 'parent') {
+        if (!childName.trim()) return 'Please add a child nickname'
+      } else {
+        if (!parentEmail.trim()) return 'Please enter a parent or guardian email'
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(parentEmail)) return 'Please enter a valid parent or guardian email'
+      }
       if (!password) return 'Please enter a password'
       if (password.length < 6) return 'Password must be at least 6 characters'
       if (password !== confirmPassword) return 'Passwords do not match'
@@ -105,12 +123,21 @@ function LoginPage() {
           password,
         })
       } else {
+        const initialChildId = registrationRole === 'parent' ? generateChildId() : undefined
         const result = await authService.register({
           username: username.trim(),
           email: normalizedRegisterEmail,
           password,
           display_name: displayName.trim() || undefined,
           referral_code: referralCode,
+          role: registrationRole,
+          parent_email: registrationRole === 'child'
+            ? parentEmail.trim().toLowerCase()
+            : undefined,
+          child_id: initialChildId,
+          child_name: registrationRole === 'parent' ? childName.trim() : undefined,
+          child_age_group: registrationRole === 'parent' ? childAgeGroup : undefined,
+          child_interests: registrationRole === 'parent' ? childInterests : undefined,
         })
 
         if ('pendingConfirmation' in result) {
@@ -125,7 +152,21 @@ function LoginPage() {
       // Store auth data
       setAuth(response.user, response.token.access_token)
 
-      // Navigate to home
+      if (mode === 'register' && response.user.role === 'child') {
+        const approval = await authService.resendParentApproval()
+        setPendingParentApproval({
+          parentEmail: approval.parent_email || parentEmail.trim().toLowerCase(),
+          approvalUrl: approval.approval_url,
+        })
+        return
+      }
+
+      if (mode === 'register' && response.user.role === 'parent') {
+        await useChildStore.getState().loadChildProfiles()
+        navigate('/my-agent')
+        return
+      }
+
       navigate('/')
     } catch (err: any) {
       if (err?.code === 'EMAIL_CONFIRMATION_REQUIRED') {
@@ -176,6 +217,38 @@ function LoginPage() {
     setConfirmationNotice(null)
     setPassword('')
     setConfirmPassword('')
+    setParentEmail('')
+    setChildName('')
+    setChildAgeGroup('6-8')
+    setChildInterests(['Animals', 'Space'])
+    setPendingParentApproval(null)
+  }
+
+  const toggleChildInterest = (interest: string) => {
+    setChildInterests((current) => {
+      if (current.includes(interest)) {
+        return current.filter((item) => item !== interest)
+      }
+      return [...current, interest].slice(0, 8)
+    })
+  }
+
+  const handleResendParentApproval = async () => {
+    if (!pendingParentApproval) return
+    setIsLoading(true)
+    setError(null)
+    try {
+      const approval = await authService.resendParentApproval()
+      setPendingParentApproval({
+        parentEmail: approval.parent_email || pendingParentApproval.parentEmail,
+        approvalUrl: approval.approval_url,
+      })
+      setConfirmationNotice('Parent approval request refreshed.')
+    } catch (err) {
+      setError(friendlyAuthError(getErrorMessage(err), 'register'))
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (
@@ -241,6 +314,52 @@ function LoginPage() {
         </motion.div>
 
         {/* Email confirmation success card */}
+        {pendingParentApproval && (
+          <Card variant="elevated" padding="lg" className="backdrop-blur-sm bg-white/95">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="text-center space-y-4 py-4"
+            >
+              <div className="text-5xl">📬</div>
+              <h2 className="text-xl font-bold text-gray-800">Parent approval needed</h2>
+              <p className="text-gray-500 text-sm">
+                We sent an approval request to your parent or guardian. You can come back after they approve it.
+              </p>
+              <p className="text-gray-400 text-xs break-all">{pendingParentApproval.parentEmail}</p>
+              {pendingParentApproval.approvalUrl && (
+                <a
+                  href={pendingParentApproval.approvalUrl}
+                  className="block rounded-lg bg-gray-50 px-3 py-2 text-xs font-medium text-primary hover:bg-primary/10"
+                >
+                  Open approval link
+                </a>
+              )}
+              {confirmationNotice && (
+                <p className="text-xs text-green-700">{confirmationNotice}</p>
+              )}
+              <Button
+                type="button"
+                variant="secondary"
+                size="md"
+                isLoading={isLoading}
+                onClick={handleResendParentApproval}
+              >
+                Resend Approval Request
+              </Button>
+              <div>
+                <button
+                  type="button"
+                  onClick={() => navigate('/')}
+                  className="text-sm text-gray-500 hover:text-primary transition-colors"
+                >
+                  Back to Home
+                </button>
+              </div>
+            </motion.div>
+          </Card>
+        )}
+
         {confirmationPending && (
           <Card variant="elevated" padding="lg" className="backdrop-blur-sm bg-white/95">
             <motion.div
@@ -275,7 +394,7 @@ function LoginPage() {
         )}
 
         {/* Form Card */}
-        {!confirmationPending && (
+        {!confirmationPending && !pendingParentApproval && (
         <Card variant="elevated" padding="lg" className="backdrop-blur-sm bg-white/95">
           <AnimatePresence mode="wait">
             <motion.form
@@ -380,6 +499,133 @@ function LoginPage() {
                       autoComplete="email"
                     />
                   </div>
+                </motion.div>
+              )}
+
+              {/* Account setup role (register only) */}
+              {mode === 'register' && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="space-y-2"
+                >
+                  <label className="block text-sm font-medium text-gray-700">
+                    Who is setting this up?
+                  </label>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    {([
+                      ['parent', 'Parent / guardian', 'Manage child profiles and consent'],
+                      ['child', 'Kid with parent email', 'Parent approval required'],
+                    ] as const).map(([value, label, helper]) => {
+                      const selected = registrationRole === value
+                      return (
+                        <button
+                          key={value}
+                          type="button"
+                          onClick={() => setRegistrationRole(value)}
+                          className={`rounded-lg border px-3 py-2 text-left transition-colors ${
+                            selected
+                              ? 'border-primary bg-primary/10 text-gray-900'
+                              : 'border-gray-200 bg-white text-gray-600 hover:border-primary/40'
+                          }`}
+                        >
+                          <span className="block text-sm font-semibold">{label}</span>
+                          <span className="block text-xs text-gray-500">{helper}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </motion.div>
+              )}
+
+              {/* Parent child setup (parent register only) */}
+              {mode === 'register' && registrationRole === 'parent' && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="space-y-3 rounded-lg border border-primary/20 bg-primary/5 p-3"
+                >
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Child Nickname
+                    </label>
+                    <input
+                      type="text"
+                      value={childName}
+                      onChange={(e) => setChildName(e.target.value)}
+                      placeholder="Little Artist"
+                      className="input-kid"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Age Group
+                    </label>
+                    <select
+                      value={childAgeGroup}
+                      onChange={(e) => setChildAgeGroup(e.target.value as AgeGroup)}
+                      className="input-kid"
+                    >
+                      <option value="3-5">3-5</option>
+                      <option value="6-8">6-8</option>
+                      <option value="9-12">9-12</option>
+                    </select>
+                  </div>
+                  <div>
+                    <span className="block text-sm font-medium text-gray-700 mb-2">
+                      Interests
+                    </span>
+                    <div className="flex flex-wrap gap-2">
+                      {DEFAULT_INTERESTS.slice(0, 8).map((interest) => {
+                        const selected = childInterests.includes(interest)
+                        return (
+                          <button
+                            key={interest}
+                            type="button"
+                            onClick={() => toggleChildInterest(interest)}
+                            className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${
+                              selected
+                                ? 'border-primary bg-primary/10 text-primary'
+                                : 'border-gray-200 bg-white text-gray-600 hover:border-primary/40'
+                            }`}
+                          >
+                            {interest}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+
+              {/* Parent email (child-started register only) */}
+              {mode === 'register' && registrationRole === 'child' && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                >
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Parent / Guardian Email
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                      📬
+                    </span>
+                    <input
+                      type="email"
+                      value={parentEmail}
+                      onChange={(e) => setParentEmail(e.target.value)}
+                      placeholder="parent@email.com"
+                      className="input-kid pl-10"
+                      autoComplete="email"
+                    />
+                  </div>
+                  <p className="mt-1 text-xs text-gray-500">
+                    A parent or guardian must approve before protected features are enabled.
+                  </p>
                 </motion.div>
               )}
 

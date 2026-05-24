@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from ..deps import get_current_user
+from ..deps import get_current_user, require_owned_child_profile
 from ..models import (
     NewsCategory,
     SubscriptionListResponse,
@@ -13,6 +13,7 @@ from ..models import (
 from ...services.database import (
     DuplicateSubscriptionError,
     MaxSubscriptionsExceededError,
+    preference_repo,
     subscription_repo,
 )
 from ...services.user_service import UserData
@@ -34,6 +35,7 @@ async def subscribe_topic(
     request: SubscriptionRequest,
     user: UserData = Depends(get_current_user),
 ):
+    await require_owned_child_profile(user, request.child_id)
     try:
         created = await subscription_repo.create(
             user_id=user.user_id,
@@ -50,6 +52,16 @@ async def subscribe_topic(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
         )
+
+    try:
+        await preference_repo.update_from_kids_daily_subscription(
+            child_id=request.child_id,
+            topic=request.topic.value,
+            user_id=user.user_id,
+        )
+    except Exception:
+        # Preference feedback is helpful but should never block subscription CRUD.
+        pass
 
     return SubscriptionResponse(
         child_id=created["child_id"],
@@ -70,6 +82,7 @@ async def unsubscribe_topic(
     topic: NewsCategory,
     user: UserData = Depends(get_current_user),
 ):
+    await require_owned_child_profile(user, child_id)
     removed = await subscription_repo.deactivate(
         user_id=user.user_id,
         child_id=child_id,
@@ -92,6 +105,7 @@ async def list_subscriptions(
     child_id: str,
     user: UserData = Depends(get_current_user),
 ):
+    await require_owned_child_profile(user, child_id)
     rows = await subscription_repo.list_active(user.user_id, child_id)
     items = [
         TopicSubscription(

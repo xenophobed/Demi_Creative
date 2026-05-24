@@ -613,7 +613,7 @@ Remembers each child's creation history and preferences to enable content contin
 
 ---
 
-### 3.6 My Library [Not Started]
+### 3.6 My Library [Implemented]
 
 > Cross-reference: §3.12 Content Hub provides the *public* sharing surface; My Library remains private. Library cards now display the child's buddy byline (§3.11) alongside the title, so children see consistent authorship between their library and any public posts they make.
 
@@ -679,14 +679,14 @@ New users see an encouraging empty state: "Start creating! Your growth story beg
 | Parent role | Always visible (regardless of child's age group) |
 
 ##### Acceptance Criteria
-- [ ] `GET /api/v1/library/stats` returns creation count JSON grouped by week/month
-- [ ] Response includes `period` (date string), `count` (integer), optional `by_type` (breakdown by content type)
-- [ ] Frontend chart component renders bar or line chart with week/month toggle
-- [ ] Library top has toggle button switching between content view and growth view
-- [ ] Only ages 9-12 and parent role can see growth view entry
-- [ ] Encouraging empty state message when no creation records exist
-- [ ] Chart is responsively adapted for mobile viewports
-- [ ] No personal privacy data exposed — aggregated counts only
+- [x] `GET /api/v1/library/stats` returns creation count JSON grouped by week/month
+- [x] Response includes `period` (date string), `count` (integer), optional `by_type` (breakdown by content type)
+- [x] Frontend chart component renders bar or line chart with week/month toggle
+- [x] Library top has toggle button switching between content view and growth view
+- [x] Only ages 9-12 and parent role can see growth view entry
+- [x] Encouraging empty state message when no creation records exist
+- [x] Chart is responsively adapted for mobile viewports
+- [x] No personal privacy data exposed — aggregated counts only
 
 ##### Out of Scope
 - Separate trend charts by content type (only total count provided, `by_type` is optional extension)
@@ -707,17 +707,17 @@ New users see an encouraging empty state: "Start creating! Your growth story beg
 - Search does not expose intermediate/archived unsafe content — only published/candidate lifecycle states are queryable
 
 #### Acceptance Criteria
-- [ ] Library displays all three content types (art stories, interactive sessions, news) with unified card design
-- [ ] Tab filtering works: "All", "Art Stories", "Interactive", "Kids News" (merged news_to_kids + morning_show)
-- [ ] Search input filters by title, story text preview, themes, and character names
-- [ ] Sort options: "Newest first" (default), "Oldest first", "Bookmarks first"
-- [ ] Each library card has a bookmark/unbookmark toggle, persisted to backend
-- [ ] Grid view toggle (grid shows larger thumbnails)
-- [ ] Pagination for all content types ("Load more")
-- [ ] Audio mini-player on library cards: click play/pause without leaving library
-- [ ] Library UI age-adapted (3-5: large cards; 6-8: balanced; 9-12: compact grid+data)
-- [ ] Growth timeline view (detailed acceptance criteria in "Growth Timeline" subsection above)
-- [ ] Authenticated users see server data; unauthenticated users fall back to local storage
+- [x] Library displays all three content types (art stories, interactive sessions, news) with unified card design
+- [x] Tab filtering works: "All", "Art Stories", "Interactive", "Kids News" (merged news_to_kids + morning_show)
+- [x] Search input filters by title, story text preview, themes, and character names
+- [x] Sort options: "Newest first" (default), "Oldest first", "Bookmarks first"
+- [x] Each library card has a bookmark/unbookmark toggle, persisted to backend
+- [x] Grid view toggle (grid shows larger thumbnails)
+- [x] Pagination for all content types ("Load more")
+- [x] Audio mini-player on library cards: click play/pause without leaving library
+- [x] Library UI age-adapted (3-5: large cards; 6-8: balanced; 9-12: compact grid+data)
+- [x] Growth timeline view (detailed acceptance criteria in "Growth Timeline" subsection above)
+- [x] Authenticated users see server data; unauthenticated users fall back to local storage
 
 #### Profile Stats
 
@@ -732,11 +732,40 @@ Profile page displays creation counts for each content type, replacing the curre
 | Kids News | `stories WHERE story_type IN ('news_to_kids', 'morning_show')` | Kids News |
 
 ##### Acceptance Criteria
-- [ ] Profile page shows 3 stat cards (Art Stories, Interactive Tales, Kids News), each with accurate count
-- [ ] No longer shows "recent stories" and "recent sessions" lists
-- [ ] Deleting content in library immediately updates profile counts (React Query cache invalidation)
-- [ ] Each stat card is clickable, navigating to library with corresponding tab filter
-- [ ] Gracefully displays "0" when count is zero
+- [x] Profile page shows 3 stat cards (Art Stories, Interactive Tales, Kids News), each with accurate count
+- [x] No longer shows "recent stories" and "recent sessions" lists
+- [x] Deleting content in library immediately updates profile counts (React Query cache invalidation)
+- [x] Each stat card is clickable, navigating to library with corresponding tab filter
+- [x] Gracefully displays "0" when count is zero
+
+#### Profile Tabs & Parent/Child Organization [Phase 3]
+
+##### Feature Description
+The profile page should be reorganized into tabbed aspects so parents and children can find the right surface without scrolling through unrelated account, memory, reward, and referral controls. The page remains a single `/profile` route, but it uses tabs to separate account-level settings from child-scoped growth and memory data.
+
+##### Tabs
+| Tab | Primary Audience | Contents |
+|---|---|---|
+| Overview | Parent + child | Active child summary, creation stats, achievements, star collection |
+| Children | Parent | Child profile list, active child switcher, add/edit child profile entrypoints |
+| Memory | Parent + older children | Character gallery, preference summary, selective memory deletion |
+| Rewards | Child | Star jar, badges, streaks, age-adapted achievement surfaces |
+| Account | Parent | Display name/avatar, referral invite, membership/quota details, privacy controls |
+
+##### Behavior
+- The selected tab is reflected in the URL (`/profile?tab=children`) so profile sections can be linked directly.
+- Parent-only controls are hidden or disabled for child-role accounts.
+- Child-scoped tabs read from the active child profile rather than only `users.default_child_id`.
+- Mobile renders tabs as a horizontally scrollable segmented control; desktop renders tabs as compact top navigation.
+
+##### Acceptance Criteria
+- [ ] `/profile` renders tab navigation with stable URL query state
+- [ ] Overview tab shows active child, stats, achievements, and stars without unrelated account controls
+- [ ] Children tab is visible to parent-role users and lists all child profiles on the account
+- [ ] Memory tab scopes characters/preferences to the active child profile
+- [ ] Account tab contains display name/avatar, referral, and privacy controls
+- [ ] Child-role users cannot access parent-only child management actions
+- [ ] Mobile tab labels do not truncate or overlap
 
 #### Homepage Recent Stories & Tips
 
@@ -756,11 +785,11 @@ Homepage displays the user's 3 most recent creations (across all types: art stor
 | Kids News | Real-world events turned into fun, easy-to-understand stories! | 📰 |
 
 ##### Acceptance Criteria
-- [ ] Homepage shows 3 most recent mixed-type creations, sorted by newest
-- [ ] Each card has type label and correct navigation route
-- [ ] "More" button navigates to library
-- [ ] Generic empty state message when no content exists
-- [ ] Tips rotate every 5 seconds with crossfade animation
+- [x] Homepage shows 3 most recent mixed-type creations, sorted by newest
+- [x] Each card has type label and correct navigation route
+- [x] "More" button navigates to library
+- [x] Generic empty state message when no content exists
+- [x] Tips rotate every 5 seconds with crossfade animation
 
 #### Out of Scope
 - Sharing/social features (involves privacy and COPPA compliance)
@@ -841,7 +870,7 @@ Retention policy is enforced automatically via scheduled tasks, protecting publi
 
 ---
 
-### 3.8 TTS & Audio Pipeline [In Progress]
+### 3.8 TTS & Audio Pipeline [Implemented — sound design deferred]
 
 #### Feature Description
 
@@ -891,36 +920,36 @@ A pluggable multi-provider TTS engine supporting expressive voice narration, sce
 
 #### What's Built
 
-- ✅ `TTSProvider` protocol interface + `OpenAITTSProvider` + `ReplicateTTSProvider` (#149)
+- ✅ `TTSProvider` protocol interface + `OpenAITTSProvider` + `ReplicateTTSProvider` + `ElevenLabsTTSProvider` (#149, #243)
 - ✅ Emotion parameters + age filtering (`AGE_EMOTION_MAP`)
-- ✅ Replicate → OpenAI dual-tier fallback + retry
-- ✅ `list_available_voices` MCP tool (merged OpenAI + Replicate catalogs)
+- ✅ ElevenLabs → OpenAI and Replicate → OpenAI fallback with retry and latency logging
+- ✅ `list_available_voices` MCP tool (merged OpenAI + Replicate + ElevenLabs catalogs)
 - ✅ `generate_audio_batch` MCP tool (multi-segment batch generation)
 - ✅ Multi-character TTS orchestration (daily news)
 - ✅ On-demand audio generation API (`/api/v1/audio/generate`)
+- ✅ Voice catalog REST API (`GET /api/v1/audio/voices`)
+- ✅ Voice preview playback (`GET /api/v1/audio/preview`) with disk cache, provider validation, rate limiting, and frontend Howl playback
+- ✅ Voice provider passthrough from frontend selection to image-to-story generation
+- ✅ Scene profile presets (`bedtime`, `adventure`, `spooky`, `educational`) with age-aware spooky fallback
+- ✅ Evaluation harness and provider decision fixtures for golden story benchmarking
 - ✅ Contract tests: provider protocol shape, emotion filtering, backward compatibility
 
-#### Remaining Gaps
+#### Deferred Gaps
 
-- 🔲 **ElevenLabs provider**: Add `ElevenLabsTTSProvider`, curate children's narration voice catalog (#243)
-- 🔲 **Voice catalog REST API**: Expose `GET /api/v1/audio/voices` endpoint for frontend consumption (#244)
-- 🔲 **Scene style presets**: Auto-select stability/style/speed combinations by story type (#245)
-- 🔲 **Voice preview playback**: Backend `GET /api/v1/audio/preview` endpoint generates 2-4 second sample audio (fixed safe preview text), disk-cached at `data/audio/previews/{provider}_{voice_id}.mp3`; frontend `VoicePicker` calls and plays via Howl. Second click on same voice stops playback; switching voices auto-stops the previous one. Rate limited to 10 requests per IP per minute. (#333, #334, #336)
-- 🔲 **Voice provider passthrough**: Frontend VoicePicker's selected `provider` field must be sent with the image-to-story request to backend, ensuring final voice matches preview. (#335)
-- 🔲 **Evaluation framework**: MOS scoring criteria + latency/cost metrics + golden story set A/B testing (#246)
-- 🔲 **Sound design**: Ambient sound + sound effect mixing pipeline (Phase 2+)
-- 🔲 **Streaming TTS**: Support play-as-you-generate (ElevenLabs Flash model natively supports this)
+- 🔲 **Sound design**: Ambient sound + sound effect mixing pipeline remains Phase 2+.
+- 🔲 **Streaming TTS**: Play-as-you-generate remains deferred; current generation is file-based with provider fallback.
+- 🔲 **Production SLO proof**: 99.9% availability requires production metrics over time; implementation logs provider, fallback, and latency for measurement.
 
 #### Acceptance Criteria
 
-- [ ] Provider interface supports at least 3 providers (OpenAI + Replicate + ElevenLabs)
-- [ ] API supports emotion parameters without breaking existing clients
-- [ ] Scene style presets can be specified per request or auto-inferred from story type
-- [ ] At least 5 story samples per age group benchmarked across providers
-- [ ] P95 generation latency and per-minute cost tracked in logs/metrics
-- [ ] Frontend voice picker displays age-adapted voice catalog + 3-5 second preview
+- [x] Provider interface supports at least 3 providers (OpenAI + Replicate + ElevenLabs)
+- [x] API supports emotion parameters without breaking existing clients
+- [x] Scene style presets can be specified per request or auto-inferred from story type
+- [x] At least 5 story samples per age group benchmarked across providers
+- [x] P95 generation latency and provider fallback are tracked in logs/metrics payloads
+- [x] Frontend voice picker displays age-adapted voice catalog + 3-5 second preview
 - [ ] Sound design mode can be enabled/disabled per request
-- [ ] Three-tier fallback chain ensures 99.9% audio generation availability
+- [ ] Three-tier fallback chain has implementation support; 99.9% availability remains a production SLO to validate with live metrics
 
 #### Out of Scope
 
@@ -937,9 +966,9 @@ A pluggable multi-provider TTS engine supporting expressive voice narration, sce
 ### 4.1 First-Time Use
 
 ```
-Step 1: Parent registers an account
+Step 1: Parent registers an account as the parent/guardian owner
   ↓
-Step 2: Creates child profile (age, interests)
+Step 2: Creates or confirms a child profile (age, interests, buddy identity)
   ↓
 Step 3: Child uploads first drawing
   ↓
@@ -1039,12 +1068,14 @@ Month 3: Child has created 20+ stories, forming their own "story universe"
 
 ### Phase 3
 
+**Productization Track**:
+- Dynamic picture book and story video experience (see §3.14.1)
+- Parent creativity dashboard (see §3.14.2)
+- Achievement badge system (see §3.14.3)
+- Phase 3 positioning and pitch alignment (see §3.14.4)
+
 **Could Have**:
-- Dynamic picture book (drawing element animation)
-- Video generation (full animation)
 - Multi-language support
-- Parent control panel
-- Achievement badge system
 
 ---
 
@@ -1311,6 +1342,8 @@ The existing tear-to-claim-star mechanic (Epic #371) is preserved:
 
 #### 3.11.2 First-Login Onboarding
 
+Registration is parent-owned by default. The primary path is a parent/guardian creating the account, then configuring one child profile inside that account. Child-started registration is allowed only when a parent/guardian email is supplied, and the account remains in `pending_parent_consent` until a parent approves.
+
 After successful login or registration, a returning user with `onboarded_at = NULL` is redirected to `/my-agent`, where an onboarding modal opens automatically.
 
 The flow has these steps:
@@ -1319,9 +1352,54 @@ The flow has these steps:
 2. **Name + nickname** — the child names the buddy, optionally enters their own nickname for in-app display.
 3. **Avatar** — the child picks one of the 20 animal emojis from the existing avatar set (shared with `/profile`).
 4. **Title** — the child picks from a curated list of 20 buddy titles (e.g. "Story Wizard", "Brave Lion"); free-text titles are allowed for ages 9–12 only and must pass safety check.
-5. **Parent-consent gate** — before completion, the parent confirms they're OK with the buddy being shown publicly when stories are shared.
+5. **Parent-consent gate** — before completion, a parent-role account confirms they're OK with the buddy being shown publicly when stories are shared. Child-role accounts cannot self-consent.
 
-`POST /api/v1/me/onboarding/complete` requires both an agent and parent consent before flipping `users.onboarded_at`.
+`POST /api/v1/me/onboarding/complete` requires a parent-role account, an agent, and parent consent before flipping `users.onboarded_at`.
+
+##### Registration Ownership
+
+| Setup path | Required fields | Account role | Consent state | Notes |
+|---|---|---|---|---|
+| Parent / guardian setup | Parent email, password | `parent` | `not_required` | Primary supported path. Parent can access parent dashboard and configure child profiles. |
+| Child-started setup | Child account email + parent/guardian email | `child` | `pending_parent_consent` | Protected features that require adult consent stay blocked until parent approval is implemented. |
+
+For MVP, the product should steer users toward parent-owned registration. Child-started signup exists to capture intent safely, not to bypass adult approval.
+
+##### Child Profile Selection & Switching [Phase 3]
+
+Parent-owned registration creates the first child profile, but the child still needs an explicit entry point to choose *who is creating today*. The system must support multiple child profiles under one parent account and keep every child-scoped surface bound to the selected profile.
+
+###### Child Profile Model
+| Field | Description | Notes |
+|---|---|---|
+| `child_id` | Stable profile id within the parent account | Server-generated or accepted from trusted registration setup |
+| `user_id` | Parent account owner | Required ownership boundary |
+| `name` | Child-facing nickname | No real full name required; safety/PII validation applies |
+| `age_group` | `3-5`, `6-8`, `9-12` | Drives age adaptation across creation flows |
+| `interests` | Initial interest tags | Seed memory and recommendations |
+| `avatar` | Optional child profile avatar | Whitelisted emoji/avatar only in v1 |
+| `is_default` | Parent-selected default profile | Used when no active child session is set |
+
+###### Entry Points
+- **After parent registration**: route to child profile confirmation, then My Agent setup for that child.
+- **After parent login**: if the account has multiple child profiles, show "Who's creating today?" before creation surfaces.
+- **Navigation/Profile**: always expose the active child profile and a switcher.
+- **Parent dashboard/Profile Children tab**: parent can add/edit/archive child profiles and set the default.
+
+###### Active Child Contract
+- Frontend stores the active child profile in `useChildStore`.
+- Backend persists child profiles and validates ownership on every child-scoped endpoint.
+- `users.default_child_id` remains a compatibility pointer, but the canonical profile data lives in a `child_profiles` table.
+- My Agent, Library, Kids Daily, Interactive Story, Image-to-Story, Achievements, Memory, and Parent Dashboard all use the same active child profile contract.
+
+###### Acceptance Criteria
+- [ ] Parent accounts can create at least one child profile after registration
+- [ ] Parent accounts can add a second child profile from `/profile?tab=children`
+- [ ] A "Who's creating today?" picker appears when a parent account has multiple active child profiles and no active child is selected
+- [ ] Selecting a child updates the active child profile used by My Agent, Library, Kids Daily, Interactive Story, Image-to-Story, Achievements, and Memory
+- [ ] Backend rejects child-scoped requests for profiles not owned by the authenticated parent account
+- [ ] Child-role accounts cannot create sibling profiles or change parent-owned profile settings
+- [ ] Archived child profiles no longer appear in pickers but remain available for historical content scoping
 
 ##### Age-Gated Onboarding Variants
 
@@ -1655,6 +1733,103 @@ Switch all agents from `ClaudeSDKClient` to direct `anthropic.AsyncAnthropic()` 
 - SDK hooks (PreToolUse) — deferred until SDK stabilizes post-1.0
 - Session management via SDK — handled by our own session_repository
 - Removing `claude_agent_sdk` from requirements.txt (keep for future re-evaluation)
+
+---
+
+## 3.14 Phase 3 Productization — Video, Parent Dashboard, and Achievements [Phase 3]
+
+Phase 3 turns the existing foundations for video, growth metrics, and rewards into coherent product surfaces. Several building blocks already exist: a video MCP server and `/api/v1/video` routes, artifact support for video, the Library growth timeline, parent role/consent primitives, and Daily Inspiration reward components. The Phase 3 backlog should focus on integration, safety, age adaptation, and honest product positioning rather than rebuilding those foundations.
+
+### 3.14.1 Story Video and Dynamic Picture Book
+
+**User value**: Children can transform a completed story into a short animated picture-book moment they can rewatch, share safely, or keep in My Library.
+
+**Current foundation**:
+- `backend/src/mcp_servers/video_generator_server.py` provides `generate_painting_video`, `check_video_status`, and video/audio combination tooling.
+- `backend/src/api/routes/video.py` exposes authenticated video generation and status endpoints.
+- Artifact models already include `video` and `final_video` roles.
+
+**In scope**:
+- Add an eligible-story video CTA from `StoryPage` and Library detail surfaces.
+- Show video job states: queued, generating, completed, failed, and retryable.
+- Store and display completed video artifacts alongside story/audio artifacts.
+- Provide a lower-cost dynamic picture-book fallback using existing images, audio, and CSS/JS animation when provider video is unavailable or too expensive.
+- Respect `prefers-reduced-motion` and provide a non-animated reading fallback.
+
+**Out of scope**:
+- Open-ended video editing.
+- Public video remixing.
+- Long-form video generation.
+
+### 3.14.2 Parent Creativity Dashboard
+
+**User value**: Parents can understand a child's creative habits without turning the app into surveillance or ranking.
+
+**Current foundation**:
+- `GET /api/v1/library/stats-rich` provides richer Library metrics.
+- `GrowthTimeline` already visualizes creation frequency.
+- Parent role, parent email, consent status, and parent consent are represented in user models and onboarding.
+
+**In scope**:
+- Create a parent-facing dashboard entrypoint that summarizes creation frequency, content mix, favorite themes, and recent safe creations.
+- Keep dashboard insights descriptive, not competitive: no leaderboards, no productivity scores, no pressure streaks.
+- Gate visibility to parent role, or to ages 9-12 where child-facing growth view is already allowed.
+- Provide empty states that guide parents toward healthy creative prompts rather than more screen time.
+
+**Out of scope**:
+- Behavioral scoring.
+- School-style grading.
+- Cross-child comparisons.
+
+### 3.14.3 Achievement Badges and Healthy Rewards
+
+**User value**: Children receive gentle encouragement for breadth, completion, and creativity without addictive streak pressure.
+
+**Current foundation**:
+- `StarPiggyBank`, `MysteryBagOverlay`, Daily Inspiration rewards, and streaming celebration effects already exist.
+- Library and artifact metadata provide enough signal for first-pass achievement rules.
+
+**In scope**:
+- Define a small badge catalog based on healthy creative actions: first story, first interactive ending, first Kids Daily listen, first shared post, first video, and trying multiple themes.
+- Keep rewards age-aware: visual-first for ages 3-5, simple progress for ages 6-8, optional reflective goals for ages 9-12.
+- Avoid daily-use pressure; achievements should reward completed creative acts, not login streaks.
+- Add a server-owned achievement source of truth before exposing persistent badges in the UI.
+
+**Out of scope**:
+- Competitive rankings.
+- Paid reward boosts.
+- Infinite streak mechanics.
+
+### 3.14.4 Phase 3 Positioning and Pitch Alignment
+
+**User value**: Internal roadmap, PRD, and external pitch materials describe the shipped product accurately and keep future claims clearly marked.
+
+**In scope**:
+- Align pitch deck and speaker scripts with the actual implementation of My Agent, video, parent dashboard, and gamification.
+- Distinguish "foundation shipped" from "productized experience shipped."
+- Update stale milestone counts and codebase module counts.
+- Treat A2A, runtime dynamic specialist registration, and autonomous buddy initiatives as future-facing unless implemented.
+
+### Phase 3 Acceptance Criteria
+
+- [ ] Story video generation is reachable from at least one child-facing completed-story surface.
+- [ ] Video job status is visible and handles provider failure without losing the original story.
+- [ ] Completed videos appear in Library or story detail surfaces with ownership checks.
+- [ ] Dynamic picture-book fallback works when full video generation is unavailable.
+- [ ] Parent dashboard exposes descriptive growth metrics without PII leakage or cross-child ranking.
+- [ ] Achievement badges are backed by server-side state and reward healthy creative completion.
+- [ ] Age adaptation is applied across video, dashboard, and achievements.
+- [ ] Pitch and PRD language accurately distinguish shipped, in-progress, and future Phase 3 capabilities.
+
+### Candidate Backlog
+
+1. **Epic: Phase 3 productization — video, parent dashboard, and achievements** (`type:epic`, `domain:video`, `phase:3`)
+2. **Productize story video generation from completed stories** (`type:story`, `domain:video`, `P1`)
+3. **Add dynamic picture-book fallback for video-unavailable states** (`type:story`, `domain:video`, `P1`)
+4. **Create parent creativity dashboard entrypoint** (`type:story`, `domain:library`, `P1`)
+5. **Add server-owned achievement badge model** (`type:story`, `domain:gamification`, `P1`)
+6. **Render child-safe achievement surfaces** (`type:story`, `domain:gamification`, `P2`)
+7. **Align pitch deck and Phase 3 docs with shipped implementation** (`type:chore`, `domain:my-agent`, `P1`)
 
 ---
 

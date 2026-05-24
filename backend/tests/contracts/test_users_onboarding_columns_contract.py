@@ -28,6 +28,11 @@ REQUIRED_ONBOARDING_COLUMNS = (
     "default_child_id",
 )
 
+REQUIRED_PARENT_REGISTRATION_COLUMNS = (
+    "parent_email",
+    "consent_status",
+)
+
 
 # ============================================================================
 # Fixtures
@@ -76,6 +81,12 @@ class TestOnboardingColumnsExist:
         cols = {row["name"] for row in await _users_columns(db)}
         assert "default_child_id" in cols
 
+    @pytest.mark.asyncio
+    async def test_parent_registration_columns_exist(self, db):
+        cols = {row["name"] for row in await _users_columns(db)}
+        for name in REQUIRED_PARENT_REGISTRATION_COLUMNS:
+            assert name in cols
+
 
 # ============================================================================
 # Contract: columns are nullable
@@ -95,6 +106,8 @@ class TestOnboardingColumnsNullable:
             assert info[name]["notnull"] == 0, (
                 f"column {name} must be NULLABLE so existing rows stay valid"
             )
+        assert info["parent_email"]["notnull"] == 0
+        assert info["consent_status"]["notnull"] == 0
 
 
 # ============================================================================

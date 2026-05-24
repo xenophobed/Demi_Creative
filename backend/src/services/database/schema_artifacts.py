@@ -17,7 +17,7 @@ Design Principles:
 - Unique constraints prevent duplicates (UNIQUE relations, one primary per role)
 """
 
-from .sql_compat import column_exists, get_table_columns, translate_ddl
+from .sql_compat import column_exists, get_table_columns, table_create_sql, translate_ddl
 
 # ============================================================================
 # Artifact Tables
@@ -136,7 +136,7 @@ RUNS_TABLE = """
 CREATE TABLE IF NOT EXISTS runs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     run_id TEXT UNIQUE NOT NULL,
-    story_id TEXT NOT NULL,
+    story_id TEXT,
     session_id TEXT,
     workflow_type TEXT NOT NULL,
     status TEXT DEFAULT 'pending',
@@ -147,6 +147,34 @@ CREATE TABLE IF NOT EXISTS runs (
     FOREIGN KEY (story_id) REFERENCES stories(story_id) ON DELETE CASCADE,
     FOREIGN KEY (session_id) REFERENCES sessions(session_id) ON DELETE SET NULL
 );
+"""
+
+# ============================================================================
+# Artifact Character Links Table
+# ============================================================================
+
+ARTIFACT_CHARACTER_LINKS_TABLE = """
+CREATE TABLE IF NOT EXISTS artifact_character_links (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    link_id TEXT UNIQUE NOT NULL,
+    artifact_id TEXT NOT NULL,
+    character_id INTEGER NOT NULL,
+    story_id TEXT,
+    relationship TEXT NOT NULL DEFAULT 'features',
+    role TEXT,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (artifact_id) REFERENCES artifacts(artifact_id) ON DELETE CASCADE,
+    FOREIGN KEY (character_id) REFERENCES characters(id) ON DELETE CASCADE,
+    FOREIGN KEY (story_id) REFERENCES stories(story_id) ON DELETE CASCADE,
+    UNIQUE(artifact_id, character_id, relationship)
+);
+"""
+
+ARTIFACT_CHARACTER_LINKS_INDEXES = """
+CREATE INDEX IF NOT EXISTS idx_artifact_character_artifact ON artifact_character_links(artifact_id);
+CREATE INDEX IF NOT EXISTS idx_artifact_character_character ON artifact_character_links(character_id);
+CREATE INDEX IF NOT EXISTS idx_artifact_character_story ON artifact_character_links(story_id);
+CREATE INDEX IF NOT EXISTS idx_artifact_character_relationship ON artifact_character_links(relationship);
 """
 
 RUNS_INDEXES = """
@@ -268,6 +296,15 @@ async def init_artifact_schema(db: "DatabaseManager") -> None:
             except Exception:
                 pass
 
+    # Create artifact_character_links table
+    await db.execute(translate_ddl(ARTIFACT_CHARACTER_LINKS_TABLE, d))
+    for stmt in ARTIFACT_CHARACTER_LINKS_INDEXES.strip().split(";"):
+        if stmt.strip():
+            try:
+                await db.execute(stmt)
+            except Exception:
+                pass
+
     # Create agent_steps table
     await db.execute(translate_ddl(AGENT_STEPS_TABLE, d))
     for stmt in AGENT_STEPS_INDEXES.strip().split(";"):
@@ -285,7 +322,74 @@ async def init_artifact_schema(db: "DatabaseManager") -> None:
     # Run v2 migration: add new columns and indexes to artifacts table
     await _migrate_add_artifact_columns_v2(db)
 
+    # Run v3 provenance migration: session-scoped runs + character links
+    await _migrate_artifact_provenance_v3(db)
+
     print("✅ Artifact schema initialized")
+
+
+async def _migrate_artifact_provenance_v3(db: "DatabaseManager") -> None:
+    """Migration: allow session-only runs and add artifact-character links."""
+    await db.execute(translate_ddl(ARTIFACT_CHARACTER_LINKS_TABLE, db.dialect))
+    for stmt in ARTIFACT_CHARACTER_LINKS_INDEXES.strip().split(";"):
+        if stmt.strip():
+            try:
+                await db.execute(stmt)
+            except Exception:
+                pass
+
+    if db.dialect == "sqlite":
+        create_sql = await table_create_sql(db, "runs")
+        if "story_id TEXT NOT NULL" in create_sql:
+            await db.execute("PRAGMA foreign_keys=OFF")
+            try:
+                await db.execute(
+                    """
+                    CREATE TABLE runs_new (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        run_id TEXT UNIQUE NOT NULL,
+                        story_id TEXT,
+                        session_id TEXT,
+                        workflow_type TEXT NOT NULL,
+                        status TEXT DEFAULT 'pending',
+                        result_summary TEXT,
+                        created_at TEXT NOT NULL,
+                        started_at TEXT,
+                        completed_at TEXT,
+                        FOREIGN KEY (story_id) REFERENCES stories(story_id) ON DELETE CASCADE,
+                        FOREIGN KEY (session_id) REFERENCES sessions(session_id) ON DELETE SET NULL
+                    )
+                    """
+                )
+                await db.execute(
+                    """
+                    INSERT INTO runs_new (
+                        id, run_id, story_id, session_id, workflow_type, status,
+                        result_summary, created_at, started_at, completed_at
+                    )
+                    SELECT id, run_id, story_id, session_id, workflow_type, status,
+                           result_summary, created_at, started_at, completed_at
+                    FROM runs
+                    """
+                )
+                await db.execute("DROP TABLE runs")
+                await db.execute("ALTER TABLE runs_new RENAME TO runs")
+            finally:
+                await db.execute("PRAGMA foreign_keys=ON")
+    else:
+        try:
+            await db.execute("ALTER TABLE runs ALTER COLUMN story_id DROP NOT NULL")
+        except Exception:
+            pass
+
+    for stmt in RUNS_INDEXES.strip().split(";"):
+        if stmt.strip():
+            try:
+                await db.execute(stmt)
+            except Exception:
+                pass
+
+    await db.commit()
 
 
 async def _migrate_add_artifact_columns_to_stories(db: "DatabaseManager") -> None:

@@ -27,7 +27,7 @@
   <g>
     <rect x="80" y="180" width="1000" height="60" rx="10" fill="#0F172A" stroke="#F472B6" stroke-width="3"/>
     <text x="100" y="208" fill="#F472B6" font-size="18" font-weight="700">3 · Agents (AI orchestration)</text>
-    <text x="100" y="227" fill="#FFFFFF" font-size="12">my_agent_proxy + 4 specialists (image_story · interactive_story · kids_daily · audio_narration)</text>
+    <text x="100" y="227" fill="#FFFFFF" font-size="12">my_agent_proxy + 3 specialists (image_story · interactive_story · kids_daily) + audio_narration tool</text>
     <text x="1060" y="208" text-anchor="end" fill="#F8FAFC" font-size="13">backend/src/agents/</text>
     <text x="1060" y="227" text-anchor="end" fill="#94A3B8" font-size="11" font-style="italic">Claude Agent SDK · AgentDefinition</text>
   </g>

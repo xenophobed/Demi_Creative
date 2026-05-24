@@ -28,10 +28,10 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Optional
 
-# Add backend/src to path
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+# Add repository root to path so backend.src package-relative imports work
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from services.tts_service import generate_story_audio_file  # noqa: E402
+from backend.src.services.tts_service import generate_story_audio_file  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)

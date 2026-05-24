@@ -15,6 +15,12 @@ export interface RegisterRequest {
   password: string
   display_name?: string
   referral_code?: string
+  role?: 'parent' | 'child'
+  parent_email?: string
+  child_id?: string
+  child_name?: string
+  child_age_group?: '3-5' | '6-8' | '9-12'
+  child_interests?: string[]
 }
 
 // User profile returned from API
@@ -27,6 +33,8 @@ export interface User {
   is_active: boolean
   is_verified: boolean
   role: 'child' | 'parent'
+  parent_email?: string | null
+  consent_status?: 'not_required' | 'pending_parent_consent' | 'approved'
   created_at: string
   last_login_at: string | null
   membership_tier: 'free' | 'plus'
@@ -60,6 +68,19 @@ export interface TokenResponse {
 export interface AuthResponse {
   user: User
   token: TokenResponse
+}
+
+export interface ParentApprovalResponse {
+  status: 'approved'
+  user_id: string
+  consent_status: 'approved'
+}
+
+export interface ParentApprovalStatusResponse {
+  status: string
+  parent_email?: string | null
+  approval_token?: string | null
+  approval_url?: string | null
 }
 
 // Returned when Supabase requires email confirmation before login

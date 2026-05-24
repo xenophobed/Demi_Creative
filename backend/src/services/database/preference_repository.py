@@ -74,6 +74,31 @@ class PreferenceRepository:
         self._bump(profile["concepts"], concepts, 1)
         await self._save_profile(key, profile)
 
+    async def update_from_kids_daily_subscription(
+        self,
+        child_id: str,
+        topic: str,
+        *,
+        user_id: str = "",
+    ) -> None:
+        """Record a Kids Daily channel subscription as a lightweight interest signal."""
+        token = (topic or "").strip()
+        if not token:
+            return
+
+        key = self._composite_key(user_id, child_id) if user_id else child_id
+        profile = await self._get_profile(key)
+
+        self._bump(profile["themes"], [token], 1)
+        kids_daily = profile.setdefault("kids_daily", {})
+        topic_stats = kids_daily.setdefault("topic_stats", {})
+        stats = topic_stats.get(token, {"started": 0, "completed": 0, "abandoned": 0})
+        stats["subscribed"] = int(stats.get("subscribed", 0)) + 1
+        topic_stats[token] = stats
+        kids_daily["last_event_at"] = datetime.now().isoformat()
+
+        await self._save_profile(key, profile)
+
     async def update_from_kids_daily(
         self,
         child_id: str,

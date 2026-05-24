@@ -5,6 +5,7 @@ Image-to-story API unit tests
 """
 
 import json
+import time
 import uuid
 from io import BytesIO
 from pathlib import Path
@@ -42,15 +43,18 @@ class TestImageToStoryAPI:
                 "enable_audio": "true",
             }
 
+            started = time.monotonic()
             response = await client.post(
                 "/api/v1/image-to-story", files=files, data=data
             )
+            elapsed = time.monotonic() - started
 
             assert response.status_code == 201
             result = response.json()
 
             # Core fields
             assert "story_id" in result
+            assert elapsed < 30.0
 
             # Story text exists and has content
             assert "story" in result
@@ -60,6 +64,7 @@ class TestImageToStoryAPI:
             # Word count is positive
             assert "word_count" in result["story"]
             assert result["story"]["word_count"] > 0
+            assert result["story"]["degraded_length"] is False
 
             # Safety score present and in valid range
             assert "safety_score" in result
@@ -75,6 +80,41 @@ class TestImageToStoryAPI:
             assert "concepts" in edu
             assert isinstance(edu["themes"], list)
             assert isinstance(edu["concepts"], list)
+            assert "audio_url" in result
+            assert "image_url" in result
+            assert result["image_url"].startswith("/data/uploads/")
+            assert result["characters"]
+
+            lineage_resp = await client.get(
+                f"/api/v1/admin/artifacts/stories/{result['story_id']}/lineage"
+            )
+            assert lineage_resp.status_code == 200
+            artifact_types = {
+                artifact.get("artifact_type")
+                for run in lineage_resp.json().get("runs", [])
+                for artifact in run.get("artifacts", [])
+            }
+            assert {"image", "text"}.issubset(artifact_types)
+
+    async def test_age_3_5_story_is_repaired_before_delivery(
+        self, sample_image, test_client
+    ):
+        """Mock story is slightly long for 3-5 and must be trimmed before response."""
+        async with test_client as client:
+            response = await client.post(
+                "/api/v1/image-to-story",
+                files={"image": ("drawing.png", sample_image, "image/png")},
+                data={
+                    "child_id": f"child-len-{uuid.uuid4().hex[:8]}",
+                    "age_group": "3-5",
+                    "enable_audio": "false",
+                },
+            )
+
+            assert response.status_code == 201
+            story = response.json()["story"]
+            assert 100 <= story["word_count"] <= 200
+            assert story["degraded_length"] is False
 
     async def test_upload_invalid_file_type(self):
         """Test uploading an invalid file type"""
@@ -300,6 +340,41 @@ class TestStreamingProvenance:
             assert len(runs) >= 1, "Must have at least one provenance run"
             assert runs[0]["run"]["status"] == "completed"
 
+    async def test_streaming_syncs_characters_to_memory(
+        self, sample_image, test_client
+    ):
+        """Streaming result characters must be persisted like sync generation."""
+        from backend.src.services.database import character_repo
+
+        child_id = f"child-char-stream-{uuid.uuid4().hex[:8]}"
+        async with test_client as client:
+            resp = await client.post(
+                "/api/v1/image-to-story/stream",
+                files={"image": ("d.png", sample_image, "image/png")},
+                data={
+                    "child_id": child_id,
+                    "age_group": "6-8",
+                    "interests": "animals",
+                },
+            )
+
+            assert resp.status_code == 200
+            result_payload = None
+            for line in resp.text.split("\n"):
+                if line.startswith("data:") and "story_id" in line:
+                    result_payload = json.loads(line[5:])
+                    break
+
+            assert result_payload is not None
+            assert result_payload["characters"][0]["character_name"] == "Little Artist"
+            assert "audio_url" in result_payload
+            assert result_payload["video_url"] is None
+            assert result_payload["video_job_id"] is None
+
+            characters = await character_repo.get_characters("test_user", child_id)
+            names = {c["name"] for c in characters}
+            assert "Little Artist" in names
+
 
 @pytest.mark.asyncio
 class TestStyleFallbackHelpers:
@@ -352,8 +427,8 @@ class TestStyleFallbackHelpers:
         from backend.src.api.models import ArtTheme
         from backend.src.api.routes import image_to_story as route_module
 
-        backend_root = Path(__file__).resolve().parents[2]
-        existing_file = backend_root / "test_art.png"
+        backend_root = Path(__file__).resolve().parents[1]
+        existing_file = backend_root / "fixtures" / "images" / "happy_face.png"
         assert existing_file.exists()
 
         called = {"count": 0}

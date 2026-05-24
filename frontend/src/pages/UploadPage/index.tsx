@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Button from '@/components/common/Button'
 import ImageUploader from '@/components/upload/ImageUploader'
@@ -66,6 +66,14 @@ function UploadPage() {
   const [selectedInterestsList, setSelectedInterestsList] = useState<string[]>(
     (currentChild?.interests || []).filter((i) => DEFAULT_INTERESTS.includes(i))
   )
+
+  useEffect(() => {
+    if (!currentChild) return
+    setSelectedAgeGroup(currentChild.age_group || null)
+    setSelectedInterestsList(
+      (currentChild.interests || []).filter((i) => DEFAULT_INTERESTS.includes(i)),
+    )
+  }, [currentChild?.child_id, currentChild?.age_group, currentChild?.interests])
 
   const { generateStream, cancel, isLoading, isGenerating, streaming, uploadStatus: currentUploadStatus } = useStoryGeneration()
 

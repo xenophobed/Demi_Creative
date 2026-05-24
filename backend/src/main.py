@@ -341,9 +341,11 @@ if os.getenv("STORAGE_BACKEND", "local").lower() != "supabase":
 from .api.routes import (
     admin_artifacts,
     admin_hub,
+    achievements,
     agents,
     artifacts,
     audio,
+    child_profiles,
     hub,
     image_to_story,
     inspiration_daily,
@@ -362,6 +364,7 @@ from .api.routes import (
 app.include_router(image_to_story.router)
 app.include_router(interactive_story.router)
 app.include_router(audio.router)
+app.include_router(child_profiles.router)
 app.include_router(video.router)
 app.include_router(voice.router)
 app.include_router(users.router)
@@ -374,6 +377,7 @@ app.include_router(subscriptions.router)
 app.include_router(artifacts.router)
 app.include_router(admin_artifacts.router)
 app.include_router(admin_hub.router)
+app.include_router(achievements.router)
 app.include_router(library.router)
 app.include_router(memory.router)
 app.include_router(usage.router)

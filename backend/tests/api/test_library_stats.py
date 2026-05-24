@@ -9,8 +9,11 @@ import pytest
 import uuid
 from datetime import datetime, timedelta
 
+from backend.src.api.deps import get_current_user
+from backend.src.main import app
 from backend.src.services.database import story_repo, session_repo, db_manager
 from backend.src.services.database.schema import init_schema
+from backend.src.services.database.user_repository import UserData
 
 
 @pytest.mark.asyncio
@@ -188,3 +191,231 @@ class TestLibraryStatsEmpty:
             data = resp.json()
             assert "periods" in data
             assert isinstance(data["periods"], list)
+
+
+@pytest.mark.asyncio
+class TestLibraryCountsEndpoint:
+    """Integration tests for profile/library count sync (#524)."""
+
+    @pytest.fixture(autouse=True)
+    async def setup_count_data(self):
+        """Insert mixed content, including unsafe content that must be excluded."""
+        if not db_manager.is_connected:
+            await db_manager.connect()
+            await init_schema(db_manager)
+
+        now = datetime.now().isoformat()
+        await db_manager.execute(
+            """INSERT OR IGNORE INTO users
+                (user_id, username, email, password_hash, display_name,
+                 is_active, is_verified, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, 1, 1, ?, ?)""",
+            (
+                "test_user",
+                "test_user",
+                "test@example.com",
+                "test_hash",
+                "Test User",
+                now,
+                now,
+            ),
+        )
+        await db_manager.commit()
+
+        self.story_ids = []
+        for story_type, safety_score in [
+            ("image_to_story", 0.95),
+            ("kids_daily", 0.96),
+            ("morning_show", 0.98),
+            ("news_to_kids", 0.97),
+            ("image_to_story", 0.40),
+        ]:
+            sid = f"counts-{story_type}-{uuid.uuid4().hex[:8]}"
+            self.story_ids.append(sid)
+            await story_repo.create(
+                {
+                    "story_id": sid,
+                    "user_id": "test_user",
+                    "child_id": "child_001",
+                    "age_group": "9-12",
+                    "story": {
+                        "text": f"{story_type} count fixture.",
+                        "word_count": 4,
+                    },
+                    "educational_value": {"themes": ["counts"]},
+                    "characters": [],
+                    "safety_score": safety_score,
+                    "story_type": story_type,
+                    "created_at": now,
+                }
+            )
+
+        session = await session_repo.create_session(
+            child_id="child_001",
+            story_title="Counts test session",
+            age_group="9-12",
+            interests=["space"],
+            theme="adventure",
+            voice="fable",
+            enable_audio=True,
+            total_segments=4,
+            user_id="test_user",
+        )
+        self.session_ids = [session.session_id]
+
+        yield
+
+        for sid in self.story_ids:
+            await db_manager.execute("DELETE FROM stories WHERE story_id = ?", (sid,))
+        for sid in self.session_ids:
+            await db_manager.execute(
+                "DELETE FROM sessions WHERE session_id = ?", (sid,)
+            )
+        await db_manager.commit()
+
+    async def test_counts_match_library_visible_categories(self, test_client):
+        """Counts endpoint returns library-visible totals by profile stat category."""
+        async with test_client as client:
+            counts_resp = await client.get("/api/v1/library/counts")
+            assert counts_resp.status_code == 200
+            counts = counts_resp.json()
+
+            art_resp = await client.get(
+                "/api/v1/library", params={"type": "art-story", "limit": 1}
+            )
+            interactive_resp = await client.get(
+                "/api/v1/library", params={"type": "interactive", "limit": 1}
+            )
+            news_resp = await client.get(
+                "/api/v1/library", params={"type": "kids-news", "limit": 1}
+            )
+
+            assert counts["art_story_count"] == art_resp.json()["total"]
+            assert counts["interactive_count"] == interactive_resp.json()["total"]
+            assert counts["news_count"] == news_resp.json()["total"]
+            assert counts["total"] == (
+                counts["art_story_count"]
+                + counts["interactive_count"]
+                + counts["news_count"]
+            )
+
+
+@pytest.mark.asyncio
+class TestRichStatsParentDashboardAccess:
+    """Role and child-scope coverage for parent creativity dashboard (#532)."""
+
+    @pytest.fixture(autouse=True)
+    async def setup_parent_dashboard_data(self):
+        if not db_manager.is_connected:
+            await db_manager.connect()
+            await init_schema(db_manager)
+
+        self.previous_override = app.dependency_overrides.get(get_current_user)
+        now = datetime.now().isoformat()
+        self.parent_user_id = "test_user"
+        await db_manager.execute(
+            """INSERT OR IGNORE INTO users
+                (user_id, username, email, password_hash, display_name,
+                 is_active, is_verified, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, 1, 1, ?, ?)""",
+            (
+                self.parent_user_id,
+                self.parent_user_id,
+                "test@example.com",
+                "test_hash",
+                "Test User",
+                now,
+                now,
+            ),
+        )
+        await db_manager.commit()
+
+        self.story_ids = []
+        for user_id, child_id, label in [
+            (self.parent_user_id, "child_alpha", "alpha"),
+            (self.parent_user_id, "child_beta", "beta"),
+        ]:
+            sid = f"parent-rich-{label}-{uuid.uuid4().hex[:8]}"
+            self.story_ids.append(sid)
+            await story_repo.create(
+                {
+                    "story_id": sid,
+                    "user_id": user_id,
+                    "child_id": child_id,
+                    "age_group": "9-12",
+                    "story": {
+                        "text": f"{label} creativity dashboard fixture.",
+                        "word_count": 4,
+                    },
+                    "educational_value": {"themes": [label]},
+                    "characters": [],
+                    "safety_score": 0.95,
+                    "story_type": "image_to_story",
+                    "created_at": now,
+                }
+            )
+
+        yield
+
+        if self.previous_override is None:
+            app.dependency_overrides.pop(get_current_user, None)
+        else:
+            app.dependency_overrides[get_current_user] = self.previous_override
+        for sid in self.story_ids:
+            await db_manager.execute("DELETE FROM stories WHERE story_id = ?", (sid,))
+        await db_manager.commit()
+
+    def _override_user(self, *, role: str = "parent") -> None:
+        async def fake_user() -> UserData:
+            return UserData(
+                user_id=self.parent_user_id,
+                username=self.parent_user_id,
+                email=f"{self.parent_user_id}@example.com",
+                password_hash="test_hash",
+                display_name="Parent User",
+                is_active=True,
+                is_verified=True,
+                role=role,
+                created_at="",
+                updated_at="",
+                default_child_id="child_alpha",
+            )
+
+        app.dependency_overrides[get_current_user] = fake_user
+
+    async def test_parent_dashboard_requires_parent_role(self, test_client):
+        self._override_user(role="child")
+
+        async with test_client as client:
+            resp = await client.get(
+                "/api/v1/library/stats-rich",
+                params={"parent_dashboard": True, "child_id": "child_alpha"},
+            )
+
+        assert resp.status_code == 403
+        assert resp.json()["detail"] == "Parent dashboard requires parent role"
+
+    async def test_parent_dashboard_scopes_to_owned_child(self, test_client):
+        self._override_user(role="parent")
+
+        async with test_client as client:
+            resp = await client.get(
+                "/api/v1/library/stats-rich",
+                params={"parent_dashboard": True, "child_id": "child_alpha"},
+            )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert sum(p["creation_count"] for p in data["periods"]) == 1
+        assert data["streak_days"] == 0
+
+    async def test_parent_dashboard_rejects_unowned_child_scope(self, test_client):
+        self._override_user(role="parent")
+
+        async with test_client as client:
+            resp = await client.get(
+                "/api/v1/library/stats-rich",
+                params={"parent_dashboard": True, "child_id": "child_external"},
+            )
+
+        assert resp.status_code == 404

@@ -25,7 +25,7 @@ from tempfile import NamedTemporaryFile
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 
-from ..deps import get_current_user
+from ..deps import get_current_user, require_owned_child_profile
 from ..models import AgentChatRequest, AgentResponse, UpsertAgentRequest
 from ...agents.my_agent_proxy import stream_my_agent_chat
 from ...mcp_servers import check_content_safety
@@ -188,6 +188,7 @@ async def get_my_agent(
     user: UserData = Depends(get_current_user),
 ):
     """Look up the agent for (user_id, child_id). 404 if no row exists."""
+    await require_owned_child_profile(user, child_id)
     agent = await agent_repo.get_agent(user.user_id, child_id)
     if agent is None:
         raise HTTPException(
@@ -218,6 +219,8 @@ async def upsert_my_agent(
       3. Upsert to user_agents.
       4. Return AgentResponse.
     """
+    await require_owned_child_profile(user, request.child_id)
+
     # 1. Avatar whitelist
     if request.agent_avatar_id not in AVATAR_IDS:
         raise HTTPException(
@@ -375,6 +378,8 @@ async def chat_with_my_agent_stream(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={"code": "INVALID_AGENT_CHAT_REQUEST", "reason": str(exc)},
         )
+
+    await require_owned_child_profile(user, payload.child_id)
 
     async def _events():
         try:

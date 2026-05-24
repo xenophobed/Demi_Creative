@@ -269,6 +269,28 @@ class TestSSEEventShapes:
         assert isinstance(data["themes"], list)
         assert isinstance(data["safety_score"], (int, float))
 
+    def test_streaming_result_event_story_fits_age_contract(self):
+        """Final streaming result stories must fit PRD age-group ranges."""
+        from backend.src.agents.image_to_story_agent import repair_story_length
+
+        story, info = repair_story_length("short story", "6-8")
+        event = {
+            "type": "result",
+            "data": {
+                "story": story,
+                "themes": [],
+                "concepts": [],
+                "moral": None,
+                "characters": [],
+                "analysis": {},
+                "safety_score": 0.95,
+            },
+        }
+
+        assert event["type"] == "result"
+        assert info["in_range"] is True
+        assert 200 <= info["word_count"] <= 400
+
     def test_complete_event_shape(self):
         """complete event must have a message."""
         event = {"type": "complete", "data": {"status": "completed", "message": "Done!"}}
@@ -384,6 +406,24 @@ class TestImageToStoryBusinessRules:
 
         # Verify safety_score meets threshold
         assert result["safety_score"] >= 0.85
+
+    def test_length_repair_contract_returns_validation_metadata(self):
+        """Length repair must return text plus stable validation metadata."""
+        from backend.src.agents.image_to_story_agent import repair_story_length
+
+        story, info = repair_story_length("Tiny story.", "3-5")
+
+        assert isinstance(story, str)
+        assert story
+        for key in {
+            "word_count",
+            "in_range",
+            "degraded_length",
+            "needs_retry",
+            "repaired",
+        }:
+            assert key in info
+        assert info["in_range"] is True
 
     def test_mock_result_characters_have_required_fields(self):
         """Each mock character must have name, description, appearances."""

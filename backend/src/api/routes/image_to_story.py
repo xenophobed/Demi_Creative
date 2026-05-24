@@ -29,6 +29,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 
 from ...agents.image_to_story_agent import (
     image_to_story,
+    repair_story_length,
     stream_image_to_story,
     validate_story_length,
 )
@@ -55,7 +56,12 @@ from ...services.models.artifact_models import (
 from ...services.provenance_tracker import ProvenanceTracker
 from ...services.user_service import UserData
 from ...utils.audio_strategy import get_audio_strategy
-from ..deps import check_generation_quota, get_current_user, get_story_for_owner
+from ..deps import (
+    check_generation_quota,
+    get_current_user,
+    get_story_for_owner,
+    require_owned_child_profile,
+)
 from ..models import (
     AgeGroup,
     ArtTheme,
@@ -469,6 +475,7 @@ async def create_story_from_image(
       -F "enable_audio=true"
     ```
     """
+    await require_owned_child_profile(user, child_id)
     try:
         # 1. Validate image
         validate_image_file(image)
@@ -537,10 +544,17 @@ async def create_story_from_image(
                 voice=voice,
                 art_theme=art_theme.value if art_theme != ArtTheme.NONE else None,
                 user_id=user.user_id,
+                provider=provider,
             )
             length_info = validate_story_length(
                 result.get("story", ""), age_group.value
             )
+
+        if length_info["degraded_length"]:
+            repaired_story, length_info = repair_story_length(
+                result.get("story", ""), age_group.value
+            )
+            result["story"] = repaired_story
 
         # 5. Parse result and build response
 
@@ -712,6 +726,8 @@ async def create_story_from_image(
         analysis = result.get("analysis", {})
         for c in characters:
             try:
+                if not c.character_name.strip():
+                    continue
                 char_data = {
                     "character_name": c.character_name,
                     "description": c.description,
@@ -1014,6 +1030,15 @@ async def create_story_from_image_stream(
     - `complete`: Generation complete
     - `error`: Error message
     """
+    try:
+        await require_owned_child_profile(user, child_id)
+    except HTTPException as e:
+
+        async def error_generator():
+            yield f"event: error\ndata: {json.dumps({'error': 'ChildProfileError', 'message': e.detail}, ensure_ascii=False)}\n\n"
+
+        return StreamingResponse(error_generator(), media_type="text/event-stream")
+
     # Validate image
     try:
         validate_image_file(image)
@@ -1113,6 +1138,12 @@ async def create_story_from_image_stream(
                         result_data.get("story", ""),
                         age_group.value,
                     )
+                    if length_info["degraded_length"]:
+                        repaired_story, length_info = repair_story_length(
+                            result_data.get("story", ""),
+                            age_group.value,
+                        )
+                        result_data["story"] = repaired_story
                     degraded_length = length_info["degraded_length"]
 
                     story_text = result_data.get("story", "")
@@ -1182,6 +1213,8 @@ async def create_story_from_image_stream(
                         if cover_image_url != image_url
                         else None,
                         "audio_url": audio_url,
+                        "video_url": None,
+                        "video_job_id": None,
                         "educational_value": {
                             "themes": result_data.get("themes", []),
                             "concepts": result_data.get("concepts", []),
@@ -1226,9 +1259,7 @@ async def create_story_from_image_stream(
                             {
                                 "child_id": safe_child_id,
                                 "story_id": story_id,
-                                "story_text": result_data.get("story", {}).get(
-                                    "text", ""
-                                ),
+                                "story_text": story_text,
                                 "themes": ", ".join(result_data.get("themes", [])),
                                 "age_group": age_group.value,
                             }
@@ -1250,13 +1281,16 @@ async def create_story_from_image_stream(
                     stream_analysis = result_data.get("analysis", {})
                     for c in result_data.get("characters", []):
                         try:
+                            char_name = str(c.get("name", "")).strip()
+                            if not char_name:
+                                continue
                             visual_features, traits = _extract_character_enrichment(
                                 c, stream_analysis
                             )
                             await character_repo.upsert_character(
                                 user_id=user.user_id,
                                 child_id=safe_child_id,
-                                name=c.get("name", ""),
+                                name=char_name,
                                 description=c.get("description", ""),
                                 visual_features=visual_features,
                                 traits=traits,

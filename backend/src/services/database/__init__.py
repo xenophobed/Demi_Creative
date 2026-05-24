@@ -9,6 +9,11 @@ from .connection import DatabaseManager, db_manager
 from .story_repository import StoryRepository, story_repo
 from .session_repository import SessionRepository, session_repo
 from .user_repository import UserRepository, user_repo, UserData
+from .child_profile_repository import (
+    ChildProfileRepository,
+    ChildProfileData,
+    child_profile_repo,
+)
 from .preference_repository import PreferenceRepository, preference_repo
 from .character_repository import CharacterRepository, character_repo
 from .voice_repository import VoiceRepository, voice_repo
@@ -45,6 +50,11 @@ from .hub_reaction_repository import (
     hub_reaction_repo,
     ReactionData,
 )
+from .achievement_repository import (
+    AchievementRepository,
+    AchievementData,
+    achievement_repo,
+)
 
 __all__ = [
     "CursorResult",
@@ -59,6 +69,9 @@ __all__ = [
     "UserRepository",
     "user_repo",
     "UserData",
+    "ChildProfileRepository",
+    "ChildProfileData",
+    "child_profile_repo",
     "PreferenceRepository",
     "preference_repo",
     "CharacterRepository",
@@ -94,4 +107,7 @@ __all__ = [
     "HubReactionRepository",
     "hub_reaction_repo",
     "ReactionData",
+    "AchievementRepository",
+    "AchievementData",
+    "achievement_repo",
 ]

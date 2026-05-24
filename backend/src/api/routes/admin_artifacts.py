@@ -15,6 +15,7 @@ from ...services.database.connection import DatabaseManager, db_manager
 from ...services.database.artifact_repository import (
     ArtifactRepository,
     ArtifactRelationRepository,
+    ArtifactCharacterLinkRepository,
     StoryArtifactLinkRepository,
     RunRepository,
     AgentStepRepository,
@@ -110,10 +111,14 @@ async def get_story_lineage(
     if not runs:
         # Still return story artifact links even if no runs
         story_artifacts = await story_link_repo.list_by_story(story_id)
+        character_links = await ArtifactCharacterLinkRepository(db).list_by_story(
+            story_id
+        )
         return StoryLineage(
             story_id=story_id,
             runs=[],
             story_artifacts=story_artifacts,
+            character_links=character_links,
             total_artifacts=0,
             total_runs=0,
         )
@@ -141,11 +146,15 @@ async def get_story_lineage(
         )
 
     story_artifacts = await story_link_repo.list_by_story(story_id)
+    character_links = await ArtifactCharacterLinkRepository(db).list_by_story(
+        story_id
+    )
 
     return StoryLineage(
         story_id=story_id,
         runs=runs_with_artifacts,
         story_artifacts=story_artifacts,
+        character_links=character_links,
         total_artifacts=total_artifacts,
         total_runs=len(runs),
     )

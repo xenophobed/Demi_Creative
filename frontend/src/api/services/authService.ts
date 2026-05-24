@@ -25,6 +25,8 @@ import type {
   PaginatedStories,
   PaginatedSessions,
   ReferralStatus,
+  ParentApprovalResponse,
+  ParentApprovalStatusResponse,
 } from '@/types/auth'
 
 const AUTH_BASE = '/users'
@@ -74,6 +76,12 @@ export const authService = {
           data: {
             display_name: data.display_name || data.username,
             username: data.username,
+            role: data.role ?? 'parent',
+            ...(data.parent_email ? { parent_email: data.parent_email } : {}),
+            ...(data.child_id ? { child_id: data.child_id } : {}),
+            ...(data.child_name ? { child_name: data.child_name } : {}),
+            ...(data.child_age_group ? { child_age_group: data.child_age_group } : {}),
+            ...(data.child_interests ? { child_interests: data.child_interests } : {}),
             ...(data.referral_code ? { referral_code: data.referral_code } : {}),
           },
         },
@@ -97,7 +105,10 @@ export const authService = {
     }
 
     // Legacy flow
-    const response = await apiClient.post<AuthResponse>(`${AUTH_BASE}/register`, data)
+    const response = await apiClient.post<AuthResponse>(`${AUTH_BASE}/register`, {
+      ...data,
+      role: data.role ?? 'parent',
+    })
     return response.data
   },
 
@@ -216,6 +227,21 @@ export const authService = {
    */
   async fetchReferralStatus(): Promise<ReferralStatus> {
     const response = await apiClient.get<ReferralStatus>(`${AUTH_BASE}/me/referrals`)
+    return response.data
+  },
+
+  async approveParentApprovalToken(token: string): Promise<ParentApprovalResponse> {
+    const response = await apiClient.post<ParentApprovalResponse>(
+      `${AUTH_BASE}/parent-approval/approve`,
+      { token },
+    )
+    return response.data
+  },
+
+  async resendParentApproval(): Promise<ParentApprovalStatusResponse> {
+    const response = await apiClient.post<ParentApprovalStatusResponse>(
+      `${AUTH_BASE}/me/parent-approval/resend`,
+    )
     return response.data
   },
 

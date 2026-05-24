@@ -48,8 +48,8 @@
   </g>
   <g>
     <rect x="820" y="260" width="240" height="80" rx="12" fill="#0F172A" stroke="#C4B5FD" stroke-width="2"/>
-    <text x="940" y="290" text-anchor="middle" fill="#F8FAFC" font-size="16" font-weight="600">🔊 audio_narration</text>
-    <text x="940" y="315" text-anchor="middle" fill="#94A3B8" font-size="12">TTS + sound design</text>
+    <text x="940" y="290" text-anchor="middle" fill="#F8FAFC" font-size="16" font-weight="600">🔊 audio_narration tool</text>
+    <text x="940" y="315" text-anchor="middle" fill="#94A3B8" font-size="12">TTS, not subagent</text>
   </g>
 
   <!-- Connector lines proxy → specialists -->
@@ -80,7 +80,11 @@
   <!-- Shared context bus -->
   <rect x="40" y="525" width="1080" height="50" rx="25" fill="url(#ctxBus)" stroke="#C4B5FD" stroke-width="2"/>
   <text x="580" y="557" text-anchor="middle" fill="#F8FAFC" font-size="15" font-weight="600">
-    🔗 shared context bus: persona · child_id · age · recurring characters
+    🔗 context: persona · tone · style · skills · topics · goals · child_id · age
+  </text>
+
+  <text x="580" y="588" text-anchor="middle" fill="#94A3B8" font-size="12" font-style="italic">
+    recurring characters: character_repo + vector memory
   </text>
 
   <!-- Context bus connectors to each agent column (subtle vertical lines) -->

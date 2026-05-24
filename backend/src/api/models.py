@@ -753,6 +753,34 @@ class UserRegisterRequest(BaseModel):
         max_length=8,
         description="Referral code from share link (optional)"
     )
+    role: Literal["parent", "child"] = Field(
+        default="parent",
+        description="Who is setting up the account. Parent is the primary supported path.",
+    )
+    parent_email: Optional[str] = Field(
+        None,
+        description="Required when a child starts registration without a parent account.",
+    )
+    child_id: Optional[str] = Field(
+        None,
+        min_length=1,
+        max_length=100,
+        description="Configured child profile id for parent-owned setup.",
+    )
+    child_name: Optional[str] = Field(
+        None,
+        max_length=80,
+        description="Parent-provided child profile nickname.",
+    )
+    child_age_group: Optional[AgeGroup] = Field(
+        None,
+        description="Parent-selected age group for the initial child profile.",
+    )
+    child_interests: List[str] = Field(
+        default_factory=list,
+        max_length=8,
+        description="Parent-selected interests for the initial child profile.",
+    )
 
     @field_validator('email')
     @classmethod
@@ -761,12 +789,116 @@ class UserRegisterRequest(BaseModel):
             raise ValueError("Invalid email format")
         return v.lower()
 
+    @field_validator('parent_email')
+    @classmethod
+    def validate_parent_email(cls, v):
+        if v is None or v == "":
+            return None
+        if "@" not in v or "." not in v:
+            raise ValueError("Invalid parent email format")
+        return v.lower()
+
     @field_validator('username')
     @classmethod
     def validate_username(cls, v):
         if not v.replace("_", "").replace("-", "").isalnum():
             raise ValueError("Username can only contain letters, numbers, underscores, and hyphens")
         return v.lower()
+
+    @field_validator('child_name')
+    @classmethod
+    def validate_child_name(cls, v):
+        if v is None or v == "":
+            return None
+        return _validate_child_nickname(v)
+
+    @model_validator(mode="after")
+    def validate_child_signup_parent_email(self):
+        if self.role == "child" and not self.parent_email:
+            raise ValueError("A parent/guardian email is required for child sign-up")
+        return self
+
+
+_NICKNAME_EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
+_NICKNAME_PHONE_RE = re.compile(r"(?:\+?\d[\s().-]*){7,}")
+
+
+def _validate_child_nickname(value: str) -> str:
+    nickname = value.strip()
+    if not nickname:
+        raise ValueError("Child nickname is required")
+    if _NICKNAME_EMAIL_RE.search(nickname) or _NICKNAME_PHONE_RE.search(nickname):
+        raise ValueError("Child nickname cannot include email addresses or phone numbers")
+    return nickname
+
+
+class ChildProfileCreateRequest(BaseModel):
+    """Create a child profile under the current parent account."""
+    name: str = Field(..., min_length=1, max_length=80)
+    age_group: AgeGroup = Field(default=AgeGroup.AGE_6_8)
+    interests: List[str] = Field(default_factory=list, max_length=8)
+    avatar: Optional[str] = Field(default=None, max_length=120)
+    child_id: Optional[str] = Field(default=None, min_length=1, max_length=100)
+    is_default: bool = Field(default=False)
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v):
+        return _validate_child_nickname(v)
+
+
+class ChildProfileUpdateRequest(BaseModel):
+    """Patch editable child profile fields."""
+    name: Optional[str] = Field(default=None, min_length=1, max_length=80)
+    age_group: Optional[AgeGroup] = None
+    interests: Optional[List[str]] = Field(default=None, max_length=8)
+    avatar: Optional[str] = Field(default=None, max_length=120)
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v):
+        if v is None:
+            return None
+        return _validate_child_nickname(v)
+
+
+class ChildProfileResponse(BaseModel):
+    """Child profile API response."""
+    child_id: str
+    user_id: str
+    name: str
+    age_group: str
+    interests: List[str] = Field(default_factory=list)
+    avatar: Optional[str] = None
+    is_default: bool = False
+    archived_at: Optional[datetime] = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class ChildProfileListResponse(BaseModel):
+    """GET /child-profiles response envelope."""
+    items: List[ChildProfileResponse] = Field(default_factory=list)
+
+
+class ParentApprovalTokenRequest(BaseModel):
+    """Approve a child-started account with a signed parent token."""
+    token: str = Field(..., min_length=20, description="Signed parent approval token")
+
+
+class ParentApprovalResponse(BaseModel):
+    """Parent approval result."""
+    status: str = Field(..., description="Approval operation status")
+    user_id: str = Field(..., description="Approved child user id")
+    consent_status: str = Field(..., description="Updated consent status")
+
+
+class ParentApprovalStatusResponse(BaseModel):
+    """Pending approval resend/status response."""
+    status: str = Field(..., description="Approval status")
+    parent_email: Optional[str] = Field(None, description="Parent/guardian email")
+    approval_token: Optional[str] = Field(None, description="Development/test approval token")
+    approval_url: Optional[str] = Field(None, description="Development/test approval URL")
 
 
 class UserLoginRequest(BaseModel):
@@ -800,6 +932,8 @@ class UserResponse(BaseModel):
     is_active: bool = Field(..., description="Whether active")
     is_verified: bool = Field(..., description="Whether verified")
     role: str = Field(default="child", description="User role: 'child' or 'parent'")
+    parent_email: Optional[str] = Field(None, description="Parent/guardian email for child-started accounts")
+    consent_status: str = Field(default="not_required", description="Parent consent status")
     membership_tier: str = Field(default="free", description="Membership tier: 'free' or 'plus'")
     referral_code: str = Field(default="", description="User's unique referral code")
     created_at: datetime = Field(..., description="Registered at")
@@ -1161,7 +1295,7 @@ class RichStatsPeriod(BaseModel):
 class RichStatsResponse(BaseModel):
     """Rich growth dashboard stats (#356)."""
     periods: List[RichStatsPeriod] = Field(..., description="Per-period growth metrics")
-    streak_days: int = Field(0, description="Current consecutive creation days")
+    streak_days: int = Field(0, description="Deprecated compatibility field; always 0")
 
 
 class PaginatedNewsResponse(BaseModel):

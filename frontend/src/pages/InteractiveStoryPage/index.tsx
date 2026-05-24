@@ -51,7 +51,8 @@ function InteractiveStoryPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { isAuthenticated } = useAuthStore();
-  const { defaultChildId } = useChildStore();
+  const { currentChild, defaultChildId } = useChildStore();
+  const childId = currentChild?.child_id || defaultChildId;
 
   if (!isAuthenticated) {
     return (
@@ -62,9 +63,13 @@ function InteractiveStoryPage() {
   }
 
   // Local form state
-  const [selectedAge, setSelectedAge] = useState<AgeGroup | null>(null);
+  const [selectedAge, setSelectedAge] = useState<AgeGroup | null>(
+    currentChild?.age_group || null,
+  );
   const [selectedLength, setSelectedLength] = useState<StoryLengthMode>("short");
-  const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
+  const [selectedInterests, setSelectedInterests] = useState<string[]>(
+    currentChild?.interests?.slice(0, 5) || [],
+  );
   const [theme, setTheme] = useState("");
   const [quotaDismissed, setQuotaDismissed] = useState(false);
 
@@ -253,11 +258,11 @@ function InteractiveStoryPage() {
 
   // Start story handler - uses streaming for real-time progress
   const handleStartStory = async () => {
-    if (!selectedAge || selectedInterests.length === 0) return;
+    if (!selectedAge || selectedInterests.length === 0 || !childId) return;
 
     try {
       await startStoryStream({
-        child_id: defaultChildId,
+        child_id: childId,
         age_group: selectedAge,
         interests: selectedInterests,
         theme: theme || undefined,

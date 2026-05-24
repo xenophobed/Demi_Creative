@@ -909,11 +909,12 @@ function LibraryPage() {
 
       queryClient.invalidateQueries({ queryKey: ["library"] });
       queryClient.invalidateQueries({ queryKey: ["library-search"] });
+      queryClient.invalidateQueries({ queryKey: ["library-counts"] });
+      queryClient.invalidateQueries({ queryKey: ["homepage-recent"] });
       queryClient.invalidateQueries({
         queryKey: ["library-child-art-stories"],
       });
       queryClient.invalidateQueries({ queryKey: ["library-news-history"] });
-      queryClient.invalidateQueries({ queryKey: ["user-stats"] });
       queryClient.invalidateQueries({ queryKey: ["memory-characters"] });
       queryClient.invalidateQueries({ queryKey: ["memory-preferences"] });
     },
@@ -954,11 +955,13 @@ function LibraryPage() {
           My Library
         </h1>
         <div className="flex items-center gap-2">
-          {/* Growth Timeline toggle — 9-12 age group or parent role (#134, #232) */}
+          {/* Growth Timeline toggle — 9-12 age group or parent role (#134, #232, #532) */}
           {canShowGrowthTimeline && isAuthenticated && (
             <motion.button
               onClick={() => setShowGrowthView((v) => !v)}
-              className={`p-2 rounded-lg transition-colors ${
+              className={`flex items-center gap-1.5 rounded-lg transition-colors ${
+                isParent ? "px-3 py-2 text-sm font-medium" : "p-2"
+              } ${
                 showGrowthView
                   ? "text-primary bg-primary/10"
                   : "text-gray-500 hover:text-primary hover:bg-primary/10"
@@ -966,10 +969,15 @@ function LibraryPage() {
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               title={
-                showGrowthView ? "Back to library" : "View growth timeline"
+                showGrowthView
+                  ? "Back to library"
+                  : isParent
+                    ? "Open parent creativity dashboard"
+                    : "View growth timeline"
               }
             >
               <TrendingUp size={20} />
+              {isParent && <span>Parent dashboard</span>}
             </motion.button>
           )}
           <motion.button
@@ -1084,7 +1092,10 @@ function LibraryPage() {
 
       {/* Growth Timeline view (#134, #232) — replaces content area when active */}
       {showGrowthView && canShowGrowthTimeline && isAuthenticated ? (
-        <GrowthTimeline />
+        <GrowthTimeline
+          childId={childIdForAgent}
+          isParentDashboard={isParent}
+        />
       ) : (
         <>
           {/* Loading indicator */}

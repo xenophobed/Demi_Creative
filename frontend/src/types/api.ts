@@ -171,6 +171,83 @@ export interface HealthCheckResponse {
 }
 
 // ============================================================================
+// Video Generation Types
+// ============================================================================
+
+export type VideoStyle = "gentle_animation" | "playful" | "storybook";
+
+export type VideoStatus = "pending" | "processing" | "completed" | "failed";
+
+export interface VideoJobRequest {
+  story_id: string;
+  style?: VideoStyle;
+  include_audio?: boolean;
+  duration_seconds?: number;
+}
+
+export interface VideoJobResponse {
+  job_id: string;
+  story_id: string;
+  status: VideoStatus;
+  estimated_completion?: string | null;
+  created_at: string;
+}
+
+export interface VideoJobStatusResponse {
+  job_id: string;
+  status: VideoStatus;
+  progress_percent: number;
+  video_url?: string | null;
+  error_message?: string | null;
+  created_at: string;
+  completed_at?: string | null;
+}
+
+export interface StoryVideoItem {
+  video_id: string;
+  status: VideoStatus;
+  style?: VideoStyle;
+  video_url?: string | null;
+  has_audio: boolean;
+  created_at?: string | null;
+}
+
+export interface StoryVideosResponse {
+  story_id: string;
+  total: number;
+  videos: StoryVideoItem[];
+}
+
+// ============================================================================
+// Achievement Badge Types
+// ============================================================================
+
+export interface AchievementDefinition {
+  achievement_id: string;
+  title: string;
+  description: string;
+  icon: string;
+  category: string;
+  award_event: string;
+}
+
+export interface AchievementItem {
+  achievement_id: string;
+  user_id: string;
+  child_id: string;
+  awarded_at: string;
+  source_event: string;
+  definition: AchievementDefinition | null;
+}
+
+export interface AchievementListResponse {
+  child_id: string;
+  items: AchievementItem[];
+  total: number;
+  available_definitions: AchievementDefinition[];
+}
+
+// ============================================================================
 // News-to-Kids Types
 // ============================================================================
 
@@ -431,10 +508,33 @@ export interface StoryHistoryItem {
 // Child profile
 export interface ChildProfile {
   child_id: string;
+  user_id?: string;
   name: string;
   age_group: AgeGroup;
   interests: string[];
-  avatar?: string;
+  avatar?: string | null;
+  is_default?: boolean;
+  archived_at?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface ChildProfileListResponse {
+  items: ChildProfile[];
+}
+
+export interface ChildProfileCreateRequest {
+  name: string;
+  age_group: AgeGroup;
+  interests?: string[];
+  avatar?: string | null;
+}
+
+export interface ChildProfileUpdateRequest {
+  name?: string;
+  age_group?: AgeGroup;
+  interests?: string[];
+  avatar?: string | null;
 }
 
 // Upload status

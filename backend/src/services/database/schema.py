@@ -124,6 +124,8 @@ CREATE TABLE IF NOT EXISTS users (
     is_active INTEGER DEFAULT 1,
     is_verified INTEGER DEFAULT 0,
     role TEXT DEFAULT 'child',
+    parent_email TEXT,
+    consent_status TEXT DEFAULT 'not_required',
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     last_login_at TEXT
@@ -168,6 +170,30 @@ CREATE TABLE IF NOT EXISTS child_preferences (
 CHILD_PREFERENCES_INDEXES = """
 CREATE INDEX IF NOT EXISTS idx_child_preferences_child_id ON child_preferences(child_id);
 CREATE INDEX IF NOT EXISTS idx_child_preferences_updated_at ON child_preferences(updated_at DESC);
+"""
+
+CHILD_PROFILES_TABLE = """
+CREATE TABLE IF NOT EXISTS child_profiles (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    child_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    age_group TEXT NOT NULL DEFAULT '6-8',
+    interests TEXT NOT NULL DEFAULT '[]',
+    avatar TEXT,
+    is_default INTEGER DEFAULT 0,
+    archived_at TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
+    UNIQUE(user_id, child_id)
+);
+"""
+
+CHILD_PROFILES_INDEXES = """
+CREATE INDEX IF NOT EXISTS idx_child_profiles_user ON child_profiles(user_id);
+CREATE INDEX IF NOT EXISTS idx_child_profiles_user_default ON child_profiles(user_id, is_default);
+CREATE INDEX IF NOT EXISTS idx_child_profiles_user_archived ON child_profiles(user_id, archived_at);
 """
 
 TOPIC_SUBSCRIPTIONS_TABLE = """
@@ -537,12 +563,14 @@ async def init_schema(db: "DatabaseManager") -> None:
     await _migrate_add_user_id(db)
     await _migrate_add_story_type(db)
     await _migrate_add_user_role(db)
+    await _migrate_add_parent_registration_columns(db)
     await _migrate_backfill_word_counts(db)
     await _migrate_characters_user_id(db)
     await _migrate_add_styled_image_url(db)
     await _migrate_add_referral_columns(db)
     await _migrate_add_story_length_mode(db)
     await _migrate_add_onboarding_columns(db)
+    await _migrate_create_child_profiles_table(db)
     await _migrate_create_user_agents_table(db)
     await _migrate_add_user_agent_config_columns(db)
     await _migrate_create_agent_chat_tables(db)
@@ -576,6 +604,10 @@ async def init_schema(db: "DatabaseManager") -> None:
     # Initialize favorites schema (#49 My Library)
     from .schema_favorites import init_favorites_schema
     await init_favorites_schema(db)
+
+    # Initialize achievement badge schema (#536)
+    from .schema_achievements import init_achievement_schema
+    await init_achievement_schema(db)
 
     # Initialize pgvector schema (#342) — only on PostgreSQL
     from .schema_vectors import init_vector_schema
@@ -619,6 +651,31 @@ async def _migrate_add_user_role(db: "DatabaseManager") -> None:
     """Migration: Add role column to users table (#232)."""
     if not await column_exists(db, "users", "role"):
         await db.execute("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'child'")
+        await db.commit()
+
+
+async def _migrate_add_parent_registration_columns(db: "DatabaseManager") -> None:
+    """Migration: Add parent-owned registration fields."""
+    changed = False
+    if not await column_exists(db, "users", "parent_email"):
+        await db.execute("ALTER TABLE users ADD COLUMN parent_email TEXT")
+        changed = True
+    if not await column_exists(db, "users", "consent_status"):
+        await db.execute(
+            "ALTER TABLE users ADD COLUMN consent_status TEXT DEFAULT 'not_required'"
+        )
+        changed = True
+    if changed:
+        await db.execute(
+            """
+            UPDATE users
+            SET consent_status = CASE
+                WHEN role = 'parent' THEN 'not_required'
+                ELSE 'pending_parent_consent'
+            END
+            WHERE consent_status IS NULL OR consent_status = ''
+            """
+        )
         await db.commit()
 
 
@@ -815,6 +872,74 @@ async def _migrate_add_onboarding_columns(db: "DatabaseManager") -> None:
     if added:
         await db.commit()
         print("Users onboarding migration completed")
+
+
+async def _migrate_create_child_profiles_table(db: "DatabaseManager") -> None:
+    """Migration: Create parent-owned child profile table and backfill defaults."""
+    from datetime import datetime
+
+    await db.execute(translate_ddl(CHILD_PROFILES_TABLE, db.dialect))
+    for stmt in CHILD_PROFILES_INDEXES.strip().split(";"):
+        if stmt.strip():
+            try:
+                await db.execute(stmt)
+            except Exception:
+                pass
+
+    rows = await db.fetchall(
+        """
+        SELECT user_id, default_child_id, nickname, display_name, created_at, updated_at
+        FROM users
+        WHERE default_child_id IS NOT NULL AND default_child_id != ''
+        """
+    )
+    for row in rows:
+        await db.execute(
+            "UPDATE child_profiles SET is_default = 0 WHERE user_id = ?",
+            (row["user_id"],),
+        )
+        existing = await db.fetchone(
+            "SELECT 1 FROM child_profiles WHERE user_id = ? AND child_id = ?",
+            (row["user_id"], row["default_child_id"]),
+        )
+        if existing:
+            await db.execute(
+                """
+                UPDATE child_profiles
+                SET is_default = 1, updated_at = ?
+                WHERE user_id = ? AND child_id = ? AND archived_at IS NULL
+                """,
+                (
+                    row.get("updated_at") or datetime.now().isoformat(),
+                    row["user_id"],
+                    row["default_child_id"],
+                ),
+            )
+            continue
+
+        now = row.get("created_at") or datetime.now().isoformat()
+        name = row.get("nickname") or row.get("display_name") or "Child"
+        await db.execute(
+            """
+            INSERT INTO child_profiles (
+                child_id, user_id, name, age_group, interests, avatar,
+                is_default, archived_at, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                row["default_child_id"],
+                row["user_id"],
+                name,
+                "6-8",
+                "[]",
+                None,
+                1,
+                None,
+                now,
+                row.get("updated_at") or now,
+            ),
+        )
+    await db.commit()
 
 
 async def _migrate_create_user_agents_table(db: "DatabaseManager") -> None:

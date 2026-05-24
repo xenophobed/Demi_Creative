@@ -266,39 +266,59 @@ class StoryRepository:
         )
         return row['count'] if row else 0
 
-    async def count_recent_on_demand(self, child_id: str, since_iso: str) -> int:
+    async def count_recent_on_demand(
+        self,
+        child_id: str,
+        since_iso: str,
+        user_id: Optional[str] = None,
+    ) -> int:
         """Count on-demand kids_daily episodes for a child created after *since_iso*.
 
         Uses JSON analysis field to identify source = 'on_demand'.
         """
+        user_clause = "AND user_id = ?" if user_id else ""
+        params = [child_id, since_iso]
+        if user_id:
+            params.append(user_id)
         row = await self._db.fetchone(
             f"""
             SELECT COUNT(*) as count FROM stories
             WHERE child_id = ?
               AND story_type IN ('kids_daily', 'morning_show')
               AND created_at > ?
+              {user_clause}
               AND {json_value('analysis', 'source', self._db.dialect)} = 'on_demand'
             """,
-            (child_id, since_iso),
+            tuple(params),
         )
         return int(row["count"]) if row else 0
 
-    async def get_oldest_recent_on_demand_ts(self, child_id: str, since_iso: str) -> Optional[str]:
+    async def get_oldest_recent_on_demand_ts(
+        self,
+        child_id: str,
+        since_iso: str,
+        user_id: Optional[str] = None,
+    ) -> Optional[str]:
         """Return the created_at of the oldest on-demand episode since *since_iso*.
 
         Used to compute retry_after for rate limiting.
         """
+        user_clause = "AND user_id = ?" if user_id else ""
+        params = [child_id, since_iso]
+        if user_id:
+            params.append(user_id)
         row = await self._db.fetchone(
             f"""
             SELECT created_at FROM stories
             WHERE child_id = ?
               AND story_type IN ('kids_daily', 'morning_show')
               AND created_at > ?
+              {user_clause}
               AND {json_value('analysis', 'source', self._db.dialect)} = 'on_demand'
             ORDER BY created_at ASC
             LIMIT 1
             """,
-            (child_id, since_iso),
+            tuple(params),
         )
         return row["created_at"] if row else None
 
