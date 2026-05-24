@@ -23,6 +23,7 @@ from ..models import (
 from ..deps import get_current_user, get_story_for_owner
 from ...mcp_servers import generate_painting_video, check_video_status, combine_video_audio
 from ...services.database import story_repo
+from ...services.achievement_service import FIRST_VIDEO, achievement_service
 from ...services.user_service import UserData
 
 
@@ -206,6 +207,14 @@ async def get_video_status(
         completed_at = None
         if result_data.get("completed_at"):
             completed_at = datetime.fromisoformat(result_data["completed_at"])
+
+        if result_data["status"] == VideoStatus.COMPLETED.value and job_data:
+            story_id = job_data.get("story_id")
+            if story_id:
+                story = await get_story_for_owner(story_id, user.user_id)
+                await achievement_service.award_event_safely(
+                    user.user_id, story.get("child_id"), FIRST_VIDEO
+                )
 
         return VideoJobStatusResponse(
             job_id=job_id,

@@ -36,6 +36,10 @@ from ..deps import (
     require_owned_child_profile,
 )
 from ...services.database import session_repo, story_repo, preference_repo, character_repo, db_manager, usage_repo
+from ...services.achievement_service import (
+    FIRST_INTERACTIVE_ENDING,
+    achievement_service,
+)
 from ...services.tts_service import generate_story_audio_file
 from ...services.user_service import UserData
 from ...services.provenance_tracker import ProvenanceTracker
@@ -1286,6 +1290,9 @@ async def save_interactive_story(
         }
 
         await story_repo.create(story_data)
+        await achievement_service.award_event_safely(
+            user.user_id, session.child_id, FIRST_INTERACTIVE_ENDING
+        )
 
         # Store story embedding for dedup detection (#290)
         try:

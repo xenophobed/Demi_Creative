@@ -38,6 +38,7 @@ from ...models import (
 )
 from ....mcp_servers import check_content_safety
 from ....services.database import group_repo, hub_post_repo
+from ....services.achievement_service import FIRST_SHARED_POST, achievement_service
 from ....services.user_service import UserData
 
 
@@ -215,6 +216,10 @@ async def create_post(
                 detail={"code": "AGENT_REQUIRED"},
             )
         raise
+
+    await achievement_service.award_event_safely(
+        user.user_id, child_id, FIRST_SHARED_POST
+    )
 
     return _to_response(post)
 

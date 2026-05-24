@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import asdict, dataclass
 
 from .database.achievement_repository import AchievementRepository, achievement_repo
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -19,48 +22,64 @@ class AchievementDefinition:
     award_event: str
 
 
+FIRST_STORY = "first_story"
+FIRST_INTERACTIVE_ENDING = "first_interactive_ending"
+FIRST_KIDS_DAILY_LISTEN = "first_kids_daily_listen"
+FIRST_SHARED_POST = "first_shared_post"
+FIRST_VIDEO = "first_video"
+MULTIPLE_THEMES_TRIED = "multiple_themes_tried"
+
+
 ACHIEVEMENT_DEFINITIONS: tuple[AchievementDefinition, ...] = tuple(
     sorted(
         (
             AchievementDefinition(
-                achievement_id="first_audio_narration",
-                title="Voice Explorer",
-                description="Listened to a story with narration.",
-                icon="volume-2",
-                category="care",
-                award_event="first_audio_narration",
-            ),
-            AchievementDefinition(
-                achievement_id="first_character_created",
-                title="Character Keeper",
-                description="Created a reusable story character.",
-                icon="sparkles",
-                category="creativity",
-                award_event="first_character_created",
-            ),
-            AchievementDefinition(
-                achievement_id="first_image_story",
-                title="Picture Story Starter",
-                description="Turned a picture into a story.",
+                achievement_id=FIRST_STORY,
+                title="Story Starter",
+                description="Completed a first picture story.",
                 icon="image",
                 category="storytelling",
-                award_event="first_image_story",
+                award_event=FIRST_STORY,
             ),
             AchievementDefinition(
-                achievement_id="first_interactive_story",
-                title="Choice Maker",
-                description="Started an interactive story.",
+                achievement_id=FIRST_INTERACTIVE_ENDING,
+                title="Adventure Finisher",
+                description="Finished an interactive story path.",
                 icon="git-branch",
                 category="storytelling",
-                award_event="first_interactive_story",
+                award_event=FIRST_INTERACTIVE_ENDING,
             ),
             AchievementDefinition(
-                achievement_id="first_kids_daily",
+                achievement_id=FIRST_KIDS_DAILY_LISTEN,
                 title="Curious Listener",
-                description="Explored one Kids Daily episode.",
+                description="Listened to a Kids Daily episode.",
                 icon="newspaper",
                 category="learning",
-                award_event="first_kids_daily",
+                award_event=FIRST_KIDS_DAILY_LISTEN,
+            ),
+            AchievementDefinition(
+                achievement_id=FIRST_SHARED_POST,
+                title="Kindly Shared",
+                description="Shared a safe creation with a group.",
+                icon="share-2",
+                category="community",
+                award_event=FIRST_SHARED_POST,
+            ),
+            AchievementDefinition(
+                achievement_id=FIRST_VIDEO,
+                title="Movie Maker",
+                description="Made a story video from a creation.",
+                icon="video",
+                category="creativity",
+                award_event=FIRST_VIDEO,
+            ),
+            AchievementDefinition(
+                achievement_id=MULTIPLE_THEMES_TRIED,
+                title="Theme Explorer",
+                description="Tried more than one story theme.",
+                icon="palette",
+                category="creativity",
+                award_event=MULTIPLE_THEMES_TRIED,
             ),
         ),
         key=lambda item: item.achievement_id,
@@ -69,6 +88,9 @@ ACHIEVEMENT_DEFINITIONS: tuple[AchievementDefinition, ...] = tuple(
 
 _DEFINITIONS_BY_ID = {
     definition.achievement_id: definition for definition in ACHIEVEMENT_DEFINITIONS
+}
+_DEFINITIONS_BY_EVENT = {
+    definition.award_event: definition for definition in ACHIEVEMENT_DEFINITIONS
 }
 
 
@@ -105,6 +127,35 @@ class AchievementService:
             "definition": asdict(definition),
             "created": created,
         }
+
+    async def award_event(self, user_id: str, child_id: str, event: str) -> dict:
+        """Award the badge attached to a known server event."""
+        definition = _DEFINITIONS_BY_EVENT.get(event)
+        if definition is None:
+            raise UnknownAchievementError(event)
+        return await self.award(user_id, child_id, definition.achievement_id)
+
+    async def award_event_safely(
+        self, user_id: str, child_id: str | None, event: str
+    ) -> None:
+        """Best-effort award hook for creation flows.
+
+        Badge persistence should never block story, video, or sharing
+        completion. Unknown events still surface in tests through
+        ``award_event``; this helper is deliberately fail-soft for routes.
+        """
+        if not child_id:
+            return
+        try:
+            await self.award_event(user_id, child_id, event)
+        except Exception:
+            logger.warning(
+                "Achievement award skipped: user_id=%s child_id=%s event=%s",
+                user_id,
+                child_id,
+                event,
+                exc_info=True,
+            )
 
     async def list_for_child(self, user_id: str, child_id: str) -> dict:
         """List awards for one user-owned child profile."""
