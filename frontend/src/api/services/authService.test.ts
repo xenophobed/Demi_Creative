@@ -68,6 +68,46 @@ describe("authService registration ownership", () => {
     });
   });
 
+  it("passes referral code during legacy registration", async () => {
+    const response = {
+      user: {
+        user_id: "u2",
+        username: "friend",
+        email: "friend@test.com",
+        display_name: "Friend",
+        avatar_url: null,
+        is_active: true,
+        is_verified: false,
+        role: "parent",
+        created_at: "2026-01-01T00:00:00",
+        last_login_at: null,
+        membership_tier: "free",
+        referral_code: "friend01",
+      },
+      token: {
+        access_token: "token",
+        token_type: "bearer",
+        expires_in: 3600,
+      },
+    };
+    vi.mocked(apiClient.post).mockResolvedValueOnce({ data: response });
+
+    await authService.register({
+      username: "friend",
+      email: "friend@test.com",
+      password: "password123",
+      referral_code: "abc12345",
+    });
+
+    expect(apiClient.post).toHaveBeenCalledWith("/users/register", {
+      username: "friend",
+      email: "friend@test.com",
+      password: "password123",
+      referral_code: "abc12345",
+      role: "parent",
+    });
+  });
+
   it("supports parent approval endpoints", async () => {
     vi.mocked(apiClient.post)
       .mockResolvedValueOnce({
