@@ -303,9 +303,8 @@ async def _get_or_create_supabase_user(claims) -> Optional[UserData]:
 
                 # Qualify immediately if email is confirmed (#425)
                 if claims.email_confirmed:
-                    await referral_repo.qualify_referral(claims.sub)
                     from ..services.user_service import user_service
-                    await user_service.qualify_and_maybe_upgrade(referrer.user_id)
+                    await user_service.qualify_and_maybe_upgrade(claims.sub)
         except Exception:
             pass  # Referral is non-critical — don't block user creation
 
