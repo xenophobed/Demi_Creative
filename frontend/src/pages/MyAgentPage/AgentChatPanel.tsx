@@ -32,9 +32,10 @@ import {
   X,
 } from "lucide-react";
 import { agentService } from "@/api/services/agentService";
+import { memoryService } from "@/api/services/memoryService";
 import { useLaunchFlowNavigation } from "@/hooks/useLaunchFlowNavigation";
 import type { Agent } from "@/types/agent";
-import type { AgeGroup } from "@/types/api";
+import type { AgeGroup, MemoryCharacter } from "@/types/api";
 import type {
   SSEErrorData,
   SSELaunchFlowData,
@@ -48,6 +49,10 @@ import {
   settleAssistantMessage,
   type ChatMessage,
 } from "./chatMessageState";
+import {
+  chipPrefillForCharacter,
+  pickRecurringCharacter,
+} from "./recurringCharacter";
 
 interface Props {
   agent: Agent;
@@ -129,6 +134,8 @@ export default function AgentChatPanel({
   const [statusText, setStatusText] = useState<string | null>(null);
   const [toolText, setToolText] = useState<string | null>(null);
   const [errorText, setErrorText] = useState<string | null>(null);
+  const [recurringCharacter, setRecurringCharacter] =
+    useState<MemoryCharacter | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
@@ -143,6 +150,33 @@ export default function AgentChatPanel({
   useEffect(() => {
     return () => abortRef.current?.abort();
   }, []);
+
+  // Fetch recurring characters for the active child to surface a
+  // "Remember…" chip above the composer (#560). Cancelled on
+  // child-id change so a slow response for a previous child can't
+  // overwrite the next child's chip — the same active-child precedent
+  // we follow across creation surfaces (#548).
+  useEffect(() => {
+    if (!childId) {
+      setRecurringCharacter(null);
+      return;
+    }
+    let cancelled = false;
+    memoryService
+      .getCharacters(childId)
+      .then((response) => {
+        if (cancelled) return;
+        setRecurringCharacter(pickRecurringCharacter(response.characters));
+      })
+      .catch(() => {
+        if (cancelled) return;
+        // Non-critical surface — hide the chip on failure.
+        setRecurringCharacter(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [childId]);
 
   const tail = messages[messages.length - 1]?.text ?? "";
   useEffect(() => {
@@ -172,6 +206,11 @@ export default function AgentChatPanel({
   const useStarter = (prompt: string) => {
     setDraft(prompt);
     setTimeout(() => textareaRef.current?.focus(), 0);
+  };
+
+  const useRecurringCharacter = () => {
+    if (!recurringCharacter) return;
+    useStarter(chipPrefillForCharacter(recurringCharacter.name));
   };
 
   const cancelStream = () => {
@@ -414,6 +453,19 @@ export default function AgentChatPanel({
         <label htmlFor="agent-chat-message" className="sr-only">
           Message {agent.agent_name}
         </label>
+        {recurringCharacter && !isStreaming && (
+          <div className="mb-2">
+            <button
+              type="button"
+              onClick={useRecurringCharacter}
+              className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-900 transition-colors hover:border-amber-400 hover:bg-amber-100 focus:outline-none focus:ring-2 focus:ring-amber-500"
+              title={`Chat about ${recurringCharacter.name}`}
+            >
+              <Sparkles size={12} className="text-amber-500" />
+              Remember {recurringCharacter.name}?
+            </button>
+          </div>
+        )}
         {image && (
           <div className="mb-2 flex items-center justify-between gap-2 rounded-lg border border-violet-100 bg-violet-50 px-3 py-1.5 text-xs text-violet-800">
             <span className="truncate">{image.name}</span>
