@@ -578,7 +578,7 @@ Remembers each child's creation history and preferences to enable content contin
 - ✅ **Cross-story memory**: `story_memory.py` injects recent 3 story summaries into agent prompts, supporting cross-story references
 - ✅ **Memory API exposure**: `GET/DELETE /api/v1/memory/preferences/{child_id}` and `GET /api/v1/memory/characters/{child_id}` implemented
 - 🔲 **Frontend memory consumption**: Frontend does not call memory APIs; no character gallery, no preference display, no theme recommendations
-- 🔲 **Buddy memory wiring (§3.11)**: `my_agent_proxy` does not consume `story_memory.py`, `PreferenceRepository`, or `CharacterRepository` — the buddy cannot say "Remember when you and Sparkle went to the moon?". Tracked under the Buddy Memory Wiring epic.
+- ✅ **Buddy memory wiring (§3.11)**: `my_agent_proxy` now injects episodic memory (story_memory) and factual memory (preferences) into every buddy chat turn so the buddy can say "Remember when you and Sparkle went to the moon?" — closing the §3.5 ↔ §3.11 promise.
 - ✅ **Contract test coverage**: PreferenceRepository, preference scoping, preference retention, story memory, and interactive memory contract tests implemented
 - ✅ **Privacy compliance**: `recent_choices` capped at 50 entries, theme scores decay after 6 months, DELETE endpoint clears SQLite + ChromaDB data
 - 🔲 **Theme recommendation engine**: Preference data has been accumulated but no recommendation algorithm exists; no personalized theme suggestions shown to users
