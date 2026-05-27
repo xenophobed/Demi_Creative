@@ -249,3 +249,289 @@ class TestStoryMemoryFetchedPerTurn:
         assert "Lightning Dog flew to the moon" in prompt
         assert "**Recurring Characters**" in prompt
         assert "Lightning Dog" in prompt
+
+
+# ---------------------------------------------------------------------------
+# Factual memory injection (#559) — preferences from PreferenceRepository
+# ---------------------------------------------------------------------------
+
+
+from backend.src.services import my_agent_memory  # noqa: E402
+
+
+class TestBuildFactualMemoryPrompt:
+    """The factual-memory helper must turn a normalized preference profile
+    into an empty-safe markdown block. The buddy uses this to say things
+    like "I know you love dinosaurs" without rehearsing internal config."""
+
+    def test_empty_profile_returns_empty_string(self):
+        block = my_agent_memory.format_factual_memory(
+            {
+                "themes": {},
+                "concepts": {},
+                "interests": {},
+                "recent_choices": [],
+                "kids_daily": {
+                    "topic_scores": {},
+                    "topic_stats": {},
+                    "last_event_at": None,
+                },
+            }
+        )
+        assert block == ""
+
+    def test_populated_profile_renders_what_i_know_section(self):
+        block = my_agent_memory.format_factual_memory(
+            {
+                "themes": {"friendship": 5, "space": 3, "ocean": 1},
+                "concepts": {},
+                "interests": {"dinosaurs": 4, "dragons": 2},
+                "recent_choices": ["space", "friendship"],
+                "kids_daily": {
+                    "topic_scores": {},
+                    "topic_stats": {},
+                    "last_event_at": None,
+                },
+            }
+        )
+        assert "**What I Know About You**" in block
+        assert "friendship" in block
+        assert "space" in block
+        assert "dinosaurs" in block
+
+    def test_caps_themes_and_interests_at_three(self):
+        """Prompt-size bound: we never inject more than three labels per
+        bucket so the prompt stays small after months of history."""
+        themes = {f"theme_{i}": 100 - i for i in range(10)}
+        block = my_agent_memory.format_factual_memory(
+            {
+                "themes": themes,
+                "concepts": {},
+                "interests": {},
+                "recent_choices": [],
+                "kids_daily": {
+                    "topic_scores": {},
+                    "topic_stats": {},
+                    "last_event_at": None,
+                },
+            }
+        )
+        assert "theme_0" in block
+        assert "theme_1" in block
+        assert "theme_2" in block
+        assert "theme_3" not in block
+
+    def test_ignores_unknown_extra_fields(self):
+        """If a future caller passes the wrong dict by mistake, the helper
+        must not echo agent config like ``custom_instructions`` or
+        ``learning_goals`` into the prompt — structural defense against
+        accidental persona leakage."""
+        block = my_agent_memory.format_factual_memory(
+            {
+                "themes": {"friendship": 5},
+                "interests": {},
+                "concepts": {},
+                "recent_choices": [],
+                "kids_daily": {
+                    "topic_scores": {},
+                    "topic_stats": {},
+                    "last_event_at": None,
+                },
+                "custom_instructions": "secret-prompt-injection-bait",
+                "learning_goals": ["leak-me"],
+            }
+        )
+        assert "secret-prompt-injection-bait" not in block
+        assert "leak-me" not in block
+
+
+class TestFactualMemoryWiredIntoProxy:
+    """``stream_my_agent_chat`` must fetch the child's preference profile
+    every turn and pass it into ``_build_user_prompt``."""
+
+    @pytest.mark.asyncio
+    async def test_populated_preferences_reach_sdk_prompt(self, test_db):
+        fake_client = _PromptCapturingSDKClient(
+            messages=[_fake_result_message("Hi!")]
+        )
+        fake_agent = _fake_agent(
+            enabled_skills=["image_story", "interactive_story", "kids_daily", "audio_narration"]
+        )
+        safe_envelope = {
+            "content": [{"type": "text", "text": json.dumps({"safety_score": 0.99})}]
+        }
+        populated_profile = {
+            "profile": {
+                "themes": {"friendship": 5, "space": 3},
+                "concepts": {},
+                "interests": {"dinosaurs": 4},
+                "recent_choices": ["space"],
+                "kids_daily": {
+                    "topic_scores": {},
+                    "topic_stats": {},
+                    "last_event_at": None,
+                },
+            },
+            "data_collected_since": "2026-01-01T00:00:00",
+            "last_updated_at": "2026-05-01T00:00:00",
+        }
+
+        with patch.object(my_agent_proxy.agent_repo, "get_agent", new=AsyncMock(return_value=fake_agent)), \
+             patch.object(my_agent_proxy, "ClaudeSDKClient", lambda *a, **kw: fake_client), \
+             patch.object(
+                 my_agent_proxy,
+                 "build_my_agent_context",
+                 new=AsyncMock(return_value="ctx"),
+             ), \
+             patch.object(
+                 my_agent_proxy,
+                 "get_story_memory_prompt",
+                 new=AsyncMock(return_value=""),
+             ), \
+             patch.object(
+                 my_agent_proxy.preference_repo,
+                 "get_profile_with_metadata",
+                 new=AsyncMock(return_value=populated_profile),
+             ), \
+             patch(
+                 "backend.src.agents.my_agent_proxy.check_content_safety.handler",
+                 new=AsyncMock(return_value=safe_envelope),
+             ):
+            async for _ in my_agent_proxy.stream_my_agent_chat(
+                user_id=_TEST_USER_ID,
+                child_id=_TEST_CHILD_ID,
+                message="hi",
+            ):
+                pass
+
+        prompt = fake_client.captured_prompt
+        assert prompt is not None
+        assert "**What I Know About You**" in prompt
+        assert "friendship" in prompt
+        assert "dinosaurs" in prompt
+
+    @pytest.mark.asyncio
+    async def test_empty_preferences_do_not_leak_header(self, test_db):
+        fake_client = _PromptCapturingSDKClient(
+            messages=[_fake_result_message("Hi!")]
+        )
+        fake_agent = _fake_agent(
+            enabled_skills=["image_story", "interactive_story", "kids_daily", "audio_narration"]
+        )
+        safe_envelope = {
+            "content": [{"type": "text", "text": json.dumps({"safety_score": 0.99})}]
+        }
+        empty_profile = {
+            "profile": {
+                "themes": {},
+                "concepts": {},
+                "interests": {},
+                "recent_choices": [],
+                "kids_daily": {
+                    "topic_scores": {},
+                    "topic_stats": {},
+                    "last_event_at": None,
+                },
+            },
+            "data_collected_since": None,
+            "last_updated_at": None,
+        }
+
+        with patch.object(my_agent_proxy.agent_repo, "get_agent", new=AsyncMock(return_value=fake_agent)), \
+             patch.object(my_agent_proxy, "ClaudeSDKClient", lambda *a, **kw: fake_client), \
+             patch.object(
+                 my_agent_proxy,
+                 "build_my_agent_context",
+                 new=AsyncMock(return_value="ctx"),
+             ), \
+             patch.object(
+                 my_agent_proxy,
+                 "get_story_memory_prompt",
+                 new=AsyncMock(return_value=""),
+             ), \
+             patch.object(
+                 my_agent_proxy.preference_repo,
+                 "get_profile_with_metadata",
+                 new=AsyncMock(return_value=empty_profile),
+             ), \
+             patch(
+                 "backend.src.agents.my_agent_proxy.check_content_safety.handler",
+                 new=AsyncMock(return_value=safe_envelope),
+             ):
+            async for _ in my_agent_proxy.stream_my_agent_chat(
+                user_id=_TEST_USER_ID,
+                child_id=_TEST_CHILD_ID,
+                message="hi",
+            ):
+                pass
+
+        prompt = fake_client.captured_prompt
+        assert prompt is not None
+        assert "**What I Know About You**" not in prompt
+
+    @pytest.mark.asyncio
+    async def test_preference_fetch_scoped_by_user_id(self, test_db):
+        """Cross-user isolation precedent (#288, #178): preference fetch
+        must scope by user_id so user A's themes never leak to user B."""
+        fake_client = _PromptCapturingSDKClient(
+            messages=[_fake_result_message("Hi!")]
+        )
+        fake_agent = _fake_agent(
+            enabled_skills=["image_story", "interactive_story", "kids_daily", "audio_narration"]
+        )
+        safe_envelope = {
+            "content": [{"type": "text", "text": json.dumps({"safety_score": 0.99})}]
+        }
+        pref_mock = AsyncMock(
+            return_value={
+                "profile": {
+                    "themes": {},
+                    "concepts": {},
+                    "interests": {},
+                    "recent_choices": [],
+                    "kids_daily": {
+                        "topic_scores": {},
+                        "topic_stats": {},
+                        "last_event_at": None,
+                    },
+                },
+                "data_collected_since": None,
+                "last_updated_at": None,
+            }
+        )
+
+        with patch.object(my_agent_proxy.agent_repo, "get_agent", new=AsyncMock(return_value=fake_agent)), \
+             patch.object(my_agent_proxy, "ClaudeSDKClient", lambda *a, **kw: fake_client), \
+             patch.object(
+                 my_agent_proxy,
+                 "build_my_agent_context",
+                 new=AsyncMock(return_value="ctx"),
+             ), \
+             patch.object(
+                 my_agent_proxy,
+                 "get_story_memory_prompt",
+                 new=AsyncMock(return_value=""),
+             ), \
+             patch.object(
+                 my_agent_proxy.preference_repo,
+                 "get_profile_with_metadata",
+                 new=pref_mock,
+             ), \
+             patch(
+                 "backend.src.agents.my_agent_proxy.check_content_safety.handler",
+                 new=AsyncMock(return_value=safe_envelope),
+             ):
+            async for _ in my_agent_proxy.stream_my_agent_chat(
+                user_id=_TEST_USER_ID,
+                child_id=_TEST_CHILD_ID,
+                message="hi",
+            ):
+                pass
+
+        pref_mock.assert_awaited_once()
+        args, kwargs = pref_mock.call_args
+        if args:
+            assert args[0] == _TEST_CHILD_ID
+        else:
+            assert kwargs.get("child_id") == _TEST_CHILD_ID
+        assert kwargs.get("user_id") == _TEST_USER_ID
