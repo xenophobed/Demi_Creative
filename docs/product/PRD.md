@@ -1577,6 +1577,77 @@ removing it.
 - Inline image upload from inside the chat textbox (deferred — large UI surface, low value)
 - Multi-turn negotiation in buddy chat ("which kind of story?") — buddy asks at most once, otherwise picks a default
 
+#### 3.11.8 Multi-Topic Chat Sessions [Phase 2]
+
+> A child often wants to chat about more than one topic with their buddy — bedtime questions one night, a dinosaur story the next. Today every page mount silently starts a new session and the child can never get back to a prior topic. This section adds visible session management on top of the existing `agent_chat_sessions` table.
+
+##### Product Vision
+
+The buddy chat becomes a **multi-topic surface** with a sidebar list of past sessions. The child can: (a) tap a row to resume that topic with full history, (b) hit "New chat" to start a clean session, (c) rename a session ("Dinosaur story"), and (d) delete sessions they no longer want. Parents retain destructive control via the existing Memory tab.
+
+Sessions are scoped by `(user_id, child_id)` — switching the active child profile shows that child's own sessions, never another child's.
+
+##### Core Capabilities
+
+| Capability | Description |
+|---|---|
+| Session list | Sidebar / drawer of past sessions sorted by most-recent activity, with title + last-message preview + relative timestamp |
+| New chat | One-tap button creates a fresh empty session keyed by `(user_id, child_id)` |
+| Resume session | Tapping a row loads its full message history; new turns append to that session and resume the SDK conversation via `sdk_session_id` |
+| Title auto-gen | First user message becomes the session title (truncated to ~60 chars); editable later |
+| Rename | Pencil/kebab action; title passes `check_content_safety ≥ 0.85` like agent persona text |
+| Archive / Delete | Hard delete cascades to `agent_chat_messages` via existing FK; archive is a soft-hide for the list |
+| Cross-user isolation | All endpoints filter by `user_id` server-side; cross-tenant requests return 404 (IDs stay unguessable) |
+
+##### Architecture
+
+| Layer | Change |
+|---|---|
+| Schema | Add `title TEXT`, `last_message_preview TEXT`, `archived_at TEXT` columns to `agent_chat_sessions` via idempotent ALTER migration |
+| Repository | New `list_sessions_for_user`, `list_messages`, `rename_session`, `archive_session`, `delete_session` on `AgentChatRepository`; `add_message` keeps `last_message_preview` in sync |
+| API | `GET /me/agent/sessions`, `GET /me/agent/sessions/{id}/messages`, `POST /me/agent/sessions`, `PATCH /me/agent/sessions/{id}`, `DELETE /me/agent/sessions/{id}` |
+| Proxy | `stream_my_agent_chat` sets `title = message[:60]` on the first user turn when `title==""`; updates `last_message_preview` after the safety-passed reply |
+| Frontend | New `useAgentChatStore` (Zustand), `AgentSessionListSidebar.tsx`, `AgentChatPanel` reads sessionId + messages from the store |
+
+##### Age Adaptation
+
+| Ages 3-5 | Ages 6-8 | Ages 9-12 |
+|---|---|---|
+| Large tappable rows. Rename / Archive / Delete hidden behind parent gate. | Full kebab menu. Delete shows confirmation dialog. | Same as 6-8 plus keyboard shortcuts in v2. |
+
+##### Acceptance Criteria
+
+- [ ] Schema migration adds `title`, `last_message_preview`, `archived_at` columns idempotently
+- [ ] `GET /me/agent/sessions` returns sessions for the calling user only, paginated, sorted by `updated_at DESC`
+- [ ] `GET /me/agent/sessions/{id}/messages` returns chronological history; cross-user request returns 404
+- [ ] `POST /me/agent/sessions` creates an empty session keyed by `(user_id, child_id)`
+- [ ] `PATCH /me/agent/sessions/{id}` rejects titles failing `check_content_safety < 0.85`
+- [ ] `DELETE /me/agent/sessions/{id}` cascades to `agent_chat_messages`
+- [ ] First user message sets the session title automatically when title is empty
+- [ ] `last_message_preview` updates after every safety-passed assistant reply
+- [ ] `AgentChatPanel` reads sessionId + messages from the new store; selecting a sidebar row swaps the visible history
+- [ ] Switching the active child profile clears the current session and re-fetches that child's session list
+- [ ] In-flight stream is cancelled (existing AbortController) when switching sessions; partial assistant message is not committed to the old session
+- [ ] Empty state: "No chats yet — say hi to start one" when the list is empty
+
+##### Content Safety Requirements
+
+- All rename inputs pass through the existing `check_content_safety` MCP at threshold 0.85 (same as agent persona)
+- Replayed history is already post-safety text (proxy gates before persist) — no new safety logic on read
+- Titles render as plain text (no HTML interpretation)
+- Destructive actions (Delete) are gated by the existing parent-only UI surface for child accounts
+
+##### Out of Scope (v1)
+
+- LLM-generated titles (we use first-message truncation; can be upgraded later)
+- Full-text search across sessions
+- Multi-buddy sessions (one buddy per child stays in #3.11.3)
+- Cross-device session sync beyond what `users.user_id` already provides
+- Export / download history
+- Pinning sessions to the top of the list
+
+> **GitHub Epic**: TBD (Multi-Topic Chat Sessions) | **Phase**: 2 | **Milestone**: Phase 2 — Interactive + Memory + News
+
 ---
 
 ### 3.12 Content Hub — Group-Based Community Sharing [Phase 2]
