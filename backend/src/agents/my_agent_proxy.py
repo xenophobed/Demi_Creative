@@ -48,8 +48,15 @@ from .interactive_story_agent import (
 from .kids_daily_agent import generate_kids_daily_episode
 from ..mcp_servers import check_content_safety
 from ..mcp_servers.tts_generator_server import generate_story_audio
-from ..services.database import agent_chat_repo, agent_repo, session_repo, usage_repo
+from ..services.database import (
+    agent_chat_repo,
+    agent_repo,
+    preference_repo,
+    session_repo,
+    usage_repo,
+)
 from ..services.my_agent_context import build_my_agent_context
+from ..services.my_agent_memory import build_factual_memory_prompt
 from ..services.story_memory import get_story_memory_prompt
 from ..utils.model_config import get_claude_agent_model
 
@@ -825,6 +832,7 @@ def _build_user_prompt(
     age_group: Optional[str] = None,
     interests: Optional[list[str]] = None,
     story_memory: str = "",
+    factual_memory: str = "",
 ) -> str:
     """Build the per-turn user prompt with a routing hint reminder.
 
@@ -836,6 +844,11 @@ def _build_user_prompt(
     produced by ``story_memory.get_story_memory_prompt`` and is already
     self-formatted with ``**Story Memory**`` / ``**Recurring Characters**``
     headers, so the empty-safe contract is "empty string in, no header out".
+
+    ``factual_memory`` is the same shape for the preference layer
+    (#559) — produced by ``my_agent_memory.format_factual_memory`` and
+    appended next to ``story_memory`` so the buddy sees the child's
+    stable interests + recent themes.
     """
     profile_lines = ""
     if child_id or age_group or interests:
@@ -847,7 +860,7 @@ Active child profile:
 - interests: {", ".join(child_interests) if child_interests else "adventure"}
 """
 
-    memory_block = story_memory if story_memory else ""
+    memory_block = (story_memory or "") + (factual_memory or "")
 
     return f"""
 {my_agent_context}
@@ -1055,6 +1068,10 @@ async def stream_my_agent_chat(
     except Exception:  # pragma: no cover - non-critical, degrade gracefully
         story_memory_block = ""
 
+    factual_memory_block = await build_factual_memory_prompt(
+        user_id, child_id, preference_repo=preference_repo
+    )
+
     prompt = _build_user_prompt(
         my_agent_context=my_agent_context,
         history=history,
@@ -1064,6 +1081,7 @@ async def stream_my_agent_chat(
         age_group=child_age_group,
         interests=child_interests,
         story_memory=story_memory_block,
+        factual_memory=factual_memory_block,
     )
 
     allowed_tools = [
