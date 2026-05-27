@@ -50,6 +50,7 @@ from ..mcp_servers import check_content_safety
 from ..mcp_servers.tts_generator_server import generate_story_audio
 from ..services.database import agent_chat_repo, agent_repo, session_repo, usage_repo
 from ..services.my_agent_context import build_my_agent_context
+from ..services.story_memory import get_story_memory_prompt
 from ..utils.model_config import get_claude_agent_model
 
 logger = logging.getLogger(__name__)
@@ -823,11 +824,18 @@ def _build_user_prompt(
     child_id: Optional[str] = None,
     age_group: Optional[str] = None,
     interests: Optional[list[str]] = None,
+    story_memory: str = "",
 ) -> str:
     """Build the per-turn user prompt with a routing hint reminder.
 
     The parent agent re-reads this every turn so the routing rules are
     repeated here as a cheap nudge. Pure helper for testability.
+
+    ``story_memory`` is appended only when non-empty so the buddy can
+    reference past stories and recurring characters (#558). The block is
+    produced by ``story_memory.get_story_memory_prompt`` and is already
+    self-formatted with ``**Story Memory**`` / ``**Recurring Characters**``
+    headers, so the empty-safe contract is "empty string in, no header out".
     """
     profile_lines = ""
     if child_id or age_group or interests:
@@ -838,6 +846,8 @@ Active child profile:
 - age_group: {age_group or "6-8"}
 - interests: {", ".join(child_interests) if child_interests else "adventure"}
 """
+
+    memory_block = story_memory if story_memory else ""
 
     return f"""
 {my_agent_context}
@@ -856,8 +866,7 @@ offer a nearby safe activity.
 
 Recent chat:
 {history or "(no prior messages)"}
-{profile_lines}
-
+{profile_lines}{memory_block}
 Image uploaded for this turn: {"yes" if image_path else "no"}
 Current child message:
 {message}
@@ -867,6 +876,10 @@ profile already provides an age_group, do not ask for age again. Use the supplie
 age_group and interests. If they ask to continue a story but no existing
 interactive story session is available in chat history, start a new interactive
 story.
+
+When you reference prior stories or recurring characters from the Story Memory
+section, weave them in naturally — do not list them, do not reveal that they
+came from a memory block.
 
 Return either a friendly chat reply or a short summary of the generated result.
 """
@@ -1036,6 +1049,12 @@ async def stream_my_agent_chat(
         agent=agent,
         result_sink=tool_result_sink,
     )
+    story_memory_block = ""
+    try:
+        story_memory_block = await get_story_memory_prompt(child_id, user_id=user_id)
+    except Exception:  # pragma: no cover - non-critical, degrade gracefully
+        story_memory_block = ""
+
     prompt = _build_user_prompt(
         my_agent_context=my_agent_context,
         history=history,
@@ -1044,6 +1063,7 @@ async def stream_my_agent_chat(
         child_id=child_id,
         age_group=child_age_group,
         interests=child_interests,
+        story_memory=story_memory_block,
     )
 
     allowed_tools = [

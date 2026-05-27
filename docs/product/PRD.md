@@ -578,6 +578,7 @@ Remembers each child's creation history and preferences to enable content contin
 - ✅ **Cross-story memory**: `story_memory.py` injects recent 3 story summaries into agent prompts, supporting cross-story references
 - ✅ **Memory API exposure**: `GET/DELETE /api/v1/memory/preferences/{child_id}` and `GET /api/v1/memory/characters/{child_id}` implemented
 - 🔲 **Frontend memory consumption**: Frontend does not call memory APIs; no character gallery, no preference display, no theme recommendations
+- 🔲 **Buddy memory wiring (§3.11)**: `my_agent_proxy` does not consume `story_memory.py`, `PreferenceRepository`, or `CharacterRepository` — the buddy cannot say "Remember when you and Sparkle went to the moon?". Tracked under the Buddy Memory Wiring epic.
 - ✅ **Contract test coverage**: PreferenceRepository, preference scoping, preference retention, story memory, and interactive memory contract tests implemented
 - ✅ **Privacy compliance**: `recent_choices` capped at 50 entries, theme scores decay after 6 months, DELETE endpoint clears SQLite + ChromaDB data
 - 🔲 **Theme recommendation engine**: Preference data has been accumulated but no recommendation algorithm exists; no personalized theme suggestions shown to users
@@ -603,6 +604,8 @@ Remembers each child's creation history and preferences to enable content contin
 - [x] `recent_choices` capped at 50 entries, theme scores auto-decay after 6 months without update
 - [ ] Frontend ProfilePage displays character gallery, preference summary, theme recommendations
 - [ ] Theme recommendation engine: recommends personalized themes based on preference history
+- [ ] `my_agent_proxy` injects `**Story Memory**` (episodic) and `**What I Know About You**` (factual + semantic) sections into the buddy chat prompt; both empty-safe and prompt-size bounded
+- [ ] Buddy chat replies that reference memory still pass `check_content_safety` ≥ 0.85 via the safety-review subagent
 
 #### Out of Scope
 - Character growth mechanism (traits evolving over time) — Phase 3
@@ -1567,7 +1570,7 @@ removing it.
 #### Out of Scope (Phase 2)
 - Multiple buddies per child profile (table designed to allow this in v3)
 - Buddy deletion / reset (only edit in v1 — deletion deferred until snapshot policy is finalized)
-- Buddy memory of past stories (Memory §3.5 will plug in here)
+- Buddy memory of past stories — moved **in scope** under the Buddy Memory Wiring epic; the proxy will consume `story_memory`, `PreferenceRepository`, and `CharacterRepository` so the buddy can say "Remember when you and Sparkle went to the moon?". Procedural memory (how the buddy behaves) stays configuration-only, not learned from chat history
 - Buddy voice / TTS persona — neither buddy edits nor chat replies use a buddy voice in v1; current TTS uses fixed voices
 - Custom buddy avatars (image upload) — closed whitelist only in v1
 - Replacing standalone pages with chat-only flows (launcher pattern only in v1)
