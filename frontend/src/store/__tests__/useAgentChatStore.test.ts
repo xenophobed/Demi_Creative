@@ -222,3 +222,29 @@ describe("reset", () => {
     expect(st.messages).toEqual([]);
   });
 });
+
+// #571 — active-child switch isolation. The page does reset() then
+// loadSessions(newChild) when the active child changes; this asserts the
+// store never carries one child's sessions into another's view.
+describe("active-child switch isolation", () => {
+  it("shows only the new child's sessions after reset + reload", async () => {
+    mocked.listAgentSessions.mockResolvedValueOnce({
+      sessions: [session("childA_1", { child_id: "childA" })],
+    });
+    await useAgentChatStore.getState().loadSessions("childA");
+    expect(
+      useAgentChatStore.getState().sessions.map((s) => s.session_id),
+    ).toEqual(["childA_1"]);
+
+    // Simulate the page's child-switch sequence.
+    useAgentChatStore.getState().reset();
+    mocked.listAgentSessions.mockResolvedValueOnce({
+      sessions: [session("childB_1", { child_id: "childB" })],
+    });
+    await useAgentChatStore.getState().loadSessions("childB");
+
+    const ids = useAgentChatStore.getState().sessions.map((s) => s.session_id);
+    expect(ids).toEqual(["childB_1"]);
+    expect(ids).not.toContain("childA_1");
+  });
+});
