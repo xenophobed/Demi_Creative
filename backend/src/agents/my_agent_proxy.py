@@ -957,13 +957,28 @@ async def stream_my_agent_chat(
     chat_session = await agent_chat_repo.get_or_create_session(
         user_id=user_id, child_id=child_id, session_id=session_id
     )
+    # Auto-title the session from the first user message so the sidebar
+    # (#566) shows something meaningful instead of "My Agent Chat" for
+    # every row. Only fires when the title is still empty, so renames and
+    # later turns are never clobbered.
+    session_title = chat_session.title.strip()
+    if not session_title:
+        derived_title = message.strip()[:60]
+        if derived_title:
+            await agent_chat_repo.rename_session(
+                chat_session.session_id, user_id=user_id, title=derived_title
+            )
+            session_title = derived_title
     await agent_chat_repo.add_message(
         session_id=chat_session.session_id, role="user", text=message
     )
 
     yield _sse(
         "session",
-        {"session_id": chat_session.session_id, "story_title": "My Agent Chat"},
+        {
+            "session_id": chat_session.session_id,
+            "story_title": session_title or "My Agent Chat",
+        },
     )
     yield _sse("status", {"status": "started", "message": "Your buddy is thinking..."})
 
