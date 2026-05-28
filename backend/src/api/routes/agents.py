@@ -33,6 +33,8 @@ from ..models import (
     AgentChatSessionListResponse,
     AgentChatSessionSummary,
     AgentResponse,
+    CreateAgentChatSessionRequest,
+    UpdateAgentChatSessionRequest,
     UpsertAgentRequest,
 )
 from ...agents.my_agent_proxy import stream_my_agent_chat
@@ -495,3 +497,124 @@ async def get_agent_session_messages(
             for m in messages
         ],
     )
+
+
+# ---------------------------------------------------------------------------
+# Multi-topic chat sessions — write endpoints (#568)
+# ---------------------------------------------------------------------------
+
+
+@router.post(
+    "/sessions",
+    response_model=AgentChatSessionSummary,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create a fresh buddy chat session",
+    description="Starts an empty session for (current_user, child_id) before the first message.",
+)
+async def create_agent_session(
+    request: CreateAgentChatSessionRequest,
+    user: UserData = Depends(get_current_user),
+):
+    """Create an empty session. The optional title is safety-checked like
+    a rename so a child cannot seed an unsafe title at creation time."""
+    await require_owned_child_profile(user, request.child_id)
+
+    session = await agent_chat_repo.get_or_create_session(
+        user_id=user.user_id, child_id=request.child_id
+    )
+    title = (request.title or "").strip()
+    if title:
+        await _guard_session_title(title)
+        await agent_chat_repo.rename_session(
+            session.session_id, user_id=user.user_id, title=title
+        )
+        session = await agent_chat_repo.get_session(
+            session.session_id, user_id=user.user_id
+        )
+    return _session_to_summary(session)
+
+
+@router.patch(
+    "/sessions/{session_id}",
+    response_model=AgentChatSessionSummary,
+    summary="Rename and/or archive a buddy chat session",
+    description="Renames (safety-checked) and/or archives a session the caller owns.",
+)
+async def update_agent_session(
+    session_id: str,
+    request: UpdateAgentChatSessionRequest,
+    user: UserData = Depends(get_current_user),
+):
+    """Rename / archive. A foreign or unknown session 404s before any
+    mutation, so a cross-tenant request can never touch another's row."""
+    owner = await agent_chat_repo.get_session(session_id, user_id=user.user_id)
+    if owner is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "SESSION_NOT_FOUND"},
+        )
+
+    if request.title is not None:
+        title = request.title.strip()
+        if not title:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={"code": "INVALID_SESSION_TITLE"},
+            )
+        await _guard_session_title(title)
+        await agent_chat_repo.rename_session(
+            session_id, user_id=user.user_id, title=title
+        )
+
+    if request.archived is not None:
+        await agent_chat_repo.archive_session(
+            session_id, user_id=user.user_id, archived=request.archived
+        )
+
+    updated = await agent_chat_repo.get_session(session_id, user_id=user.user_id)
+    return _session_to_summary(updated)
+
+
+@router.delete(
+    "/sessions/{session_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete a buddy chat session",
+    description="Hard-deletes a session the caller owns; messages cascade via FK.",
+)
+async def delete_agent_session(
+    session_id: str,
+    user: UserData = Depends(get_current_user),
+):
+    """Hard delete. A foreign or unknown session 404s; otherwise the row
+    and its messages are removed via the ON DELETE CASCADE FK."""
+    deleted = await agent_chat_repo.delete_session(session_id, user_id=user.user_id)
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "SESSION_NOT_FOUND"},
+        )
+    return None
+
+
+async def _guard_session_title(title: str) -> None:
+    """Run the shared safety check on a user-supplied session title.
+
+    Reuses the agent-persona safety bar (0.85) so a session title can't
+    sneak content the persona name couldn't. Fails closed on MCP outage.
+    """
+    try:
+        score = await _run_safety_check(title)
+    except _SafetyUnavailableError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={"code": "SAFETY_UNAVAILABLE"},
+        )
+    if score < _SAFETY_THRESHOLD:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "code": "UNSAFE_SESSION_TITLE",
+                "reason": "Title did not pass content safety check",
+                "score": score,
+            },
+        )
