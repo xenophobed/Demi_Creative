@@ -18,11 +18,14 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { PanelLeft } from "lucide-react";
 import useChildStore from "@/store/useChildStore";
 import useAuthStore from "@/store/useAuthStore";
+import useAgentChatStore from "@/store/useAgentChatStore";
 import { authService } from "@/api/services/authService";
 import { useAgent } from "@/hooks/useAgent";
 import AgentChatPanel from "./AgentChatPanel";
+import AgentSessionListSidebar from "./AgentSessionListSidebar";
 import OnboardingModal from "./OnboardingModal";
 import PersonaEditorSheet from "./PersonaEditorSheet";
 import { shouldAutoOpenOnboarding } from "./onboardingState";
@@ -49,6 +52,21 @@ export default function MyAgentPage() {
   const [editorOpen, setEditorOpen] = useState(false);
   const [approvalNotice, setApprovalNotice] = useState<string | null>(null);
   const [approvalBusy, setApprovalBusy] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  const loadSessions = useAgentChatStore((s) => s.loadSessions);
+  const resetSessions = useAgentChatStore((s) => s.reset);
+
+  // Load (and reset on child switch) the session list whenever the
+  // active child changes. Sessions are scoped to (user, child), so a
+  // child switch must never show the previous child's chats (#570).
+  useEffect(() => {
+    if (!isAuthenticated || !childId) return;
+    resetSessions();
+    loadSessions(childId).catch((err) => {
+      console.error("Failed to load agent chat sessions:", err);
+    });
+  }, [childId, isAuthenticated, loadSessions, resetSessions]);
 
   useEffect(() => {
     if (!isAuthenticated || user?.role !== "parent" || childProfiles.length > 0) {
@@ -227,16 +245,50 @@ export default function MyAgentPage() {
     );
   }
 
-  // --- State 3: Authed + buddy exists → chat + configure --------------
+  // --- State 3: Authed + buddy exists → sessions + chat + configure ---
   return (
-    <div className="mx-auto flex h-[calc(100vh-7rem)] max-w-3xl flex-col gap-4 px-4 pb-4 pt-6">
-      <AgentChatPanel
-        agent={existing}
-        childId={childId}
-        ageGroup={ageGroup}
-        interests={currentChild?.interests ?? []}
-        onConfigure={() => setEditorOpen(true)}
-      />
+    <div className="mx-auto flex h-[calc(100vh-7rem)] max-w-5xl gap-4 px-4 pb-4 pt-6">
+      {/* Desktop sidebar */}
+      <div className="hidden w-64 shrink-0 md:block">
+        <AgentSessionListSidebar childId={childId} ageGroup={ageGroup} />
+      </div>
+
+      {/* Mobile drawer */}
+      {sidebarOpen && (
+        <div className="fixed inset-0 z-40 md:hidden">
+          <div
+            className="absolute inset-0 bg-black/30"
+            onClick={() => setSidebarOpen(false)}
+            aria-hidden="true"
+          />
+          <div className="absolute left-0 top-0 h-full w-72 max-w-[80%] p-3">
+            <AgentSessionListSidebar
+              childId={childId}
+              ageGroup={ageGroup}
+              onSelected={() => setSidebarOpen(false)}
+            />
+          </div>
+        </div>
+      )}
+
+      <div className="flex min-w-0 flex-1 flex-col gap-2">
+        {/* Mobile-only "open chats" toggle */}
+        <button
+          type="button"
+          onClick={() => setSidebarOpen(true)}
+          className="inline-flex w-fit items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-medium text-gray-600 shadow-sm hover:bg-gray-50 md:hidden"
+        >
+          <PanelLeft size={14} /> Chats
+        </button>
+        <AgentChatPanel
+          agent={existing}
+          childId={childId}
+          ageGroup={ageGroup}
+          interests={currentChild?.interests ?? []}
+          onConfigure={() => setEditorOpen(true)}
+        />
+      </div>
+
       <PersonaEditorSheet
         open={editorOpen}
         agent={existing}
