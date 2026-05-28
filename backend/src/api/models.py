@@ -679,6 +679,14 @@ class VideoJobRequest(BaseModel):
         default=VideoStyle.GENTLE_ANIMATION,
         description="Video style"
     )
+    provider: Optional[str] = Field(
+        default=None,
+        description="Video provider adapter name"
+    )
+    model: Optional[str] = Field(
+        default=None,
+        description="Provider video model identifier"
+    )
     include_audio: bool = Field(
         default=True,
         description="Whether to include audio narration"
@@ -991,6 +999,42 @@ class CompleteOnboardingRequest(BaseModel):
     """POST /me/onboarding/complete body — gates onboarding completion behind parent consent (#440)."""
     parent_consent: bool = Field(..., description="True iff a parent has granted consent for the child's buddy persona to be shown publicly when sharing")
     child_id: str = Field(..., min_length=1, description="Child profile being onboarded")
+
+
+# ---------------------------------------------------------------------------
+# My Agent — multi-topic chat sessions (#565 §3.11.8)
+# ---------------------------------------------------------------------------
+
+
+class AgentChatSessionSummary(BaseModel):
+    """One row in the sessions sidebar (#567)."""
+    session_id: str = Field(..., description="Stable session identifier")
+    child_id: str = Field(..., description="Child profile this session belongs to")
+    title: str = Field(default="", description="Auto-generated or renamed session title")
+    last_message_preview: str = Field(default="", description="Truncated last assistant reply")
+    archived_at: Optional[str] = Field(None, description="ISO timestamp when archived, else null")
+    created_at: str = Field(..., description="When the session was created")
+    updated_at: str = Field(..., description="When the session was last active")
+
+
+class AgentChatSessionListResponse(BaseModel):
+    """GET /me/agent/sessions response."""
+    sessions: List[AgentChatSessionSummary] = Field(default_factory=list)
+
+
+class AgentChatMessageItem(BaseModel):
+    """One chat message in a session's history (#567)."""
+    message_id: str = Field(..., description="Stable message identifier")
+    role: str = Field(..., description="'user' or 'assistant'")
+    text: str = Field(..., description="Message text")
+    result_metadata: dict = Field(default_factory=dict, description="Structured launch/result payload, if any")
+    created_at: str = Field(..., description="When the message was stored")
+
+
+class AgentChatMessagesResponse(BaseModel):
+    """GET /me/agent/sessions/{id}/messages response."""
+    session_id: str = Field(..., description="Session whose history this is")
+    messages: List[AgentChatMessageItem] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
