@@ -346,6 +346,9 @@ CREATE TABLE IF NOT EXISTS agent_chat_sessions (
     user_id TEXT NOT NULL,
     child_id TEXT NOT NULL,
     sdk_session_id TEXT,
+    title TEXT NOT NULL DEFAULT '',
+    last_message_preview TEXT NOT NULL DEFAULT '',
+    archived_at TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     FOREIGN KEY(user_id) REFERENCES users(user_id) ON DELETE CASCADE
@@ -574,6 +577,7 @@ async def init_schema(db: "DatabaseManager") -> None:
     await _migrate_create_user_agents_table(db)
     await _migrate_add_user_agent_config_columns(db)
     await _migrate_create_agent_chat_tables(db)
+    await _migrate_add_agent_chat_session_columns(db)
     await _migrate_create_hub_groups_table(db)
     await _migrate_create_hub_group_memberships_table(db)
     await _migrate_create_hub_posts_table(db)
@@ -997,6 +1001,25 @@ async def _migrate_create_agent_chat_tables(db: "DatabaseManager") -> None:
             except Exception:
                 pass
     await db.commit()
+
+
+async def _migrate_add_agent_chat_session_columns(db: "DatabaseManager") -> None:
+    """Migration: Add multi-topic session columns to agent_chat_sessions (#566)."""
+    columns = [
+        ("title", "ALTER TABLE agent_chat_sessions ADD COLUMN title TEXT NOT NULL DEFAULT ''"),
+        ("last_message_preview", "ALTER TABLE agent_chat_sessions ADD COLUMN last_message_preview TEXT NOT NULL DEFAULT ''"),
+        ("archived_at", "ALTER TABLE agent_chat_sessions ADD COLUMN archived_at TEXT"),
+    ]
+    added = False
+    for column_name, ddl in columns:
+        if not await column_exists(db, "agent_chat_sessions", column_name):
+            if not added:
+                print("Migrating agent_chat_sessions: adding multi-topic session columns...")
+                added = True
+            await db.execute(ddl)
+    if added:
+        await db.commit()
+        print("Agent chat session columns migration completed")
 
 
 async def _migrate_create_hub_groups_table(db: "DatabaseManager") -> None:
