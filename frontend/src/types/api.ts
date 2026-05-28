@@ -181,6 +181,8 @@ export type VideoStatus = "pending" | "processing" | "completed" | "failed";
 export interface VideoJobRequest {
   story_id: string;
   style?: VideoStyle;
+  provider?: string | null;
+  model?: string | null;
   include_audio?: boolean;
   duration_seconds?: number;
 }
@@ -631,4 +633,35 @@ export interface StreamCallbacks {
   onComplete?: (data: SSEStatusData) => void;
   onError?: (data: SSEErrorData) => void;
   onLaunchFlow?: (data: SSELaunchFlowData) => void;
+}
+
+// ============================================================================
+// My Agent — multi-topic chat sessions (#565 §3.11.8)
+// ============================================================================
+
+export interface AgentChatSessionSummary {
+  session_id: string;
+  child_id: string;
+  title: string;
+  last_message_preview: string;
+  archived_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AgentChatSessionListResponse {
+  sessions: AgentChatSessionSummary[];
+}
+
+export interface AgentChatMessageItem {
+  message_id: string;
+  role: "user" | "assistant";
+  text: string;
+  result_metadata: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface AgentChatMessagesResponse {
+  session_id: string;
+  messages: AgentChatMessageItem[];
 }

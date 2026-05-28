@@ -12,7 +12,12 @@ import { AxiosError } from "axios";
 import apiClient from "../client";
 import { consumeSSEStream } from "../utils/sseStream";
 import { getFreshAuthHeaders } from "../authUtils";
-import type { StreamCallbacks } from "@/types/api";
+import type {
+  AgentChatMessagesResponse,
+  AgentChatSessionListResponse,
+  AgentChatSessionSummary,
+  StreamCallbacks,
+} from "@/types/api";
 import type { Agent, AgentChatPayload, UpsertAgentPayload } from "@/types/agent";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api/v1";
@@ -93,4 +98,85 @@ export async function streamAgentChat(
   await consumeSSEStream(response, callbacks);
 }
 
-export const agentService = { getAgent, putAgent, streamAgentChat };
+// ---------------------------------------------------------------------------
+// Multi-topic chat sessions (#569). apiClient prefixes /api/v1.
+// ---------------------------------------------------------------------------
+
+export async function listAgentSessions(
+  childId?: string,
+  opts?: { includeArchived?: boolean; limit?: number; offset?: number },
+): Promise<AgentChatSessionListResponse> {
+  const params: Record<string, string | number | boolean> = {};
+  if (childId) params.child_id = childId;
+  if (opts?.includeArchived) params.include_archived = true;
+  if (opts?.limit != null) params.limit = opts.limit;
+  if (opts?.offset != null) params.offset = opts.offset;
+  const r = await apiClient.get<AgentChatSessionListResponse>(
+    "/me/agent/sessions",
+    { params },
+  );
+  return r.data;
+}
+
+export async function getAgentSessionMessages(
+  sessionId: string,
+  opts?: { limit?: number; beforeCreatedAt?: string },
+): Promise<AgentChatMessagesResponse> {
+  const params: Record<string, string | number> = {};
+  if (opts?.limit != null) params.limit = opts.limit;
+  if (opts?.beforeCreatedAt) params.before_created_at = opts.beforeCreatedAt;
+  const r = await apiClient.get<AgentChatMessagesResponse>(
+    `/me/agent/sessions/${sessionId}/messages`,
+    { params },
+  );
+  return r.data;
+}
+
+export async function createAgentSession(
+  childId: string,
+  title?: string,
+): Promise<AgentChatSessionSummary> {
+  const r = await apiClient.post<AgentChatSessionSummary>(
+    "/me/agent/sessions",
+    { child_id: childId, title: title ?? undefined },
+  );
+  return r.data;
+}
+
+export async function renameAgentSession(
+  sessionId: string,
+  title: string,
+): Promise<AgentChatSessionSummary> {
+  const r = await apiClient.patch<AgentChatSessionSummary>(
+    `/me/agent/sessions/${sessionId}`,
+    { title },
+  );
+  return r.data;
+}
+
+export async function archiveAgentSession(
+  sessionId: string,
+  archived: boolean,
+): Promise<AgentChatSessionSummary> {
+  const r = await apiClient.patch<AgentChatSessionSummary>(
+    `/me/agent/sessions/${sessionId}`,
+    { archived },
+  );
+  return r.data;
+}
+
+export async function deleteAgentSession(sessionId: string): Promise<void> {
+  await apiClient.delete(`/me/agent/sessions/${sessionId}`);
+}
+
+export const agentService = {
+  getAgent,
+  putAgent,
+  streamAgentChat,
+  listAgentSessions,
+  getAgentSessionMessages,
+  createAgentSession,
+  renameAgentSession,
+  archiveAgentSession,
+  deleteAgentSession,
+};
