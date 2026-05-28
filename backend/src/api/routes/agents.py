@@ -26,7 +26,15 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 
 from ..deps import get_current_user, require_owned_child_profile
-from ..models import AgentChatRequest, AgentResponse, UpsertAgentRequest
+from ..models import (
+    AgentChatMessageItem,
+    AgentChatMessagesResponse,
+    AgentChatRequest,
+    AgentChatSessionListResponse,
+    AgentChatSessionSummary,
+    AgentResponse,
+    UpsertAgentRequest,
+)
 from ...agents.my_agent_proxy import stream_my_agent_chat
 from ...mcp_servers import check_content_safety
 from ...services.agent_constants import (
@@ -35,7 +43,7 @@ from ...services.agent_constants import (
     MAX_AGENT_NAME_LENGTH,
     MAX_AGENT_TITLE_LENGTH,
 )
-from ...services.database import agent_repo, user_repo
+from ...services.database import agent_chat_repo, agent_repo, user_repo
 from ...services.user_service import UserData
 
 logger = logging.getLogger(__name__)
@@ -401,3 +409,89 @@ async def chat_with_my_agent_stream(
                     pass
 
     return StreamingResponse(_events(), media_type="text/event-stream")
+
+
+# ---------------------------------------------------------------------------
+# Multi-topic chat sessions (#565 §3.11.8) — read endpoints (#567)
+# ---------------------------------------------------------------------------
+
+
+def _session_to_summary(session) -> AgentChatSessionSummary:
+    return AgentChatSessionSummary(
+        session_id=session.session_id,
+        child_id=session.child_id,
+        title=session.title,
+        last_message_preview=session.last_message_preview,
+        archived_at=session.archived_at,
+        created_at=session.created_at,
+        updated_at=session.updated_at,
+    )
+
+
+@router.get(
+    "/sessions",
+    response_model=AgentChatSessionListResponse,
+    summary="List the current user's buddy chat sessions",
+    description="Returns sessions for (current_user, optional child_id), most-recently-updated first.",
+)
+async def list_agent_sessions(
+    child_id: str | None = Query(None, description="Optional child profile filter"),
+    include_archived: bool = Query(False, description="Include archived sessions"),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    user: UserData = Depends(get_current_user),
+):
+    """List chat sessions scoped to the calling user (cross-user isolation #288)."""
+    if child_id:
+        await require_owned_child_profile(user, child_id)
+    sessions = await agent_chat_repo.list_sessions_for_user(
+        user.user_id,
+        child_id=child_id,
+        include_archived=include_archived,
+        limit=limit,
+        offset=offset,
+    )
+    return AgentChatSessionListResponse(
+        sessions=[_session_to_summary(s) for s in sessions]
+    )
+
+
+@router.get(
+    "/sessions/{session_id}/messages",
+    response_model=AgentChatMessagesResponse,
+    summary="Get a buddy chat session's message history",
+    description="Returns chronological history for a session the caller owns; 404 otherwise.",
+)
+async def get_agent_session_messages(
+    session_id: str,
+    limit: int = Query(200, ge=1, le=500),
+    before_created_at: str | None = Query(None, description="Cursor: only messages strictly before this ISO timestamp"),
+    user: UserData = Depends(get_current_user),
+):
+    """Fetch one session's history. A session not owned by the caller 404s —
+    we never leak existence, matching the agent_repo.get_session contract."""
+    owner = await agent_chat_repo.get_session(session_id, user_id=user.user_id)
+    if owner is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "SESSION_NOT_FOUND"},
+        )
+    messages = await agent_chat_repo.list_messages(
+        session_id,
+        user_id=user.user_id,
+        limit=limit,
+        before_created_at=before_created_at,
+    )
+    return AgentChatMessagesResponse(
+        session_id=session_id,
+        messages=[
+            AgentChatMessageItem(
+                message_id=m.message_id,
+                role=m.role,
+                text=m.text,
+                result_metadata=m.result_metadata,
+                created_at=m.created_at,
+            )
+            for m in messages
+        ],
+    )
