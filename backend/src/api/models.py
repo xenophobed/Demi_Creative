@@ -1037,6 +1037,18 @@ class AgentChatMessagesResponse(BaseModel):
     messages: List[AgentChatMessageItem] = Field(default_factory=list)
 
 
+class CreateAgentChatSessionRequest(BaseModel):
+    """POST /me/agent/sessions body — start a fresh empty session (#568)."""
+    child_id: str = Field(..., min_length=1, description="Child profile this session belongs to")
+    title: Optional[str] = Field(None, max_length=60, description="Optional initial title")
+
+
+class UpdateAgentChatSessionRequest(BaseModel):
+    """PATCH /me/agent/sessions/{id} body — rename and/or archive (#568)."""
+    title: Optional[str] = Field(None, max_length=60, description="New title; safety-checked when present")
+    archived: Optional[bool] = Field(None, description="Set true to archive, false to restore")
+
+
 # ---------------------------------------------------------------------------
 # Content Hub — groups (#448)
 # ---------------------------------------------------------------------------

@@ -17,6 +17,9 @@ Parent Epic: #565
 
 from __future__ import annotations
 
+import json
+from unittest.mock import AsyncMock, patch
+
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
@@ -196,4 +199,161 @@ class TestGetSessionMessages:
     @pytest.mark.asyncio
     async def test_unknown_session_returns_404(self, client):
         r = await client.get("/api/v1/me/agent/sessions/does_not_exist/messages")
+        assert r.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Write endpoints (#568)
+# ---------------------------------------------------------------------------
+
+
+def _safety_envelope(score: float) -> dict:
+    return {"content": [{"type": "text", "text": json.dumps({"safety_score": score})}]}
+
+
+class TestCreateSession:
+    @pytest.mark.asyncio
+    async def test_creates_empty_session(self, client):
+        r = await client.post(
+            "/api/v1/me/agent/sessions", json={"child_id": _CHILD_A}
+        )
+        assert r.status_code == 201, r.text
+        body = r.json()
+        assert body["child_id"] == _CHILD_A
+        assert body["title"] == ""
+
+    @pytest.mark.asyncio
+    async def test_create_with_unowned_child_404s(self, client):
+        r = await client.post(
+            "/api/v1/me/agent/sessions", json={"child_id": "not_mine"}
+        )
+        assert r.status_code == 404
+        assert r.json()["detail"]["code"] == "CHILD_PROFILE_NOT_FOUND"
+
+    @pytest.mark.asyncio
+    async def test_create_with_safe_title(self, client):
+        with patch(
+            "backend.src.api.routes.agents.check_content_safety.handler",
+            new=AsyncMock(return_value=_safety_envelope(0.99)),
+        ):
+            r = await client.post(
+                "/api/v1/me/agent/sessions",
+                json={"child_id": _CHILD_A, "title": "Dinosaur story"},
+            )
+        assert r.status_code == 201, r.text
+        assert r.json()["title"] == "Dinosaur story"
+
+
+class TestRenameSession:
+    @pytest.mark.asyncio
+    async def test_rename_safe_title(self, client):
+        s = await agent_chat_repo.get_or_create_session(
+            user_id=_USER_A.user_id, child_id=_CHILD_A
+        )
+        with patch(
+            "backend.src.api.routes.agents.check_content_safety.handler",
+            new=AsyncMock(return_value=_safety_envelope(0.99)),
+        ):
+            r = await client.patch(
+                f"/api/v1/me/agent/sessions/{s.session_id}",
+                json={"title": "Space adventure"},
+            )
+        assert r.status_code == 200, r.text
+        assert r.json()["title"] == "Space adventure"
+
+    @pytest.mark.asyncio
+    async def test_unsafe_title_rejected_422_no_mutation(self, client):
+        s = await agent_chat_repo.get_or_create_session(
+            user_id=_USER_A.user_id, child_id=_CHILD_A
+        )
+        with patch(
+            "backend.src.api.routes.agents.check_content_safety.handler",
+            new=AsyncMock(return_value=_safety_envelope(0.10)),
+        ):
+            r = await client.patch(
+                f"/api/v1/me/agent/sessions/{s.session_id}",
+                json={"title": "something scary"},
+            )
+        assert r.status_code == 422
+        assert r.json()["detail"]["code"] == "UNSAFE_SESSION_TITLE"
+        # Title unchanged.
+        reloaded = await agent_chat_repo.get_session(s.session_id, user_id=_USER_A.user_id)
+        assert reloaded.title == ""
+
+    @pytest.mark.asyncio
+    async def test_foreign_session_rename_404(self, client):
+        b_session = await agent_chat_repo.get_or_create_session(
+            user_id=_USER_B.user_id, child_id="other_child"
+        )
+        with patch(
+            "backend.src.api.routes.agents.check_content_safety.handler",
+            new=AsyncMock(return_value=_safety_envelope(0.99)),
+        ):
+            r = await client.patch(
+                f"/api/v1/me/agent/sessions/{b_session.session_id}",
+                json={"title": "hijack"},
+            )
+        assert r.status_code == 404
+        # B's session is untouched.
+        survivor = await agent_chat_repo.get_session(
+            b_session.session_id, user_id=_USER_B.user_id
+        )
+        assert survivor.title == ""
+
+
+class TestArchiveSession:
+    @pytest.mark.asyncio
+    async def test_archive_round_trip(self, client):
+        s = await agent_chat_repo.get_or_create_session(
+            user_id=_USER_A.user_id, child_id=_CHILD_A
+        )
+        r = await client.patch(
+            f"/api/v1/me/agent/sessions/{s.session_id}", json={"archived": True}
+        )
+        assert r.status_code == 200, r.text
+        assert r.json()["archived_at"] is not None
+
+        r2 = await client.patch(
+            f"/api/v1/me/agent/sessions/{s.session_id}", json={"archived": False}
+        )
+        assert r2.status_code == 200
+        assert r2.json()["archived_at"] is None
+
+
+class TestDeleteSession:
+    @pytest.mark.asyncio
+    async def test_delete_cascades_to_messages(self, client):
+        s = await agent_chat_repo.get_or_create_session(
+            user_id=_USER_A.user_id, child_id=_CHILD_A
+        )
+        await agent_chat_repo.add_message(
+            session_id=s.session_id, role="user", text="hi"
+        )
+        r = await client.delete(f"/api/v1/me/agent/sessions/{s.session_id}")
+        assert r.status_code == 204
+
+        assert await agent_chat_repo.get_session(
+            s.session_id, user_id=_USER_A.user_id
+        ) is None
+        rows = await agent_chat_repo._db.fetchall(
+            "SELECT message_id FROM agent_chat_messages WHERE session_id = ?",
+            (s.session_id,),
+        )
+        assert rows == []
+
+    @pytest.mark.asyncio
+    async def test_foreign_session_delete_404_no_mutation(self, client):
+        b_session = await agent_chat_repo.get_or_create_session(
+            user_id=_USER_B.user_id, child_id="other_child"
+        )
+        r = await client.delete(f"/api/v1/me/agent/sessions/{b_session.session_id}")
+        assert r.status_code == 404
+        # B's session survives.
+        assert await agent_chat_repo.get_session(
+            b_session.session_id, user_id=_USER_B.user_id
+        ) is not None
+
+    @pytest.mark.asyncio
+    async def test_unknown_session_delete_404(self, client):
+        r = await client.delete("/api/v1/me/agent/sessions/nope")
         assert r.status_code == 404
