@@ -34,21 +34,18 @@ import {
 import { agentService } from "@/api/services/agentService";
 import { memoryService } from "@/api/services/memoryService";
 import { useLaunchFlowNavigation } from "@/hooks/useLaunchFlowNavigation";
+import useAgentChatStore from "@/store/useAgentChatStore";
 import type { Agent } from "@/types/agent";
 import type { AgeGroup, MemoryCharacter } from "@/types/api";
 import type {
   SSEErrorData,
   SSELaunchFlowData,
+  SSESessionData,
   SSEStatusData,
   SSEThinkingData,
   SSEToolResultData,
   SSEToolUseData,
 } from "@/types/api";
-import {
-  appendAssistantDelta,
-  settleAssistantMessage,
-  type ChatMessage,
-} from "./chatMessageState";
 import {
   chipPrefillForCharacter,
   pickRecurringCharacter,
@@ -75,12 +72,6 @@ const STARTER_PROMPTS: string[] = [
   "What's in the news today for kids?",
   "Let's make an interactive choose-your-own adventure",
 ];
-
-function nextMessageId(prefix: string): string {
-  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-}
-
-const nextAssistantId = () => nextMessageId("assistant");
 
 function avatarGlyph(agent: Agent): string {
   return agent.agent_avatar_id.startsWith("emoji:")
@@ -128,8 +119,15 @@ export default function AgentChatPanel({
 }: Props) {
   const [draft, setDraft] = useState("");
   const [image, setImage] = useState<File | null>(null);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [sessionId, setSessionId] = useState<string | null>(null);
+  // Messages + the active session id live in the shared store (#569) so
+  // the sidebar (#570) and this panel stay in lock-step when the user
+  // switches topics.
+  const messages = useAgentChatStore((s) => s.messages);
+  const sessionId = useAgentChatStore((s) => s.currentSessionId);
+  const appendUserMessage = useAgentChatStore((s) => s.appendUserMessage);
+  const appendStreamingDelta = useAgentChatStore((s) => s.appendStreamingDelta);
+  const settleAssistant = useAgentChatStore((s) => s.settleAssistantMessage);
+  const adoptServerSession = useAgentChatStore((s) => s.adoptServerSession);
   const [isStreaming, setIsStreaming] = useState(false);
   const [statusText, setStatusText] = useState<string | null>(null);
   const [toolText, setToolText] = useState<string | null>(null);
@@ -137,6 +135,10 @@ export default function AgentChatPanel({
   const [recurringCharacter, setRecurringCharacter] =
     useState<MemoryCharacter | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  // The session id the in-flight stream belongs to. Lets us tell a
+  // user-initiated session switch (abort) apart from the proxy adopting
+  // a server-issued session mid-stream (do not abort).
+  const streamSessionRef = useRef<string | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -150,6 +152,25 @@ export default function AgentChatPanel({
   useEffect(() => {
     return () => abortRef.current?.abort();
   }, []);
+
+  // Abort an in-flight stream when the user switches to a *different*
+  // session than the stream belongs to, so partial deltas don't bleed
+  // into the newly selected session's history (#570). A mid-stream
+  // adopt of the server session keeps streamSessionRef in sync, so that
+  // case does not trip this guard.
+  useEffect(() => {
+    if (
+      abortRef.current &&
+      streamSessionRef.current !== null &&
+      sessionId !== streamSessionRef.current
+    ) {
+      abortRef.current.abort();
+      abortRef.current = null;
+      setIsStreaming(false);
+      setStatusText(null);
+      setToolText(null);
+    }
+  }, [sessionId]);
 
   // Fetch recurring characters for the active child to surface a
   // "Remember…" chip above the composer (#560). Cancelled on
@@ -216,6 +237,7 @@ export default function AgentChatPanel({
   const cancelStream = () => {
     abortRef.current?.abort();
     abortRef.current = null;
+    streamSessionRef.current = null;
     setIsStreaming(false);
     setToolText(null);
     setStatusText(`${agent.agent_name} stopped.`);
@@ -236,10 +258,8 @@ export default function AgentChatPanel({
     setToolText(null);
     setStatusText(`${agent.agent_name} is thinking...`);
     resetPendingFlow();
-    setMessages((prev) => [
-      ...prev,
-      { id: nextMessageId("user"), role: "user", text: message },
-    ]);
+    appendUserMessage(message);
+    streamSessionRef.current = sessionId;
     setIsStreaming(true);
 
     try {
@@ -253,29 +273,24 @@ export default function AgentChatPanel({
           image: attachedImage,
         },
         {
-          onSession: (data) => setSessionId(data.session_id),
+          onSession: (data: SSESessionData) => {
+            streamSessionRef.current = data.session_id;
+            adoptServerSession(data.session_id);
+          },
           onStatus: (data: SSEStatusData) => setStatusText(data.message),
-          onThinking: (data: SSEThinkingData) =>
-            setMessages((prev) =>
-              appendAssistantDelta(prev, data.content, nextAssistantId),
-            ),
+          onThinking: (data: SSEThinkingData) => appendStreamingDelta(data.content),
           onToolUse: (data: SSEToolUseData) => setToolText(data.message),
           onToolResult: (data: SSEToolResultData) =>
             setToolText(data.message ?? "Specialist finished."),
           onLaunchFlow,
-          onResult: (data) =>
-            setMessages((prev) =>
-              settleAssistantMessage(prev, resultMessage(data), nextAssistantId),
-            ),
+          onResult: (data) => settleAssistant(resultMessage(data)),
           onError: (data: SSEErrorData) => {
             setErrorText(data.message);
-            setMessages((prev) =>
-              settleAssistantMessage(prev, data.message, nextAssistantId),
-            );
+            settleAssistant(data.message);
           },
           onComplete: (data: SSEStatusData) => {
             setStatusText(data.message);
-            setMessages((prev) => settleAssistantMessage(prev, "", nextAssistantId));
+            settleAssistant("");
           },
         },
         controller.signal,
@@ -287,12 +302,11 @@ export default function AgentChatPanel({
             ? err.message
             : "My Agent chat is temporarily unavailable.";
         setErrorText(messageText);
-        setMessages((prev) =>
-          settleAssistantMessage(prev, messageText, nextAssistantId),
-        );
+        settleAssistant(messageText);
       }
     } finally {
       if (abortRef.current === controller) abortRef.current = null;
+      streamSessionRef.current = null;
       setIsStreaming(false);
     }
   };
