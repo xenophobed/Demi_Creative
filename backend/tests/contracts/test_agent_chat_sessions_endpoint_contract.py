@@ -357,3 +357,43 @@ class TestDeleteSession:
     async def test_unknown_session_delete_404(self, client):
         r = await client.delete("/api/v1/me/agent/sessions/nope")
         assert r.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_double_delete_is_idempotent_404(self, client):
+        """A second DELETE of an already-removed session must 404, not 500."""
+        s = await agent_chat_repo.get_or_create_session(
+            user_id=_USER_A.user_id, child_id=_CHILD_A
+        )
+        first = await client.delete(f"/api/v1/me/agent/sessions/{s.session_id}")
+        assert first.status_code == 204
+        second = await client.delete(f"/api/v1/me/agent/sessions/{s.session_id}")
+        assert second.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Edge cases (#571) — archive is not delete
+# ---------------------------------------------------------------------------
+
+
+class TestArchivePreservesHistory:
+    @pytest.mark.asyncio
+    async def test_archived_session_history_still_readable(self, client):
+        """Archiving hides a session from the default list but must NOT
+        destroy its messages — archive and delete are distinct (§3.11.8)."""
+        s = await agent_chat_repo.get_or_create_session(
+            user_id=_USER_A.user_id, child_id=_CHILD_A
+        )
+        await agent_chat_repo.add_message(
+            session_id=s.session_id, role="user", text="kept after archive"
+        )
+        await agent_chat_repo.archive_session(s.session_id, user_id=_USER_A.user_id)
+
+        # Excluded from the default list...
+        listed = await client.get("/api/v1/me/agent/sessions")
+        assert s.session_id not in {
+            row["session_id"] for row in listed.json()["sessions"]
+        }
+        # ...but its history is intact and still readable.
+        msgs = await client.get(f"/api/v1/me/agent/sessions/{s.session_id}/messages")
+        assert msgs.status_code == 200
+        assert [m["text"] for m in msgs.json()["messages"]] == ["kept after archive"]
