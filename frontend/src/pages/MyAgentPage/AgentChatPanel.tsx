@@ -35,6 +35,9 @@ import { agentService } from "@/api/services/agentService";
 import { memoryService } from "@/api/services/memoryService";
 import { useLaunchFlowNavigation } from "@/hooks/useLaunchFlowNavigation";
 import useAgentChatStore from "@/store/useAgentChatStore";
+import useChildStore from "@/store/useChildStore";
+import VoiceInputButton from "@/components/common/VoiceInputButton";
+import ParentConsentGate from "@/components/common/ParentConsentGate";
 import type { Agent } from "@/types/agent";
 import type { AgeGroup, MemoryCharacter } from "@/types/api";
 import type {
@@ -207,6 +210,8 @@ export default function AgentChatPanel({
   const buddyGlyph = useMemo(() => avatarGlyph(agent), [agent]);
   const canSend = Boolean(draft.trim()) && !isStreaming && Boolean(childId);
   const imageInputId = `agent-chat-image-${agent.agent_id}`;
+  const currentChild = useChildStore((s) => s.currentChild);
+  const [showMicConsentGate, setShowMicConsentGate] = useState(false);
 
   const clearImage = () => {
     setImage(null);
@@ -525,6 +530,28 @@ export default function AgentChatPanel({
             <ImagePlus size={18} />
             <span className="sr-only">Attach image</span>
           </label>
+          {ageGroup &&
+            (currentChild?.microphone_consent === true ? (
+              <VoiceInputButton
+                ageGroup={ageGroup}
+                consentGranted
+                onText={(text) =>
+                  setDraft((prev) => (prev ? `${prev} ${text}` : text))
+                }
+                className="shrink-0"
+              />
+            ) : (
+              <button
+                type="button"
+                onClick={() => setShowMicConsentGate(true)}
+                disabled={isStreaming}
+                className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-gray-300 text-gray-600 hover:bg-gray-50 disabled:pointer-events-none disabled:bg-gray-100 disabled:text-gray-300"
+                title="Ask a grown-up to allow the microphone"
+              >
+                <span aria-hidden="true">🎤</span>
+                <span className="sr-only">Ask a grown-up to allow the microphone</span>
+              </button>
+            ))}
           {isStreaming ? (
             <button
               type="button"
@@ -547,6 +574,15 @@ export default function AgentChatPanel({
           )}
         </div>
       </form>
+      {showMicConsentGate && ageGroup && (
+        <ParentConsentGate
+          kind="microphone"
+          ageGroup={ageGroup}
+          childId={childId}
+          onGranted={() => setShowMicConsentGate(false)}
+          onDismiss={() => setShowMicConsentGate(false)}
+        />
+      )}
     </section>
   );
 }
