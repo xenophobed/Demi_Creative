@@ -517,6 +517,8 @@ export interface ChildProfile {
   avatar?: string | null;
   is_default?: boolean;
   archived_at?: string | null;
+  camera_consent?: boolean;
+  microphone_consent?: boolean;
   created_at?: string;
   updated_at?: string;
 }
@@ -537,6 +539,14 @@ export interface ChildProfileUpdateRequest {
   age_group?: AgeGroup;
   interests?: string[];
   avatar?: string | null;
+}
+
+// PATCH /child-profiles/{child_id}/consent (#587).
+// At least one of camera_consent or microphone_consent must be supplied; the
+// backend rejects an empty body with 422.
+export interface ChildProfileConsentUpdateRequest {
+  camera_consent?: boolean;
+  microphone_consent?: boolean;
 }
 
 // Upload status

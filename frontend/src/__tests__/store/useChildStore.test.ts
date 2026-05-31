@@ -10,6 +10,7 @@ vi.mock("@/api/services/childProfileService", () => ({
     update: vi.fn(),
     archive: vi.fn(),
     setDefault: vi.fn(),
+    updateConsent: vi.fn(),
   },
 }));
 
@@ -146,5 +147,78 @@ describe("useChildStore child profile hydration", () => {
     expect(childProfileService.list).toHaveBeenCalledTimes(1);
     expect(useChildStore.getState().childProfiles).toHaveLength(1);
     expect(useChildStore.getState().currentChild?.child_id).toBe("child-1");
+  });
+});
+
+describe("useChildStore.updateConsent (#587)", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    vi.clearAllMocks();
+    resetStore();
+  });
+
+  it("merges the updated consent flags into childProfiles", async () => {
+    const initial = profile("child-1", {
+      camera_consent: false,
+      microphone_consent: false,
+    });
+    useChildStore.getState().setChildProfiles([initial]);
+
+    vi.mocked(childProfileService.updateConsent).mockResolvedValueOnce({
+      ...initial,
+      camera_consent: true,
+    });
+
+    const returned = await useChildStore
+      .getState()
+      .updateConsent("child-1", { camera_consent: true });
+
+    expect(childProfileService.updateConsent).toHaveBeenCalledWith("child-1", {
+      camera_consent: true,
+    });
+    expect(returned.camera_consent).toBe(true);
+    expect(useChildStore.getState().childProfiles[0].camera_consent).toBe(true);
+  });
+
+  it("updates currentChild when the target is the active profile", async () => {
+    const active = profile("child-active", {
+      camera_consent: false,
+      microphone_consent: false,
+    });
+    useChildStore.getState().setChildProfiles([active]);
+
+    vi.mocked(childProfileService.updateConsent).mockResolvedValueOnce({
+      ...active,
+      microphone_consent: true,
+    });
+
+    await useChildStore
+      .getState()
+      .updateConsent("child-active", { microphone_consent: true });
+
+    expect(useChildStore.getState().currentChild?.microphone_consent).toBe(true);
+  });
+
+  it("leaves currentChild untouched when updating a different profile", async () => {
+    const active = profile("child-active", { camera_consent: false });
+    const other = profile("child-other", { camera_consent: false });
+    useChildStore.getState().setChildProfiles([active, other]);
+    useChildStore.getState().switchActiveChild("child-active");
+
+    vi.mocked(childProfileService.updateConsent).mockResolvedValueOnce({
+      ...other,
+      camera_consent: true,
+    });
+
+    await useChildStore
+      .getState()
+      .updateConsent("child-other", { camera_consent: true });
+
+    expect(useChildStore.getState().currentChild?.child_id).toBe("child-active");
+    expect(useChildStore.getState().currentChild?.camera_consent).toBe(false);
+    const otherInStore = useChildStore
+      .getState()
+      .childProfiles.find((p) => p.child_id === "child-other");
+    expect(otherInStore?.camera_consent).toBe(true);
   });
 });

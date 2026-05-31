@@ -48,6 +48,26 @@ describe("childProfileService", () => {
     });
   });
 
+  it("patches consent flags through /consent (#587)", async () => {
+    const profile = {
+      child_id: "child-1",
+      name: "Milo",
+      age_group: "6-8" as const,
+      interests: [],
+      camera_consent: true,
+      microphone_consent: false,
+    };
+    vi.mocked(apiClient.patch).mockResolvedValueOnce({ data: profile });
+
+    await expect(
+      childProfileService.updateConsent("child-1", { camera_consent: true }),
+    ).resolves.toBe(profile);
+    expect(apiClient.patch).toHaveBeenCalledWith(
+      "/child-profiles/child-1/consent",
+      { camera_consent: true },
+    );
+  });
+
   it("updates, defaults, and archives encoded child ids", async () => {
     const profile = {
       child_id: "child alpha",
