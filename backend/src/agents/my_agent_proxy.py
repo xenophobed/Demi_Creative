@@ -494,6 +494,24 @@ def _make_tools(
         }
         return await raw(payload)
 
+    @tool(
+        "search_my_stories",
+        "Find this child's prior stories by topic or character name (e.g. 'find my Lightning Dog story'). Pure recall — does NOT launch a generation.",
+        {"query": str, "top_k": int},
+    )
+    async def search_my_stories(args: dict[str, Any]) -> dict[str, Any]:
+        # child_id is pre-bound from the proxy turn — the model cannot
+        # ask for another child's stories even by passing one. (#288, #590)
+        from ..mcp_servers.vector_search_server import (
+            search_my_stories as _raw_search,
+        )
+        raw = getattr(_raw_search, "handler", _raw_search)
+        return await raw({
+            "query": args.get("query") or "",
+            "child_id": child_id,
+            "top_k": int(args.get("top_k") or 5),
+        })
+
     return create_sdk_mcp_server(
         name="my-agent-tools",
         version="1.0.0",
@@ -504,6 +522,7 @@ def _make_tools(
             create_kids_daily_episode,
             check_child_content_safety,
             generate_my_agent_audio,
+            search_my_stories,
         ],
     )
 
@@ -806,9 +825,16 @@ def _build_system_prompt() -> str:
         "\n"
         "DO NOT delegate for:\n"
         "  - Greetings, small talk, or 'how are you' style chat.\n"
-        "  - Memory recall about past sessions ('what did we make yesterday?').\n"
         "  - Clarifying questions when the child's request is ambiguous —\n"
         "    answer inline with ONE short clarifying question.\n"
+        "\n"
+        "STORY RECALL (do this inline, do NOT delegate):\n"
+        "  - When the child asks to *find* an existing story by topic, name,\n"
+        "    or vibe (e.g. 'find my Lightning Dog story', 'what was that\n"
+        "    moon story', 'the one with the brave puppy'), call\n"
+        "    `mcp__my-agent-tools__search_my_stories` with their query and\n"
+        "    summarize 1-3 matching results back in chat. This is pure\n"
+        "    recall — never launch a generation specialist for these.\n"
         "\n"
         "AGE-AWARE FALLBACK:\n"
         "  - If the child is ages 3-5 and asks vaguely for 'a story', default to\n"
@@ -1107,6 +1133,7 @@ async def stream_my_agent_chat(
         "mcp__my-agent-tools__create_kids_daily_episode",
         "mcp__my-agent-tools__check_child_content_safety",
         "mcp__my-agent-tools__generate_my_agent_audio",
+        "mcp__my-agent-tools__search_my_stories",
     ]
     options_kwargs = {
         "model": get_claude_agent_model(),
