@@ -183,6 +183,8 @@ CREATE TABLE IF NOT EXISTS child_profiles (
     avatar TEXT,
     is_default INTEGER DEFAULT 0,
     archived_at TEXT,
+    camera_consent INTEGER DEFAULT 0,
+    microphone_consent INTEGER DEFAULT 0,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
@@ -574,6 +576,7 @@ async def init_schema(db: "DatabaseManager") -> None:
     await _migrate_add_story_length_mode(db)
     await _migrate_add_onboarding_columns(db)
     await _migrate_create_child_profiles_table(db)
+    await _migrate_add_child_profile_consent_columns(db)
     await _migrate_create_user_agents_table(db)
     await _migrate_add_user_agent_config_columns(db)
     await _migrate_create_agent_chat_tables(db)
@@ -876,6 +879,34 @@ async def _migrate_add_onboarding_columns(db: "DatabaseManager") -> None:
     if added:
         await db.commit()
         print("Users onboarding migration completed")
+
+
+async def _migrate_add_child_profile_consent_columns(db: "DatabaseManager") -> None:
+    """Migration: Add camera_consent and microphone_consent columns to child_profiles (#587).
+
+    Gates camera and microphone surfaces in epic #579 (tablet/mobile capture).
+    Both columns default to 0 (False) because consent must be granted explicitly
+    by a parent — children cannot bootstrap their own consent. Existing rows
+    inherit the default via the column-level DEFAULT, so no backfill is needed.
+
+    Reversal: column-add is non-destructive; reverting the application code
+    leaves the columns intact but unread. A true drop would require a follow-up
+    migration if ever needed.
+    """
+    columns = [
+        ("camera_consent", "ALTER TABLE child_profiles ADD COLUMN camera_consent INTEGER DEFAULT 0"),
+        ("microphone_consent", "ALTER TABLE child_profiles ADD COLUMN microphone_consent INTEGER DEFAULT 0"),
+    ]
+    added = False
+    for column_name, ddl in columns:
+        if not await column_exists(db, "child_profiles", column_name):
+            if not added:
+                print("Migrating child_profiles table: adding consent columns (#587)...")
+                added = True
+            await db.execute(ddl)
+    if added:
+        await db.commit()
+        print("Child profile consent migration completed")
 
 
 async def _migrate_create_child_profiles_table(db: "DatabaseManager") -> None:

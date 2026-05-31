@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from ..deps import get_current_user
 from ..models import (
+    ChildProfileConsentUpdateRequest,
     ChildProfileCreateRequest,
     ChildProfileListResponse,
     ChildProfileResponse,
@@ -47,6 +48,8 @@ def _to_response(profile: ChildProfileData) -> ChildProfileResponse:
         avatar=profile.avatar,
         is_default=profile.is_default,
         archived_at=_parse_dt(profile.archived_at),
+        camera_consent=profile.camera_consent,
+        microphone_consent=profile.microphone_consent,
         created_at=datetime.fromisoformat(profile.created_at),
         updated_at=datetime.fromisoformat(profile.updated_at),
     )
@@ -119,6 +122,24 @@ async def set_default_child_profile(
     profile = await child_profile_repo.set_default(
         user_id=user.user_id,
         child_id=child_id,
+    )
+    if profile is None:
+        raise _not_found()
+    return _to_response(profile)
+
+
+@router.patch("/{child_id}/consent", response_model=ChildProfileResponse)
+async def update_child_profile_consent(
+    child_id: str,
+    request: ChildProfileConsentUpdateRequest,
+    user: UserData = Depends(get_current_user),
+):
+    _require_parent(user)
+    profile = await child_profile_repo.update_consent(
+        user_id=user.user_id,
+        child_id=child_id,
+        camera_consent=request.camera_consent,
+        microphone_consent=request.microphone_consent,
     )
     if profile is None:
         raise _not_found()

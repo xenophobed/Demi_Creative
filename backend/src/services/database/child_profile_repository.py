@@ -21,6 +21,8 @@ class ChildProfileData:
     archived_at: Optional[str]
     created_at: str
     updated_at: str
+    camera_consent: bool = False
+    microphone_consent: bool = False
 
 
 class ChildProfileRepository:
@@ -34,7 +36,8 @@ class ChildProfileRepository:
     ) -> list[ChildProfileData]:
         query = """
             SELECT child_id, user_id, name, age_group, interests, avatar,
-                   is_default, archived_at, created_at, updated_at
+                   is_default, archived_at, camera_consent, microphone_consent,
+                   created_at, updated_at
             FROM child_profiles
             WHERE user_id = ?
         """
@@ -51,7 +54,8 @@ class ChildProfileRepository:
     ) -> Optional[ChildProfileData]:
         query = """
             SELECT child_id, user_id, name, age_group, interests, avatar,
-                   is_default, archived_at, created_at, updated_at
+                   is_default, archived_at, camera_consent, microphone_consent,
+                   created_at, updated_at
             FROM child_profiles
             WHERE user_id = ? AND child_id = ?
         """
@@ -115,6 +119,8 @@ class ChildProfileRepository:
             archived_at=None,
             created_at=now,
             updated_at=now,
+            camera_consent=False,
+            microphone_consent=False,
         )
 
     async def update(
@@ -177,6 +183,40 @@ class ChildProfileRepository:
             (now, user_id, child_id),
         )
         await self._sync_user_default(user_id, child_id)
+        await self._db.commit()
+        return await self.get_for_user(user_id, child_id)
+
+    async def update_consent(
+        self,
+        *,
+        user_id: str,
+        child_id: str,
+        camera_consent: Optional[bool] = None,
+        microphone_consent: Optional[bool] = None,
+    ) -> Optional[ChildProfileData]:
+        existing = await self.get_for_user(user_id, child_id)
+        if existing is None:
+            return None
+
+        updates = ["updated_at = ?"]
+        params: list[object] = [datetime.now().isoformat()]
+
+        if camera_consent is not None:
+            updates.append("camera_consent = ?")
+            params.append(1 if camera_consent else 0)
+        if microphone_consent is not None:
+            updates.append("microphone_consent = ?")
+            params.append(1 if microphone_consent else 0)
+
+        params.extend([user_id, child_id])
+        await self._db.execute(
+            f"""
+            UPDATE child_profiles
+            SET {', '.join(updates)}
+            WHERE user_id = ? AND child_id = ? AND archived_at IS NULL
+            """,
+            tuple(params),
+        )
         await self._db.commit()
         return await self.get_for_user(user_id, child_id)
 
@@ -246,6 +286,8 @@ class ChildProfileRepository:
             archived_at=row.get("archived_at"),
             created_at=row["created_at"],
             updated_at=row["updated_at"],
+            camera_consent=bool(row.get("camera_consent", 0)),
+            microphone_consent=bool(row.get("microphone_consent", 0)),
         )
 
 
