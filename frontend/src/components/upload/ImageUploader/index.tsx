@@ -1,6 +1,8 @@
-import { useCallback } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useDropzone } from 'react-dropzone'
 import { motion, AnimatePresence } from 'framer-motion'
+
+export const TOUCH_DEVICE_QUERY = '(pointer: coarse) and (max-width: 1024px)'
 
 interface ImageUploaderProps {
   onFileSelect: (file: File) => void
@@ -36,8 +38,58 @@ function ImageUploader({
 
   const hasError = fileRejections.length > 0
 
+  const [isTouchSmall, setIsTouchSmall] = useState(false)
+  const cameraInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return
+    const mq = window.matchMedia(TOUCH_DEVICE_QUERY)
+    const update = () => setIsTouchSmall(mq.matches)
+    update()
+    mq.addEventListener('change', update)
+    return () => mq.removeEventListener('change', update)
+  }, [])
+
+  const handleCameraClick = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    cameraInputRef.current?.click()
+  }
+
+  const handleCameraChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file && file.size <= maxSize) {
+      onFileSelect(file)
+    }
+    if (cameraInputRef.current) cameraInputRef.current.value = ''
+  }
+
   return (
     <div className={className}>
+      {isTouchSmall && (
+        <>
+          <motion.button
+            type="button"
+            onClick={handleCameraClick}
+            whileTap={{ scale: 0.97 }}
+            className="w-full mb-3 py-4 px-6 rounded-2xl bg-primary text-white font-bold text-lg flex items-center justify-center gap-2 shadow-md"
+            aria-label="Take a photo with your camera"
+          >
+            <span className="text-2xl" aria-hidden="true">📸</span>
+            <span>Take Photo</span>
+          </motion.button>
+          <input
+            ref={cameraInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={handleCameraChange}
+            aria-hidden="true"
+            tabIndex={-1}
+          />
+        </>
+      )}
+
       <motion.div
         whileHover={{ scale: 1.01 }}
         transition={{ duration: 0.2 }}
@@ -110,9 +162,11 @@ function ImageUploader({
 
               <div className="text-center">
                 <p className="text-xl font-bold text-gray-700 mb-2">
-                  Drag image here
+                  {isTouchSmall ? 'Or pick from your photos' : 'Drag image here'}
                 </p>
-                <p className="text-gray-500">or click to select file</p>
+                <p className="text-gray-500">
+                  {isTouchSmall ? 'Tap to choose a file' : 'or click to select file'}
+                </p>
               </div>
 
               <div className="flex items-center gap-2 text-sm text-gray-400 mt-2">

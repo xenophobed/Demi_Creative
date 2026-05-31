@@ -1054,6 +1054,7 @@ Month 3: Child has created 20+ stories, forming their own "story universe"
 - 🔲 Login page mobile logo clipping fix
 - 🔲 Profile page mobile layout fix (Edit Profile button overlap)
 - 🔲 UploadPage React hook order fix (useState called after conditional return, violates React rules, may cause state corruption)
+- 🔲 ImageUploader camera capture on tablets/phones (§3.15)
 
 **Should Have**:
 - 🔲 Library "New" badge expiry rule (auto-disappear after 7 days from creation)
@@ -1063,6 +1064,7 @@ Month 3: Child has created 20+ stories, forming their own "story universe"
 - 🔲 Upload page DOM nesting validation error fix
 - 🔲 StoryPage success banner conditional display (only appears when `justGenerated === true`, not when opened from Library)
 - 🔲 LibraryPage per-tab empty state UI (with CTA guiding to corresponding creation page)
+- 🔲 Voice input on Interactive Story theme + buddy chat (§3.15)
 
 **Could Have**:
 - 🔲 Library/Profile card hover feedback (desktop lift effect)
@@ -1907,6 +1909,50 @@ Phase 3 turns the existing foundations for video, growth metrics, and rewards in
 5. **#536 Add server-owned achievement badge model** (`type:story`, `domain:gamification`, `P1`) — closed
 6. **#537 Render child-safe achievement surfaces** (`type:story`, `domain:gamification`, `P2`) — closed
 7. **#522 Align pitch deck and Phase 3 docs with shipped implementation** (`type:chore`, `domain:my-agent`, `P1`) — PR #554
+
+---
+
+## 3.15 Tablet & Mobile Capture Modalities [Phase 2 — Reach]
+
+Goal: make the kid-facing flows usable on tablets and phones by replacing laptop-only input affordances (file picker, keyboard) with touch-native camera and voice input — without weakening content safety or parental consent.
+
+### 3.15.1 Problem
+The product is positioned for ages 3-12, but the lowest cohort cannot read or type, and tablet/phone users cannot take photos directly. `ImageUploader` (drag-drop only, no `capture` attribute), `InteractiveStoryPage` theme input (50-char free text), and `AgentChatPanel` textarea (buddy chat) are the worst offenders today. Today's UI assumes a laptop with a mouse + keyboard.
+
+### 3.15.2 Solution
+Two parallel tracks:
+- **Camera capture**: tabbed picker ("Take Photo" | "Upload File") in `ImageUploader` defaulting to "Take Photo" on `(pointer: coarse) and (max-width: 1024px)` devices; new `CameraCapture` component using `getUserMedia` + `<canvas>` snapshot; `capture="environment"` fallback on a hidden input for the quick-win path. Captured JPEG flows through the existing `/api/v1/image-to-story` multipart contract with no backend change.
+- **Voice input**: new `backend/src/services/stt_service.py` wrapping OpenAI Whisper (mirrors `tts_service.py` shape), new `POST /api/v1/audio/transcriptions` endpoint, reusable `VoiceInputButton` attached to the `InteractiveStoryPage` theme input and `AgentChatPanel` textarea. Web Speech API is progressive enhancement only — iPad Safari (most likely target device) does not support it, so server-side Whisper is canonical.
+
+**Cross-cutting**: extend `child_profiles` with `camera_consent` and `microphone_consent` booleans, route first-use through the existing `ParentApprovalPage` flow. In-page `PermissionPrompt` component shows a child-friendly explainer before the browser prompt fires.
+
+### 3.15.3 Stories
+1. **Quick-win** — `capture="environment"` fallback + "Take Photo" affordance on touch devices (1-day ship, zero new dependencies)
+2. **CameraCapture component** — live preview, capture, retake, front/back toggle, permission state machine
+3. **ImageUploader tabbed picker** — default-to-camera on touch devices via `(pointer: coarse) and (max-width: 1024px)`
+4. **STT backend** — `STTService` + `POST /api/v1/audio/transcriptions` + contract + API tests
+5. **VoiceInputButton + useVoiceInput** — reusable mic button with waveform animation; state machine (idle → recording → processing → done | error)
+6. **Voice on InteractiveStoryPage** — wire `VoiceInputButton` next to the Story Theme input
+7. **Voice on AgentChatPanel** — wire `VoiceInputButton` next to the buddy chat textarea
+8. **Parental consent** — `camera_consent` + `microphone_consent` on `child_profiles`, parent-only PIN gate via `ParentApprovalPage`
+9. **PermissionPrompt component** — in-page child-friendly permission explainer before browser prompt
+
+### 3.15.4 Acceptance Criteria
+- [ ] "Take Photo" defaults on `(pointer: coarse) and (max-width: 1024px)`; "Upload File" defaults elsewhere
+- [ ] Captured photos are JPEG, upright-normalized, ≤10MB, flow through existing `/api/v1/image-to-story` with no backend change
+- [ ] `POST /api/v1/audio/transcriptions` accepts ≤2MB and ≤30s audio, returns `{text, language, duration_ms, safety_passed}`
+- [ ] Transcribed text passes `check_content_safety` (threshold 0.85) BEFORE insertion into any input
+- [ ] First-time camera/mic use requires `camera_consent` / `microphone_consent = true` (parent-set via `ParentApprovalPage`)
+- [ ] Audio bytes are NOT persisted server-side; only the moderated transcript is stored
+- [ ] Camera-denied state shows file-upload fallback; mic-denied state focuses the textarea
+- [ ] Recording auto-stops at 30s; reduced-motion users get static states (no waveform animation)
+- [ ] Voice recognition achieves ≥90% accuracy on a 20-clip kids-voice test set; transcripts return ≤3s after speech ends
+
+#### Out of Scope
+- Local on-device STT (Whisper.cpp) and Web Speech as the primary path — Web Speech only as progressive enhancement
+- Real-time camera filters, AR overlays, or background blur — capture only
+- Multilingual STT beyond OpenAI Whisper's automatic language detection
+- Native iOS/Android apps — this is a web-only effort targeting tablet/phone browsers
 
 ---
 
