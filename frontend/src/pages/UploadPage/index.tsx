@@ -214,7 +214,11 @@ function UploadPage() {
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.95 }}
                 >
-                  <ImageUploader onFileSelect={setSelectedImage} />
+                  <ImageUploader
+                    onFileSelect={setSelectedImage}
+                    childId={currentChild?.child_id}
+                    ageGroup={currentChild?.age_group}
+                  />
                 </motion.div>
               )}
             </AnimatePresence>

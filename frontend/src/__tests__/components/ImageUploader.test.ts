@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { TOUCH_DEVICE_QUERY } from '@/components/upload/ImageUploader'
+import { pickInitialTab, TOUCH_DEVICE_QUERY } from '@/components/upload/ImageUploader'
 
 describe('ImageUploader: TOUCH_DEVICE_QUERY', () => {
   it('matches the PRD §3.15 acceptance criterion exactly', () => {
@@ -12,5 +12,15 @@ describe('ImageUploader: TOUCH_DEVICE_QUERY', () => {
 
   it('excludes large desktop displays via max-width breakpoint', () => {
     expect(TOUCH_DEVICE_QUERY).toContain('max-width: 1024px')
+  })
+})
+
+describe('ImageUploader: pickInitialTab (#582)', () => {
+  it("defaults to 'camera' on touch+small devices", () => {
+    expect(pickInitialTab(true)).toBe('camera')
+  })
+
+  it("defaults to 'file' on desktop", () => {
+    expect(pickInitialTab(false)).toBe('file')
   })
 })
