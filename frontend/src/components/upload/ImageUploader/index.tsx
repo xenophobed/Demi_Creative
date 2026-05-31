@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useDropzone } from 'react-dropzone'
 import { motion, AnimatePresence } from 'framer-motion'
 import CameraCapture from '@/components/upload/CameraCapture'
@@ -15,10 +15,9 @@ interface ImageUploaderProps {
   accept?: Record<string, string[]>
   maxSize?: number
   className?: string
-  /** When present together with ageGroup, enables the full CameraCapture
-   *  experience (live preview + consent gate). When absent, the camera
-   *  tab uses the quick-win `capture="environment"` fallback that ships
-   *  with PR #589 — preserves backwards compatibility for legacy callers.
+  /** When present together with ageGroup, enables the parent-consent
+   *  gate on first camera use. Without them the camera tab still works
+   *  — it just relies on the browser's native permission prompt only.
    */
   childId?: string
   ageGroup?: AgeGroup
@@ -58,7 +57,6 @@ function ImageUploader({
   const hasError = fileRejections.length > 0
 
   const [isTouchSmall, setIsTouchSmall] = useState(false)
-  const cameraInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (typeof window === 'undefined' || !window.matchMedia) return
@@ -69,42 +67,28 @@ function ImageUploader({
     return () => mq.removeEventListener('change', update)
   }, [])
 
-  // Full camera experience requires both childId (for consent) and ageGroup
-  // (for gate copy). Without them we fall back to the OS-camera quick-win.
-  const fullCameraEnabled = Boolean(childId && ageGroup)
-
-  const [activeTab, setActiveTab] = useState<PickerTab>(() => pickInitialTab(false))
+  const [activeTab, setActiveTab] = useState<PickerTab>(pickInitialTab(false))
+  // Re-sync the default tab once the matchMedia check lands.
   useEffect(() => {
-    if (fullCameraEnabled) setActiveTab(pickInitialTab(isTouchSmall))
-  }, [fullCameraEnabled, isTouchSmall])
+    setActiveTab(pickInitialTab(isTouchSmall))
+  }, [isTouchSmall])
 
-  // Quick-win (no childId) path: legacy "Take Photo" button + dropzone.
-  const handleCameraClick = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    cameraInputRef.current?.click()
-  }
-
-  const handleCameraChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file && file.size <= maxSize) {
-      onFileSelect(file)
-    }
-    if (cameraInputRef.current) cameraInputRef.current.value = ''
-  }
-
-  // Consent gate state (only relevant when fullCameraEnabled).
+  // Consent gating only applies when we know which child profile the
+  // photo is for. Without childId/ageGroup we can't store consent
+  // anywhere, so we fall back to browser-native permissions only.
+  const consentEnabled = Boolean(childId && ageGroup)
   const currentChild = useChildStore((s) => s.currentChild)
   const cameraConsent = useMemo(() => {
-    if (!fullCameraEnabled) return true
+    if (!consentEnabled) return true
     if (currentChild?.child_id !== childId) return false
     return currentChild?.camera_consent === true
-  }, [fullCameraEnabled, currentChild, childId])
+  }, [consentEnabled, currentChild, childId])
 
   const [showConsentGate, setShowConsentGate] = useState(false)
 
   function handleSelectCameraTab() {
     setActiveTab('camera')
-    if (fullCameraEnabled && !cameraConsent) {
+    if (consentEnabled && !cameraConsent) {
       setShowConsentGate(true)
     }
   }
@@ -204,53 +188,6 @@ function ImageUploader({
     </motion.div>
   )
 
-  // Legacy (no childId) quick-win path: show OS-camera button + dropzone.
-  if (!fullCameraEnabled) {
-    return (
-      <div className={className}>
-        {isTouchSmall && (
-          <>
-            <motion.button
-              type="button"
-              onClick={handleCameraClick}
-              whileTap={{ scale: 0.97 }}
-              className="w-full mb-3 py-4 px-6 rounded-2xl bg-primary text-white font-bold text-lg flex items-center justify-center gap-2 shadow-md"
-              aria-label="Take a photo with your camera"
-            >
-              <span className="text-2xl" aria-hidden="true">📸</span>
-              <span>Take Photo</span>
-            </motion.button>
-            <input
-              ref={cameraInputRef}
-              type="file"
-              accept="image/*"
-              capture="environment"
-              className="hidden"
-              onChange={handleCameraChange}
-              aria-hidden="true"
-              tabIndex={-1}
-            />
-          </>
-        )}
-
-        {renderDropzone()}
-
-        {hasError && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mt-3 p-3 bg-red-100 rounded-lg text-red-600 text-sm"
-          >
-            {fileRejections[0]?.errors[0]?.message === 'File is larger than 10485760 bytes'
-              ? 'File too large, please select an image under 10MB'
-              : 'Upload error, please select another image'}
-          </motion.div>
-        )}
-      </div>
-    )
-  }
-
-  // Full-camera path: tabbed picker + consent gate.
   return (
     <div className={className}>
       <div
@@ -318,7 +255,7 @@ function ImageUploader({
         </motion.div>
       )}
 
-      {showConsentGate && fullCameraEnabled && ageGroup && childId && (
+      {showConsentGate && consentEnabled && ageGroup && childId && (
         <ParentConsentGate
           kind="camera"
           ageGroup={ageGroup}
