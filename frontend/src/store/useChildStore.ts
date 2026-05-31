@@ -4,6 +4,7 @@ import { childProfileService } from '@/api/services/childProfileService'
 import type {
   AgeGroup,
   ChildProfile,
+  ChildProfileConsentUpdateRequest,
   ChildProfileCreateRequest,
   ChildProfileUpdateRequest,
 } from '@/types/api'
@@ -43,6 +44,7 @@ interface ChildState {
   saveChildProfile: (childId: string, payload: ChildProfileUpdateRequest) => Promise<ChildProfile>
   archiveChildProfile: (childId: string) => Promise<ChildProfile>
   setDefaultChildProfile: (childId: string) => Promise<ChildProfile>
+  updateConsent: (childId: string, payload: ChildProfileConsentUpdateRequest) => Promise<ChildProfile>
   switchActiveChild: (childId: string) => void
 }
 
@@ -228,6 +230,17 @@ const useChildStore = create<ChildState>()(
         }))
         get().setChildProfiles(mergeProfile(profiles, updated))
         get().switchActiveChild(updated.child_id)
+        return updated
+      },
+
+      updateConsent: async (childId, payload) => {
+        const updated = await childProfileService.updateConsent(childId, payload)
+        const merged = mergeProfile(get().childProfiles, updated)
+        const isCurrent = get().currentChild?.child_id === updated.child_id
+        set({
+          childProfiles: merged,
+          currentChild: isCurrent ? updated : get().currentChild,
+        })
         return updated
       },
 

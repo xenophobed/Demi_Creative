@@ -880,8 +880,27 @@ class ChildProfileResponse(BaseModel):
     avatar: Optional[str] = None
     is_default: bool = False
     archived_at: Optional[datetime] = None
+    camera_consent: bool = False
+    microphone_consent: bool = False
     created_at: datetime
     updated_at: datetime
+
+
+class ChildProfileConsentUpdateRequest(BaseModel):
+    """Patch camera/microphone consent flags on a child profile (#587).
+
+    At least one field must be supplied; supplying both is allowed.
+    """
+    camera_consent: Optional[bool] = None
+    microphone_consent: Optional[bool] = None
+
+    @model_validator(mode="after")
+    def require_at_least_one_field(self):
+        if self.camera_consent is None and self.microphone_consent is None:
+            raise ValueError(
+                "At least one of camera_consent or microphone_consent must be provided"
+            )
+        return self
 
 
 class ChildProfileListResponse(BaseModel):

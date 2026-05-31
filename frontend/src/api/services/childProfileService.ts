@@ -1,6 +1,7 @@
 import apiClient from "../client";
 import type {
   ChildProfile,
+  ChildProfileConsentUpdateRequest,
   ChildProfileCreateRequest,
   ChildProfileListResponse,
   ChildProfileUpdateRequest,
@@ -45,6 +46,17 @@ export const childProfileService = {
   async archive(childId: string): Promise<ChildProfile> {
     const response = await apiClient.post<ChildProfile>(
       `${CHILD_PROFILE_BASE}/${encodeURIComponent(childId)}/archive`,
+    );
+    return response.data;
+  },
+
+  async updateConsent(
+    childId: string,
+    payload: ChildProfileConsentUpdateRequest,
+  ): Promise<ChildProfile> {
+    const response = await apiClient.patch<ChildProfile>(
+      `${CHILD_PROFILE_BASE}/${encodeURIComponent(childId)}/consent`,
+      payload,
     );
     return response.data;
   },
