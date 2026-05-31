@@ -213,6 +213,7 @@ EXPECTED_TOOL_NAMES = {
     "create_kids_daily_episode",
     "check_child_content_safety",
     "generate_my_agent_audio",
+    "search_my_stories",  # #590 hybrid recall
 }
 
 
@@ -225,7 +226,7 @@ class TestMcpServerShape:
         assert server["name"] == "my-agent-tools"
         assert server["version"] == "1.0.0"
 
-    def test_exposes_exactly_six_tools(self):
+    def test_exposes_exactly_seven_tools(self):
         """Adding or removing tools must update both this test and the subagent allow-lists."""
         server = _build_tools_for(_fake_agent())
         names = {getattr(t, "name", None) for t in server["tools"]}

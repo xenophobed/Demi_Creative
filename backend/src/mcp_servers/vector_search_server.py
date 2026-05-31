@@ -103,11 +103,33 @@ async def search_similar_drawings(args: Dict[str, Any]) -> Dict[str, Any]:
     try:
         # --- pgvector path (production) ---
         if _use_pgvector():
-            similar_drawings = await vector_repo.search_similar_drawings(
+            # Hybrid (BM25 + cosine via RRF) replaces pure cosine here
+            # so exact-name queries ("Lightning Dog") rank correctly even
+            # when a different drawing is closer in vector space (#590).
+            # Shape stays additive: the legacy fields are still present,
+            # plus optional rrf_score / lex_rank / vec_rank for callers
+            # that care about provenance.
+            hits = await vector_repo.hybrid_search_drawings(
                 query_text=drawing_description,
                 child_id=child_id,
                 top_k=top_k,
             )
+            similar_drawings = [
+                {
+                    "id": h["id"],
+                    "similarity_score": h.get("similarity_score") or 0.0,
+                    "distance": (
+                        round(1.0 / h["similarity_score"] - 1.0, 4)
+                        if h.get("similarity_score") else 0.0
+                    ),
+                    "drawing_data": h.get("metadata") or {},
+                    "description": h.get("document_text", ""),
+                    "rrf_score": h.get("rrf_score"),
+                    "lex_rank": h.get("lex_rank"),
+                    "vec_rank": h.get("vec_rank"),
+                }
+                for h in hits
+            ]
             return {
                 "content": [{
                     "type": "text",
@@ -419,11 +441,28 @@ async def search_similar_stories(args: Dict[str, Any]) -> Dict[str, Any]:
     try:
         # --- pgvector path (production) ---
         if _use_pgvector():
-            similar_stories = await vector_repo.search_similar_stories(
+            # Hybrid (BM25 + cosine via RRF) replaces pure cosine here so
+            # exact-name dedup checks ("the Lightning Dog moon story") match
+            # an existing story by literal name even when vector similarity
+            # is close to a different one (#590). Shape stays additive.
+            hits = await vector_repo.hybrid_search_stories(
                 query_text=story_description,
                 child_id=child_id,
                 top_k=top_k,
             )
+            similar_stories = []
+            for h in hits:
+                text = h.get("document_text", "")
+                preview = (text[:200] + "...") if len(text) > 200 else text
+                similar_stories.append({
+                    "story_id": h["id"],
+                    "similarity_score": h.get("similarity_score") or 0.0,
+                    "story_text_preview": preview,
+                    "metadata": h.get("metadata") or {},
+                    "rrf_score": h.get("rrf_score"),
+                    "lex_rank": h.get("lex_rank"),
+                    "vec_rank": h.get("vec_rank"),
+                })
             return {
                 "content": [{
                     "type": "text",
@@ -479,11 +518,106 @@ async def search_similar_stories(args: Dict[str, Any]) -> Dict[str, Any]:
         }
 
 
+@tool(
+    "search_my_stories",
+    """Find a child's previously generated stories by topic, character, or keyword.
+
+    Use this when the child asks the buddy a recall question like:
+      - "find my Lightning Dog story"
+      - "what was that story about the moon"
+      - "the one with the brave puppy"
+
+    Returns a small list of matching stories (title preview + relative
+    similarity). Hybrid retrieval (BM25 + cosine via RRF) — exact-name
+    queries surface the named story even when a different story is
+    closer in vector space. Always scoped by child_id (#288 / #590).
+
+    Pure recall: this tool never launches a generation flow. Use the
+    Agent tool to delegate generation to a specialist instead.""",
+    {"query": str, "child_id": str, "top_k": int}
+)
+async def search_my_stories(args: Dict[str, Any]) -> Dict[str, Any]:
+    """Hybrid story-recall tool for the buddy chat surface (#590)."""
+    query = args.get("query") or ""
+    child_id = args.get("child_id") or ""
+    top_k = int(args.get("top_k") or 5)
+
+    if not query or not child_id:
+        return {
+            "content": [{
+                "type": "text",
+                "text": json.dumps(
+                    {"error": "query and child_id required", "stories": []},
+                    ensure_ascii=False,
+                )
+            }]
+        }
+
+    if not _use_pgvector():
+        # Falls back to nothing on local-dev SQLite + ChromaDB because
+        # ChromaDB has no tsvector — hybrid only works on Postgres. The
+        # buddy degrades gracefully (no recall hit, no error).
+        return {
+            "content": [{
+                "type": "text",
+                "text": json.dumps(
+                    {"stories": [], "total_found": 0, "backend": "chromadb-fallback"},
+                    ensure_ascii=False,
+                )
+            }]
+        }
+
+    try:
+        hits = await vector_repo.hybrid_search_stories(
+            query_text=query, child_id=child_id, top_k=top_k,
+        )
+        stories = []
+        for h in hits:
+            text = h.get("document_text", "")
+            preview = (text[:200] + "...") if len(text) > 200 else text
+            meta = h.get("metadata") or {}
+            stories.append({
+                "story_id": h["id"],
+                "title": meta.get("title", ""),
+                "preview": preview,
+                "themes": meta.get("themes", ""),
+                "age_group": meta.get("age_group", ""),
+                "similarity_score": h.get("similarity_score"),
+                "rrf_score": h.get("rrf_score"),
+            })
+        return {
+            "content": [{
+                "type": "text",
+                "text": json.dumps(
+                    {"stories": stories, "total_found": len(stories),
+                     "query": {"q": query, "child_id": child_id, "top_k": top_k}},
+                    ensure_ascii=False, indent=2,
+                )
+            }]
+        }
+    except Exception as exc:  # noqa: BLE001
+        return {
+            "content": [{
+                "type": "text",
+                "text": json.dumps(
+                    {"stories": [], "total_found": 0, "error": str(exc)},
+                    ensure_ascii=False,
+                )
+            }]
+        }
+
+
 # Create MCP Server
 vector_server = create_sdk_mcp_server(
     name="vector-search",
     version="1.0.0",
-    tools=[search_similar_drawings, store_drawing_embedding, store_story_embedding, search_similar_stories]
+    tools=[
+        search_similar_drawings,
+        store_drawing_embedding,
+        store_story_embedding,
+        search_similar_stories,
+        search_my_stories,
+    ]
 )
 
 

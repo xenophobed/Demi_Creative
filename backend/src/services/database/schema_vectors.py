@@ -29,12 +29,14 @@ CREATE TABLE IF NOT EXISTS drawing_embeddings (
     document_text TEXT NOT NULL,
     embedding vector(1536) NOT NULL,
     metadata_json TEXT,
+    text_search tsvector GENERATED ALWAYS AS (to_tsvector('english', document_text)) STORED,
     created_at TEXT NOT NULL
 );
 """
 
 DRAWING_EMBEDDINGS_INDEXES = """
 CREATE INDEX IF NOT EXISTS idx_drawing_embeddings_child_id ON drawing_embeddings(child_id);
+CREATE INDEX IF NOT EXISTS idx_drawing_embeddings_text_search ON drawing_embeddings USING GIN (text_search);
 """
 
 # IVFFlat index for cosine similarity search (PostgreSQL only, raw SQL)
@@ -55,12 +57,14 @@ CREATE TABLE IF NOT EXISTS story_embeddings_pg (
     document_text TEXT NOT NULL,
     embedding vector(1536) NOT NULL,
     metadata_json TEXT,
+    text_search tsvector GENERATED ALWAYS AS (to_tsvector('english', document_text)) STORED,
     created_at TEXT NOT NULL
 );
 """
 
 STORY_EMBEDDINGS_PG_INDEXES = """
 CREATE INDEX IF NOT EXISTS idx_story_embeddings_pg_child_id ON story_embeddings_pg(child_id);
+CREATE INDEX IF NOT EXISTS idx_story_embeddings_pg_text_search ON story_embeddings_pg USING GIN (text_search);
 """
 
 STORY_EMBEDDINGS_PG_VECTOR_INDEX = """
@@ -119,5 +123,34 @@ async def init_vector_schema(db: "DatabaseManager") -> None:
     except Exception:
         pass
 
+    # Idempotent migration for existing DBs that pre-date hybrid search
+    # (#590). The CREATE TABLE above only adds the column on fresh
+    # tables; older DBs need an ALTER TABLE.
+    await _migrate_add_text_search_columns(db)
+
     await db.commit()
     print("Vector schema initialized (pgvector)")
+
+
+async def _migrate_add_text_search_columns(db: "DatabaseManager") -> None:
+    """Add the generated ``text_search`` tsvector column + GIN index to
+    drawing_embeddings + story_embeddings_pg (#590).
+
+    Idempotent: re-running on a freshly-created DB is a no-op because
+    the column already exists from CREATE TABLE.
+    """
+    for table in ("drawing_embeddings", "story_embeddings_pg"):
+        rows = await db.fetchall(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_name = ? AND column_name = 'text_search'",
+            (table,),
+        )
+        if not rows:
+            await db.execute(
+                f"ALTER TABLE {table} ADD COLUMN text_search tsvector "
+                f"GENERATED ALWAYS AS (to_tsvector('english', document_text)) STORED"
+            )
+            await db.execute(
+                f"CREATE INDEX IF NOT EXISTS idx_{table}_text_search "
+                f"ON {table} USING GIN (text_search)"
+            )
