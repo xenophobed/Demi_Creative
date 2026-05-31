@@ -719,14 +719,30 @@ async def _migrate_characters_user_id(db: "DatabaseManager") -> None:
     with the new UNIQUE(user_id, child_id, name) constraint.
     Existing rows get user_id='' (empty string) for backward compatibility.
     """
-    # Check if the UNIQUE constraint includes user_id by inspecting the CREATE TABLE SQL.
-    # We need to handle both cases: (1) table has no user_id column at all,
-    # (2) user_id was added via ALTER TABLE but UNIQUE still only covers (child_id, name).
-    create_sql = await table_create_sql(db, "characters")
+    # Decide whether to recreate the table:
+    #   - SQLite: inspect the original CREATE TABLE SQL for the UNIQUE clause
+    #     (PRAGMA gives no other reliable way to see composite uniques).
+    #   - Postgres: query pg_indexes for a unique index covering user_id —
+    #     `table_create_sql` on Postgres only reconstructs columns, not
+    #     constraints, so the SQLite check would false-positive here every
+    #     time and corrupt the table (leaves orphaned `characters_new`).
     needs_migration = True
-    if create_sql:
-        # If the CREATE TABLE already has UNIQUE(user_id, child_id, name), no migration needed
-        if 'user_id' in create_sql and 'UNIQUE(user_id' in create_sql.replace(' ', ''):
+    if db.dialect == "postgresql":
+        # Defensive: if a previous run failed mid-migration we may have
+        # an orphaned `characters_new` lying around. Drop it before
+        # deciding anything else.
+        await db.execute("DROP TABLE IF EXISTS characters_new")
+        rows = await db.fetchall(
+            "SELECT indexdef FROM pg_indexes WHERE schemaname='public' AND tablename='characters'"
+        )
+        for r in rows:
+            idx = (r.get("indexdef") or "").lower()
+            if "unique" in idx and "user_id" in idx and "child_id" in idx and "name" in idx:
+                needs_migration = False
+                break
+    else:
+        create_sql = await table_create_sql(db, "characters")
+        if create_sql and 'user_id' in create_sql and 'UNIQUE(user_id' in create_sql.replace(' ', ''):
             needs_migration = False
 
     if needs_migration:

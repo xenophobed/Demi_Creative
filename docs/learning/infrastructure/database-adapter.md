@@ -6,7 +6,20 @@
 
 **Explorer**: The database adapter is like a translator. Our app speaks one language (SQL), but the database in development (SQLite) and the database in production (PostgreSQL) understand slightly different dialects. The adapter translates so our code works with both — no changes needed.
 
-**Maker**: The adapter pattern abstracts database-specific SQL dialect differences behind a common interface. `adapter.py` defines the base class; `sqlite_adapter.py` and `postgres_adapter.py` implement it. `connection.py` reads `DATABASE_URL` to pick the right adapter at startup. This lets us develop with zero-install SQLite locally and deploy to Supabase PostgreSQL in production.
+**Maker**: The adapter pattern abstracts database-specific SQL dialect differences behind a common interface. `adapter.py` defines the base class; `sqlite_adapter.py` and `postgres_adapter.py` implement it. `connection.py` reads `DATABASE_URL` to pick the right adapter at startup. This lets us develop with zero-install SQLite locally OR run Postgres + pgvector locally via docker-compose for full dev/prod parity, and deploy to Supabase PostgreSQL in production.
+
+### Running Postgres + pgvector locally (recommended)
+
+For dev/prod parity, run Postgres + pgvector in Docker and point `DATABASE_URL` at it:
+
+```bash
+./backend/scripts/dev_db.sh up          # boots pgvector/pgvector:pg17 on :54329
+export DATABASE_URL=postgresql://creative:creative@localhost:54329/creative_agent_dev
+python -m backend.scripts.migrate_sqlite_to_postgres   # optional one-shot backfill
+python backend/scripts/start_server.py
+```
+
+When `DATABASE_URL` points at Postgres, [`_use_pgvector()` in `vector_search_server.py`](../../../backend/src/mcp_servers/vector_search_server.py) flips to true and all vector search runs through `VectorRepository` against the `drawing_embeddings` + `story_embeddings_pg` tables — same code path as production. Unset `DATABASE_URL` to fall back to SQLite + ChromaDB.
 
 ## How It Works
 
