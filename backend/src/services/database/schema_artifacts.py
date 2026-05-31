@@ -251,7 +251,31 @@ async def init_artifact_schema(db: "DatabaseManager") -> None:
     """
     d = db.dialect
 
-    # Create artifacts table
+    # FK-topological order. SQLite accepts forward CREATE-TABLE refs,
+    # Postgres does not — `artifacts.created_by_step_id` references
+    # `agent_steps(agent_step_id)` and `agent_steps` references
+    # `runs(run_id)`, so we build the chain runs -> agent_steps ->
+    # artifacts -> dependents.
+
+    # Create runs table (referenced by agent_steps).
+    await db.execute(translate_ddl(RUNS_TABLE, d))
+    for stmt in RUNS_INDEXES.strip().split(";"):
+        if stmt.strip():
+            try:
+                await db.execute(stmt)
+            except Exception:
+                pass
+
+    # Create agent_steps table (referenced by artifacts).
+    await db.execute(translate_ddl(AGENT_STEPS_TABLE, d))
+    for stmt in AGENT_STEPS_INDEXES.strip().split(";"):
+        if stmt.strip():
+            try:
+                await db.execute(stmt)
+            except Exception:
+                pass
+
+    # Create artifacts table (referenced by relations + link tables).
     await db.execute(translate_ddl(ARTIFACTS_TABLE, d))
     for stmt in ARTIFACTS_INDEXES.strip().split(";"):
         if stmt.strip():
@@ -278,16 +302,7 @@ async def init_artifact_schema(db: "DatabaseManager") -> None:
             except Exception:
                 pass
 
-    # Create runs table
-    await db.execute(translate_ddl(RUNS_TABLE, d))
-    for stmt in RUNS_INDEXES.strip().split(";"):
-        if stmt.strip():
-            try:
-                await db.execute(stmt)
-            except Exception:
-                pass
-
-    # Create run_artifact_links table (after runs table due to FK)
+    # Create run_artifact_links table
     await db.execute(translate_ddl(RUN_ARTIFACT_LINKS_TABLE, d))
     for stmt in RUN_ARTIFACT_LINKS_INDEXES.strip().split(";"):
         if stmt.strip():
@@ -299,15 +314,6 @@ async def init_artifact_schema(db: "DatabaseManager") -> None:
     # Create artifact_character_links table
     await db.execute(translate_ddl(ARTIFACT_CHARACTER_LINKS_TABLE, d))
     for stmt in ARTIFACT_CHARACTER_LINKS_INDEXES.strip().split(";"):
-        if stmt.strip():
-            try:
-                await db.execute(stmt)
-            except Exception:
-                pass
-
-    # Create agent_steps table
-    await db.execute(translate_ddl(AGENT_STEPS_TABLE, d))
-    for stmt in AGENT_STEPS_INDEXES.strip().split(";"):
         if stmt.strip():
             try:
                 await db.execute(stmt)

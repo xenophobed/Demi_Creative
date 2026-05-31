@@ -10,6 +10,7 @@ import pytest
 
 from backend.src.services.database import db_manager
 from backend.src.services.database.schema import init_schema
+from backend.src.services.database.sql_compat import insert_or_ignore
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -25,14 +26,19 @@ async def _init_database():
         await db_manager.connect()
         await init_schema(db_manager)
 
-    # Ensure e2e test user exists (FK constraint on stories.user_id)
+    # Ensure e2e test user exists (FK constraint on stories.user_id).
+    # `INSERT OR IGNORE` is SQLite-only; insert_or_ignore() routes through
+    # `ON CONFLICT DO NOTHING` on Postgres so this conftest works against
+    # both dev (SQLite default) and the new local pgvector dev backend.
     from datetime import datetime
     now = datetime.now().isoformat()
+    sql = insert_or_ignore(
+        "users",
+        ["user_id", "username", "email", "password_hash", "created_at", "updated_at"],
+        db_manager.dialect,
+    )
     await db_manager.execute(
-        """
-        INSERT OR IGNORE INTO users (user_id, username, email, password_hash, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?)
-        """,
+        sql,
         ("e2e_test_user", "e2e_test_user", "e2e@example.com", "test_hash", now, now),
     )
     await db_manager.commit()

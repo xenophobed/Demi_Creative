@@ -100,6 +100,19 @@ python -m pytest tests/contracts/ -v        # contract tests only
 python -m pytest tests/integration/ -v     # integration tests only
 ```
 
+### Local DB: SQLite (default) or Postgres + pgvector (recommended)
+
+By default the backend uses SQLite + ChromaDB locally and Postgres + pgvector in production. To bring dev onto the same stack as prod (eliminates dialect-drift bugs):
+
+```bash
+./backend/scripts/dev_db.sh up          # boots postgres+pgvector on :54329
+export DATABASE_URL=postgresql://creative:creative@localhost:54329/creative_agent_dev
+python -m backend.scripts.migrate_sqlite_to_postgres   # optional one-shot backfill
+python backend/scripts/start_server.py
+```
+
+Unset `DATABASE_URL` to roll back to SQLite. See [docker-compose.yml](docker-compose.yml) and [backend/scripts/migrate_sqlite_to_postgres.py](backend/scripts/migrate_sqlite_to_postgres.py).
+
 ## Environment Variables
 
 ```env
