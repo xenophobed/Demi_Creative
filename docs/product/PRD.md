@@ -583,6 +583,23 @@ Remembers each child's creation history and preferences to enable content contin
 - ✅ **Privacy compliance**: `recent_choices` capped at 50 entries, theme scores decay after 6 months, DELETE endpoint clears SQLite + ChromaDB data
 - 🔲 **Theme recommendation engine**: Preference data has been accumulated but no recommendation algorithm exists; no personalized theme suggestions shown to users
 - 🔲 **Character growth and difficulty progression**: Character traits accumulate over time, reading difficulty adapts with usage (P3 enhancement)
+- 🔲 **Hybrid search across drawings + stories**: Today retrieval is either pure SQL key-lookup (recent N) or pure pgvector cosine. Neither lets the buddy answer "find my Lightning Dog story" — exact-name and fuzzy-concept must both count. Hybrid search (BM25 + vector via Reciprocal Rank Fusion) closes this gap on the existing `drawing_embeddings` and `story_embeddings_pg` tables — no new store. Depends on local-dev pgvector migration landing first.
+
+#### Hybrid Retrieval Approach (Phase 2)
+
+The memory system uses **two retrieval styles**, picked per call:
+
+| Style | Where it runs today | Where hybrid extends it |
+|---|---|---|
+| General SQL (`WHERE … ORDER BY counter DESC`) | session, episodic-by-recency, factual, characters-by-appearance, procedural | unchanged |
+| Vector cosine (`embedding <=> ?::vector`) | drawing recognition + story dedup (specialists only) | replaced by Reciprocal Rank Fusion of BM25 (Postgres `tsvector`) + vector cosine |
+| **Hybrid (BM25 + vector, RRF)** | not yet used | drawing recognition, story dedup, AND a new `search_my_stories(query)` MCP tool the buddy can call from chat |
+
+**Why RRF (not weighted score blend)**: rank-based fusion is robust without needing to normalize raw scores from two different scoring functions (BM25 raw vs. cosine distance). One additional `tsvector` column + GIN index on each embedding table; no new store.
+
+#### Graph RAG — Out of Scope Today
+
+Graph traversal + vector retrieval (e.g., FalkorDB as a lightweight Cypher backend) would unlock multi-hop queries like *"characters that share a story with Sparkle"* or *"themes preferred by kids in my group"*. **Deferred until a real Inspiration Daily (§3.10) or Content Hub (§3.12) user story demands cross-entity recommendation that hybrid search alone cannot serve.** Trigger condition: an explicit recall miss attributable to flat-counter limitations.
 
 #### Content Safety Requirements
 - Privacy protection: only stores creative content, not personal sensitive information
@@ -606,6 +623,8 @@ Remembers each child's creation history and preferences to enable content contin
 - [ ] Theme recommendation engine: recommends personalized themes based on preference history
 - [ ] `my_agent_proxy` injects `**Story Memory**` (episodic) and `**What I Know About You**` (factual + semantic) sections into the buddy chat prompt; both empty-safe and prompt-size bounded
 - [ ] Buddy chat replies that reference memory still pass `check_content_safety` ≥ 0.85 via the safety-review subagent
+- [ ] `drawing_embeddings` and `story_embeddings_pg` each have a `tsvector` column + GIN index; hybrid search (BM25 + cosine via RRF) replaces vector-only retrieval in `search_similar_drawings` and `search_similar_stories`
+- [ ] New `search_my_stories(query)` MCP tool: the buddy can answer "find my X story" on `/my-agent` using hybrid retrieval, with `user_id:child_id` scope enforced
 
 #### Out of Scope
 - Character growth mechanism (traits evolving over time) — Phase 3
