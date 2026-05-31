@@ -41,6 +41,47 @@ interface GateCopy {
   body: string
 }
 
+export const GATE_ERROR_COPY = {
+  wrong_password: "That password didn't match. Try again.",
+  child_not_found:
+    "We can't find this child profile. Refresh the page and try again.",
+  parent_required:
+    "Only a parent account can change this. Log out and log in as the parent.",
+  missing_email:
+    "Sign in first, then try again.",
+  unknown:
+    "Something went wrong. Try again or refresh the page.",
+} as const
+
+export type GateErrorKind = keyof typeof GATE_ERROR_COPY
+
+/** Map a thrown error from authService.login OR updateConsent to a
+ *  user-facing copy key. Pure function so we can unit-test the mapping
+ *  without rendering the modal.
+ */
+export function classifyGateError(err: unknown): GateErrorKind {
+  const status =
+    typeof err === 'object' && err !== null && 'response' in err
+      ? (err as { response?: { status?: number } }).response?.status
+      : undefined
+  const code =
+    typeof err === 'object' && err !== null && 'response' in err
+      ? (err as { response?: { data?: { detail?: { code?: string } } } }).response?.data?.detail?.code
+      : undefined
+
+  if (status === 404 || code === 'CHILD_PROFILE_NOT_FOUND') return 'child_not_found'
+  if (status === 403 || code === 'PARENT_ROLE_REQUIRED') return 'parent_required'
+  if (status === 400 || status === 401 || status === 422) return 'wrong_password'
+
+  // Supabase login throws a plain Error with a message — treat as
+  // password-class failure since that's the most common interpretation.
+  if (err instanceof Error && /password|credential|invalid/i.test(err.message)) {
+    return 'wrong_password'
+  }
+
+  return 'unknown'
+}
+
 export const GATE_COPY: Record<ConsentKind, Record<AgeGroup, GateCopy>> = {
   camera: {
     '3-5': {
@@ -108,15 +149,35 @@ export function ParentConsentGate({
 
     setSubmitting(true)
     setError(null)
+
+    // Split the two calls so we can attribute the failure correctly.
+    // Bundling them was the bug behind #603 — a 404 on consent-update
+    // showed up as "password didn't match" and sent users hunting for a
+    // password they hadn't actually mistyped.
     try {
       await authService.login({
         username_or_email: user.email,
         password,
       })
+    } catch (err) {
+      console.warn('ParentConsentGate: login failed', err)
+      const kind = classifyGateError(err)
+      // Login failure is almost always a password mismatch; map other
+      // codes through the classifier in case the auth backend evolves.
+      setError(
+        kind === 'unknown' ? GATE_ERROR_COPY.wrong_password : GATE_ERROR_COPY[kind],
+      )
+      setSubmitting(false)
+      return
+    }
+
+    try {
       await updateConsent(childId, { [consentField]: true })
       onGranted()
     } catch (err) {
-      setError("That password didn't match. Please try again.")
+      console.warn('ParentConsentGate: consent update failed', err)
+      const kind = classifyGateError(err)
+      setError(GATE_ERROR_COPY[kind])
     } finally {
       setSubmitting(false)
     }
