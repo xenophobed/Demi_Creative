@@ -977,7 +977,7 @@ A pluggable multi-provider TTS engine supporting expressive voice narration, sce
 
 - Full custom voice cloning (→ #150, Phase 3)
 - Fully automated soundtrack generation
-- Real-time voice conversation (non-TTS scenario)
+- ~~Real-time voice conversation (non-TTS scenario)~~ → moved in-scope under §3.16 Talk to Buddy
 
 > **GitHub Epic**: #45 | **Phase**: 2 | **Milestone**: Phase 2 — Interactive + Memory + News
 
@@ -1972,6 +1972,70 @@ Two parallel tracks:
 - Real-time camera filters, AR overlays, or background blur — capture only
 - Multilingual STT beyond OpenAI Whisper's automatic language detection
 - Native iOS/Android apps — this is a web-only effort targeting tablet/phone browsers
+
+---
+
+## 3.16 Talk to Buddy — Realtime Voice [Phase 2 — Reach]
+
+Two-way spoken conversation between the child and their My Agent buddy on `/my-agent`. Voice is a new I/O surface on top of the existing My Agent proxy (§3.11.7) — the proxy, memory wiring (§3.5), safety pipeline (§3.4), `launch_flow` handoffs, and Content Hub byline (§3.12) are all unchanged. Text-chat replies stay text-only in v1; voice is a separate surface, not a TTS overlay on text chat.
+
+### 3.16.1 Problem
+The buddy promise is companionship. Ages 3-5 cannot read the buddy's text replies, and ages 6-12 find typing slow on tablets. The existing one-shot `VoiceInputButton` (§3.15) lets a child speak a single prompt, but the buddy still answers in silence. That breaks the "creative buddy" pitch for the core pre-reader cohort and creates an unnatural rhythm for tablet users.
+
+### 3.16.2 Solution
+A "Talk to {buddy_name}" mode on `/my-agent` that opens a full-duplex voice session. The child speaks; the buddy listens, thinks (via the existing Claude-based proxy), and speaks the reply in its configured TTS voice. Transcripts of every turn land in the same `agent_chat_messages` rows as text mode, with `input_modality` and `output_modality` tags so memory, search, and Content Hub byline see no difference.
+
+**Provider strategy (v1)**: hybrid pipeline — streaming STT (OpenAI Whisper) → Claude via `my_agent_proxy.stream_my_agent_chat` → streaming TTS (ElevenLabs Flash). Full-duplex glue is a new backend WebSocket. Claude stays the brain. (OpenAI Realtime + ElevenLabs Conversational AI were considered and deferred — see story C1 for the provider-abstraction architecture.)
+
+### 3.16.3 Consent & Privacy
+Voice mode requires **two stacked consents** on `child_profiles`:
+1. `microphone_consent` (existing, §3.15) — gates the mic itself
+2. `voice_conversation_consent` (new) — gates the two-way spoken channel separately
+
+Both are parent-PIN-gated via `ParentApprovalPage`. The consent screen explicitly lists the data flow (mic → STT → server → Claude → TTS → speaker) and the audio-not-stored invariant. Parents can revoke from the Parent Dashboard; in-flight sessions close within 2s. Past voice transcripts persist as text in chat history; raw audio bytes never reach disk.
+
+### 3.16.4 Backend Pipeline
+- `POST /api/v1/me/agent/voice/session` — issues an ephemeral WS token bound to `(user_id, child_id, agent_id)`, single-use, 60s TTL.
+- `WS /api/v1/me/agent/voice/stream` — full-duplex broker. Per finalized child utterance: `check_content_safety` (threshold 0.85, fail-closed) → forward to `stream_my_agent_chat` → safety-review-specialist on the reply → stream Claude's text to TTS → stream audio frames back. `launch_flow` events arrive as control frames and trigger the same handoff as text-mode SSE.
+- New columns: `agent_chat_messages.input_modality`, `agent_chat_messages.output_modality` (both `text|voice`); `child_profiles.voice_conversation_consent BOOL`.
+- New table: `voice_sessions(user_id, child_id, agent_id, started_at, ended_at, duration_seconds, ended_reason)`.
+- Quota: voice minutes count against the existing daily quota (§3.9.1) at age-adapted rates (see 3.16.6).
+
+### 3.16.5 Frontend
+- `frontend/src/pages/MyAgentPage/TalkToBuddyPanel.tsx` — full-screen voice surface (mobile sheet, desktop side panel) launched from a new Talk button on `AgentChatPanel`.
+- `frontend/src/hooks/useVoiceConversation.ts` + pure `voiceConversationStateMachine.ts` — `getUserMedia` capture, WS client, state machine (`idle → connecting → listening → thinking → speaking → ending → error`). Mirrors the `useVoiceInput` reducer-extracted pattern from #584.
+- Live captions write into `useAgentChatStore` so text history and voice history merge.
+- `ParentConsentGate` gains a `kind="voice_conversation"` variant.
+
+### 3.16.6 Age Adaptation
+
+| Concern | 3-5 | 6-8 | 9-12 |
+|---|---|---|---|
+| Entry surface | Giant emoji + "Talk!" | "Talk to {buddy_name}" pill | Mic icon + "Voice" |
+| Default mode | Continuous VAD | Continuous VAD + PTT toggle | Push-to-talk default |
+| Greeting | One short line | Two-sentence with prompt | One line + suggestion list |
+| TTS voice picker | Parent-locked | 3 curated voices | 8 curated voices |
+| Barge-in / interrupt | Disabled (toddlers talk over) | 500ms hold-off | 200ms hold-off |
+| Max session | 10 min | 15 min | 20 min |
+| Idle auto-end | 30s silence | 45s silence | 60s silence |
+| Captions | Off; auto-show on rejection | On, small font | On, full scrollback |
+| Safety threshold | 0.90 (raised) | 0.85 | 0.85 |
+| Launch-flow speech | Full narration | One-sentence handoff | Brief tone + toast |
+| Quota cost | 4 min = 1 unit | 3 min = 1 unit | 2 min = 1 unit |
+
+### 3.16.7 Out of Scope (v1)
+- Buddy voice cloning from a parent/child sample (→ Phase 3 via existing `voice_service.py`)
+- Voice replies on the **text** chat panel — text stays text-only
+- Multi-locale STT/TTS beyond Whisper auto-detect
+- Voice-driven creation **inside** `/image-to-story` and `/interactive-story` (voice still launches them via `launch_flow`; pages remain text/keyboard)
+- Group voice chat / multi-child sessions
+- Offline / on-device STT or TTS
+- Cross-device voice-session handoff
+- Voice emotion or sentiment classification
+- Voice-age classifier as an enforced gate
+- Recording/downloading voice sessions for parents — transcripts only
+
+> **GitHub Epic**: tracked under the epic created by `/spec-to-backlog talk-to-buddy-realtime-voice` | **Phase**: 2 | **Milestone**: Phase 2 — Interactive + Memory + News
 
 ---
 
