@@ -7,7 +7,7 @@ Pydantic models defining request and response formats for all API endpoints
 import re
 from datetime import datetime
 from enum import Enum
-from typing import List, Optional, Dict, Any, Literal
+from typing import List, Optional, Dict, Any, Literal, Union
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 
@@ -906,6 +906,139 @@ class ChildProfileConsentUpdateRequest(BaseModel):
 class ChildProfileListResponse(BaseModel):
     """GET /child-profiles response envelope."""
     items: List[ChildProfileResponse] = Field(default_factory=list)
+
+
+# ============================================================================
+# Talk to Buddy — Realtime Voice (#611 / epic #605, PRD §3.16)
+# ============================================================================
+
+class VoiceSessionStartRequest(BaseModel):
+    """POST /api/v1/me/agent/voice/session — initiate a realtime voice session.
+
+    Child profile is the consent + quota anchor. Backend mints an ephemeral
+    token + WS URL; the browser opens the WebSocket directly. Audio bytes
+    flow over the WS — never through this REST envelope.
+    """
+    child_id: str = Field(..., min_length=1, max_length=100)
+    persona: Optional[str] = Field(
+        default=None,
+        max_length=64,
+        description="Override the buddy's voice persona for this session. "
+                    "Falls back to child_profile.voice_persona.",
+    )
+
+
+class VoiceProviderConfig(BaseModel):
+    """Sub-shape of VoiceSessionStartResponse — provider-specific runtime hints."""
+    provider: Literal["mock", "hybrid"] = Field(
+        ..., description="Which RealtimeVoiceProvider impl backs this session."
+    )
+    sample_rate_hz: int = Field(default=16_000, ge=8_000, le=48_000)
+    audio_format: Literal["pcm16", "opus"] = Field(default="pcm16")
+
+
+class VoiceSessionStartResponse(BaseModel):
+    """REST response — what the client needs to open the WS handshake.
+
+    Returns 501 in the foundation PR (#611). Real implementation lands in
+    sub-story #606.5 once the broker is wired.
+    """
+    session_id: str
+    ephemeral_token: str = Field(..., min_length=20, max_length=512)
+    expires_at: datetime
+    ws_url: str = Field(..., description="Absolute or relative WebSocket URL")
+    provider_config: VoiceProviderConfig
+
+
+# ── WS Event envelopes ───────────────────────────────────────────────────────
+# Discriminated unions on `type`. Pydantic resolves by literal match.
+
+class VoiceWSAudioChunkEvent(BaseModel):
+    """Client → Server: a chunk of captured PCM/opus from the browser mic."""
+    type: Literal["audio_chunk"]
+    seq: int = Field(..., ge=0, description="Monotonic sequence number")
+    audio_b64: str = Field(..., description="Base64-encoded audio bytes")
+
+
+class VoiceWSVadEndEvent(BaseModel):
+    """Client → Server: VAD detected end-of-utterance; finalize transcription."""
+    type: Literal["vad_end"]
+    seq: int = Field(..., ge=0)
+
+
+class VoiceWSClientDoneEvent(BaseModel):
+    """Client → Server: user tapped End; close the session gracefully."""
+    type: Literal["client_done"]
+
+
+# Discriminated union of every legal client → server WS event.
+VoiceWSClientEvent = Union[
+    VoiceWSAudioChunkEvent,
+    VoiceWSVadEndEvent,
+    VoiceWSClientDoneEvent,
+]
+
+
+class VoiceWSPartialTranscriptEvent(BaseModel):
+    """Server → Client: streaming partial transcript while the child is speaking."""
+    type: Literal["partial_transcript"]
+    text: str
+    seq: int = Field(..., ge=0)
+
+
+class VoiceWSFinalTranscriptEvent(BaseModel):
+    """Server → Client: safety-passed final transcript for one child utterance."""
+    type: Literal["final_transcript"]
+    text: str
+    safety_passed: bool = Field(default=True)
+
+
+class VoiceWSAssistantTextEvent(BaseModel):
+    """Server → Client: a delta of the buddy's reply text (pre-TTS)."""
+    type: Literal["assistant_text"]
+    delta: str
+    is_final: bool = Field(default=False)
+
+
+class VoiceWSAudioChunkServerEvent(BaseModel):
+    """Server → Client: a chunk of synthesized buddy speech."""
+    type: Literal["audio_chunk"]
+    seq: int = Field(..., ge=0)
+    audio_b64: str
+
+
+class VoiceWSSafetyBlockEvent(BaseModel):
+    """Server → Client: the proposed reply or transcript failed safety; replaced."""
+    type: Literal["safety_block"]
+    direction: Literal["utterance", "reply"]
+    fallback_text: str = Field(
+        ..., description="The kid-friendly redirect that will be spoken instead."
+    )
+
+
+class VoiceWSQuotaExhaustedEvent(BaseModel):
+    """Server → Client: daily voice quota is spent; session closing."""
+    type: Literal["quota_exhausted"]
+    seconds_remaining: int = Field(default=0)
+
+
+class VoiceWSErrorEvent(BaseModel):
+    """Server → Client: terminal error; session will close after this frame."""
+    type: Literal["error"]
+    code: str = Field(..., description="Stable error code (e.g. 'not_implemented').")
+    message: str = Field(default="")
+
+
+# Discriminated union of every legal server → client WS event.
+VoiceWSServerEvent = Union[
+    VoiceWSPartialTranscriptEvent,
+    VoiceWSFinalTranscriptEvent,
+    VoiceWSAssistantTextEvent,
+    VoiceWSAudioChunkServerEvent,
+    VoiceWSSafetyBlockEvent,
+    VoiceWSQuotaExhaustedEvent,
+    VoiceWSErrorEvent,
+]
 
 
 class ParentApprovalTokenRequest(BaseModel):
