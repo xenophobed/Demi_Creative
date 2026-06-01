@@ -577,6 +577,8 @@ async def init_schema(db: "DatabaseManager") -> None:
     await _migrate_add_onboarding_columns(db)
     await _migrate_create_child_profiles_table(db)
     await _migrate_add_child_profile_consent_columns(db)
+    await _migrate_add_voice_realtime_columns(db)
+    await _migrate_create_voice_sessions_table(db)
     await _migrate_create_user_agents_table(db)
     await _migrate_add_user_agent_config_columns(db)
     await _migrate_create_agent_chat_tables(db)
@@ -923,6 +925,75 @@ async def _migrate_add_child_profile_consent_columns(db: "DatabaseManager") -> N
     if added:
         await db.commit()
         print("Child profile consent migration completed")
+
+
+async def _migrate_add_voice_realtime_columns(db: "DatabaseManager") -> None:
+    """Migration: Add Talk-to-Buddy realtime voice columns to child_profiles (#611).
+
+    Companion to #587 microphone_consent. While microphone_consent gates
+    short STT clips (push-to-record voice input), voice_conversation_consent
+    gates the new full-duplex spoken channel under PRD §3.16. Voice persona
+    binds the buddy's TTS voice; quota_seconds tracks the daily voice budget.
+
+    All three columns default to 0/'buddy_default' so existing rows inherit
+    safe defaults via the column-level DEFAULT. No backfill needed.
+    """
+    columns = [
+        ("voice_conversation_consent", "ALTER TABLE child_profiles ADD COLUMN voice_conversation_consent INTEGER DEFAULT 0"),
+        ("voice_persona", "ALTER TABLE child_profiles ADD COLUMN voice_persona TEXT DEFAULT 'buddy_default'"),
+        ("voice_session_quota_seconds", "ALTER TABLE child_profiles ADD COLUMN voice_session_quota_seconds INTEGER DEFAULT 0"),
+    ]
+    added = False
+    for column_name, ddl in columns:
+        if not await column_exists(db, "child_profiles", column_name):
+            if not added:
+                print("Migrating child_profiles: adding voice-realtime columns (#611)...")
+                added = True
+            await db.execute(ddl)
+    if added:
+        await db.commit()
+        print("Child profile voice-realtime migration completed")
+
+
+VOICE_SESSIONS_TABLE = """
+CREATE TABLE IF NOT EXISTS voice_sessions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT UNIQUE NOT NULL,
+    user_id TEXT NOT NULL,
+    child_id TEXT NOT NULL,
+    started_at TEXT NOT NULL,
+    ended_at TEXT,
+    duration_seconds INTEGER,
+    transcript_safety_score REAL,
+    termination_reason TEXT,
+    provider TEXT,
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+);
+"""
+
+VOICE_SESSIONS_INDEXES = """
+CREATE INDEX IF NOT EXISTS idx_voice_sessions_user_child ON voice_sessions(user_id, child_id);
+CREATE INDEX IF NOT EXISTS idx_voice_sessions_started_at ON voice_sessions(started_at DESC);
+"""
+
+
+async def _migrate_create_voice_sessions_table(db: "DatabaseManager") -> None:
+    """Migration: Create voice_sessions table for Talk-to-Buddy audit + quota (#611).
+
+    Each row tracks one realtime voice session: who, when, how long, how it
+    ended, and what provider served it. termination_reason values include
+    'user_ended', 'timeout', 'quota', 'safety_fail', 'provider_error',
+    'consent_revoked'. Audio bytes are NEVER persisted; only the moderated
+    transcript_safety_score is kept for audit.
+    """
+    await db.execute(translate_ddl(VOICE_SESSIONS_TABLE, db.dialect))
+    for stmt in VOICE_SESSIONS_INDEXES.strip().split(";"):
+        if stmt.strip():
+            try:
+                await db.execute(stmt)
+            except Exception:
+                pass
+    await db.commit()
 
 
 async def _migrate_create_child_profiles_table(db: "DatabaseManager") -> None:

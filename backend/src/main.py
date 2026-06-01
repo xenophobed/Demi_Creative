@@ -12,6 +12,15 @@ from datetime import datetime
 from pathlib import Path
 
 from dotenv import load_dotenv
+
+# Load .env BEFORE any import that constructs a singleton from the
+# environment. The db_manager singleton in services.database reads
+# os.environ["DATABASE_URL"] at module-import time; if .env loads after
+# that import, the singleton silently falls back to SQLite regardless
+# of what's in .env. (#600 dev-prod parity bug.)
+_backend_dir = Path(__file__).resolve().parent.parent
+load_dotenv(_backend_dir / ".env")
+
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -33,10 +42,6 @@ from .services.kids_daily_scheduler import daily_drop_scheduler
 from .services.retention_scheduler import retention_scheduler
 
 logger = logging.getLogger(__name__)
-
-# Load environment variables from backend/.env regardless of cwd
-_backend_dir = Path(__file__).resolve().parent.parent
-load_dotenv(_backend_dir / ".env")
 
 
 def _patch_anthropic_async_http_client_close() -> None:
@@ -360,6 +365,7 @@ from .api.routes import (
     users,
     video,
     voice,
+    voice_realtime,
 )
 
 app.include_router(image_to_story.router)
@@ -383,6 +389,7 @@ app.include_router(achievements.router)
 app.include_router(library.router)
 app.include_router(memory.router)
 app.include_router(usage.router)
+app.include_router(voice_realtime.router)
 
 
 # ============================================================================
