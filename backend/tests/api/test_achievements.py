@@ -6,6 +6,7 @@ import pytest
 
 from backend.src.services.achievement_service import FIRST_STORY
 from backend.src.services.database import child_profile_repo, db_manager
+from backend.src.services.database.sql_compat import insert_or_ignore
 
 
 async def _ensure_owned_child(child_id: str) -> None:
@@ -16,13 +17,15 @@ async def _ensure_owned_child(child_id: str) -> None:
         return
 
     await db_manager.execute(
-        """
-        INSERT OR IGNORE INTO users (
-            user_id, username, email, password_hash, display_name,
-            is_active, is_verified, role, consent_status,
-            membership_tier, referral_code, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
+        insert_or_ignore(
+            "users",
+            [
+                "user_id", "username", "email", "password_hash", "display_name",
+                "is_active", "is_verified", "role", "consent_status",
+                "membership_tier", "referral_code", "created_at", "updated_at",
+            ],
+            db_manager.dialect,
+        ),
         (
             "test_user",
             "test_user",
