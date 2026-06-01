@@ -28,6 +28,11 @@ from .usage_repository import UsageRepository, usage_repo
 from .referral_repository import ReferralRepository, referral_repo
 from .vector_repository import VectorRepository, vector_repo
 from .agent_repository import AgentRepository, AgentData, agent_repo
+from .voice_session_repository import (
+    VoiceSessionRepository,
+    VoiceSessionData,
+    voice_session_repo,
+)
 from .agent_chat_repository import (
     AgentChatRepository,
     AgentChatSession,

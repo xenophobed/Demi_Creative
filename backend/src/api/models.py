@@ -882,23 +882,52 @@ class ChildProfileResponse(BaseModel):
     archived_at: Optional[datetime] = None
     camera_consent: bool = False
     microphone_consent: bool = False
+    voice_conversation_consent: bool = False
+    voice_persona: str = "buddy_default"
+    voice_session_quota_seconds: int = 0
     created_at: datetime
     updated_at: datetime
 
 
 class ChildProfileConsentUpdateRequest(BaseModel):
-    """Patch camera/microphone consent flags on a child profile (#587).
+    """Patch consent + voice fields on a child profile (#587, #612).
 
-    At least one field must be supplied; supplying both is allowed.
+    Camera + microphone consent shipped with #587. The voice fields land
+    in #612 to support PRD §3.16 Talk to Buddy:
+      - voice_conversation_consent — gates the realtime voice channel
+      - voice_persona — selects the buddy's TTS voice preset
+      - voice_session_quota_seconds — per-day quota cap (per-age in §3.16.6)
+
+    At least one field must be supplied; supplying multiple is allowed.
     """
     camera_consent: Optional[bool] = None
     microphone_consent: Optional[bool] = None
+    voice_conversation_consent: Optional[bool] = None
+    voice_persona: Optional[str] = Field(
+        default=None,
+        min_length=1,
+        max_length=64,
+    )
+    voice_session_quota_seconds: Optional[int] = Field(
+        default=None,
+        ge=0,
+        le=24 * 60 * 60,  # at most one day
+    )
 
     @model_validator(mode="after")
     def require_at_least_one_field(self):
-        if self.camera_consent is None and self.microphone_consent is None:
+        if all(
+            value is None
+            for value in (
+                self.camera_consent,
+                self.microphone_consent,
+                self.voice_conversation_consent,
+                self.voice_persona,
+                self.voice_session_quota_seconds,
+            )
+        ):
             raise ValueError(
-                "At least one of camera_consent or microphone_consent must be provided"
+                "At least one consent or voice field must be provided"
             )
         return self
 

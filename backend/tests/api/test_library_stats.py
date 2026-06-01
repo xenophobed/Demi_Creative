@@ -18,6 +18,7 @@ from backend.src.services.database import (
     db_manager,
 )
 from backend.src.services.database.schema import init_schema
+from backend.src.services.database.sql_compat import insert_or_ignore
 from backend.src.services.database.user_repository import UserData
 
 
@@ -35,13 +36,17 @@ class TestLibraryStatsEndpoint:
         # Seed test user so FK constraints are satisfied (#184)
         now = datetime.now()
         await db_manager.execute(
-            """INSERT OR IGNORE INTO users
-                (user_id, username, email, password_hash, display_name,
-                 is_active, is_verified, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, 1, 1, ?, ?)""",
+            insert_or_ignore(
+                "users",
+                [
+                    "user_id", "username", "email", "password_hash", "display_name",
+                    "is_active", "is_verified", "created_at", "updated_at",
+                ],
+                db_manager.dialect,
+            ),
             ("test_user", "test_user", "test@example.com",
              "test_hash", "Test User",
-             now.isoformat(), now.isoformat()),
+             1, 1, now.isoformat(), now.isoformat()),
         )
         await db_manager.commit()
 
@@ -211,16 +216,22 @@ class TestLibraryCountsEndpoint:
 
         now = datetime.now().isoformat()
         await db_manager.execute(
-            """INSERT OR IGNORE INTO users
-                (user_id, username, email, password_hash, display_name,
-                 is_active, is_verified, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, 1, 1, ?, ?)""",
+            insert_or_ignore(
+                "users",
+                [
+                    "user_id", "username", "email", "password_hash", "display_name",
+                    "is_active", "is_verified", "created_at", "updated_at",
+                ],
+                db_manager.dialect,
+            ),
             (
                 "test_user",
                 "test_user",
                 "test@example.com",
                 "test_hash",
                 "Test User",
+                1,
+                1,
                 now,
                 now,
             ),
@@ -319,16 +330,22 @@ class TestRichStatsParentDashboardAccess:
         now = datetime.now().isoformat()
         self.parent_user_id = "test_user"
         await db_manager.execute(
-            """INSERT OR IGNORE INTO users
-                (user_id, username, email, password_hash, display_name,
-                 is_active, is_verified, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, 1, 1, ?, ?)""",
+            insert_or_ignore(
+                "users",
+                [
+                    "user_id", "username", "email", "password_hash", "display_name",
+                    "is_active", "is_verified", "created_at", "updated_at",
+                ],
+                db_manager.dialect,
+            ),
             (
                 self.parent_user_id,
                 self.parent_user_id,
                 "test@example.com",
                 "test_hash",
                 "Test User",
+                1,
+                1,
                 now,
                 now,
             ),
