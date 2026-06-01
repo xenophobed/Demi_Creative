@@ -23,6 +23,9 @@ class ChildProfileData:
     updated_at: str
     camera_consent: bool = False
     microphone_consent: bool = False
+    voice_conversation_consent: bool = False
+    voice_persona: str = "buddy_default"
+    voice_session_quota_seconds: int = 0
 
 
 class ChildProfileRepository:
@@ -37,7 +40,8 @@ class ChildProfileRepository:
         query = """
             SELECT child_id, user_id, name, age_group, interests, avatar,
                    is_default, archived_at, camera_consent, microphone_consent,
-                   created_at, updated_at
+                   voice_conversation_consent, voice_persona,
+                   voice_session_quota_seconds, created_at, updated_at
             FROM child_profiles
             WHERE user_id = ?
         """
@@ -55,7 +59,8 @@ class ChildProfileRepository:
         query = """
             SELECT child_id, user_id, name, age_group, interests, avatar,
                    is_default, archived_at, camera_consent, microphone_consent,
-                   created_at, updated_at
+                   voice_conversation_consent, voice_persona,
+                   voice_session_quota_seconds, created_at, updated_at
             FROM child_profiles
             WHERE user_id = ? AND child_id = ?
         """
@@ -121,6 +126,9 @@ class ChildProfileRepository:
             updated_at=now,
             camera_consent=False,
             microphone_consent=False,
+            voice_conversation_consent=False,
+            voice_persona="buddy_default",
+            voice_session_quota_seconds=0,
         )
 
     async def update(
@@ -193,6 +201,9 @@ class ChildProfileRepository:
         child_id: str,
         camera_consent: Optional[bool] = None,
         microphone_consent: Optional[bool] = None,
+        voice_conversation_consent: Optional[bool] = None,
+        voice_persona: Optional[str] = None,
+        voice_session_quota_seconds: Optional[int] = None,
     ) -> Optional[ChildProfileData]:
         existing = await self.get_for_user(user_id, child_id)
         if existing is None:
@@ -207,6 +218,15 @@ class ChildProfileRepository:
         if microphone_consent is not None:
             updates.append("microphone_consent = ?")
             params.append(1 if microphone_consent else 0)
+        if voice_conversation_consent is not None:
+            updates.append("voice_conversation_consent = ?")
+            params.append(1 if voice_conversation_consent else 0)
+        if voice_persona is not None:
+            updates.append("voice_persona = ?")
+            params.append(voice_persona)
+        if voice_session_quota_seconds is not None:
+            updates.append("voice_session_quota_seconds = ?")
+            params.append(int(voice_session_quota_seconds))
 
         params.extend([user_id, child_id])
         await self._db.execute(
@@ -280,6 +300,9 @@ class ChildProfileRepository:
             user_id=row["user_id"],
             name=row["name"],
             age_group=row.get("age_group") or "6-8",
+            voice_conversation_consent=bool(row.get("voice_conversation_consent", 0)),
+            voice_persona=row.get("voice_persona") or "buddy_default",
+            voice_session_quota_seconds=int(row.get("voice_session_quota_seconds") or 0),
             interests=[str(item) for item in interests],
             avatar=row.get("avatar"),
             is_default=bool(row.get("is_default", 0)),

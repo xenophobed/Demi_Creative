@@ -50,6 +50,9 @@ def _to_response(profile: ChildProfileData) -> ChildProfileResponse:
         archived_at=_parse_dt(profile.archived_at),
         camera_consent=profile.camera_consent,
         microphone_consent=profile.microphone_consent,
+        voice_conversation_consent=profile.voice_conversation_consent,
+        voice_persona=profile.voice_persona,
+        voice_session_quota_seconds=profile.voice_session_quota_seconds,
         created_at=datetime.fromisoformat(profile.created_at),
         updated_at=datetime.fromisoformat(profile.updated_at),
     )
@@ -140,6 +143,9 @@ async def update_child_profile_consent(
         child_id=child_id,
         camera_consent=request.camera_consent,
         microphone_consent=request.microphone_consent,
+        voice_conversation_consent=request.voice_conversation_consent,
+        voice_persona=request.voice_persona,
+        voice_session_quota_seconds=request.voice_session_quota_seconds,
     )
     if profile is None:
         raise _not_found()
