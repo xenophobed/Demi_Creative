@@ -71,6 +71,7 @@ Every issue MUST be assigned to a milestone.
 | #436 | My Agent — Personal Creative Buddy with Onboarding & Customization | domain:my-agent | 2 |
 | #437 | Content Hub — Group-Based Community Sharing with Buddy Bylines | domain:content-hub | 2 |
 | #579 | Tablet & Mobile Capture Modalities | domain:capture | 2 |
+| #605 | Talk to Buddy — Realtime Voice | domain:my-agent | 2 |
 
 Every story/bug body MUST include `**Parent Epic**: #<number>`.
 
