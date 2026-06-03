@@ -166,23 +166,31 @@ class TestPydanticContracts:
 # -------------------- REST endpoint contract --------------------
 
 class TestRestEndpointContract:
-    """POST /session returns 501 with the documented detail shape."""
+    """Foundation-PR REST contract is now superseded by #615.
+
+    The 501 stub from #611 has been replaced by the real broker
+    (test coverage lives in test_voice_broker_contract.py). What
+    remains here is the request-validation invariant — Pydantic
+    422 must fire BEFORE any route handler runs.
+    """
 
     @pytest.mark.asyncio
-    async def test_post_session_returns_501(self, client):
+    async def test_post_session_no_longer_returns_501(self, client):
+        # Once #615 landed, the body is real — an unauthorized/missing-child
+        # call surfaces a 404, NOT 501. The 501 detail code is gone.
         response = await client.post(
             "/api/v1/me/agent/voice/session",
             json={"child_id": "child_realtime_voice"},
         )
-        assert response.status_code == 501
+        assert response.status_code != 501
         body = response.json()
-        assert body["detail"]["code"] == "VOICE_REALTIME_NOT_IMPLEMENTED"
-        assert "#606.5" in body["detail"]["message"]
+        if "detail" in body and isinstance(body["detail"], dict):
+            assert body["detail"].get("code") != "VOICE_REALTIME_NOT_IMPLEMENTED"
 
     @pytest.mark.asyncio
     async def test_post_session_validates_request_shape(self, client):
-        # Missing required child_id → 422 from Pydantic, NOT 501.
-        # This ensures the contract enforcement happens BEFORE the stub.
+        # Missing required child_id → 422 from Pydantic, BEFORE the
+        # route handler runs. This invariant survives #615.
         response = await client.post(
             "/api/v1/me/agent/voice/session",
             json={"persona": "buddy_default"},
@@ -193,25 +201,29 @@ class TestRestEndpointContract:
 # -------------------- WebSocket endpoint contract --------------------
 
 class TestWebSocketContract:
-    """WS /stream accepts, emits one documented error envelope, closes 1011."""
+    """The WS handshake is now real (#615). Foundation-stub behavior is gone.
 
-    def test_ws_emits_not_implemented_envelope_and_closes(self):
-        # FastAPI's TestClient is the canonical WS test surface; httpx's
-        # AsyncClient doesn't expose WS handshake. Import lazily so the
-        # rest of this module doesn't grow a sync-test dependency.
+    The remaining invariant: a connection with NO token still gets an
+    error envelope (now `auth_failed`, not `not_implemented`). Full WS
+    coverage lives in test_voice_broker_contract.py.
+    """
+
+    def test_ws_without_token_emits_auth_failed(self):
         from fastapi.testclient import TestClient
 
         with TestClient(app) as test_client:
-            with test_client.websocket_connect("/api/v1/me/agent/voice/stream") as ws:
+            with test_client.websocket_connect(
+                "/api/v1/me/agent/voice/stream"
+            ) as ws:
                 envelope = ws.receive_json()
                 assert envelope["type"] == "error"
-                assert envelope["code"] == "not_implemented"
-                # Server-side close gets surfaced when we try to receive
-                # again; that's the documented foundation behavior.
+                assert envelope["code"] == "auth_failed"
 
-    def test_ws_envelope_matches_pydantic_error_shape(self):
-        # The envelope the server sends must validate against the
-        # discriminated-union shape the frontend will type against.
-        envelope = json.loads(json.dumps(voice_realtime.NOT_IMPLEMENTED_WS_ENVELOPE))
+    def test_documented_error_shape_still_validates(self):
+        # The error envelope the broker sends matches VoiceWSErrorEvent.
+        # We synthesize a representative payload and round-trip it.
+        envelope = json.loads(
+            json.dumps({"type": "error", "code": "auth_failed", "message": "x"})
+        )
         ev = VoiceWSErrorEvent(**envelope)
-        assert ev.code == "not_implemented"
+        assert ev.code == "auth_failed"
