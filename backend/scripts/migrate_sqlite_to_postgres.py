@@ -177,10 +177,10 @@ async def _replay_chromadb(chroma_path: Path, pg_db, dry_run: bool) -> Dict[str,
     from backend.src.services.database.vector_repository import VectorRepository
 
     client = chromadb.PersistentClient(path=str(chroma_path))
-    # VectorRepository uses the singleton db_manager — the caller must
-    # have arranged for db_manager to be the Postgres one before invoking
-    # this script (which we do via DATABASE_URL env var).
-    vector_repo = VectorRepository()
+    # Bind the repo to the SAME connected pg_db the migration opened.
+    # (The global db_manager singleton is never connected in this script,
+    # so VectorRepository() with no args would fail "not connected".)
+    vector_repo = VectorRepository(db=pg_db)
 
     counts: Dict[str, int] = {}
 
@@ -225,11 +225,14 @@ async def _replay_chromadb(chroma_path: Path, pg_db, dry_run: bool) -> Dict[str,
                 if not child_id or not text:
                     continue
                 await vector_repo.add_story_embedding(
-                    story_id=story_id,
+                    doc_id=story_id,
                     child_id=child_id,
-                    story_text=text,
-                    themes=themes if isinstance(themes, str) else json.dumps(themes),
-                    age_group=age_group,
+                    document_text=text,
+                    metadata={
+                        "story_id": story_id,
+                        "themes": themes if isinstance(themes, str) else json.dumps(themes),
+                        "age_group": age_group,
+                    },
                 )
         counts["story_embeddings"] = len(ids)
     except Exception as exc:  # noqa: BLE001
