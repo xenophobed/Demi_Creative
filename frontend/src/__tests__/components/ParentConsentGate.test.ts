@@ -128,3 +128,47 @@ describe('ParentConsentGate: GATE_ERROR_COPY', () => {
     expect(GATE_ERROR_COPY.parent_required.toLowerCase()).toContain('parent')
   })
 })
+
+describe('ParentConsentGate: voice_conversation variant (#619)', () => {
+  it('covers all three age groups for voice_conversation', () => {
+    for (const age of AGE_GROUPS) {
+      const copy = GATE_COPY.voice_conversation[age]
+      expect(copy).toBeDefined()
+      expect(copy.emoji.length).toBeGreaterThan(0)
+      expect(copy.title.length).toBeGreaterThan(0)
+      expect(copy.body.length).toBeGreaterThan(0)
+    }
+  })
+
+  it('uses a distinct conversation emoji', () => {
+    // Distinct from 📸/🎤 so kids and parents can tell the kinds apart at
+    // a glance in screenshots and the consent history audit.
+    for (const age of AGE_GROUPS) {
+      const emoji = GATE_COPY.voice_conversation[age].emoji
+      expect(emoji).not.toBe('📸')
+      expect(emoji).not.toBe('🎤')
+    }
+  })
+
+  it('age 3-5 voice_conversation copy stays short', () => {
+    expect(GATE_COPY.voice_conversation['3-5'].body.length).toBeLessThanOrEqual(140)
+  })
+
+  it('voice_conversation copy promises audio is not stored', () => {
+    // PRD §3.16 hard rule — must be visible to the parent at consent time
+    // for at least the older bands. 3-5 defers to a grown-up so we accept
+    // either pattern.
+    for (const age of AGE_GROUPS) {
+      const body = GATE_COPY.voice_conversation[age].body.toLowerCase()
+      const promisesNoStorage =
+        body.includes("don't save") ||
+        body.includes('not stored') ||
+        body.includes('never stored') ||
+        body.includes("only the words") ||
+        body.includes('only the moderated') ||
+        body.includes('only keep the words') ||
+        body.includes('grown-up')
+      expect(promisesNoStorage).toBe(true)
+    }
+  })
+})

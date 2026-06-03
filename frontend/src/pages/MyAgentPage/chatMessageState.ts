@@ -13,6 +13,13 @@ export interface ChatMessage {
   role: "user" | "assistant";
   text: string;
   streaming?: boolean;
+  /** When set, marks the message as originating from a non-text modality.
+   *  Currently the only value is "voice" for transcripts of the realtime
+   *  voice channel (#619, PRD §3.16). The chat panel renders a small mic
+   *  icon next to messages with this tag so parents can see at a glance
+   *  which turns happened via voice vs typing.
+   */
+  source?: "voice";
 }
 
 /**
