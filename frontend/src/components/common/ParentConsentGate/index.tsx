@@ -25,7 +25,7 @@ import useAuthStore from '@/store/useAuthStore'
 import useChildStore from '@/store/useChildStore'
 import type { AgeGroup } from '@/types/api'
 
-export type ConsentKind = 'camera' | 'microphone'
+export type ConsentKind = 'camera' | 'microphone' | 'voice_conversation'
 
 export interface ParentConsentGateProps {
   kind: ConsentKind
@@ -117,6 +117,23 @@ export const GATE_COPY: Record<ConsentKind, Record<AgeGroup, GateCopy>> = {
       body: 'A parent must approve microphone access. Audio is transcribed and never stored — only the moderated text reaches your input.',
     },
   },
+  voice_conversation: {
+    '3-5': {
+      emoji: '💬',
+      title: 'Talk with your buddy?',
+      body: "Ask a grown-up to say yes. Your buddy can listen AND talk back — like a real friend.",
+    },
+    '6-8': {
+      emoji: '💬',
+      title: 'Talk back-and-forth with your buddy?',
+      body: "We need a grown-up's OK before your buddy speaks out loud. We only keep the words (not the audio) and check every reply for kid-safe content.",
+    },
+    '9-12': {
+      emoji: '💬',
+      title: 'Enable voice conversation',
+      body: 'A parent must approve two-way voice chat. Audio is never stored — only the moderated transcript persists in your chat history, same as text mode. The session has a daily time cap.',
+    },
+  },
 }
 
 export function ParentConsentGate({
@@ -134,7 +151,13 @@ export function ParentConsentGate({
   const [error, setError] = useState<string | null>(null)
 
   const copy = GATE_COPY[kind][ageGroup]
-  const consentField = kind === 'camera' ? 'camera_consent' : 'microphone_consent'
+  // Map each kind to the child_profiles boolean it flips.
+  const consentField =
+    kind === 'camera'
+      ? 'camera_consent'
+      : kind === 'microphone'
+        ? 'microphone_consent'
+        : 'voice_conversation_consent'
 
   async function handleAllow(event: React.FormEvent) {
     event.preventDefault()

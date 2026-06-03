@@ -38,6 +38,9 @@ interface AgentChatState {
   appendStreamingDelta: (delta: string) => void;
   settleAssistantMessage: (text: string) => void;
   appendUserMessage: (text: string) => void;
+  // Realtime voice transcripts merge into the same chat history with
+  // a `source: "voice"` tag so the UI can render a mic icon (#619).
+  appendVoiceCaption: (turn: { role: "user" | "assistant"; text: string }) => void;
   // Reconcile the server-issued session id from the first SSE `session`
   // event when the turn started without a selected session.
   adoptServerSession: (sessionId: string) => void;
@@ -184,6 +187,22 @@ const useAgentChatStore = create<AgentChatState>((set, get) => ({
   appendUserMessage: (text) => {
     set((state) => ({
       messages: [...state.messages, { id: nextId("user"), role: "user", text }],
+    }));
+  },
+
+  appendVoiceCaption: (turn) => {
+    // Merge a voice-channel transcript into the same message list the
+    // text panel renders so parents see one unified chat history (#619).
+    set((state) => ({
+      messages: [
+        ...state.messages,
+        {
+          id: nextId(`voice_${turn.role}`),
+          role: turn.role,
+          text: turn.text,
+          source: "voice",
+        },
+      ],
     }));
   },
 
