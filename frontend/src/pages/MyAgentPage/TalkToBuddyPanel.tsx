@@ -1,142 +1,185 @@
-import { describe, expect, it } from "vitest";
+/**
+ * TalkToBuddyPanel (#618) — full-screen UI for the Talk-to-Buddy
+ * realtime voice surface (PRD §3.16).
+ *
+ * Mobile sheet on (pointer: coarse) and (max-width: 1024px); desktop
+ * side panel otherwise. Pure helpers (state copy map, indicator picker,
+ * entry-button truth table) live in `talkToBuddyHelpers.ts` so the
+ * test load stays off this presentational component.
+ *
+ * The panel does NOT own the WebSocket or MediaRecorder — those live
+ * in `useVoiceConversation` (#617). This component only renders the
+ * current state and forwards user-pressed events (Start, End, Retry).
+ * The hook is instantiated in a TalkToBuddyContainer up in
+ * AgentChatPanel (#620), which forwards state + handlers down here.
+ *
+ * NOTE: PR #629 accidentally shipped a duplicate of the test file as
+ * this component. PR #620 reconstructs the real component content.
+ */
+
+import { motion } from "framer-motion";
 import {
   isEndButtonEnabled,
   isPanelVisible,
   pickIndicator,
-  shouldShowEntryButton,
   TALK_PANEL_STATE_COPY,
-} from "@/pages/MyAgentPage/talkToBuddyHelpers";
+} from "./talkToBuddyHelpers";
 import type { VoiceConversationState } from "@/hooks/voiceConversationStateMachine";
 
-const ALL_STATES: VoiceConversationState[] = [
-  "idle",
-  "connecting",
-  "listening",
-  "thinking",
-  "speaking",
-  "interrupted",
-  "ending",
-  "error",
-  "unsupported",
-];
+export interface TalkToBuddyPanelProps {
+  state: VoiceConversationState;
+  /** Latest STT partial transcript ("what I'm hearing you say so far"). */
+  partialTranscript?: string;
+  /** Latest assistant text delta accumulator. */
+  assistantText?: string;
+  /** RMS-derived mic input level 0..1 for the waveform animation. */
+  inputLevel?: number;
+  prefersReducedMotion?: boolean;
+  onStart: () => void;
+  onEnd: () => void;
+  onRetry?: () => void;
+  /** Optional close button for the panel itself (separate from End). */
+  onClose?: () => void;
+}
 
-describe("TALK_PANEL_STATE_COPY (#618)", () => {
-  it("covers every state in the reducer", () => {
-    for (const state of ALL_STATES) {
-      expect(TALK_PANEL_STATE_COPY[state]).toBeDefined();
-      expect(TALK_PANEL_STATE_COPY[state].length).toBeGreaterThan(10);
-    }
-  });
+function Indicator({
+  variant,
+  level,
+}: {
+  variant: "static" | "pulse-listening" | "pulse-speaking";
+  level: number;
+}) {
+  if (variant === "static") {
+    return (
+      <div
+        className="h-2 w-2 rounded-full bg-primary"
+        aria-hidden="true"
+      />
+    );
+  }
+  const colorClass =
+    variant === "pulse-listening" ? "bg-emerald-500" : "bg-violet-500";
+  const scale = 1 + Math.min(0.4, (level ?? 0) * 0.4);
+  return (
+    <motion.div
+      className={`h-3 w-3 rounded-full ${colorClass}`}
+      animate={{ scale: [1, scale, 1] }}
+      transition={{ duration: 0.8, repeat: Infinity, ease: "easeInOut" }}
+      aria-hidden="true"
+    />
+  );
+}
 
-  it("unsupported copy points the user to typed chat", () => {
-    expect(TALK_PANEL_STATE_COPY.unsupported.toLowerCase()).toContain("typ");
-  });
+export function TalkToBuddyPanel({
+  state,
+  partialTranscript = "",
+  assistantText = "",
+  inputLevel = 0,
+  prefersReducedMotion = false,
+  onStart,
+  onEnd,
+  onRetry,
+  onClose,
+}: TalkToBuddyPanelProps) {
+  if (!isPanelVisible(state)) return null;
 
-  it("error copy offers a recovery path", () => {
-    const copy = TALK_PANEL_STATE_COPY.error.toLowerCase();
-    expect(copy).toMatch(/try again|typing|switch/);
-  });
-});
+  const status = TALK_PANEL_STATE_COPY[state];
+  const indicator = pickIndicator(state, prefersReducedMotion);
+  const endEnabled = isEndButtonEnabled(state);
+  const canStart = state === "idle" || state === "error";
 
-describe("shouldShowEntryButton (#618)", () => {
-  const baseline = {
-    supportsVoice: true,
-    micConsentGranted: true,
-    voiceConversationConsentGranted: true,
-    hasCurrentChild: true,
-  };
+  return (
+    <section
+      role="dialog"
+      aria-modal="true"
+      aria-label="Talk to your buddy"
+      className="fixed inset-0 z-40 flex flex-col bg-gradient-to-b from-violet-50 to-white lg:inset-auto lg:bottom-4 lg:right-4 lg:h-[640px] lg:w-[420px] lg:rounded-2xl lg:border lg:border-gray-200 lg:shadow-2xl"
+    >
+      <header className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
+        <div className="flex items-center gap-2">
+          <Indicator variant={indicator} level={inputLevel} />
+          <h2 className="text-lg font-semibold text-gray-800">
+            Talk to Buddy
+          </h2>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onEnd}
+            disabled={!endEnabled}
+            className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            End
+          </button>
+          {onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close Talk to Buddy"
+              className="rounded-lg p-1.5 text-gray-600 hover:bg-gray-100"
+            >
+              ×
+            </button>
+          )}
+        </div>
+      </header>
 
-  it("shows the button only when every precondition is met", () => {
-    expect(shouldShowEntryButton(baseline)).toBe(true);
-  });
+      <div
+        className="flex-1 overflow-y-auto px-4 py-4"
+        aria-live="polite"
+        aria-atomic="false"
+      >
+        <p className="mb-3 text-center text-sm font-medium text-gray-600">
+          {status}
+        </p>
 
-  it("hides when voice support is missing", () => {
-    expect(
-      shouldShowEntryButton({ ...baseline, supportsVoice: false }),
-    ).toBe(false);
-  });
+        {partialTranscript && (
+          <div className="mb-3 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-900">
+            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-emerald-700">
+              You
+            </p>
+            <p>{partialTranscript}</p>
+          </div>
+        )}
 
-  it("hides when microphone consent is missing", () => {
-    expect(
-      shouldShowEntryButton({ ...baseline, micConsentGranted: false }),
-    ).toBe(false);
-  });
+        {assistantText && (
+          <div className="mb-3 rounded-lg bg-violet-50 p-3 text-sm text-violet-900">
+            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-violet-700">
+              Buddy
+            </p>
+            <p>{assistantText}</p>
+          </div>
+        )}
+      </div>
 
-  it("hides when voice_conversation_consent is missing", () => {
-    expect(
-      shouldShowEntryButton({
-        ...baseline,
-        voiceConversationConsentGranted: false,
-      }),
-    ).toBe(false);
-  });
+      <footer className="border-t border-gray-200 px-4 py-3">
+        {canStart && (
+          <motion.button
+            type="button"
+            onClick={onStart}
+            whileTap={{ scale: 0.97 }}
+            className="w-full rounded-xl bg-primary px-6 py-4 text-base font-bold text-white shadow-md hover:bg-primary/90"
+          >
+            {state === "error" ? "Try Again" : "Start Talking"}
+          </motion.button>
+        )}
+        {state === "error" && onRetry && (
+          <button
+            type="button"
+            onClick={onRetry}
+            className="mt-2 w-full text-sm font-medium text-violet-600 underline"
+          >
+            Reset and start over
+          </button>
+        )}
+        {!canStart && (
+          <p className="text-center text-xs text-gray-500">
+            Tap End to stop the conversation when you're done.
+          </p>
+        )}
+      </footer>
+    </section>
+  );
+}
 
-  it("hides when no child profile is selected", () => {
-    expect(
-      shouldShowEntryButton({ ...baseline, hasCurrentChild: false }),
-    ).toBe(false);
-  });
-});
-
-describe("isPanelVisible (#618)", () => {
-  it("hides only on the terminal unsupported state", () => {
-    for (const state of ALL_STATES) {
-      const visible = isPanelVisible(state);
-      expect(visible).toBe(state !== "unsupported");
-    }
-  });
-});
-
-describe("isEndButtonEnabled (#618)", () => {
-  it("enables the End button during any active session state", () => {
-    const active: VoiceConversationState[] = [
-      "connecting",
-      "listening",
-      "thinking",
-      "speaking",
-      "interrupted",
-      "ending",
-    ];
-    for (const state of active) {
-      expect(isEndButtonEnabled(state)).toBe(true);
-    }
-  });
-
-  it("disables the End button when there is no active session", () => {
-    const inactive: VoiceConversationState[] = ["idle", "error", "unsupported"];
-    for (const state of inactive) {
-      expect(isEndButtonEnabled(state)).toBe(false);
-    }
-  });
-});
-
-describe("pickIndicator (#618)", () => {
-  it("reduced-motion users always get the static pill", () => {
-    for (const state of ALL_STATES) {
-      expect(pickIndicator(state, true)).toBe("static");
-    }
-  });
-
-  it("listening + interrupted → pulse-listening (kid speaking)", () => {
-    expect(pickIndicator("listening", false)).toBe("pulse-listening");
-    expect(pickIndicator("interrupted", false)).toBe("pulse-listening");
-  });
-
-  it("thinking + speaking → pulse-speaking (buddy active)", () => {
-    expect(pickIndicator("thinking", false)).toBe("pulse-speaking");
-    expect(pickIndicator("speaking", false)).toBe("pulse-speaking");
-  });
-
-  it("everything else gets a static indicator even without reduced motion", () => {
-    const staticStates: VoiceConversationState[] = [
-      "idle",
-      "connecting",
-      "ending",
-      "error",
-      "unsupported",
-    ];
-    for (const state of staticStates) {
-      expect(pickIndicator(state, false)).toBe("static");
-    }
-  });
-});
+export default TalkToBuddyPanel;

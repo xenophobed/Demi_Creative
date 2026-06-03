@@ -102,3 +102,30 @@ export function pickIndicator(
   if (state === "speaking" || state === "thinking") return "pulse-speaking";
   return "static";
 }
+
+/**
+ * Pick the next ParentConsentGate kind to render in the consent chain,
+ * or null when both consents are granted (#620).
+ *
+ * PRD §3.16.3 specifies stacked consent: microphone first, then
+ * voice_conversation. This pure helper locks the ordering so the
+ * AgentChatPanel integration can't drift.
+ *
+ * Defensive: a null/undefined child returns "mic" so the panel
+ * surfaces the first gate rather than crashing on an undefined read.
+ */
+export type PendingGate = "mic" | "voice" | null;
+
+export interface ChildConsentState {
+  micConsent?: boolean;
+  voiceConsent?: boolean;
+}
+
+export function nextPendingGate(
+  child: ChildConsentState | null | undefined,
+): PendingGate {
+  if (!child) return "mic";
+  if (!child.micConsent) return "mic";
+  if (!child.voiceConsent) return "voice";
+  return null;
+}
