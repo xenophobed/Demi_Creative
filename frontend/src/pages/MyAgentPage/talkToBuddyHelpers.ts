@@ -129,3 +129,46 @@ export function nextPendingGate(
   if (!child.voiceConsent) return "voice";
   return null;
 }
+
+/**
+ * Inline onboarding banner truth table. Renders only when:
+ *   - The feature flag is on (no banner in prod canary)
+ *   - The device supports voice (don't tease an unavailable feature)
+ *   - A child profile is loaded (banner is per-child)
+ *   - At least one consent is still missing (nothing to surface otherwise)
+ *   - The parent hasn't dismissed it for THIS child profile
+ *
+ * The new UX (post "Ask"-button removal): instead of a button in the
+ * header that mixes "set up" with "use", we surface a one-time inline
+ * banner in the chat empty state. The CTA opens the same consent gate
+ * chain (mic → voice) but the surface only appears when there's actually
+ * something for the parent to do.
+ */
+export interface OnboardingBannerArgs {
+  flagEnabled: boolean;
+  supportsVoice: boolean;
+  hasCurrentChild: boolean;
+  micConsentGranted: boolean;
+  voiceConversationConsentGranted: boolean;
+  dismissed: boolean;
+}
+
+export function shouldShowOnboardingBanner(
+  args: OnboardingBannerArgs,
+): boolean {
+  if (!args.flagEnabled) return false;
+  if (!args.supportsVoice) return false;
+  if (!args.hasCurrentChild) return false;
+  if (args.dismissed) return false;
+  // Banner only appears when there IS setup work left.
+  return !args.micConsentGranted || !args.voiceConversationConsentGranted;
+}
+
+/**
+ * localStorage key for the per-child banner-dismissal flag. Per-child
+ * so a parent who's set up voice for kid A still sees the banner the
+ * first time kid B's profile loads.
+ */
+export function voiceBannerStorageKey(childId: string): string {
+  return `talk_to_buddy_banner_dismissed:${childId}`;
+}

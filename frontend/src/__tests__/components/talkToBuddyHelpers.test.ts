@@ -5,7 +5,9 @@ import {
   nextPendingGate,
   pickIndicator,
   shouldShowEntryButton,
+  shouldShowOnboardingBanner,
   TALK_PANEL_STATE_COPY,
+  voiceBannerStorageKey,
 } from "@/pages/MyAgentPage/talkToBuddyHelpers";
 import type { VoiceConversationState } from "@/hooks/voiceConversationStateMachine";
 
@@ -172,5 +174,75 @@ describe("nextPendingGate (#620)", () => {
 
   it("treats undefined voice consent as not-granted when mic is true", () => {
     expect(nextPendingGate({ micConsent: true })).toBe("voice");
+  });
+});
+
+describe("shouldShowOnboardingBanner (UX rework)", () => {
+  const baseline = {
+    flagEnabled: true,
+    supportsVoice: true,
+    hasCurrentChild: true,
+    micConsentGranted: false,
+    voiceConversationConsentGranted: false,
+    dismissed: false,
+  };
+
+  it("shows when feature flag on + capable + child loaded + setup left + not dismissed", () => {
+    expect(shouldShowOnboardingBanner(baseline)).toBe(true);
+  });
+
+  it("hides when the feature flag is off (prod default)", () => {
+    expect(
+      shouldShowOnboardingBanner({ ...baseline, flagEnabled: false }),
+    ).toBe(false);
+  });
+
+  it("hides when the device cannot support voice", () => {
+    expect(
+      shouldShowOnboardingBanner({ ...baseline, supportsVoice: false }),
+    ).toBe(false);
+  });
+
+  it("hides when no child profile is loaded", () => {
+    expect(
+      shouldShowOnboardingBanner({ ...baseline, hasCurrentChild: false }),
+    ).toBe(false);
+  });
+
+  it("hides when the parent has dismissed it", () => {
+    expect(
+      shouldShowOnboardingBanner({ ...baseline, dismissed: true }),
+    ).toBe(false);
+  });
+
+  it("hides when both consents are already granted (nothing to do)", () => {
+    expect(
+      shouldShowOnboardingBanner({
+        ...baseline,
+        micConsentGranted: true,
+        voiceConversationConsentGranted: true,
+      }),
+    ).toBe(false);
+  });
+
+  it("still shows when only one consent is missing (setup left)", () => {
+    expect(
+      shouldShowOnboardingBanner({
+        ...baseline,
+        micConsentGranted: true,
+        voiceConversationConsentGranted: false,
+      }),
+    ).toBe(true);
+  });
+});
+
+describe("voiceBannerStorageKey (UX rework)", () => {
+  it("namespaces per child profile so different children get fresh banners", () => {
+    expect(voiceBannerStorageKey("child_abc")).toBe(
+      "talk_to_buddy_banner_dismissed:child_abc",
+    );
+    expect(voiceBannerStorageKey("child_xyz")).not.toBe(
+      voiceBannerStorageKey("child_abc"),
+    );
   });
 });

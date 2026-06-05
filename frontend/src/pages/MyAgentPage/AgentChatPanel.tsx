@@ -21,10 +21,12 @@ import {
   useRef,
   useState,
 } from "react";
+import { motion } from "framer-motion";
 import {
   ExternalLink,
   ImagePlus,
   Loader2,
+  Mic,
   Send,
   Settings,
   Sparkles,
@@ -42,6 +44,8 @@ import TalkToBuddyPanel from "./TalkToBuddyPanel";
 import {
   nextPendingGate,
   shouldShowEntryButton,
+  shouldShowOnboardingBanner,
+  voiceBannerStorageKey,
   type PendingGate,
 } from "./talkToBuddyHelpers";
 import {
@@ -265,23 +269,59 @@ export default function AgentChatPanel({
     hasCurrentChild: Boolean(currentChild?.child_id),
   });
 
-  // Show the Talk affordance even when consents are missing (renders
-  // as "Ask a grown-up" CTA) so the feature is discoverable. Hidden
-  // entirely when the browser lacks capabilities or the flag is off.
-  const showTalkEntry =
-    TALK_TO_BUDDY_ENABLED && voiceCaps.supported && Boolean(currentChild?.child_id);
+  // Per-child onboarding-banner dismissal flag (persisted via localStorage).
+  // We hydrate from storage on mount whenever the active child changes —
+  // a parent who set up voice for kid A shouldn't see the banner for kid A
+  // again, but kid B should still get their own first-run nudge.
+  const [bannerDismissed, setBannerDismissed] = useState<boolean>(false);
+  useEffect(() => {
+    if (!currentChild?.child_id || typeof window === "undefined") {
+      setBannerDismissed(false);
+      return;
+    }
+    const stored = window.localStorage.getItem(
+      voiceBannerStorageKey(currentChild.child_id),
+    );
+    setBannerDismissed(stored === "1");
+  }, [currentChild?.child_id]);
+
+  const showOnboardingBanner = shouldShowOnboardingBanner({
+    flagEnabled: TALK_TO_BUDDY_ENABLED,
+    supportsVoice: voiceCaps.supported,
+    hasCurrentChild: Boolean(currentChild?.child_id),
+    micConsentGranted: currentChild?.microphone_consent === true,
+    voiceConversationConsentGranted:
+      currentChild?.voice_conversation_consent === true,
+    dismissed: bannerDismissed,
+  });
+
+  // Feature-flag + capability gate for the floating Talk pill. Hidden
+  // entirely when capabilities are missing or the flag is off; "ready"
+  // (consents granted) decides whether the FAB renders.
+  const fabVisible = TALK_TO_BUDDY_ENABLED && talkEntryReady && !isStreaming;
 
   const handleOpenTalk = () => {
     if (talkEntryReady) {
       setIsTalkOpen(true);
       return;
     }
-    // Compute the next pending gate from the child's consent state.
+    // Setup path — compute next pending gate. Used by the onboarding
+    // banner's primary CTA, not the (now-removed) header pill.
     const next = nextPendingGate({
       micConsent: currentChild?.microphone_consent === true,
       voiceConsent: currentChild?.voice_conversation_consent === true,
     });
     setPendingTalkGate(next);
+  };
+
+  const dismissOnboardingBanner = () => {
+    setBannerDismissed(true);
+    if (currentChild?.child_id && typeof window !== "undefined") {
+      window.localStorage.setItem(
+        voiceBannerStorageKey(currentChild.child_id),
+        "1",
+      );
+    }
   };
 
   const advancePendingGate = () => {
@@ -430,31 +470,6 @@ export default function AgentChatPanel({
               aria-label="Streaming"
             />
           )}
-          {showTalkEntry && (
-            <button
-              type="button"
-              onClick={handleOpenTalk}
-              disabled={isStreaming}
-              className={
-                talkEntryReady
-                  ? "inline-flex items-center gap-1 rounded-full bg-violet-600 px-3 py-1.5 text-xs font-bold text-white shadow hover:bg-violet-700 disabled:opacity-50"
-                  : "inline-flex items-center gap-1 rounded-full border border-violet-300 bg-violet-50 px-3 py-1.5 text-xs font-semibold text-violet-700 hover:bg-violet-100 disabled:opacity-50"
-              }
-              title={
-                talkEntryReady
-                  ? `Talk to ${agent.agent_name}`
-                  : "Ask a grown-up to turn on voice chat"
-              }
-              aria-label={
-                talkEntryReady
-                  ? `Talk to ${agent.agent_name}`
-                  : "Ask a grown-up to turn on voice chat"
-              }
-            >
-              <span aria-hidden="true">💬</span>
-              <span>{talkEntryReady ? "Talk" : "Ask"}</span>
-            </button>
-          )}
           {onConfigure && (
             <button
               type="button"
@@ -475,6 +490,43 @@ export default function AgentChatPanel({
       >
         {messages.length === 0 ? (
           <div className="mx-auto flex h-full max-w-md flex-col items-center justify-center gap-5 text-center">
+            {showOnboardingBanner && (
+              <div
+                role="status"
+                className="w-full rounded-2xl border border-violet-200 bg-violet-50 p-4 text-left shadow-sm"
+              >
+                <div className="flex items-start gap-3">
+                  <span className="text-2xl" aria-hidden="true">
+                    🎤
+                  </span>
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-violet-900">
+                      Did you know {agent.agent_name} can talk?
+                    </p>
+                    <p className="mt-1 text-xs leading-relaxed text-violet-800">
+                      A grown-up can turn on voice chat so you can have a real
+                      back-and-forth conversation with your buddy.
+                    </p>
+                    <div className="mt-3 flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={handleOpenTalk}
+                        className="rounded-full bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-violet-700"
+                      >
+                        Ask a grown-up to turn it on
+                      </button>
+                      <button
+                        type="button"
+                        onClick={dismissOnboardingBanner}
+                        className="text-xs font-medium text-violet-700 underline-offset-2 hover:underline"
+                      >
+                        Not now
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
             <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white text-3xl shadow-md ring-2 ring-violet-100">
               {buddyGlyph}
             </div>
@@ -720,6 +772,28 @@ export default function AgentChatPanel({
           ageGroup={ageGroup}
           onClose={() => setIsTalkOpen(false)}
         />
+      )}
+      {fabVisible && !isTalkOpen && (
+        <motion.button
+          type="button"
+          onClick={() => setIsTalkOpen(true)}
+          whileTap={{ scale: 0.95 }}
+          whileHover={{ scale: 1.04 }}
+          animate={{
+            boxShadow: [
+              "0 10px 24px -8px rgba(124, 58, 237, 0.45)",
+              "0 14px 30px -6px rgba(124, 58, 237, 0.65)",
+              "0 10px 24px -8px rgba(124, 58, 237, 0.45)",
+            ],
+          }}
+          transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
+          aria-label={`Talk to ${agent.agent_name}`}
+          title={`Talk to ${agent.agent_name}`}
+          className="fixed bottom-24 right-6 z-30 inline-flex items-center gap-2 rounded-full bg-violet-600 px-5 py-3 text-sm font-bold text-white hover:bg-violet-700 sm:bottom-28 lg:bottom-8 lg:right-8"
+        >
+          <Mic size={18} />
+          <span>Talk to {agent.agent_name}</span>
+        </motion.button>
       )}
     </section>
   );
