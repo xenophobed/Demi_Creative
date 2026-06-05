@@ -519,6 +519,16 @@ export interface ChildProfile {
   archived_at?: string | null;
   camera_consent?: boolean;
   microphone_consent?: boolean;
+  /** Two-way realtime voice with the buddy (PRD §3.16, epic #605).
+   *  Separate from microphone_consent: that gates one-shot speech-to-text
+   *  on input fields (#586), this one gates the full Talk-to-Buddy
+   *  duplex channel. Both are parent-PIN-gated.
+   */
+  voice_conversation_consent?: boolean;
+  /** Buddy TTS voice preset for realtime voice mode (#612). */
+  voice_persona?: string;
+  /** Daily voice quota in seconds (#612). 0 = no cap configured. */
+  voice_session_quota_seconds?: number;
   created_at?: string;
   updated_at?: string;
 }
@@ -541,12 +551,14 @@ export interface ChildProfileUpdateRequest {
   avatar?: string | null;
 }
 
-// PATCH /child-profiles/{child_id}/consent (#587).
-// At least one of camera_consent or microphone_consent must be supplied; the
-// backend rejects an empty body with 422.
+// PATCH /child-profiles/{child_id}/consent (#587, extended in #612).
+// At least one field must be supplied; backend rejects an empty body with 422.
 export interface ChildProfileConsentUpdateRequest {
   camera_consent?: boolean;
   microphone_consent?: boolean;
+  voice_conversation_consent?: boolean;
+  voice_persona?: string;
+  voice_session_quota_seconds?: number;
 }
 
 // Upload status

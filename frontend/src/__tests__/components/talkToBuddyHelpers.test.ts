@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   isEndButtonEnabled,
   isPanelVisible,
+  nextPendingGate,
   pickIndicator,
   shouldShowEntryButton,
   TALK_PANEL_STATE_COPY,
@@ -138,5 +139,38 @@ describe("pickIndicator (#618)", () => {
     for (const state of staticStates) {
       expect(pickIndicator(state, false)).toBe("static");
     }
+  });
+});
+
+describe("nextPendingGate (#620)", () => {
+  it("returns 'mic' when both consents are missing", () => {
+    expect(
+      nextPendingGate({ micConsent: false, voiceConsent: false }),
+    ).toBe("mic");
+  });
+
+  it("returns 'voice' when mic is granted but voice is missing", () => {
+    expect(
+      nextPendingGate({ micConsent: true, voiceConsent: false }),
+    ).toBe("voice");
+  });
+
+  it("returns null when both consents are granted", () => {
+    expect(
+      nextPendingGate({ micConsent: true, voiceConsent: true }),
+    ).toBe(null);
+  });
+
+  it("defensively returns 'mic' for a null child (defer to grown-up)", () => {
+    expect(nextPendingGate(null)).toBe("mic");
+    expect(nextPendingGate(undefined)).toBe("mic");
+  });
+
+  it("treats undefined consent fields as not-granted (mic missing case)", () => {
+    expect(nextPendingGate({})).toBe("mic");
+  });
+
+  it("treats undefined voice consent as not-granted when mic is true", () => {
+    expect(nextPendingGate({ micConsent: true })).toBe("voice");
   });
 });

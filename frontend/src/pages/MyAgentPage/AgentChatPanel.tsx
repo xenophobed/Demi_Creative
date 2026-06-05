@@ -38,6 +38,16 @@ import useAgentChatStore from "@/store/useAgentChatStore";
 import useChildStore from "@/store/useChildStore";
 import VoiceInputButton from "@/components/common/VoiceInputButton";
 import ParentConsentGate from "@/components/common/ParentConsentGate";
+import TalkToBuddyPanel from "./TalkToBuddyPanel";
+import {
+  nextPendingGate,
+  shouldShowEntryButton,
+  type PendingGate,
+} from "./talkToBuddyHelpers";
+import {
+  detectVoiceCapabilities,
+} from "@/hooks/voiceConversationHelpers";
+import { useVoiceConversation } from "@/hooks/useVoiceConversation";
 import type { Agent } from "@/types/agent";
 import type { AgeGroup, MemoryCharacter } from "@/types/api";
 import type {
@@ -75,6 +85,15 @@ const STARTER_PROMPTS: string[] = [
   "What's in the news today for kids?",
   "Let's make an interactive choose-your-own adventure",
 ];
+
+/**
+ * Talk-to-Buddy realtime voice mode (PRD §3.16) is feature-flagged
+ * during staging. Production canary will flip the env var once the
+ * provider + safety pipeline are observed under real traffic.
+ */
+const TALK_TO_BUDDY_ENABLED =
+  (import.meta as { env?: { VITE_TALK_TO_BUDDY_ENABLED?: string } }).env
+    ?.VITE_TALK_TO_BUDDY_ENABLED === "true";
 
 function avatarGlyph(agent: Agent): string {
   return agent.agent_avatar_id.startsWith("emoji:")
@@ -213,6 +232,74 @@ export default function AgentChatPanel({
   const currentChild = useChildStore((s) => s.currentChild);
   const [showMicConsentGate, setShowMicConsentGate] = useState(false);
 
+  // -------------------- Talk-to-Buddy realtime voice (#620) ---------------
+  // Detect browser capability once on mount — cheap, pure, no DOM mutation.
+  const voiceCaps = useMemo(
+    () =>
+      detectVoiceCapabilities({
+        getUserMedia: typeof navigator !== "undefined"
+          ? navigator.mediaDevices?.getUserMedia?.bind(navigator.mediaDevices)
+          : undefined,
+        MediaRecorder:
+          typeof MediaRecorder !== "undefined" ? MediaRecorder : undefined,
+        WebSocket:
+          typeof WebSocket !== "undefined" ? WebSocket : undefined,
+        AudioContext:
+          typeof window !== "undefined"
+            ? (window as { AudioContext?: typeof AudioContext })
+                .AudioContext ?? undefined
+            : undefined,
+        userAgent:
+          typeof navigator !== "undefined" ? navigator.userAgent : undefined,
+      }),
+    [],
+  );
+  const [isTalkOpen, setIsTalkOpen] = useState(false);
+  const [pendingTalkGate, setPendingTalkGate] = useState<PendingGate>(null);
+
+  const talkEntryReady = shouldShowEntryButton({
+    supportsVoice: voiceCaps.supported,
+    micConsentGranted: currentChild?.microphone_consent === true,
+    voiceConversationConsentGranted:
+      currentChild?.voice_conversation_consent === true,
+    hasCurrentChild: Boolean(currentChild?.child_id),
+  });
+
+  // Show the Talk affordance even when consents are missing (renders
+  // as "Ask a grown-up" CTA) so the feature is discoverable. Hidden
+  // entirely when the browser lacks capabilities or the flag is off.
+  const showTalkEntry =
+    TALK_TO_BUDDY_ENABLED && voiceCaps.supported && Boolean(currentChild?.child_id);
+
+  const handleOpenTalk = () => {
+    if (talkEntryReady) {
+      setIsTalkOpen(true);
+      return;
+    }
+    // Compute the next pending gate from the child's consent state.
+    const next = nextPendingGate({
+      micConsent: currentChild?.microphone_consent === true,
+      voiceConsent: currentChild?.voice_conversation_consent === true,
+    });
+    setPendingTalkGate(next);
+  };
+
+  const advancePendingGate = () => {
+    // Re-evaluate against the latest currentChild (the consent gate
+    // mutated it via updateConsent). If everything's granted, open the
+    // panel directly; otherwise show the next missing gate.
+    const next = nextPendingGate({
+      micConsent: currentChild?.microphone_consent === true,
+      voiceConsent: currentChild?.voice_conversation_consent === true,
+    });
+    if (next === null) {
+      setPendingTalkGate(null);
+      setIsTalkOpen(true);
+    } else {
+      setPendingTalkGate(next);
+    }
+  };
+
   const clearImage = () => {
     setImage(null);
     if (imageInputRef.current) imageInputRef.current.value = "";
@@ -342,6 +429,31 @@ export default function AgentChatPanel({
               className="shrink-0 animate-spin text-violet-600"
               aria-label="Streaming"
             />
+          )}
+          {showTalkEntry && (
+            <button
+              type="button"
+              onClick={handleOpenTalk}
+              disabled={isStreaming}
+              className={
+                talkEntryReady
+                  ? "inline-flex items-center gap-1 rounded-full bg-violet-600 px-3 py-1.5 text-xs font-bold text-white shadow hover:bg-violet-700 disabled:opacity-50"
+                  : "inline-flex items-center gap-1 rounded-full border border-violet-300 bg-violet-50 px-3 py-1.5 text-xs font-semibold text-violet-700 hover:bg-violet-100 disabled:opacity-50"
+              }
+              title={
+                talkEntryReady
+                  ? `Talk to ${agent.agent_name}`
+                  : "Ask a grown-up to turn on voice chat"
+              }
+              aria-label={
+                talkEntryReady
+                  ? `Talk to ${agent.agent_name}`
+                  : "Ask a grown-up to turn on voice chat"
+              }
+            >
+              <span aria-hidden="true">💬</span>
+              <span>{talkEntryReady ? "Talk" : "Ask"}</span>
+            </button>
           )}
           {onConfigure && (
             <button
@@ -583,6 +695,89 @@ export default function AgentChatPanel({
           onDismiss={() => setShowMicConsentGate(false)}
         />
       )}
+      {pendingTalkGate === "mic" && ageGroup && (
+        <ParentConsentGate
+          kind="microphone"
+          ageGroup={ageGroup}
+          childId={childId}
+          onGranted={advancePendingGate}
+          onDismiss={() => setPendingTalkGate(null)}
+        />
+      )}
+      {pendingTalkGate === "voice" && ageGroup && (
+        <ParentConsentGate
+          kind="voice_conversation"
+          ageGroup={ageGroup}
+          childId={childId}
+          onGranted={advancePendingGate}
+          onDismiss={() => setPendingTalkGate(null)}
+        />
+      )}
+      {isTalkOpen && (
+        <TalkToBuddyContainer
+          childId={childId}
+          persona={agent.agent_name}
+          ageGroup={ageGroup}
+          onClose={() => setIsTalkOpen(false)}
+        />
+      )}
     </section>
+  );
+}
+
+/**
+ * Adapter that instantiates `useVoiceConversation` only while the panel
+ * is mounted. Keeps the WebSocket / MediaStream / AudioContext out of
+ * the always-rendered parent so idle cost stays zero.
+ *
+ * Voice transcripts flow into `useAgentChatStore.appendVoiceCaption`
+ * so they merge into the same chat history the text panel renders.
+ */
+function TalkToBuddyContainer({
+  childId,
+  persona,
+  ageGroup,
+  onClose,
+}: {
+  childId: string;
+  persona: string;
+  ageGroup?: AgeGroup | null;
+  onClose: () => void;
+}) {
+  void ageGroup; // Future: thread per-age TTS preset overrides (Phase C, #608).
+  const appendVoiceCaption = useAgentChatStore((s) => s.appendVoiceCaption);
+
+  const voice = useVoiceConversation({
+    childId,
+    persona,
+    onCaption: (caption) => {
+      // Only persist finalized turns so the chat history doesn't get
+      // spammed with partial-transcript noise. Safety-blocked utterances
+      // also surface in the timeline so the kid can see what happened.
+      if (caption.kind === "final") {
+        appendVoiceCaption({ role: "user", text: caption.text });
+      } else if (caption.kind === "assistant" && caption.isFinal) {
+        appendVoiceCaption({ role: "assistant", text: caption.text });
+      }
+    },
+  });
+
+  const prefersReducedMotion =
+    typeof window !== "undefined" && typeof window.matchMedia === "function"
+      ? window.matchMedia("(prefers-reduced-motion: reduce)").matches
+      : false;
+
+  return (
+    <TalkToBuddyPanel
+      state={voice.state}
+      partialTranscript={voice.partialTranscript}
+      assistantText={voice.assistantText}
+      inputLevel={voice.inputLevel}
+      prefersReducedMotion={prefersReducedMotion}
+      onStart={() => voice.start(true)}
+      onEnd={voice.end}
+      onRetry={voice.retry}
+      onClose={onClose}
+    />
   );
 }
