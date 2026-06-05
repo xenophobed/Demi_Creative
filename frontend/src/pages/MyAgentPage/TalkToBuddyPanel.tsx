@@ -1,11 +1,18 @@
 /**
- * TalkToBuddyPanel (#618) — full-screen UI for the Talk-to-Buddy
- * realtime voice surface (PRD §3.16).
+ * TalkToBuddyPanel (#618) — UI for the Talk-to-Buddy realtime voice
+ * surface (PRD §3.16).
  *
- * Mobile sheet on (pointer: coarse) and (max-width: 1024px); desktop
- * side panel otherwise. Pure helpers (state copy map, indicator picker,
- * entry-button truth table) live in `talkToBuddyHelpers.ts` so the
- * test load stays off this presentational component.
+ * Two variants (PRD §3.16.5 v2, #635):
+ *   - `overlay` (default): full-screen sheet on mobile, floating side
+ *     panel on desktop. The original presentation.
+ *   - `inline`: drops the fixed positioning and rounded chrome so the
+ *     same component can render inside `AgentChatPanel`'s composer slot
+ *     (replacing the textarea/send form). Used by the new header-pill
+ *     entry pattern from #636.
+ *
+ * Pure helpers (state copy map, indicator picker, entry-button truth
+ * table) live in `talkToBuddyHelpers.ts` so the test load stays off
+ * this presentational component.
  *
  * The panel does NOT own the WebSocket or MediaRecorder — those live
  * in `useVoiceConversation` (#617). This component only renders the
@@ -14,7 +21,7 @@
  * AgentChatPanel (#620), which forwards state + handlers down here.
  *
  * NOTE: PR #629 accidentally shipped a duplicate of the test file as
- * this component. PR #620 reconstructs the real component content.
+ * this component. PR #620 reconstructed the real component content.
  */
 
 import { motion } from "framer-motion";
@@ -25,6 +32,14 @@ import {
   TALK_PANEL_STATE_COPY,
 } from "./talkToBuddyHelpers";
 import type { VoiceConversationState } from "@/hooks/voiceConversationStateMachine";
+
+/**
+ * Rendering variant. `overlay` (default) keeps the existing fixed
+ * positioning + rounded chrome so PR #620's TalkToBuddyContainer
+ * keeps working unchanged. `inline` drops both so the panel fits
+ * inside AgentChatPanel's composer slot (#636 consumer).
+ */
+export type TalkToBuddyPanelVariant = "overlay" | "inline";
 
 export interface TalkToBuddyPanelProps {
   state: VoiceConversationState;
@@ -38,9 +53,24 @@ export interface TalkToBuddyPanelProps {
   onStart: () => void;
   onEnd: () => void;
   onRetry?: () => void;
-  /** Optional close button for the panel itself (separate from End). */
+  /** Optional close button for the panel itself (separate from End).
+   *  Hidden in `inline` variant where the bubble unmounts on End. */
   onClose?: () => void;
+  /** Layout. Default `overlay` preserves PR #620's behavior. */
+  variant?: TalkToBuddyPanelVariant;
 }
+
+/**
+ * Tailwind class string for the outer wrapper, keyed by variant.
+ * Exported so #636's contract test can assert which classes the
+ * inline branch drops (no `fixed inset-0`, no `z-40`, no `shadow-2xl`).
+ */
+export const PANEL_WRAPPER_CLASS: Record<TalkToBuddyPanelVariant, string> = {
+  overlay:
+    "fixed inset-0 z-40 flex flex-col bg-gradient-to-b from-violet-50 to-white lg:inset-auto lg:bottom-4 lg:right-4 lg:h-[640px] lg:w-[420px] lg:rounded-2xl lg:border lg:border-gray-200 lg:shadow-2xl",
+  inline:
+    "flex flex-col gap-3 rounded-2xl border border-violet-200 bg-violet-50/40 p-3",
+};
 
 function Indicator({
   variant,
@@ -80,6 +110,7 @@ export function TalkToBuddyPanel({
   onEnd,
   onRetry,
   onClose,
+  variant = "overlay",
 }: TalkToBuddyPanelProps) {
   if (!isPanelVisible(state)) return null;
 
@@ -88,17 +119,54 @@ export function TalkToBuddyPanel({
   const endEnabled = isEndButtonEnabled(state);
   const canStart = state === "idle" || state === "error";
 
+  const isInline = variant === "inline";
+  const wrapperClass = PANEL_WRAPPER_CLASS[variant];
+
+  // Inline variant is a region within the existing chat (not a dialog),
+  // so it should not announce itself as a modal. Overlay keeps the
+  // dialog semantics so screen readers treat it as a takeover surface.
+  const role = isInline ? "region" : "dialog";
+  const ariaModal: { "aria-modal"?: "true" } = isInline
+    ? {}
+    : { "aria-modal": "true" };
+
+  // The header is thinner in the inline variant (no separate border, no
+  // bg gradient — those belong to the overlay). End button is the same
+  // affordance in both; X close only renders in overlay where it acts
+  // as a secondary dismiss for the modal.
+  const headerClass = isInline
+    ? "flex items-center justify-between gap-2"
+    : "flex items-center justify-between border-b border-gray-200 px-4 py-3";
+
+  const bodyClass = isInline
+    ? "min-h-0 max-h-48 overflow-y-auto"
+    : "flex-1 overflow-y-auto px-4 py-4";
+
+  const footerClass = isInline
+    ? ""
+    : "border-t border-gray-200 px-4 py-3";
+
+  const startButtonClass = isInline
+    ? "w-full rounded-xl bg-primary px-6 py-3 text-sm font-bold text-white shadow-sm hover:bg-primary/90"
+    : "w-full rounded-xl bg-primary px-6 py-4 text-base font-bold text-white shadow-md hover:bg-primary/90";
+
   return (
     <section
-      role="dialog"
-      aria-modal="true"
+      role={role}
+      {...ariaModal}
       aria-label="Talk to your buddy"
-      className="fixed inset-0 z-40 flex flex-col bg-gradient-to-b from-violet-50 to-white lg:inset-auto lg:bottom-4 lg:right-4 lg:h-[640px] lg:w-[420px] lg:rounded-2xl lg:border lg:border-gray-200 lg:shadow-2xl"
+      className={wrapperClass}
     >
-      <header className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
+      <header className={headerClass}>
         <div className="flex items-center gap-2">
           <Indicator variant={indicator} level={inputLevel} />
-          <h2 className="text-lg font-semibold text-gray-800">
+          <h2
+            className={
+              isInline
+                ? "text-sm font-semibold text-gray-800"
+                : "text-lg font-semibold text-gray-800"
+            }
+          >
             Talk to Buddy
           </h2>
         </div>
@@ -107,11 +175,11 @@ export function TalkToBuddyPanel({
             type="button"
             onClick={onEnd}
             disabled={!endEnabled}
-            className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
           >
             End
           </button>
-          {onClose && (
+          {!isInline && onClose && (
             <button
               type="button"
               onClick={onClose}
@@ -125,17 +193,29 @@ export function TalkToBuddyPanel({
       </header>
 
       <div
-        className="flex-1 overflow-y-auto px-4 py-4"
+        className={bodyClass}
         aria-live="polite"
         aria-atomic="false"
       >
-        <p className="mb-3 text-center text-sm font-medium text-gray-600">
+        <p
+          className={
+            isInline
+              ? "mb-2 text-center text-xs font-medium text-gray-600"
+              : "mb-3 text-center text-sm font-medium text-gray-600"
+          }
+        >
           {status}
         </p>
 
         {partialTranscript && (
-          <div className="mb-3 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-900">
-            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-emerald-700">
+          <div
+            className={
+              isInline
+                ? "mb-2 rounded-lg bg-emerald-50 p-2 text-xs text-emerald-900"
+                : "mb-3 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-900"
+            }
+          >
+            <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-700">
               You
             </p>
             <p>{partialTranscript}</p>
@@ -143,8 +223,14 @@ export function TalkToBuddyPanel({
         )}
 
         {assistantText && (
-          <div className="mb-3 rounded-lg bg-violet-50 p-3 text-sm text-violet-900">
-            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-violet-700">
+          <div
+            className={
+              isInline
+                ? "mb-2 rounded-lg bg-violet-50 p-2 text-xs text-violet-900"
+                : "mb-3 rounded-lg bg-violet-50 p-3 text-sm text-violet-900"
+            }
+          >
+            <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-violet-700">
               Buddy
             </p>
             <p>{assistantText}</p>
@@ -152,13 +238,13 @@ export function TalkToBuddyPanel({
         )}
       </div>
 
-      <footer className="border-t border-gray-200 px-4 py-3">
+      <footer className={footerClass}>
         {canStart && (
           <motion.button
             type="button"
             onClick={onStart}
             whileTap={{ scale: 0.97 }}
-            className="w-full rounded-xl bg-primary px-6 py-4 text-base font-bold text-white shadow-md hover:bg-primary/90"
+            className={startButtonClass}
           >
             {state === "error" ? "Try Again" : "Start Talking"}
           </motion.button>
@@ -167,12 +253,12 @@ export function TalkToBuddyPanel({
           <button
             type="button"
             onClick={onRetry}
-            className="mt-2 w-full text-sm font-medium text-violet-600 underline"
+            className="mt-2 w-full text-xs font-medium text-violet-600 underline"
           >
             Reset and start over
           </button>
         )}
-        {!canStart && (
+        {!canStart && !isInline && (
           <p className="text-center text-xs text-gray-500">
             Tap End to stop the conversation when you're done.
           </p>
