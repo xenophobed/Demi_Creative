@@ -2001,17 +2001,20 @@ Both are parent-PIN-gated via `ParentApprovalPage`. The consent screen explicitl
 - New table: `voice_sessions(user_id, child_id, agent_id, started_at, ended_at, duration_seconds, ended_reason)`.
 - Quota: voice minutes count against the existing daily quota (§3.9.1) at age-adapted rates (see 3.16.6).
 
-### 3.16.5 Frontend
-- `frontend/src/pages/MyAgentPage/TalkToBuddyPanel.tsx` — full-screen voice surface (mobile sheet, desktop side panel) launched from a new Talk button on `AgentChatPanel`.
-- `frontend/src/hooks/useVoiceConversation.ts` + pure `voiceConversationStateMachine.ts` — `getUserMedia` capture, WS client, state machine (`idle → connecting → listening → thinking → speaking → ending → error`). Mirrors the `useVoiceInput` reducer-extracted pattern from #584.
-- Live captions write into `useAgentChatStore` so text history and voice history merge.
-- `ParentConsentGate` gains a `kind="voice_conversation"` variant.
+### 3.16.5 Frontend Entry & Layout
+- **Entry surface (v2 — supersedes the FAB pattern from PR #633):** a prominent "Start Talking" pill in the **`AgentChatPanel` header**, gated by `shouldShowEntryButton` (capability + both consents + active child + not currently text-streaming + not already in voice mode).
+- **In-place layout (replaces the full-screen overlay):** tapping the header pill swaps the composer textarea/send region for an **inline voice bubble** — the `TalkToBuddyPanel` mounted with `variant="inline"`. The message list above stays scrollable and visible; voice transcripts merge into the same list via `useAgentChatStore.appendVoiceCaption`. Tapping **End** unmounts the bubble and re-mounts the composer with focus restored to the textarea.
+- **Why this beats the overlay+FAB pattern**: a single conversation surface, no modality jump, kid never sees two input affordances at once, scroll history stays anchored.
+- **Why the entry stays inside `AgentChatPanel` (not global `PageContainer` chrome)**: only meaningful on `/my-agent` with a buddy + consents; cross-page header would re-litigate the "Ask"/"Talk" header-pill decision from commit `e31c2aa0`. The same rule applies — the entry surface lives where the action lives.
+- **Setup path unchanged**: when `talkEntryReady === false`, the header pill is hidden. The empty-state onboarding banner from PR #633 (when consents are missing) remains the parent-setup affordance.
+- **Components**: `frontend/src/pages/MyAgentPage/TalkToBuddyPanel.tsx` gains a `variant?: "overlay" | "inline"` prop (overlay = current full-screen behavior, inline = composer-slot layout). `frontend/src/hooks/useVoiceConversation.ts` is unchanged — the voice pipeline (state machine, WS, MediaRecorder, AudioContext) is reused as-is.
+- `ParentConsentGate` `kind="voice_conversation"` variant from #619 stays the consent surface; the header pill simply hides until both consents land.
 
 ### 3.16.6 Age Adaptation
 
 | Concern | 3-5 | 6-8 | 9-12 |
 |---|---|---|---|
-| Entry surface | Giant emoji + "Talk!" | "Talk to {buddy_name}" pill | Mic icon + "Voice" |
+| Entry surface (header pill) | Giant emoji + "Talk!" | "Talk to {buddy_name}" | Mic icon + "Voice" |
 | Default mode | Continuous VAD | Continuous VAD + PTT toggle | Push-to-talk default |
 | Greeting | One short line | Two-sentence with prompt | One line + suggestion list |
 | TTS voice picker | Parent-locked | 3 curated voices | 8 curated voices |
