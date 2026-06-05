@@ -5,6 +5,7 @@ import {
   nextPendingGate,
   pickIndicator,
   shouldShowEntryButton,
+  shouldShowHeaderTalkPill,
   TALK_PANEL_STATE_COPY,
 } from "@/pages/MyAgentPage/talkToBuddyHelpers";
 import type { VoiceConversationState } from "@/hooks/voiceConversationStateMachine";
@@ -172,5 +173,47 @@ describe("nextPendingGate (#620)", () => {
 
   it("treats undefined voice consent as not-granted when mic is true", () => {
     expect(nextPendingGate({ micConsent: true })).toBe("voice");
+  });
+});
+
+describe("shouldShowHeaderTalkPill (#636)", () => {
+  const allGranted = {
+    supportsVoice: true,
+    micConsentGranted: true,
+    voiceConversationConsentGranted: true,
+    hasCurrentChild: true,
+  };
+
+  it("shows the pill when consents + capability are ready and no stream/bubble is active", () => {
+    expect(shouldShowHeaderTalkPill(allGranted, false, false)).toBe(true);
+  });
+
+  it("hides while the chat is streaming a text response", () => {
+    // Pressing Start mid-stream would race the AbortController flow.
+    expect(shouldShowHeaderTalkPill(allGranted, true, false)).toBe(false);
+  });
+
+  it("hides while the inline voice bubble is already open", () => {
+    // The bubble has replaced the composer; a second entry point in
+    // the header would be redundant + confusing.
+    expect(shouldShowHeaderTalkPill(allGranted, false, true)).toBe(false);
+  });
+
+  it("hides when both streaming and talk-open are true (sanity)", () => {
+    expect(shouldShowHeaderTalkPill(allGranted, true, true)).toBe(false);
+  });
+
+  it("delegates capability/consent gating to shouldShowEntryButton", () => {
+    // Any single precondition failure must hide the pill, no matter
+    // what the streaming/talk-open state is.
+    const cases = [
+      { ...allGranted, supportsVoice: false },
+      { ...allGranted, micConsentGranted: false },
+      { ...allGranted, voiceConversationConsentGranted: false },
+      { ...allGranted, hasCurrentChild: false },
+    ];
+    for (const broken of cases) {
+      expect(shouldShowHeaderTalkPill(broken, false, false)).toBe(false);
+    }
   });
 });
