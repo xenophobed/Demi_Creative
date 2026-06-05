@@ -1983,9 +1983,13 @@ Two-way spoken conversation between the child and their My Agent buddy on `/my-a
 The buddy promise is companionship. Ages 3-5 cannot read the buddy's text replies, and ages 6-12 find typing slow on tablets. The existing one-shot `VoiceInputButton` (§3.15) lets a child speak a single prompt, but the buddy still answers in silence. That breaks the "creative buddy" pitch for the core pre-reader cohort and creates an unnatural rhythm for tablet users.
 
 ### 3.16.2 Solution
-A "Talk to {buddy_name}" mode on `/my-agent` that opens a full-duplex voice session. The child speaks; the buddy listens, thinks (via the existing Claude-based proxy), and speaks the reply in its configured TTS voice. Transcripts of every turn land in the same `agent_chat_messages` rows as text mode, with `input_modality` and `output_modality` tags so memory, search, and Content Hub byline see no difference.
+**Voice is the primary interaction mode on `/my-agent`; texting is the secondary mode and bypasses STT entirely** — typed input continues to flow through `POST /me/agent/chat` SSE with no transcription on the text path. When a child taps "Start Talking," a full-duplex realtime voice session opens. The child speaks; the buddy listens, thinks, and speaks back. Transcripts of every turn land in the same `agent_chat_messages` rows as text mode, with `input_modality` and `output_modality` tags so memory, search, and Content Hub byline see no difference.
 
-**Provider strategy (v1)**: hybrid pipeline — streaming STT (OpenAI Whisper) → Claude via `my_agent_proxy.stream_my_agent_chat` → streaming TTS (ElevenLabs Flash). Full-duplex glue is a new backend WebSocket. Claude stays the brain. (OpenAI Realtime + ElevenLabs Conversational AI were considered and deferred — see story C1 for the provider-abstraction architecture.)
+**Provider strategy (v2 — voice-first cutover)**: end-to-end realtime via **OpenAI Realtime API** (`gpt-realtime-mini` default, `gpt-realtime-2` escalation per parent flag) as the primary path. Claude remains the brain for content + specialist work via **realtime tool calls** — the realtime model speaks naturally, calls tools (`launch_flow`, `delegate_to_specialist`, `recall_memory`, `end_call`), and Claude-orchestrated specialists do the heavy lifting (story generation, kids-daily, etc.). The provider abstraction in `realtime_voice_service.py` is unchanged: `REALTIME_VOICE_PROVIDER=hybrid` reverts to the cascaded Whisper+Claude+ElevenLabs path within one process restart.
+
+**STT and TTS as discrete services remain in content-generation pipelines only** (image-to-story narration, kids-daily TTS, optional caption export). They are no longer in the interactive voice loop. The voice loop is end-to-end speech-to-speech.
+
+**Why this changed (v1 was: hybrid as primary)**: production UX testing of the hybrid path showed cascaded p50 latency (~1.5–2.5s/turn) breaks the "the buddy is alive" promise for pre-readers, and Whisper-1 is one-shot (not streaming) so the latency floor is structural. OpenAI Realtime GA (June 2026) does true speech-to-speech at ~300–600ms median with native function calling, which lets Claude keep ownership of specialist orchestration through tool calls. The provider abstraction shipped in Phase A was built for exactly this kind of swap. Hybrid stays as fallback because (a) it's already shipped and tested, (b) it kicks in automatically when OpenAI credentials are missing, (c) it's the operator's escape hatch if the new path misbehaves under real load.
 
 ### 3.16.3 Consent & Privacy
 Voice mode requires **two stacked consents** on `child_profiles`:
@@ -2037,6 +2041,23 @@ Both are parent-PIN-gated via `ParentApprovalPage`. The consent screen explicitl
 - Voice emotion or sentiment classification
 - Voice-age classifier as an enforced gate
 - Recording/downloading voice sessions for parents — transcripts only
+
+### 3.16.8 Launch Prerequisites (added in v2 cutover)
+
+Before any production traffic flows over the OpenAI Realtime path:
+
+1. **ZDR enrollment** — Zero Data Retention must be enabled on the OpenAI org. Required by OpenAI's "Under-18 API Guidance" for any data of children under 13 (our 3-5 cohort). Operator action; not self-serve. Documented in `docs/guides/voice-launch-prerequisites.md`.
+2. **Fallback validated** — `REALTIME_VOICE_PROVIDER=hybrid` smoke-tested in production env. Smoke flips the env var, waits one restart cycle, verifies the cascaded path still serves a voice session end-to-end.
+3. **Cost ceiling configured** — monthly spending cap on the OpenAI org sized to expected voice quota: 10/15/20 min/day × user count × $0.05–$0.10/min (mini cached). `gpt-realtime-2` escalation is parent-flag-gated; cost telemetry alerts when cumulative org spend crosses 80% of cap.
+4. **First-audio telemetry live** — Phase D telemetry hook reports p50/p95 to the Parent Dashboard + ops dashboard. Alert at p95 > 2500ms; provider auto-failover to hybrid considered at sustained p95 > 4000ms over 5 min.
+5. **Safety pre-TTS gate verified** — contract test `test_voice_safety_pre_tts_contract` green; per-utterance + per-reply safety checks both fail-closed before audio streams to the client.
+6. **Tool definitions versioned** — `launch_flow` tool schema pinned with `version` field; backward-incompatible changes ship as new tool name, not edited schema. The realtime session prompt includes the tool version so we can detect drift in production.
+
+**ZDR contingency**: if ZDR is denied or delayed, the under-13 cohort cannot route through OpenAI Realtime. Fallback options (in order):
+  (a) gate OpenAI Realtime to ages 9-12 only and continue serving hybrid to 3-8 (clean per-age split, mixed UX),
+  (b) switch entirely to **ElevenLabs Conversational AI with Claude Sonnet 4-6 as the custom LLM** (validated in feasibility spike E7 — preserves Anthropic data terms but ElevenLabs hosts orchestration),
+  (c) stay on hybrid and accept the latency floor for v2.
+Decision belongs to the operator + legal, not engineering.
 
 > **GitHub Epic**: tracked under the epic created by `/spec-to-backlog talk-to-buddy-realtime-voice` | **Phase**: 2 | **Milestone**: Phase 2 — Interactive + Memory + News
 
