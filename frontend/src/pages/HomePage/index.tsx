@@ -4,10 +4,8 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useQuery } from '@tanstack/react-query'
 import {
   ArrowRight,
-  BadgeCheck,
   BookOpen,
   CheckCircle2,
-  CreditCard,
   Globe2,
   ImagePlus,
   Mail,
@@ -65,14 +63,6 @@ const FEATURE_SHOWCASE = [
 
 const WORKSPACE_CREATION_FEATURES = FEATURE_SHOWCASE.filter((feature) =>
   ['/upload', '/interactive', '/kids-daily'].includes(feature.to),
-)
-
-const ABOUT_CORE_FEATURES = FEATURE_SHOWCASE.filter((feature) =>
-  ['/upload', '/interactive', '/kids-daily'].includes(feature.to),
-)
-
-const ABOUT_ECOSYSTEM_FEATURES = FEATURE_SHOWCASE.filter((feature) =>
-  ['/content-hub', '/my-agent'].includes(feature.to),
 )
 
 const HERO_ACTIONS = [
@@ -687,111 +677,6 @@ function HomePage() {
             <p className="mt-2 text-sm font-semibold text-red-600">We could not save this email right now. Please try again.</p>
           )}
         </motion.section>
-      )}
-
-      {!isAuthenticated && (
-        <section
-          id="about-us"
-          className="overflow-hidden rounded-lg border border-gray-200 bg-white/90 shadow-sm"
-        >
-          <div className="grid gap-0 lg:grid-cols-[0.95fr_1.25fr]">
-            <div className="border-b border-gray-200 bg-gray-50/80 p-5 sm:p-6 lg:border-b-0 lg:border-r">
-              <p className="text-xs font-bold uppercase tracking-wide text-primary">
-                About Us
-              </p>
-              <h2 className="mt-2 text-2xl font-bold leading-tight text-gray-900">
-                A creative workspace where children can let imagination fly.
-              </h2>
-              <p className="mt-3 text-sm leading-relaxed text-gray-600">
-                Creative Workshop helps kids turn drawings, story choices, and
-                everyday curiosity into safe, age-aware creative projects. Parents
-                get a clear path from first idea to saved creation, shared work,
-                and membership options.
-              </p>
-              <div className="mt-5 flex flex-col gap-2 sm:flex-row">
-                <Link
-                  to="/login"
-                  className="btn-primary inline-flex min-h-[46px] items-center justify-center gap-2 px-4"
-                >
-                  Start Creating
-                  <ArrowRight size={17} />
-                </Link>
-                <a
-                  href="#kids-daily-email"
-                  className="btn-secondary inline-flex min-h-[46px] items-center justify-center gap-2 px-4"
-                >
-                  Get Daily Preview
-                  <Mail size={17} />
-                </a>
-              </div>
-            </div>
-
-            <div className="p-5 sm:p-6">
-              <div>
-                <h3 className="text-sm font-bold uppercase tracking-wide text-gray-500">
-                  Three main creation modes
-                </h3>
-                <div className="mt-3 grid gap-3 md:grid-cols-3">
-                  {ABOUT_CORE_FEATURES.map((feature) => {
-                    const Icon = feature.icon
-                    return (
-                      <article
-                        key={feature.to}
-                        className={`rounded-lg border bg-gradient-to-br p-4 ${feature.accent}`}
-                      >
-                        <Icon size={24} className="mb-3" />
-                        <h4 className="text-sm font-bold text-gray-900">
-                          {feature.title}
-                        </h4>
-                        <p className="mt-1 text-xs leading-relaxed text-gray-600">
-                          {feature.description}
-                        </p>
-                      </article>
-                    )
-                  })}
-                </div>
-              </div>
-
-              <div className="mt-6 grid gap-3 md:grid-cols-2">
-                {ABOUT_ECOSYSTEM_FEATURES.map((feature) => {
-                  const Icon = feature.icon
-                  const title =
-                    feature.to === '/my-agent' ? 'My Agent Buddy' : feature.title
-                  return (
-                    <article
-                      key={feature.to}
-                      className="rounded-lg border border-gray-200 bg-white p-4"
-                    >
-                      <Icon size={24} className="mb-3 text-primary" />
-                      <h3 className="text-sm font-bold text-gray-900">{title}</h3>
-                      <p className="mt-1 text-sm leading-relaxed text-gray-600">
-                        {feature.description}
-                      </p>
-                    </article>
-                  )
-                })}
-
-                <article className="rounded-lg border border-gray-200 bg-white p-4">
-                  <CreditCard size={24} className="mb-3 text-primary" />
-                  <h3 className="text-sm font-bold text-gray-900">Pricing</h3>
-                  <p className="mt-1 text-sm leading-relaxed text-gray-600">
-                    Start free, then upgrade when your family wants richer
-                    creation history, daily routines, and more room to explore.
-                  </p>
-                </article>
-
-                <article className="rounded-lg border border-gray-200 bg-white p-4">
-                  <BadgeCheck size={24} className="mb-3 text-primary" />
-                  <h3 className="text-sm font-bold text-gray-900">Membership</h3>
-                  <p className="mt-1 text-sm leading-relaxed text-gray-600">
-                    Membership is designed around family controls, safe sharing,
-                    saved projects, and parent-friendly creative routines.
-                  </p>
-                </article>
-              </div>
-            </div>
-          </div>
-        </section>
       )}
 
       {isAuthenticated && recentItems.length > 0 && (

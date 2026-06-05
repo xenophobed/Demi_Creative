@@ -5,7 +5,7 @@ describe("logged-out public navigation", () => {
   it("exposes a single About Us destination", () => {
     expect(PUBLIC_NAV_ITEMS).toEqual([
       {
-        href: "/#about-us",
+        href: "/about-us",
         label: "About Us",
       },
     ]);
