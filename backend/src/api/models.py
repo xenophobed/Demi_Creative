@@ -959,7 +959,7 @@ class VoiceSessionStartRequest(BaseModel):
 
 class VoiceProviderConfig(BaseModel):
     """Sub-shape of VoiceSessionStartResponse — provider-specific runtime hints."""
-    provider: Literal["mock", "hybrid"] = Field(
+    provider: Literal["mock", "hybrid", "openai_realtime"] = Field(
         ..., description="Which RealtimeVoiceProvider impl backs this session."
     )
     sample_rate_hz: int = Field(default=16_000, ge=8_000, le=48_000)
@@ -970,13 +970,31 @@ class VoiceSessionStartResponse(BaseModel):
     """REST response — what the client needs to open the WS handshake.
 
     Returns 501 in the foundation PR (#611). Real implementation lands in
-    sub-story #606.5 once the broker is wired.
+    sub-story #606.5 once the broker is wired. In #645 we add the OpenAI
+    Realtime client secret + transport hint so E4 (#647 WebRTC) can
+    layer in without breaking the contract.
     """
     session_id: str
     ephemeral_token: str = Field(..., min_length=20, max_length=512)
     expires_at: datetime
     ws_url: str = Field(..., description="Absolute or relative WebSocket URL")
     provider_config: VoiceProviderConfig
+    openai_realtime_client_secret: Optional[str] = Field(
+        default=None,
+        description=(
+            "Ephemeral OpenAI Realtime client secret. Populated only when "
+            "the OpenAI Realtime provider backs the session. The frontend "
+            "stores it for E4's WebRTC transport — for E2's server-relay "
+            "(WS) path it's unused."
+        ),
+    )
+    transport: Literal["ws"] = Field(
+        default="ws",
+        description=(
+            "Selected client transport. ``ws`` = server-relay broker (E2). "
+            "E4 (#647) introduces ``webrtc`` as an opt-in alternative."
+        ),
+    )
 
 
 # ── WS Event envelopes ───────────────────────────────────────────────────────

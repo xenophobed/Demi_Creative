@@ -233,66 +233,175 @@ class TestStartSessionDegraded:
         assert handle.provider_state.get("provider_unavailable") is True
 
 
-# ---------------------- Scaffold NotImplementedError -----------------------
-
-_E2_MESSAGE = "E2 — broker integration"
+# ---------------------- Post-E2 broker integration ------------------------
 
 
-class TestScaffoldNotImplemented:
-    """The scaffold methods raise NotImplementedError with an exact string.
+class _FakeUpstreamWebSocket:
+    """Minimal stand-in for an OpenAI Realtime upstream WS connection.
 
-    The string is a contract for the #645 (E2) reviewer — they'll grep
-    for this message and replace each call site with the real upstream
-    WebSocket forwarding.
+    Tests script ``incoming_events`` (list of dicts) — each call to
+    ``recv`` pops one off the front. Outbound ``send`` calls are
+    appended to ``sent`` so assertions can verify what the provider
+    forwarded.
+    """
+
+    def __init__(self, incoming_events=None):
+        self.sent = []
+        self.incoming = list(incoming_events or [])
+        self.closed = False
+
+    async def send(self, payload):
+        self.sent.append(payload)
+
+    async def recv(self):
+        if not self.incoming:
+            # Mimic a hung upstream — yield control rather than blocking.
+            import asyncio as _aio
+            await _aio.sleep(0.01)
+            raise RuntimeError("no more events")
+        import json as _json
+        ev = self.incoming.pop(0)
+        return _json.dumps(ev)
+
+    async def close(self):
+        self.closed = True
+
+
+class _FakeWebSocketsConnect:
+    """Drop-in for websockets.connect — returns the same scripted FakeUpstreamWebSocket."""
+
+    def __init__(self, ws):
+        self._ws = ws
+
+    def __call__(self, *args, **kwargs):
+        # The provider uses ``async with _websockets_connect(url) as ws``
+        # so we need an awaitable context manager.
+        outer = self
+
+        class _CM:
+            async def __aenter__(self_inner):
+                return outer._ws
+
+            async def __aexit__(self_inner, *_):
+                return False
+
+        # Also support direct-await (await connect(url)) → the WS object.
+        class _Awaitable:
+            def __await__(self_inner):
+                async def _coro():
+                    return outer._ws
+                return _coro().__await__()
+
+            async def __aenter__(self_inner):
+                return outer._ws
+
+            async def __aexit__(self_inner, *_):
+                return False
+
+        return _Awaitable()
+
+
+class TestBrokerIntegrationMethods:
+    """The push_audio / finalize_utterance / synthesize_speech methods now
+    forward to the upstream WS. NotImplementedError is gone (#645).
     """
 
     @pytest.mark.asyncio
-    async def test_push_audio_raises(self, monkeypatch):
+    async def test_push_audio_forwards_input_audio_buffer_append(self, monkeypatch):
         monkeypatch.setenv("OPENAI_API_KEY", "sk-test-key")
         monkeypatch.setattr(rtvs, "_httpx_AsyncClient", _FakeAsyncClient)
         provider = OpenAIRealtimeProvider()
         handle = await provider.start_session(
             user_id="u", child_id="c", target_age=7,
         )
-        with pytest.raises(NotImplementedError) as ei:
-            await provider.push_audio(handle, b"\x00" * 64)
-        assert str(ei.value) == _E2_MESSAGE
+        # Manually attach a fake upstream WS — broker tests cover the
+        # full lifecycle; here we focus on the per-method behaviour.
+        ws = _FakeUpstreamWebSocket()
+        handle.provider_state["upstream_ws"] = ws
+
+        await provider.push_audio(handle, b"\x00" * 32)
+        assert ws.sent, "push_audio must forward to upstream WS"
+        import json as _json
+        forwarded = _json.loads(ws.sent[0])
+        assert forwarded["type"] == "input_audio_buffer.append"
+        assert "audio" in forwarded
 
     @pytest.mark.asyncio
-    async def test_finalize_utterance_raises(self, monkeypatch):
+    async def test_finalize_utterance_commits_and_creates_response(
+        self, monkeypatch,
+    ):
         monkeypatch.setenv("OPENAI_API_KEY", "sk-test-key")
         monkeypatch.setattr(rtvs, "_httpx_AsyncClient", _FakeAsyncClient)
         provider = OpenAIRealtimeProvider()
         handle = await provider.start_session(
             user_id="u", child_id="c", target_age=7,
         )
-        with pytest.raises(NotImplementedError) as ei:
-            await provider.finalize_utterance(handle)
-        assert str(ei.value) == _E2_MESSAGE
+        ws = _FakeUpstreamWebSocket(
+            incoming_events=[
+                {
+                    "type": "conversation.item.input_audio_transcription.completed",
+                    "transcript": "hello buddy",
+                    "language": "en",
+                },
+            ],
+        )
+        handle.provider_state["upstream_ws"] = ws
+
+        transcript = await provider.finalize_utterance(handle)
+        # The provider forwarded commit + response.create before reading.
+        import json as _json
+        types_sent = [_json.loads(s)["type"] for s in ws.sent]
+        assert "input_audio_buffer.commit" in types_sent
+        assert "response.create" in types_sent
+        assert transcript.success is True
+        assert transcript.text == "hello buddy"
+        assert transcript.provider == "openai_realtime"
 
     @pytest.mark.asyncio
-    async def test_synthesize_speech_raises(self, monkeypatch):
+    async def test_synthesize_speech_yields_audio_deltas(self, monkeypatch):
         monkeypatch.setenv("OPENAI_API_KEY", "sk-test-key")
         monkeypatch.setattr(rtvs, "_httpx_AsyncClient", _FakeAsyncClient)
         provider = OpenAIRealtimeProvider()
         handle = await provider.start_session(
             user_id="u", child_id="c", target_age=7,
         )
-        with pytest.raises(NotImplementedError) as ei:
-            await provider.synthesize_speech(handle, "hello buddy")
-        assert str(ei.value) == _E2_MESSAGE
+        import base64 as _b64
+        ws = _FakeUpstreamWebSocket(
+            incoming_events=[
+                {
+                    "type": "response.audio.delta",
+                    "delta": _b64.b64encode(b"\xAA" * 16).decode("ascii"),
+                },
+                {
+                    "type": "response.audio.delta",
+                    "delta": _b64.b64encode(b"\xBB" * 16).decode("ascii"),
+                },
+                {"type": "response.done"},
+            ],
+        )
+        handle.provider_state["upstream_ws"] = ws
+
+        chunks = []
+        gen = await provider.synthesize_speech(handle, "ignored text param")
+        async for chunk in gen:
+            chunks.append(chunk)
+
+        assert chunks == [b"\xAA" * 16, b"\xBB" * 16]
 
     @pytest.mark.asyncio
-    async def test_close_is_noop(self, monkeypatch):
+    async def test_close_closes_upstream_ws(self, monkeypatch):
         monkeypatch.setenv("OPENAI_API_KEY", "sk-test-key")
         monkeypatch.setattr(rtvs, "_httpx_AsyncClient", _FakeAsyncClient)
         provider = OpenAIRealtimeProvider()
         handle = await provider.start_session(
             user_id="u", child_id="c", target_age=7,
         )
-        # close logic lands in E2 with the upstream WS lifecycle; here
-        # it must be a benign no-op (does not raise).
+        ws = _FakeUpstreamWebSocket()
+        handle.provider_state["upstream_ws"] = ws
+
         await provider.close(handle)
+        assert ws.closed, "close must release the upstream WS"
+        assert handle.provider_state["closed"] is True
 
 
 # ---------------------- _select_provider routing ---------------------------
