@@ -578,7 +578,9 @@ async def init_schema(db: "DatabaseManager") -> None:
     await _migrate_create_child_profiles_table(db)
     await _migrate_add_child_profile_consent_columns(db)
     await _migrate_add_voice_realtime_columns(db)
+    await _migrate_add_voice_premium_columns(db)
     await _migrate_create_voice_sessions_table(db)
+    await _migrate_add_voice_session_cost_columns(db)
     await _migrate_create_user_agents_table(db)
     await _migrate_add_user_agent_config_columns(db)
     await _migrate_create_agent_chat_tables(db)
@@ -955,6 +957,35 @@ async def _migrate_add_voice_realtime_columns(db: "DatabaseManager") -> None:
         print("Child profile voice-realtime migration completed")
 
 
+async def _migrate_add_voice_premium_columns(db: "DatabaseManager") -> None:
+    """Migration: Add premium-voice tier-selection flags to child_profiles (#648).
+
+    The tier-selection policy escalates from ``gpt-realtime-mini`` to
+    ``gpt-realtime-2`` only when BOTH of these flags are set:
+
+      - ``voice_premium_voice``         — per-child opt-in (parent UI)
+      - ``voice_premium_voice_consent`` — parent's explicit consent
+
+    Default 0 (off) so every existing child stays on the cheap mini tier
+    until a parent opts in. Idempotent — re-running on a migrated schema
+    is a no-op.
+    """
+    columns = [
+        ("voice_premium_voice", "ALTER TABLE child_profiles ADD COLUMN voice_premium_voice INTEGER DEFAULT 0"),
+        ("voice_premium_voice_consent", "ALTER TABLE child_profiles ADD COLUMN voice_premium_voice_consent INTEGER DEFAULT 0"),
+    ]
+    added = False
+    for column_name, ddl in columns:
+        if not await column_exists(db, "child_profiles", column_name):
+            if not added:
+                print("Migrating child_profiles: adding voice premium tier columns (#648)...")
+                added = True
+            await db.execute(ddl)
+    if added:
+        await db.commit()
+        print("Child profile voice-premium migration completed")
+
+
 VOICE_SESSIONS_TABLE = """
 CREATE TABLE IF NOT EXISTS voice_sessions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -967,6 +998,9 @@ CREATE TABLE IF NOT EXISTS voice_sessions (
     transcript_safety_score REAL,
     termination_reason TEXT,
     provider TEXT,
+    model TEXT,
+    cost_estimate_usd REAL,
+    prompt_cache_hit INTEGER,
     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
 );
 """
@@ -985,6 +1019,11 @@ async def _migrate_create_voice_sessions_table(db: "DatabaseManager") -> None:
     'user_ended', 'timeout', 'quota', 'safety_fail', 'provider_error',
     'consent_revoked'. Audio bytes are NEVER persisted; only the moderated
     transcript_safety_score is kept for audit.
+
+    #648 adds three cost-telemetry columns: ``model``, ``cost_estimate_usd``,
+    ``prompt_cache_hit``. They are NULL for legacy rows and for non-OpenAI
+    providers — the broker only populates them when the provider exposes
+    a model in its ``provider_state``.
     """
     await db.execute(translate_ddl(VOICE_SESSIONS_TABLE, db.dialect))
     for stmt in VOICE_SESSIONS_INDEXES.strip().split(";"):
@@ -994,6 +1033,31 @@ async def _migrate_create_voice_sessions_table(db: "DatabaseManager") -> None:
             except Exception:
                 pass
     await db.commit()
+
+
+async def _migrate_add_voice_session_cost_columns(db: "DatabaseManager") -> None:
+    """Migration: Add cost telemetry columns to voice_sessions (#648).
+
+    Idempotent — only adds the columns when missing. Existing rows get
+    NULL values which the repository surfaces as ``None`` in the
+    ``VoiceSessionData`` dataclass. Hybrid / Mock provider sessions also
+    keep NULL since the broker only computes cost for OpenAI sessions.
+    """
+    columns = [
+        ("model", "ALTER TABLE voice_sessions ADD COLUMN model TEXT"),
+        ("cost_estimate_usd", "ALTER TABLE voice_sessions ADD COLUMN cost_estimate_usd REAL"),
+        ("prompt_cache_hit", "ALTER TABLE voice_sessions ADD COLUMN prompt_cache_hit INTEGER"),
+    ]
+    added = False
+    for column_name, ddl in columns:
+        if not await column_exists(db, "voice_sessions", column_name):
+            if not added:
+                print("Migrating voice_sessions: adding cost telemetry columns (#648)...")
+                added = True
+            await db.execute(ddl)
+    if added:
+        await db.commit()
+        print("Voice session cost-telemetry migration completed")
 
 
 async def _migrate_create_child_profiles_table(db: "DatabaseManager") -> None:

@@ -26,6 +26,10 @@ class ChildProfileData:
     voice_conversation_consent: bool = False
     voice_persona: str = "buddy_default"
     voice_session_quota_seconds: int = 0
+    # Tier-selection flags (#648). Both must be True before the OpenAI
+    # Realtime provider escalates from gpt-realtime-mini → gpt-realtime-2.
+    voice_premium_voice: bool = False
+    voice_premium_voice_consent: bool = False
 
 
 class ChildProfileRepository:
@@ -41,7 +45,9 @@ class ChildProfileRepository:
             SELECT child_id, user_id, name, age_group, interests, avatar,
                    is_default, archived_at, camera_consent, microphone_consent,
                    voice_conversation_consent, voice_persona,
-                   voice_session_quota_seconds, created_at, updated_at
+                   voice_session_quota_seconds,
+                   voice_premium_voice, voice_premium_voice_consent,
+                   created_at, updated_at
             FROM child_profiles
             WHERE user_id = ?
         """
@@ -60,7 +66,9 @@ class ChildProfileRepository:
             SELECT child_id, user_id, name, age_group, interests, avatar,
                    is_default, archived_at, camera_consent, microphone_consent,
                    voice_conversation_consent, voice_persona,
-                   voice_session_quota_seconds, created_at, updated_at
+                   voice_session_quota_seconds,
+                   voice_premium_voice, voice_premium_voice_consent,
+                   created_at, updated_at
             FROM child_profiles
             WHERE user_id = ? AND child_id = ?
         """
@@ -204,6 +212,8 @@ class ChildProfileRepository:
         voice_conversation_consent: Optional[bool] = None,
         voice_persona: Optional[str] = None,
         voice_session_quota_seconds: Optional[int] = None,
+        voice_premium_voice: Optional[bool] = None,
+        voice_premium_voice_consent: Optional[bool] = None,
     ) -> Optional[ChildProfileData]:
         existing = await self.get_for_user(user_id, child_id)
         if existing is None:
@@ -227,6 +237,12 @@ class ChildProfileRepository:
         if voice_session_quota_seconds is not None:
             updates.append("voice_session_quota_seconds = ?")
             params.append(int(voice_session_quota_seconds))
+        if voice_premium_voice is not None:
+            updates.append("voice_premium_voice = ?")
+            params.append(1 if voice_premium_voice else 0)
+        if voice_premium_voice_consent is not None:
+            updates.append("voice_premium_voice_consent = ?")
+            params.append(1 if voice_premium_voice_consent else 0)
 
         params.extend([user_id, child_id])
         await self._db.execute(
@@ -303,6 +319,8 @@ class ChildProfileRepository:
             voice_conversation_consent=bool(row.get("voice_conversation_consent", 0)),
             voice_persona=row.get("voice_persona") or "buddy_default",
             voice_session_quota_seconds=int(row.get("voice_session_quota_seconds") or 0),
+            voice_premium_voice=bool(row.get("voice_premium_voice", 0)),
+            voice_premium_voice_consent=bool(row.get("voice_premium_voice_consent", 0)),
             interests=[str(item) for item in interests],
             avatar=row.get("avatar"),
             is_default=bool(row.get("is_default", 0)),

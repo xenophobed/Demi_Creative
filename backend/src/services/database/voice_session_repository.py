@@ -42,6 +42,12 @@ class VoiceSessionData:
     transcript_safety_score: Optional[float]
     termination_reason: Optional[str]
     provider: Optional[str]
+    # Cost-telemetry columns (#648) — populated only for OpenAI sessions.
+    # Hybrid / Mock sessions leave these as None; the broker computes
+    # cost_estimate_usd at end_session time from the provider's model.
+    model: Optional[str] = None
+    cost_estimate_usd: Optional[float] = None
+    prompt_cache_hit: Optional[bool] = None
 
 
 class VoiceSessionRepository:
@@ -105,8 +111,17 @@ class VoiceSessionRepository:
         reason: str,
         duration_seconds: Optional[int] = None,
         safety_score: Optional[float] = None,
+        model: Optional[str] = None,
+        cost_estimate_usd: Optional[float] = None,
+        prompt_cache_hit: Optional[bool] = None,
     ) -> Optional[VoiceSessionData]:
-        """Close out a session row. Idempotent — second call is a no-op."""
+        """Close out a session row. Idempotent — second call is a no-op.
+
+        ``model`` / ``cost_estimate_usd`` / ``prompt_cache_hit`` are the
+        #648 cost-telemetry fields. They are optional so the pre-#648
+        Hybrid / Mock paths still call ``end_session`` with the same
+        positional kwargs.
+        """
         existing = await self.get_by_id(session_id)
         if existing is None:
             return None
@@ -115,16 +130,27 @@ class VoiceSessionRepository:
             return existing
 
         now = datetime.now().isoformat()
+        cache_hit_int = (
+            None if prompt_cache_hit is None
+            else (1 if prompt_cache_hit else 0)
+        )
         await self._db.execute(
             """
             UPDATE voice_sessions
             SET ended_at = ?,
                 duration_seconds = ?,
                 transcript_safety_score = ?,
-                termination_reason = ?
+                termination_reason = ?,
+                model = ?,
+                cost_estimate_usd = ?,
+                prompt_cache_hit = ?
             WHERE session_id = ?
             """,
-            (now, duration_seconds, safety_score, reason, session_id),
+            (
+                now, duration_seconds, safety_score, reason,
+                model, cost_estimate_usd, cache_hit_int,
+                session_id,
+            ),
         )
         await self._db.commit()
         return await self.get_by_id(session_id)
@@ -134,7 +160,8 @@ class VoiceSessionRepository:
             """
             SELECT session_id, user_id, child_id, started_at, ended_at,
                    duration_seconds, transcript_safety_score,
-                   termination_reason, provider
+                   termination_reason, provider,
+                   model, cost_estimate_usd, prompt_cache_hit
             FROM voice_sessions
             WHERE session_id = ?
             """,
@@ -153,7 +180,8 @@ class VoiceSessionRepository:
             """
             SELECT session_id, user_id, child_id, started_at, ended_at,
                    duration_seconds, transcript_safety_score,
-                   termination_reason, provider
+                   termination_reason, provider,
+                   model, cost_estimate_usd, prompt_cache_hit
             FROM voice_sessions
             WHERE user_id = ? AND child_id = ?
             ORDER BY started_at DESC
@@ -196,6 +224,12 @@ class VoiceSessionRepository:
 
     @classmethod
     def _row_to_data(cls, row: dict) -> VoiceSessionData:
+        cache_raw = row.get("prompt_cache_hit")
+        if cache_raw is None:
+            cache_hit: Optional[bool] = None
+        else:
+            cache_hit = bool(cache_raw)
+        cost = row.get("cost_estimate_usd")
         return VoiceSessionData(
             session_id=row["session_id"],
             user_id=row["user_id"],
@@ -206,6 +240,9 @@ class VoiceSessionRepository:
             transcript_safety_score=row.get("transcript_safety_score"),
             termination_reason=row.get("termination_reason"),
             provider=row.get("provider"),
+            model=row.get("model"),
+            cost_estimate_usd=(float(cost) if cost is not None else None),
+            prompt_cache_hit=cache_hit,
         )
 
 

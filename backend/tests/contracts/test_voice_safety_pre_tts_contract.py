@@ -141,12 +141,19 @@ class _SafetyStubProvider:
     async def start_session(
         self, *, user_id, child_id, target_age,
         persona="buddy_default",
+        **_kwargs,
     ):
+        # Accept (and ignore) the #648 tier-selection kwargs the broker
+        # passes when name == "openai_realtime".
         return SessionHandle(
             session_id=f"voice_{self.name}_safety_{user_id}",
             user_id=user_id, child_id=child_id,
             target_age=target_age, persona=persona,
-            provider_state={"openai_client_secret": "ek_safety"},
+            provider_state={
+                "openai_client_secret": "ek_safety",
+                "model": "gpt-realtime-mini",
+                "prompt_cache_hit": False,
+            },
         )
 
     async def push_audio(self, h, b):

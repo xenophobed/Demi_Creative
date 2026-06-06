@@ -59,6 +59,8 @@ from ...services.realtime_voice_service import (
     RealtimeVoiceProvider,
     SessionHandle,
     _select_provider,
+    estimate_session_cost_usd,
+    log_voice_session_end,
     safety_threshold_for_age,
 )
 from ...services.user_service import UserData
@@ -323,6 +325,12 @@ async def start_voice_session(
                 child_id=request.child_id,
                 target_age=target_age,
                 persona=profile.voice_persona or "buddy_default",
+                voice_premium_voice=bool(
+                    getattr(profile, "voice_premium_voice", False)
+                ),
+                voice_premium_voice_consent=bool(
+                    getattr(profile, "voice_premium_voice_consent", False)
+                ),
             )
             openai_secret = (
                 preview_handle.provider_state.get("openai_client_secret") or None
@@ -603,12 +611,24 @@ async def stream_voice_session(websocket: WebSocket) -> None:
     max_session_seconds = _max_session_for(age_group)
 
     try:
-        handle = await provider.start_session(
-            user_id=claims.user_id,
-            child_id=claims.child_id,
-            target_age=target_age,
-            persona=profile.voice_persona or "buddy_default",
-        )
+        # #648 tier-selection: surface the per-child premium-voice flags
+        # so the OpenAI provider can pick mini vs premium. Providers that
+        # don't accept these kwargs silently ignore them — the broker
+        # passes through positionally to the typed Protocol via **kwargs.
+        start_kwargs: Dict[str, Any] = {
+            "user_id": claims.user_id,
+            "child_id": claims.child_id,
+            "target_age": target_age,
+            "persona": profile.voice_persona or "buddy_default",
+        }
+        if provider.name == "openai_realtime":
+            start_kwargs["voice_premium_voice"] = bool(
+                getattr(profile, "voice_premium_voice", False)
+            )
+            start_kwargs["voice_premium_voice_consent"] = bool(
+                getattr(profile, "voice_premium_voice_consent", False)
+            )
+        handle = await provider.start_session(**start_kwargs)
 
         while True:
             # Compute the next deadline — whichever fires first wins.
@@ -732,6 +752,22 @@ async def stream_voice_session(websocket: WebSocket) -> None:
         await _emit_error(websocket, code="provider_error", message=str(exc))
     finally:
         elapsed = int(time.monotonic() - started_at)
+        # #648 cost telemetry — only the OpenAI provider populates ``model``
+        # in provider_state. Hybrid / Mock leave it unset, so the helpers
+        # return zero cost and the row's cost columns stay NULL.
+        session_model: Optional[str] = None
+        prompt_cache_hit: bool = False
+        if handle is not None:
+            session_model = handle.provider_state.get("model")  # type: ignore[union-attr]
+            prompt_cache_hit = bool(
+                handle.provider_state.get("prompt_cache_hit", False)  # type: ignore[union-attr]
+            )
+        cost_estimate_usd = estimate_session_cost_usd(
+            model=session_model,
+            duration_seconds=elapsed,
+            prompt_cache_hit=prompt_cache_hit,
+        )
+
         # Final session_end event with telemetry — surfaced to the Parent
         # Dashboard via the frontend in Phase D (#648).
         await _send_event(websocket, {
@@ -739,11 +775,29 @@ async def stream_voice_session(websocket: WebSocket) -> None:
             "reason": termination_reason,
             "duration_seconds": elapsed,
             "first_audio_ms": state.get("first_audio_ms") or 0,
+            "model": session_model,
+            "cost_estimate_usd": cost_estimate_usd,
         })
         await voice_session_repo.end_session(
             session_id=claims.session_id,
             reason=termination_reason,
             duration_seconds=elapsed,
+            model=session_model,
+            cost_estimate_usd=cost_estimate_usd if session_model else None,
+            prompt_cache_hit=prompt_cache_hit if session_model else None,
+        )
+        # Structured log line for the ops cost dashboard. Greppable as
+        # ``event=voice_session_end`` — the alerting layer sums
+        # ``cost_estimate_usd`` over the rolling month and trips at 80%
+        # of the operator-set ``OPENAI_REALTIME_MONTHLY_CAP_USD``.
+        log_voice_session_end(
+            session_id=claims.session_id,
+            model=session_model,
+            duration_seconds=elapsed,
+            cost_estimate_usd=cost_estimate_usd,
+            prompt_cache_hit=prompt_cache_hit,
+            first_audio_ms=state.get("first_audio_ms") or 0,
+            ended_reason=termination_reason,
         )
         if handle is not None:
             try:
