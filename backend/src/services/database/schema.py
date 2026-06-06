@@ -581,6 +581,7 @@ async def init_schema(db: "DatabaseManager") -> None:
     await _migrate_add_voice_premium_columns(db)
     await _migrate_create_voice_sessions_table(db)
     await _migrate_add_voice_session_cost_columns(db)
+    await _migrate_add_voice_session_transport_column(db)
     await _migrate_create_user_agents_table(db)
     await _migrate_add_user_agent_config_columns(db)
     await _migrate_create_agent_chat_tables(db)
@@ -1001,6 +1002,7 @@ CREATE TABLE IF NOT EXISTS voice_sessions (
     model TEXT,
     cost_estimate_usd REAL,
     prompt_cache_hit INTEGER,
+    transport TEXT,
     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
 );
 """
@@ -1058,6 +1060,21 @@ async def _migrate_add_voice_session_cost_columns(db: "DatabaseManager") -> None
     if added:
         await db.commit()
         print("Voice session cost-telemetry migration completed")
+
+
+async def _migrate_add_voice_session_transport_column(db: "DatabaseManager") -> None:
+    """Migration: Add the ``transport`` column to voice_sessions (#647).
+
+    Records whether a session used the WS server-relay path (``ws``) or
+    the browser-direct WebRTC path (``webrtc``). Existing rows backfill
+    to NULL — the Phase D dashboard treats NULL as ``ws`` since that was
+    the only transport before this migration. Idempotent.
+    """
+    if not await column_exists(db, "voice_sessions", "transport"):
+        print("Migrating voice_sessions: adding transport column (#647)...")
+        await db.execute("ALTER TABLE voice_sessions ADD COLUMN transport TEXT")
+        await db.commit()
+        print("Voice session transport migration completed")
 
 
 async def _migrate_create_child_profiles_table(db: "DatabaseManager") -> None:
