@@ -28,9 +28,10 @@ import { motion } from "framer-motion";
 import {
   isEndButtonEnabled,
   isPanelVisible,
-  pickIndicator,
   TALK_PANEL_STATE_COPY,
 } from "./talkToBuddyHelpers";
+import { pickOrbMode } from "./buddyOrbHelpers";
+import { BuddyOrb } from "./BuddyOrb";
 import type { VoiceConversationState } from "@/hooks/voiceConversationStateMachine";
 
 /**
@@ -49,6 +50,10 @@ export interface TalkToBuddyPanelProps {
   assistantText?: string;
   /** RMS-derived mic input level 0..1 for the waveform animation. */
   inputLevel?: number;
+  /** RMS-derived TTS output level 0..1 for the speaking animation (#651). */
+  outputLevel?: number;
+  /** Raw child age in years. When < 6, the BuddyOrb renders the face overlay. */
+  childAge?: number | null;
   prefersReducedMotion?: boolean;
   onStart: () => void;
   onEnd: () => void;
@@ -72,39 +77,13 @@ export const PANEL_WRAPPER_CLASS: Record<TalkToBuddyPanelVariant, string> = {
     "flex flex-col gap-3 rounded-2xl border border-violet-200 bg-violet-50/40 p-3",
 };
 
-function Indicator({
-  variant,
-  level,
-}: {
-  variant: "static" | "pulse-listening" | "pulse-speaking";
-  level: number;
-}) {
-  if (variant === "static") {
-    return (
-      <div
-        className="h-2 w-2 rounded-full bg-primary"
-        aria-hidden="true"
-      />
-    );
-  }
-  const colorClass =
-    variant === "pulse-listening" ? "bg-emerald-500" : "bg-violet-500";
-  const scale = 1 + Math.min(0.4, (level ?? 0) * 0.4);
-  return (
-    <motion.div
-      className={`h-3 w-3 rounded-full ${colorClass}`}
-      animate={{ scale: [1, scale, 1] }}
-      transition={{ duration: 0.8, repeat: Infinity, ease: "easeInOut" }}
-      aria-hidden="true"
-    />
-  );
-}
-
 export function TalkToBuddyPanel({
   state,
   partialTranscript = "",
   assistantText = "",
   inputLevel = 0,
+  outputLevel = 0,
+  childAge = null,
   prefersReducedMotion = false,
   onStart,
   onEnd,
@@ -115,7 +94,7 @@ export function TalkToBuddyPanel({
   if (!isPanelVisible(state)) return null;
 
   const status = TALK_PANEL_STATE_COPY[state];
-  const indicator = pickIndicator(state, prefersReducedMotion);
+  const orbMode = pickOrbMode(state, prefersReducedMotion);
   const endEnabled = isEndButtonEnabled(state);
   const canStart = state === "idle" || state === "error";
 
@@ -159,7 +138,6 @@ export function TalkToBuddyPanel({
     >
       <header className={headerClass}>
         <div className="flex items-center gap-2">
-          <Indicator variant={indicator} level={inputLevel} />
           <h2
             className={
               isInline
@@ -197,6 +175,15 @@ export function TalkToBuddyPanel({
         aria-live="polite"
         aria-atomic="false"
       >
+        <div className={isInline ? "mb-2 flex justify-center" : "mb-4 flex justify-center"}>
+          <BuddyOrb
+            mode={orbMode}
+            inputLevel={inputLevel}
+            outputLevel={outputLevel}
+            childAge={childAge}
+            prefersReducedMotion={prefersReducedMotion}
+          />
+        </div>
         <p
           className={
             isInline

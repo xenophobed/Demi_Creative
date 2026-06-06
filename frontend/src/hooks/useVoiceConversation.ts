@@ -78,6 +78,14 @@ export interface UseVoiceConversationResult {
   partialTranscript: string;
   assistantText: string;
   inputLevel: number;
+  /**
+   * RMS-derived TTS output level 0..1 (#651). Mirrors `inputLevel` but
+   * is sourced from the AnalyserNode wired between the assistant audio
+   * element and the AudioContext destination. Used by BuddyOrb to drive
+   * the speaking animation. Stays at 0 in environments without the Web
+   * Audio API (test/SSR) or when no TTS is currently playing.
+   */
+  outputLevel: number;
   sessionId: string | null;
 }
 
@@ -120,6 +128,7 @@ export function useVoiceConversation(
   const [partialTranscript, setPartialTranscript] = useState("");
   const [assistantText, setAssistantText] = useState("");
   const [inputLevel, setInputLevel] = useState(0);
+  const [outputLevel, setOutputLevel] = useState(0);
   const [sessionId, setSessionId] = useState<string | null>(null);
 
   const stateRef = useRef<VoiceConversationState>("idle");
@@ -132,6 +141,13 @@ export function useVoiceConversation(
   const analyserRef = useRef<AnalyserNode | null>(null);
   const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const rafRef = useRef<number | null>(null);
+  // Output-side analyser (#651): the assistant's TTS audio element fed
+  // through createMediaElementSource → AnalyserNode → destination. RMS
+  // from this analyser becomes `outputLevel` so the BuddyOrb can react
+  // to the buddy talking, not just the kid talking.
+  const outputAnalyserRef = useRef<AnalyserNode | null>(null);
+  const outputSourceRef = useRef<MediaElementAudioSourceNode | null>(null);
+  const outputRafRef = useRef<number | null>(null);
   const audioElementRef = useRef<HTMLAudioElement | null>(null);
   const blobUrlRef = useRef<string | null>(null);
   const ttsChunksRef = useRef<Uint8Array[]>([]);
@@ -169,6 +185,14 @@ export function useVoiceConversation(
       try { cancelAnimationFrame(rafRef.current); } catch { /* ignore */ }
       rafRef.current = null;
     }
+  }, []);
+
+  const stopOutputAnalyserLoop = useCallback(() => {
+    if (outputRafRef.current != null) {
+      try { cancelAnimationFrame(outputRafRef.current); } catch { /* ignore */ }
+      outputRafRef.current = null;
+    }
+    setOutputLevel(0);
   }, []);
 
   const stopRecorder = useCallback(() => {
@@ -215,11 +239,15 @@ export function useVoiceConversation(
     if (ctx) {
       try { analyserRef.current?.disconnect(); } catch { /* ignore */ }
       try { sourceRef.current?.disconnect(); } catch { /* ignore */ }
+      try { outputAnalyserRef.current?.disconnect(); } catch { /* ignore */ }
+      try { outputSourceRef.current?.disconnect(); } catch { /* ignore */ }
       ctx.close().catch(() => { /* ignore */ });
     }
     audioCtxRef.current = null;
     analyserRef.current = null;
     sourceRef.current = null;
+    outputAnalyserRef.current = null;
+    outputSourceRef.current = null;
   }, []);
 
   const closeWebSocket = useCallback((code: number = 1000, reason = "") => {
@@ -232,6 +260,7 @@ export function useVoiceConversation(
 
   const teardown = useCallback(() => {
     stopAnalyserLoop();
+    stopOutputAnalyserLoop();
     stopRecorder();
     stopStream();
     stopPlayback();
@@ -241,7 +270,7 @@ export function useVoiceConversation(
     lastSpeechAtRef.current = null;
     firstAboveAtRef.current = null;
     sentVadEndRef.current = false;
-  }, [stopAnalyserLoop, stopRecorder, stopStream, stopPlayback, closeAudioContext, closeWebSocket]);
+  }, [stopAnalyserLoop, stopOutputAnalyserLoop, stopRecorder, stopStream, stopPlayback, closeAudioContext, closeWebSocket]);
 
   useEffect(() => () => teardown(), [teardown]);
 
@@ -252,6 +281,43 @@ export function useVoiceConversation(
       const last = lastTtsChunkAtRef.current ?? now;
       if (now - last >= TTS_END_QUIET_WINDOW_MS) send({ type: "ttsEnd" });
     }, TTS_END_QUIET_WINDOW_MS + 50);
+  }
+
+  function startOutputAnalyserLoop() {
+    const analyser = outputAnalyserRef.current;
+    if (!analyser) return;
+    const buf = new Uint8Array(analyser.fftSize);
+    const tick = () => {
+      const a = outputAnalyserRef.current;
+      if (!a) return;
+      a.getByteTimeDomainData(buf);
+      const rms = computeRms(buf);
+      setOutputLevel(rms);
+      outputRafRef.current = requestAnimationFrame(tick);
+    };
+    outputRafRef.current = requestAnimationFrame(tick);
+  }
+
+  function ensureOutputAnalyserWired(audio: HTMLAudioElement) {
+    // Lazy-wire on the first TTS playback so we don't pay the cost on
+    // sessions that never reach speaking. Skip cleanly if Web Audio
+    // isn't available (test env, older browsers).
+    const ctx = audioCtxRef.current;
+    if (!ctx) return;
+    if (outputAnalyserRef.current && outputSourceRef.current) return;
+    try {
+      const source = ctx.createMediaElementSource(audio);
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 512;
+      source.connect(analyser);
+      // Keep audible: also connect through to the destination.
+      analyser.connect(ctx.destination);
+      outputSourceRef.current = source;
+      outputAnalyserRef.current = analyser;
+    } catch {
+      // createMediaElementSource throws if called twice on the same
+      // element — that's fine, we already wired it earlier.
+    }
   }
 
   function playAssembledAudio() {
@@ -266,7 +332,12 @@ export function useVoiceConversation(
     if (!audioElementRef.current) audioElementRef.current = new Audio();
     const audio = audioElementRef.current;
     audio.src = url;
-    audio.onended = () => send({ type: "ttsEnd" });
+    audio.onended = () => {
+      stopOutputAnalyserLoop();
+      send({ type: "ttsEnd" });
+    };
+    ensureOutputAnalyserWired(audio);
+    startOutputAnalyserLoop();
     void audio.play().catch(() => {
       onError?.("network", "Audio playback was blocked by the browser");
     });
@@ -387,6 +458,7 @@ export function useVoiceConversation(
       setPartialTranscript("");
       setAssistantText("");
       setInputLevel(0);
+      setOutputLevel(0);
       send({ type: "start", consentGranted: true });
 
       let response: VoiceSessionStartResponse;
@@ -498,6 +570,7 @@ export function useVoiceConversation(
     setPartialTranscript("");
     setAssistantText("");
     setInputLevel(0);
+    setOutputLevel(0);
     setSessionId(null);
     send({ type: "reset" });
   }, [send, teardown]);
@@ -515,6 +588,7 @@ export function useVoiceConversation(
     partialTranscript,
     assistantText,
     inputLevel,
+    outputLevel,
     sessionId,
   };
 }
