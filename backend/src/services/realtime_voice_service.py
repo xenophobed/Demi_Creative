@@ -112,6 +112,107 @@ OPENAI_REALTIME_CLIENT_SECRETS_URL: str = (
 OPENAI_REALTIME_MODEL_DEFAULT: str = "gpt-realtime-mini"
 OPENAI_REALTIME_MODEL_ESCALATED: str = "gpt-realtime-2"
 
+# Per-model USD rates per minute (PRD §3.16.8 — E5 cost telemetry / #648).
+#
+# These are *blended* input+output rates derived from the OpenAI Realtime
+# pricing table. Cached vs uncached refers to the prompt-cache hit state
+# of the session — a cache hit dramatically reduces input cost since the
+# system prompt + per-age preamble does not get re-billed.
+#
+# Tune ranges (±5% per the contract test in
+# ``test_voice_cost_telemetry_contract``):
+#   gpt-realtime-mini cached:   $0.05/min input + $0.10/min output → blend $0.075
+#   gpt-realtime-mini uncached: $0.18/min input + $0.25/min output → blend $0.215
+#   gpt-realtime-2 cached:      $0.10/min input + $0.30/min output → blend $0.20
+#   gpt-realtime-2 uncached:    $0.40/min input + $0.46/min output → blend $0.43
+#
+# All figures are in USD. Multi-currency support is out of scope for v2.
+# Update this table together with the PRD when the upstream rate card moves.
+VOICE_MODEL_RATES_USD_PER_MIN: Dict[str, Dict[str, float]] = {
+    OPENAI_REALTIME_MODEL_DEFAULT: {
+        "cached": 0.075,
+        "uncached": 0.215,
+    },
+    OPENAI_REALTIME_MODEL_ESCALATED: {
+        "cached": 0.20,
+        "uncached": 0.43,
+    },
+}
+
+# Operator-set cap. Read by an external alerting tool — we surface the
+# env var name here so reviewers can find it. Once monthly spend crosses
+# 80% of the cap, the ops alert fires. Wiring lives in deploy infra; the
+# backend just exposes the structured ``voice_session_end`` log so the
+# alerting layer has a per-session signal to sum.
+OPENAI_REALTIME_MONTHLY_CAP_USD_ENV: str = "OPENAI_REALTIME_MONTHLY_CAP_USD"
+
+
+def estimate_session_cost_usd(
+    *,
+    model: Optional[str],
+    duration_seconds: float,
+    prompt_cache_hit: bool,
+) -> float:
+    """Per-session cost estimate in USD.
+
+    Linear-in-duration: ``cost = duration_seconds * rate / 60`` where
+    ``rate`` is picked from :data:`VOICE_MODEL_RATES_USD_PER_MIN`. Defaults
+    to ``0.0`` for unknown / missing models so the broker can call this
+    on Mock/Hybrid sessions without special-casing.
+
+    ``prompt_cache_hit=True`` selects the cached rate; the broker derives
+    this from the upstream session metadata (or, today, treats every
+    session except the first one in a 5-min window as a cache hit).
+    """
+    if not model:
+        return 0.0
+    rates = VOICE_MODEL_RATES_USD_PER_MIN.get(model)
+    if rates is None:
+        return 0.0
+    rate = rates["cached"] if prompt_cache_hit else rates["uncached"]
+    if duration_seconds <= 0:
+        return 0.0
+    return float(duration_seconds) * rate / 60.0
+
+
+def log_voice_session_end(
+    *,
+    session_id: str,
+    model: Optional[str],
+    duration_seconds: float,
+    cost_estimate_usd: float,
+    prompt_cache_hit: bool,
+    first_audio_ms: int,
+    ended_reason: str,
+) -> None:
+    """Emit the structured ``voice_session_end`` log line.
+
+    The ops-side dashboard scrapes ``event=voice_session_end`` records
+    and aggregates ``cost_estimate_usd`` by day to spot runaway spend.
+    Fields are flat so a downstream JSON formatter (e.g. ``python-json-logger``)
+    serialises them without nesting.
+
+    We log at INFO — sessions are infrequent enough (one per child play)
+    that this won't spam DEBUG-suppressed environments.
+    """
+    extra = {
+        "event": "voice_session_end",
+        "session_id": session_id,
+        "model": model,
+        "duration_s": int(round(duration_seconds)),
+        "cost_estimate_usd": float(cost_estimate_usd),
+        "prompt_cache_hit": bool(prompt_cache_hit),
+        "first_audio_ms": int(first_audio_ms or 0),
+        "ended_reason": ended_reason,
+    }
+    logger.info(
+        "voice_session_end session=%s model=%s duration_s=%s cost_usd=%.4f "
+        "cache_hit=%s first_audio_ms=%s reason=%s",
+        session_id, model, extra["duration_s"], extra["cost_estimate_usd"],
+        extra["prompt_cache_hit"], extra["first_audio_ms"], ended_reason,
+        extra=extra,
+    )
+
 
 # ---------------------------------------------------------------------------
 # Data shapes
@@ -715,6 +816,27 @@ class OpenAIRealtimeProvider:
     def _ws_available(self) -> bool:
         return _websockets_connect is not None
 
+    def _select_model(
+        self,
+        *,
+        voice_premium_voice: bool,
+        voice_premium_voice_consent: bool,
+    ) -> str:
+        """Tier-selection policy — mini default, escalate only on dual opt-in.
+
+        Both flags must be True before we route to the premium
+        ``gpt-realtime-2`` tier. Single-flag set falls back to mini so
+        that, e.g., a parent's consent toggle going True does not
+        silently upgrade a child whose per-child opt-in was never set.
+
+        The constructor's ``self.model`` is ignored — selection is
+        decided at session start so a long-lived provider instance
+        can serve sessions for many children with different tiers.
+        """
+        if voice_premium_voice and voice_premium_voice_consent:
+            return OPENAI_REALTIME_MODEL_ESCALATED
+        return OPENAI_REALTIME_MODEL_DEFAULT
+
     async def start_session(
         self,
         *,
@@ -722,7 +844,18 @@ class OpenAIRealtimeProvider:
         child_id: str,
         target_age: int,
         persona: str = "buddy_default",
+        voice_premium_voice: bool = False,
+        voice_premium_voice_consent: bool = False,
     ) -> SessionHandle:
+        # Tier-selection policy (#648): default ``gpt-realtime-mini`` and
+        # only escalate when BOTH the per-child opt-in flag and the
+        # parent-side consent flag are set. Fail closed if either is
+        # missing — silent escalation would defeat the cost guardrail.
+        chosen_model = self._select_model(
+            voice_premium_voice=voice_premium_voice,
+            voice_premium_voice_consent=voice_premium_voice_consent,
+        )
+
         # Degraded path: no key (or httpx missing in test env). Return a
         # handle the broker can recognise without raising.
         if not self._is_available:
@@ -739,7 +872,8 @@ class OpenAIRealtimeProvider:
                 provider_state={
                     "openai_client_secret": "",
                     "provider_unavailable": True,
-                    "model": self.model,
+                    "model": chosen_model,
+                    "prompt_cache_hit": False,
                 },
             )
 
@@ -750,7 +884,7 @@ class OpenAIRealtimeProvider:
         body: Dict[str, Any] = {
             "session": {
                 "type": "realtime",
-                "model": self.model,
+                "model": chosen_model,
             }
         }
         headers = {
@@ -793,7 +927,8 @@ class OpenAIRealtimeProvider:
                 provider_state={
                     "openai_client_secret": "",
                     "provider_unavailable": True,
-                    "model": self.model,
+                    "model": chosen_model,
+                    "prompt_cache_hit": False,
                     "mint_error": str(exc),
                 },
             )
@@ -821,7 +956,7 @@ class OpenAIRealtimeProvider:
         )
         if self._ws_available and open_upstream:
             try:
-                ws_url = f"{OPENAI_REALTIME_WS_URL}?model={self.model}"
+                ws_url = f"{OPENAI_REALTIME_WS_URL}?model={chosen_model}"
                 # Use the module alias so tests can monkeypatch a fake.
                 cm_or_awaitable = _websockets_connect(  # type: ignore[misc]
                     ws_url,
@@ -873,12 +1008,18 @@ class OpenAIRealtimeProvider:
             persona=persona,
             provider_state={
                 "openai_client_secret": client_secret,
-                "model": self.model,
+                "model": chosen_model,
                 "expires_at": expires_at,
                 "voice": voice,
                 "system_prompt": system_prompt,
                 "upstream_ws": upstream_ws,
                 "pending_events": [],
+                # ``prompt_cache_hit`` is set by the broker when it
+                # detects the upstream returned a cached-prompt header.
+                # For v2 we default to False — the cost telemetry layer
+                # treats unknown cache state as uncached (the safer/
+                # higher cost figure for budget planning).
+                "prompt_cache_hit": False,
             },
         )
 

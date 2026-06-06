@@ -157,7 +157,17 @@ class StubOpenAIRealtimeProvider:
     async def start_session(
         self, *, user_id: str, child_id: str, target_age: int,
         persona: str = "buddy_default",
+        voice_premium_voice: bool = False,
+        voice_premium_voice_consent: bool = False,
+        **_kwargs: Any,
     ) -> SessionHandle:
+        # Mirror the real OpenAIRealtimeProvider tier-selection logic
+        # so cost-telemetry tests can flip the flags here.
+        model = (
+            "gpt-realtime-2"
+            if voice_premium_voice and voice_premium_voice_consent
+            else "gpt-realtime-mini"
+        )
         return SessionHandle(
             session_id=f"voice_openai_stub_{user_id}_{child_id}",
             user_id=user_id,
@@ -166,8 +176,9 @@ class StubOpenAIRealtimeProvider:
             persona=persona,
             provider_state={
                 "openai_client_secret": "ek_stub_secret_abc123",
-                "model": "gpt-realtime-mini",
+                "model": model,
                 "expires_at": 1_900_000_000,
+                "prompt_cache_hit": False,
             },
         )
 
