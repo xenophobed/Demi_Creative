@@ -41,6 +41,18 @@ except Exception:  # pragma: no cover - import fallback for test env
     _elevenlabs_AsyncClient = None
     _elevenlabs_VoiceSettings = None
 
+# httpx is a hard dep (see requirements.txt). Aliasing the class through
+# the module gives tests a stable monkeypatch target — they can swap
+# ``rtvs._httpx_AsyncClient`` for a fake without touching the global
+# ``httpx`` namespace. Import is intentionally module-level (no network
+# I/O), and the class is only *constructed* inside ``start_session``.
+try:
+    import httpx as _httpx
+    _httpx_AsyncClient = _httpx.AsyncClient
+except Exception:  # pragma: no cover - import fallback for test env
+    _httpx = None
+    _httpx_AsyncClient = None  # type: ignore[assignment]
+
 
 # ---------------------------------------------------------------------------
 # Public constants
@@ -54,6 +66,17 @@ SAFETY_THRESHOLD: float = 0.85
 # deterministic in-memory provider; "hybrid" routes to the Whisper +
 # ElevenLabs Flash impl in #614 (not implemented yet).
 DEFAULT_PROVIDER_ENV: str = "REALTIME_VOICE_PROVIDER"
+
+# OpenAI Realtime API constants (#644 scaffold; broker integration → #645).
+# We mint ephemeral client secrets server-side via the documented endpoint
+# so the browser never sees the long-lived OPENAI_API_KEY.
+OPENAI_REALTIME_CLIENT_SECRETS_URL: str = (
+    "https://api.openai.com/v1/realtime/client_secrets"
+)
+# Default model — the "mini" tier is the cost guardrail. Escalation to the
+# full ``gpt-realtime-2`` tier is owned by #648 (E5 cost telemetry).
+OPENAI_REALTIME_MODEL_DEFAULT: str = "gpt-realtime-mini"
+OPENAI_REALTIME_MODEL_ESCALATED: str = "gpt-realtime-2"
 
 
 # ---------------------------------------------------------------------------
@@ -486,6 +509,185 @@ class HybridRealtimeVoiceProvider:
 
 
 # ---------------------------------------------------------------------------
+# OpenAI Realtime provider — scaffold (#644)
+# ---------------------------------------------------------------------------
+
+# Reused message string so the #645 (E2) reviewer can grep for every
+# call-site the broker integration must replace.
+_E2_NOT_IMPLEMENTED: str = "E2 — broker integration"
+
+
+class OpenAIRealtimeProvider:
+    """OpenAI Realtime API provider — scaffold only.
+
+    This story (#644) gives the provider class a Protocol-conformant
+    shape and a working ``start_session`` that mints an ephemeral client
+    secret via ``POST /v1/realtime/client_secrets``. Audio forwarding,
+    tool-call translation, and synthesis stream from the upstream WS
+    land in **E2 (#645)** — those methods explicitly raise
+    ``NotImplementedError(_E2_NOT_IMPLEMENTED)`` here so a reviewer can
+    grep the codebase and verify every site got wired.
+
+    Graceful degradation:
+      - Missing ``OPENAI_API_KEY`` → ``start_session`` returns a degraded
+        handle with ``provider_state["provider_unavailable"] = True``.
+        Mirrors the Hybrid provider's pattern: the broker translates
+        this into ``VoiceWSErrorEvent(code="provider_unavailable")``
+        instead of every caller wrapping ``start_session`` in try/except.
+      - Missing ``httpx`` (test env without dep) → same degraded handle.
+
+    Audio-on-disk invariant:
+      - The provider never touches disk. The client secret + model
+        metadata live in ``handle.provider_state`` (memory-only).
+    """
+
+    name: str = "openai_realtime"
+
+    def __init__(
+        self,
+        *,
+        model: str = OPENAI_REALTIME_MODEL_DEFAULT,
+        timeout_seconds: float = 10.0,
+    ) -> None:
+        self.model = model
+        self.timeout_seconds = timeout_seconds
+
+    @property
+    def _is_available(self) -> bool:
+        return bool(os.getenv("OPENAI_API_KEY")) and _httpx_AsyncClient is not None
+
+    async def start_session(
+        self,
+        *,
+        user_id: str,
+        child_id: str,
+        target_age: int,
+        persona: str = "buddy_default",
+    ) -> SessionHandle:
+        # Degraded path: no key (or httpx missing in test env). Return a
+        # handle the broker can recognise without raising.
+        if not self._is_available:
+            logger.warning(
+                "OpenAIRealtimeProvider unavailable — OPENAI_API_KEY missing "
+                "or httpx not installed; returning degraded handle"
+            )
+            return SessionHandle(
+                session_id=f"voice_openai_{uuid4().hex[:12]}",
+                user_id=user_id,
+                child_id=child_id,
+                target_age=target_age,
+                persona=persona,
+                provider_state={
+                    "openai_client_secret": "",
+                    "provider_unavailable": True,
+                    "model": self.model,
+                },
+            )
+
+        api_key = os.getenv("OPENAI_API_KEY")
+        # Body shape per OpenAI Realtime docs: a "session" object with
+        # type + model. Voice config is owned by the broker (E2) so we
+        # keep the body minimal here — just enough to mint the secret.
+        body: Dict[str, Any] = {
+            "session": {
+                "type": "realtime",
+                "model": self.model,
+            }
+        }
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        }
+
+        client_secret: str = ""
+        expires_at: Optional[int] = None
+        try:
+            # Lazy: construct httpx client only when we actually mint.
+            async with _httpx_AsyncClient(timeout=self.timeout_seconds) as client:  # type: ignore[misc]
+                response = await client.post(
+                    OPENAI_REALTIME_CLIENT_SECRETS_URL,
+                    headers=headers,
+                    json=body,
+                )
+                response.raise_for_status()
+                payload = response.json() or {}
+                # OpenAI returns ``{"value": "ek_...", "expires_at": <epoch>}``
+                # at the top level. Be defensive: also accept a nested
+                # ``client_secret`` shape if the API ever shifts.
+                client_secret = (
+                    payload.get("value")
+                    or payload.get("client_secret", {}).get("value", "")
+                    or ""
+                )
+                expires_at = payload.get("expires_at")
+        except Exception as exc:
+            logger.warning(
+                "OpenAI client_secrets mint failed: %s — returning degraded handle",
+                exc,
+            )
+            return SessionHandle(
+                session_id=f"voice_openai_{uuid4().hex[:12]}",
+                user_id=user_id,
+                child_id=child_id,
+                target_age=target_age,
+                persona=persona,
+                provider_state={
+                    "openai_client_secret": "",
+                    "provider_unavailable": True,
+                    "model": self.model,
+                    "mint_error": str(exc),
+                },
+            )
+
+        return SessionHandle(
+            session_id=f"voice_openai_{uuid4().hex[:12]}",
+            user_id=user_id,
+            child_id=child_id,
+            target_age=target_age,
+            persona=persona,
+            provider_state={
+                "openai_client_secret": client_secret,
+                "model": self.model,
+                "expires_at": expires_at,
+            },
+        )
+
+    async def push_audio(
+        self,
+        handle: SessionHandle,
+        audio_bytes: bytes,
+    ) -> None:
+        # Audio forwarding to the upstream OpenAI Realtime WS lands in
+        # #645. Reviewer: grep for ``_E2_NOT_IMPLEMENTED`` and wire each
+        # call-site to the real WS forward.
+        raise NotImplementedError(_E2_NOT_IMPLEMENTED)
+
+    async def finalize_utterance(
+        self,
+        handle: SessionHandle,
+    ) -> FinalTranscript:
+        raise NotImplementedError(_E2_NOT_IMPLEMENTED)
+
+    async def synthesize_speech(
+        self,
+        handle: SessionHandle,
+        text: str,
+    ) -> AsyncIterator[bytes]:
+        # Matches the Protocol shape — the existing Mock/Hybrid impls
+        # also ``async def`` this method and return an async iterator.
+        # In E2 this will yield audio frames forwarded from the OpenAI
+        # Realtime WS ``response.output_audio.delta`` events.
+        raise NotImplementedError(_E2_NOT_IMPLEMENTED)
+
+    async def close(self, handle: SessionHandle) -> None:
+        # No persistent upstream connection in the scaffold — the broker
+        # holds nothing for us to release. Closing the upstream WS is
+        # E2 territory; keep this a benign no-op so the broker's
+        # session-cleanup path doesn't fail under the scaffold.
+        handle.provider_state["closed"] = True
+
+
+# ---------------------------------------------------------------------------
 # Provider selection
 # ---------------------------------------------------------------------------
 
@@ -499,8 +701,13 @@ def _select_provider(
       2. ``REALTIME_VOICE_PROVIDER=mock`` → MockRealtimeVoiceProvider.
       3. ``REALTIME_VOICE_PROVIDER=hybrid`` → HybridRealtimeVoiceProvider
          (degrades internally when keys are missing).
-      4. Missing ``OPENAI_API_KEY`` → Mock (dev/test env without keys).
-      5. Default → Mock until an operator opts into hybrid.
+      4. ``REALTIME_VOICE_PROVIDER=openai`` →
+         a) OPENAI_API_KEY set → OpenAIRealtimeProvider
+         b) OPENAI_API_KEY missing → Hybrid (next tier in the
+            graceful-degradation chain; Hybrid further degrades to a
+            ``provider_unavailable`` envelope if its own key is missing).
+      5. Missing ``OPENAI_API_KEY`` → Mock (dev/test env without keys).
+      6. Default → Mock until an operator opts into a real provider.
     """
     if override is not None:
         return override
@@ -510,6 +717,18 @@ def _select_provider(
         return MockRealtimeVoiceProvider()
 
     if requested == "hybrid":
+        return HybridRealtimeVoiceProvider()
+
+    if requested == "openai":
+        if os.getenv("OPENAI_API_KEY"):
+            return OpenAIRealtimeProvider()
+        # Fallback chain: openai -> hybrid -> mock. Hybrid itself
+        # degrades internally if ELEVENLABS / OPENAI keys go missing,
+        # so half-deployed envs still don't crash.
+        logger.warning(
+            "REALTIME_VOICE_PROVIDER=openai but OPENAI_API_KEY missing "
+            "— falling back to HybridRealtimeVoiceProvider"
+        )
         return HybridRealtimeVoiceProvider()
 
     if not os.getenv("OPENAI_API_KEY"):
