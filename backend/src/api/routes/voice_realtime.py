@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import json
 import logging
 import time
 from datetime import datetime, timedelta
@@ -60,6 +61,10 @@ from ...services.realtime_voice_service import (
     SessionHandle,
     _select_provider,
     safety_threshold_for_age,
+)
+from ...services.realtime_voice_tools import (
+    ToolContext,
+    handle_tool_call,
 )
 from ...services.user_service import UserData
 from ...services.voice_ephemeral_token import (
@@ -394,6 +399,87 @@ async def _run_safety_gate(
     return score >= safety_threshold_for_age(target_age)
 
 
+def _age_group_for_target(target_age: int) -> str:
+    """Map the broker's integer ``target_age`` to the age-group enum
+    that tools and prompts expect. Mirrors the band split used in
+    ``realtime_voice_service`` for safety thresholds."""
+    if target_age <= 5:
+        return "3-5"
+    if target_age <= 8:
+        return "6-8"
+    return "9-12"
+
+
+async def _dispatch_function_call(
+    *,
+    websocket: WebSocket,
+    provider: RealtimeVoiceProvider,
+    handle: SessionHandle,
+    target_age: int,
+    ev: Any,  # ReplyEvent — typed via duck-typing to keep the import diamond shallow
+    state: Dict[str, Any],
+) -> None:
+    """Route one model-issued tool call.
+
+    Always pairs the dispatch with a ``function_call_output`` upstream
+    so the model isn't stranded. Envelope ``type`` is the router:
+
+    - ``launch_flow``  → forward as a WS event to the client (existing
+      ``useLaunchFlowNavigation`` consumer); also echo a minimal ack
+      back to the model so its turn settles cleanly.
+    - ``tool_result``  → feed the full payload back to the model as
+      JSON so it can continue the conversation with the lookup result.
+    - ``end_call``     → flag the outer broker loop to close the WS
+      with ``ended_reason="voice_tool_end_call"`` after this turn.
+
+    Tool handlers never raise (per ``realtime_voice_tools`` contract),
+    so any exception caught here is a wiring bug — log loudly and emit
+    an error envelope to the model so the turn doesn't hang.
+    """
+    ctx = ToolContext(
+        user_id=handle.user_id,
+        child_id=handle.child_id,
+        age_group=_age_group_for_target(target_age),
+        session_id=handle.session_id,
+    )
+    try:
+        envelope = await handle_tool_call(ev.name, ev.args, ctx)
+    except Exception as exc:  # defensive — handler contract says never raise
+        logger.exception("[session=%s] tool dispatch crashed: %s", handle.session_id, exc)
+        envelope = {"type": "tool_result", "payload": {"error": f"dispatch_crash:{exc}"}}
+
+    envelope_type = envelope.get("type", "")
+    payload = envelope.get("payload") or {}
+
+    if envelope_type == "launch_flow":
+        # Surface the navigation event to the browser BEFORE acking the
+        # model so the client transition feels in sync with the buddy's
+        # spoken handoff sentence.
+        await _send_event(websocket, {"type": "launch_flow", **payload})
+        ack_output = json.dumps({"status": "launched", "flow_type": payload.get("flow_type")})
+    elif envelope_type == "end_call":
+        # Don't ack the model — we're closing. Just remember to break.
+        state["end_call_requested"] = True
+        state["end_call_reason"] = payload.get("ended_reason") or "voice_tool_end_call"
+        return
+    else:
+        # tool_result (including unknown / error envelopes from the
+        # handler) — feed the whole payload back so the model can
+        # incorporate it into its next turn.
+        ack_output = json.dumps(payload)
+
+    if callable(getattr(provider, "send_function_call_output", None)):
+        try:
+            await provider.send_function_call_output(  # type: ignore[attr-defined]
+                handle, call_id=ev.call_id, output=ack_output,
+            )
+        except Exception as exc:  # pragma: no cover - upstream WS noise
+            logger.warning(
+                "[session=%s] failed to send function_call_output: %s",
+                handle.session_id, exc,
+            )
+
+
 async def _stream_openai_reply(
     *,
     websocket: WebSocket,
@@ -412,6 +498,7 @@ async def _stream_openai_reply(
     text_acc = ""
     audio_buffer: List[bytes] = []
     text_done_seen = False
+    end_call_requested = False
 
     stream = await provider.stream_assistant_reply(handle)  # type: ignore[attr-defined]
     async for ev in stream:
@@ -422,8 +509,30 @@ async def _stream_openai_reply(
             text_done_seen = True
         elif ev.kind == "audio_chunk":
             audio_buffer.append(ev.audio)
+        elif ev.kind == "function_call":
+            # Dispatch the model's tool call. The handler returns a typed
+            # envelope: ``launch_flow`` notifies the client to navigate,
+            # ``tool_result`` feeds extra context back to the model,
+            # ``end_call`` closes the session at the next turn boundary.
+            # Every call MUST be paired with a ``function_call_output``
+            # upstream so the model doesn't hang waiting on it.
+            await _dispatch_function_call(
+                websocket=websocket,
+                provider=provider,
+                handle=handle,
+                target_age=target_age,
+                ev=ev,
+                state=state,
+            )
+            if state.get("end_call_requested"):
+                end_call_requested = True
         elif ev.kind == "response_done":
             break
+
+    # An end_call tool fired during this turn — let the broker's outer
+    # loop close cleanly with the documented ended_reason.
+    if end_call_requested:
+        return
 
     # Run the pre-TTS safety gate on the assembled text. The gate is the
     # load-bearing safeguard — even if the model emitted the full audio
@@ -712,6 +821,13 @@ async def stream_voice_session(websocket: WebSocket) -> None:
                     target_age=target_age,
                     state=state,
                 )
+                # A tool dispatched an end_call envelope this turn —
+                # close cleanly with the dedicated reason so Parent
+                # Dashboard can distinguish kid-initiated voice goodbyes
+                # from network drops.
+                if state.get("end_call_requested"):
+                    termination_reason = "voice_tool_end_call"
+                    return
 
             elif event_type == "client_done":
                 termination_reason = "user_ended"

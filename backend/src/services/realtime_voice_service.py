@@ -582,11 +582,20 @@ class ReplyEvent:
       - ``"text_delta"``     — a partial chunk of the model's text reply
       - ``"text_done"``      — final accumulated reply text (full string)
       - ``"audio_chunk"``    — a chunk of synthesized audio bytes
+      - ``"function_call"``  — the model invoked a tool; the broker should
+        dispatch via ``realtime_voice_tools.handle_tool_call`` and feed the
+        result back via ``send_function_call_output``
       - ``"response_done"``  — the model finished the current response
     """
     kind: str
     text: str = ""
     audio: bytes = b""
+    # Populated when ``kind == "function_call"``. ``call_id`` is the
+    # opaque OpenAI-side identifier the broker echoes back in the
+    # ``function_call_output`` event so the model can correlate.
+    call_id: str = ""
+    name: str = ""
+    args: Dict[str, Any] = field(default_factory=dict)
 
 
 def _build_openai_system_prompt(*, target_age: int, persona: str) -> str:
@@ -625,9 +634,16 @@ def _build_openai_system_prompt(*, target_age: int, persona: str) -> str:
         f"Aim for around {cap} tokens or less. Stop at natural sentence "
         "boundaries — never trail off mid-thought.\n\n"
         "# Tools\n"
-        "Tool calls (launch_flow / delegate_to_specialist) are owned by "
-        "a separate orchestration layer. Do not invoke tools in this "
-        "session — focus on conversation only.\n\n"
+        "You have a small set of tools available. Use them when the "
+        "child asks for something a tool can do — do not announce that "
+        "you are using a tool, just call it:\n"
+        "- launch_image_story / launch_interactive_story / launch_kids_daily — "
+        "open the matching activity. Say one short, age-friendly handoff "
+        "sentence BEFORE calling the tool (e.g. 'Cool, let's do that!').\n"
+        "- recall_memory — look up something the child told you before.\n"
+        "- safety_review_reply — request explicit safety review of "
+        "content you're unsure about; better safe than sorry.\n"
+        "- end_call — politely end the chat when the child says goodbye.\n\n"
         "# Fallback\n"
         "If you are unsure how to respond safely, say: "
         "'Let's pick something different to talk about. What's something "
@@ -824,6 +840,12 @@ class OpenAIRealtimeProvider:
                     # Older websockets API — fall back to __aenter__.
                     upstream_ws = await cm_or_awaitable.__aenter__()
                 # Send the session.update event configuring voice + prompt.
+                # Tools are registered here so the model can call into our
+                # specialist surface (launch_flow / recall_memory / end_call)
+                # without a separate WS round-trip. The model-facing schema
+                # lives in `realtime_voice_tools.get_tool_definitions()`; the
+                # broker dispatches each call back through `handle_tool_call`.
+                from .realtime_voice_tools import get_tool_definitions
                 await upstream_ws.send(json.dumps({
                     "type": "session.update",
                     "session": {
@@ -833,6 +855,7 @@ class OpenAIRealtimeProvider:
                         "input_audio_format": "pcm16",
                         "output_audio_format": "pcm16",
                         "input_audio_transcription": {"model": "whisper-1"},
+                        "tools": get_tool_definitions(),
                     },
                 }))
             except Exception as exc:
@@ -1087,6 +1110,32 @@ class OpenAIRealtimeProvider:
 
         return _gen()
 
+    async def send_function_call_output(
+        self,
+        handle: SessionHandle,
+        *,
+        call_id: str,
+        output: str,
+    ) -> None:
+        """Feed a tool result back to the upstream model.
+
+        OpenAI Realtime requires every function call to be paired with a
+        ``conversation.item.create`` of type ``function_call_output`` and
+        then a ``response.create`` to trigger the model's continuation.
+        Skipping either step leaves the model waiting indefinitely. The
+        broker calls this after dispatching the tool via
+        ``realtime_voice_tools.handle_tool_call``.
+        """
+        await self._send_event(handle, {
+            "type": "conversation.item.create",
+            "item": {
+                "type": "function_call_output",
+                "call_id": call_id,
+                "output": output,
+            },
+        })
+        await self._send_event(handle, {"type": "response.create"})
+
     async def close(self, handle: SessionHandle) -> None:
         """Tear down the upstream WS cleanly."""
         handle.provider_state["closed"] = True
@@ -1146,6 +1195,25 @@ async def _ev_to_reply_events(ev: Dict[str, Any]) -> AsyncIterator[ReplyEvent]:
         chunk = _extract_audio_delta(ev)
         if chunk:
             yield ReplyEvent(kind="audio_chunk", audio=chunk)
+    elif ev_type == "response.function_call_arguments.done":
+        # The model decided to call one of our tools. Surface it as a
+        # ReplyEvent so the broker can dispatch via the tools module and
+        # echo back via send_function_call_output. Malformed args are
+        # coerced to an empty dict so the dispatcher's error path can
+        # respond rather than crashing the stream.
+        raw_args = ev.get("arguments", "") or "{}"
+        try:
+            parsed_args = json.loads(raw_args) if isinstance(raw_args, str) else dict(raw_args)
+        except Exception:
+            parsed_args = {}
+        if not isinstance(parsed_args, dict):
+            parsed_args = {}
+        yield ReplyEvent(
+            kind="function_call",
+            call_id=ev.get("call_id", "") or "",
+            name=ev.get("name", "") or "",
+            args=parsed_args,
+        )
     elif ev_type == "response.done":
         yield ReplyEvent(kind="response_done")
 
