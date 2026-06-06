@@ -129,3 +129,31 @@ export function nextPendingGate(
   if (!child.voiceConsent) return "voice";
   return null;
 }
+
+/**
+ * Whether the new "Start Talking" header pill in AgentChatPanel should
+ * render (#636). Three conditions, all of them gating:
+ *
+ * 1. Capability + consent + child preconditions are met (delegates to
+ *    `shouldShowEntryButton`).
+ * 2. The chat is not currently streaming a text response — pressing
+ *    Start Talking mid-stream would race the existing AbortController
+ *    flow and create a confusing "buddy is typing AND listening?" state.
+ * 3. The inline voice bubble is not already open — when `isTalkOpen` is
+ *    true, the bubble has replaced the composer and there's no second
+ *    entry point to surface in the header.
+ *
+ * Pure helper so the composer-swap story (#636) can lock the truth
+ * table without mounting AgentChatPanel — same pattern as the entry
+ * button (#618) and the variant CSS (#635).
+ */
+export function shouldShowHeaderTalkPill(
+  preconditions: TalkButtonPreconditions,
+  isStreaming: boolean,
+  isTalkOpen: boolean,
+): boolean {
+  if (!shouldShowEntryButton(preconditions)) return false;
+  if (isStreaming) return false;
+  if (isTalkOpen) return false;
+  return true;
+}

@@ -38,10 +38,13 @@ import useAgentChatStore from "@/store/useAgentChatStore";
 import useChildStore from "@/store/useChildStore";
 import VoiceInputButton from "@/components/common/VoiceInputButton";
 import ParentConsentGate from "@/components/common/ParentConsentGate";
-import TalkToBuddyPanel from "./TalkToBuddyPanel";
+import TalkToBuddyPanel, {
+  type TalkToBuddyPanelVariant,
+} from "./TalkToBuddyPanel";
 import {
   nextPendingGate,
   shouldShowEntryButton,
+  shouldShowHeaderTalkPill,
   type PendingGate,
 } from "./talkToBuddyHelpers";
 import {
@@ -255,7 +258,21 @@ export default function AgentChatPanel({
     [],
   );
   const [isTalkOpen, setIsTalkOpen] = useState(false);
+  const wasTalkOpenRef = useRef(false);
   const [pendingTalkGate, setPendingTalkGate] = useState<PendingGate>(null);
+
+  // #636: when the inline voice bubble unmounts (user tapped End), put
+  // focus back on the textarea so the kid can immediately keep typing
+  // without a second tap. Only fires on the true → false transition so
+  // typing in the textarea between sessions doesn't get stolen.
+  useEffect(() => {
+    if (wasTalkOpenRef.current && !isTalkOpen) {
+      // Defer one tick so the composer form has remounted.
+      const id = setTimeout(() => textareaRef.current?.focus(), 0);
+      return () => clearTimeout(id);
+    }
+    wasTalkOpenRef.current = isTalkOpen;
+  }, [isTalkOpen]);
 
   const talkEntryReady = shouldShowEntryButton({
     supportsVoice: voiceCaps.supported,
@@ -270,6 +287,25 @@ export default function AgentChatPanel({
   // entirely when the browser lacks capabilities or the flag is off.
   const showTalkEntry =
     TALK_TO_BUDDY_ENABLED && voiceCaps.supported && Boolean(currentChild?.child_id);
+
+  // #636: the new "Start Talking" header pill — only when the
+  // capability + consent preconditions are met AND nothing else is
+  // contending for the composer area (no in-flight text stream, no
+  // already-open inline bubble). Truth table locked by
+  // shouldShowHeaderTalkPill's contract tests.
+  const showHeaderStartTalking =
+    TALK_TO_BUDDY_ENABLED &&
+    shouldShowHeaderTalkPill(
+      {
+        supportsVoice: voiceCaps.supported,
+        micConsentGranted: currentChild?.microphone_consent === true,
+        voiceConversationConsentGranted:
+          currentChild?.voice_conversation_consent === true,
+        hasCurrentChild: Boolean(currentChild?.child_id),
+      },
+      isStreaming,
+      isTalkOpen,
+    );
 
   const handleOpenTalk = () => {
     if (talkEntryReady) {
@@ -430,29 +466,33 @@ export default function AgentChatPanel({
               aria-label="Streaming"
             />
           )}
-          {showTalkEntry && (
+          {showHeaderStartTalking && (
             <button
               type="button"
               onClick={handleOpenTalk}
-              disabled={isStreaming}
-              className={
-                talkEntryReady
-                  ? "inline-flex items-center gap-1 rounded-full bg-violet-600 px-3 py-1.5 text-xs font-bold text-white shadow hover:bg-violet-700 disabled:opacity-50"
-                  : "inline-flex items-center gap-1 rounded-full border border-violet-300 bg-violet-50 px-3 py-1.5 text-xs font-semibold text-violet-700 hover:bg-violet-100 disabled:opacity-50"
-              }
-              title={
-                talkEntryReady
-                  ? `Talk to ${agent.agent_name}`
-                  : "Ask a grown-up to turn on voice chat"
-              }
-              aria-label={
-                talkEntryReady
-                  ? `Talk to ${agent.agent_name}`
-                  : "Ask a grown-up to turn on voice chat"
-              }
+              className="inline-flex items-center gap-1 rounded-full bg-violet-600 px-3 py-1.5 text-xs font-bold text-white shadow hover:bg-violet-700"
+              title={`Start talking with ${agent.agent_name}`}
+              aria-label={`Start talking with ${agent.agent_name}`}
             >
               <span aria-hidden="true">💬</span>
-              <span>{talkEntryReady ? "Talk" : "Ask"}</span>
+              <span>Start Talking</span>
+            </button>
+          )}
+          {/* Consents-missing fallback: surface the entry as "Ask"
+              while the per-#633 onboarding banner is unshipped, so the
+              feature stays discoverable for first-run kids. Hidden
+              once consents are granted (the Start Talking pill takes
+              over) and hidden while streaming or the bubble is open. */}
+          {showTalkEntry && !talkEntryReady && !isStreaming && !isTalkOpen && (
+            <button
+              type="button"
+              onClick={handleOpenTalk}
+              className="inline-flex items-center gap-1 rounded-full border border-violet-300 bg-violet-50 px-3 py-1.5 text-xs font-semibold text-violet-700 hover:bg-violet-100"
+              title="Ask a grown-up to turn on voice chat"
+              aria-label="Ask a grown-up to turn on voice chat"
+            >
+              <span aria-hidden="true">💬</span>
+              <span>Ask</span>
             </button>
           )}
           {onConfigure && (
@@ -577,6 +617,18 @@ export default function AgentChatPanel({
         </div>
       )}
 
+      {isTalkOpen ? (
+        <div className="border-t border-gray-100 bg-white px-4 py-3">
+          <TalkToBuddyContainer
+            childId={childId}
+            persona={agent.agent_name}
+            ageGroup={ageGroup}
+            childAge={ageGroupToRepresentativeAge(ageGroup)}
+            variant="inline"
+            onClose={() => setIsTalkOpen(false)}
+          />
+        </div>
+      ) : (
       <form
         className="border-t border-gray-100 bg-white px-4 py-3"
         onSubmit={onSubmit}
@@ -686,6 +738,7 @@ export default function AgentChatPanel({
           )}
         </div>
       </form>
+      )}
       {showMicConsentGate && ageGroup && (
         <ParentConsentGate
           kind="microphone"
@@ -711,15 +764,6 @@ export default function AgentChatPanel({
           childId={childId}
           onGranted={advancePendingGate}
           onDismiss={() => setPendingTalkGate(null)}
-        />
-      )}
-      {isTalkOpen && (
-        <TalkToBuddyContainer
-          childId={childId}
-          persona={agent.agent_name}
-          ageGroup={ageGroup}
-          childAge={ageGroupToRepresentativeAge(ageGroup)}
-          onClose={() => setIsTalkOpen(false)}
         />
       )}
     </section>
@@ -756,12 +800,16 @@ function TalkToBuddyContainer({
   ageGroup,
   childAge,
   onClose,
+  variant = "overlay",
 }: {
   childId: string;
   persona: string;
   ageGroup?: AgeGroup | null;
   childAge?: number | null;
   onClose: () => void;
+  /** When `inline`, the End button also unmounts the bubble (no
+   *  separate X close affordance — see PRD §3.16.5 v2 + #635). */
+  variant?: TalkToBuddyPanelVariant;
 }) {
   void ageGroup; // Future: thread per-age TTS preset overrides (Phase C, #608).
   const appendVoiceCaption = useAgentChatStore((s) => s.appendVoiceCaption);
@@ -786,6 +834,18 @@ function TalkToBuddyContainer({
       ? window.matchMedia("(prefers-reduced-motion: reduce)").matches
       : false;
 
+  // Inline mode collapses End + Close into a single affordance: the
+  // user expects "End" to dismiss the bubble and return the textarea,
+  // not just transition to idle. Audio cleanup still runs via the
+  // hook's useEffect on unmount (#617), so eager close is safe.
+  const handleEnd =
+    variant === "inline"
+      ? () => {
+          voice.end();
+          onClose();
+        }
+      : voice.end;
+
   return (
     <TalkToBuddyPanel
       state={voice.state}
@@ -796,9 +856,10 @@ function TalkToBuddyContainer({
       childAge={childAge}
       prefersReducedMotion={prefersReducedMotion}
       onStart={() => voice.start(true)}
-      onEnd={voice.end}
+      onEnd={handleEnd}
       onRetry={voice.retry}
       onClose={onClose}
+      variant={variant}
     />
   );
 }
