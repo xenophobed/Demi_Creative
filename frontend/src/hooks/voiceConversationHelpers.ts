@@ -318,6 +318,139 @@ export function dispatchForServerEvent(
 }
 
 // ---------------------------------------------------------------------------
+// WebRTC direct-mode transport (#647)
+// ---------------------------------------------------------------------------
+
+/** Default OpenAI Realtime SDP exchange endpoint. The browser POSTs its
+ *  SDP offer here with the ephemeral client secret as Bearer auth and
+ *  gets a `application/sdp` answer back. Kept module-level so tests can
+ *  reason about the URL shape without needing OpenAI's environment.
+ */
+const OPENAI_REALTIME_SDP_URL = "https://api.openai.com/v1/realtime";
+
+export interface SdpExchangeRequest {
+  url: string;
+  headers: Record<string, string>;
+  body: string;
+}
+
+/** Build the POST request shape for the OpenAI Realtime SDP handshake
+ *  (#647). Pure — caller wraps it in `fetch`. The body is the raw SDP
+ *  string with `Content-Type: application/sdp`; OpenAI returns the SDP
+ *  answer with the same MIME.
+ *
+ *  We URL-encode the model name because OpenAI's docs allow slashes in
+ *  model identifiers and a raw `/` would split the path.
+ */
+export function buildSdpExchangeRequest(
+  clientSecret: string,
+  model: string,
+  offer: RTCSessionDescriptionInit,
+): SdpExchangeRequest {
+  const url = `${OPENAI_REALTIME_SDP_URL}?model=${encodeURIComponent(model)}`;
+  return {
+    url,
+    headers: {
+      Authorization: `Bearer ${clientSecret}`,
+      "Content-Type": "application/sdp",
+    },
+    body: offer.sdp ?? "",
+  };
+}
+
+/** Discriminated event shape emitted by the OpenAI Realtime data channel
+ *  (#647). Mirrors the WS server-relay event taxonomy so downstream
+ *  caption + audio handling can be reused — the only difference is the
+ *  wire format coming off `RTCDataChannel.onmessage` vs `WebSocket
+ *  .onmessage`.
+ */
+export type RealtimeDataChannelEvent =
+  | { kind: "text_delta"; text: string }
+  | { kind: "audio_chunk"; audioB64: string }
+  | { kind: "tool_call"; name: string; callId: string; argumentsJson: string }
+  | { kind: "response_done" }
+  | { kind: "function_call_arguments_done"; name: string; callId: string; argumentsJson: string }
+  | { kind: "unknown" };
+
+/** Parse one data-channel JSON envelope from OpenAI Realtime. Pure —
+ *  never throws. Malformed JSON or an unrecognized `type` collapses to
+ *  `{kind: "unknown"}` so the caller can log and continue without a
+ *  try/catch around every message.
+ *
+ *  Event-type → kind mapping (locks the contract the hook reuses):
+ *    response.text.delta                       → text_delta
+ *    response.audio.delta                      → audio_chunk
+ *    response.function_call_arguments.done     → tool_call
+ *      (alias kept under function_call_arguments_done for symmetry with
+ *       the upstream type name; callers should prefer ``tool_call``)
+ *    response.done                             → response_done
+ *    anything else                             → unknown
+ */
+export function parseRealtimeEvent(message: string): RealtimeDataChannelEvent {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(message);
+  } catch {
+    return { kind: "unknown" };
+  }
+  if (typeof parsed !== "object" || parsed === null) {
+    return { kind: "unknown" };
+  }
+  const obj = parsed as Record<string, unknown>;
+  const type = obj.type;
+  switch (type) {
+    case "response.text.delta":
+      return {
+        kind: "text_delta",
+        text: String(obj.delta ?? ""),
+      };
+    case "response.audio.delta":
+      return {
+        kind: "audio_chunk",
+        audioB64: String(obj.delta ?? ""),
+      };
+    case "response.function_call_arguments.done":
+      return {
+        kind: "tool_call",
+        name: String(obj.name ?? ""),
+        callId: String(obj.call_id ?? ""),
+        argumentsJson: String(obj.arguments ?? ""),
+      };
+    case "response.done":
+      return { kind: "response_done" };
+    default:
+      return { kind: "unknown" };
+  }
+}
+
+export interface RtcFallbackDecisionArgs {
+  startedAtMs: number;
+  nowMs: number;
+  rtcConnectionState: RTCPeerConnectionState;
+}
+
+/** WebRTC handshake-timeout policy (#647). Returns true when the hook
+ *  should abort the RTC connection and retry the session with
+ *  `transport: "ws"`. Pure — only reads its arguments, no DOM access.
+ *
+ *  Rules:
+ *    - `failed` → fallback immediately. The browser already determined
+ *      ICE can't establish a path.
+ *    - `connected` → never fallback. Once we're connected the WS path is
+ *      strictly worse (extra hop, extra latency).
+ *    - any other state (`connecting`, `new`) → fallback once the budget
+ *      `RTC_HANDSHAKE_BUDGET_MS` has elapsed. 3s matches the panel's
+ *      "Switching..." copy window; longer would feel stuck.
+ */
+export const RTC_HANDSHAKE_BUDGET_MS = 3000;
+
+export function shouldFallbackToWs(args: RtcFallbackDecisionArgs): boolean {
+  if (args.rtcConnectionState === "failed") return true;
+  if (args.rtcConnectionState === "connected") return false;
+  return args.nowMs - args.startedAtMs >= RTC_HANDSHAKE_BUDGET_MS;
+}
+
+// ---------------------------------------------------------------------------
 // WS URL composition
 // ---------------------------------------------------------------------------
 

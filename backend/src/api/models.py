@@ -988,11 +988,13 @@ class VoiceSessionStartResponse(BaseModel):
             "(WS) path it's unused."
         ),
     )
-    transport: Literal["ws"] = Field(
+    transport: Literal["ws", "webrtc"] = Field(
         default="ws",
         description=(
-            "Selected client transport. ``ws`` = server-relay broker (E2). "
-            "E4 (#647) introduces ``webrtc`` as an opt-in alternative."
+            "Selected client transport. ``ws`` = server-relay broker (E2, "
+            "default). ``webrtc`` = browser-direct RTCPeerConnection against "
+            "OpenAI Realtime (E4 / #647) — opt-in via the ``prefer_webrtc`` "
+            "query parameter. Non-OpenAI providers always degrade to ``ws``."
         ),
     )
 

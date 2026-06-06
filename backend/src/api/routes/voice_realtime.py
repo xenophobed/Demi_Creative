@@ -41,7 +41,7 @@ import time
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, status
+from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, status
 from fastapi.websockets import WebSocketDisconnect
 
 from ..deps import get_current_user
@@ -247,6 +247,16 @@ async def _validate_enabled_skills_for_voice(
 async def start_voice_session(
     request: VoiceSessionStartRequest,
     user: UserData = Depends(get_current_user),
+    prefer_webrtc: bool = Query(
+        default=False,
+        description=(
+            "E4 (#647) WebRTC opt-in. When ``true`` AND the active provider "
+            "supports browser-direct realtime (OpenAI), the response sets "
+            "``transport=\"webrtc\"`` and surfaces an ephemeral OpenAI "
+            "client secret. Non-OpenAI providers silently fall back to "
+            "``ws`` — the WS broker is the universal path."
+        ),
+    ),
 ) -> VoiceSessionStartResponse:
     profile = await child_profile_repo.get_for_user(user.user_id, request.child_id)
     if profile is None:
@@ -306,10 +316,21 @@ async def start_voice_session(
         )
 
     provider = _provider_for_session()
+
+    # #647: WebRTC is opt-in AND only meaningful when the provider can
+    # serve a browser-direct realtime handshake. Today that's only
+    # ``openai_realtime``. Anything else silently degrades to WS — the
+    # client never sees a 4xx for asking, because the WS broker is the
+    # universal fallback and refusing would break the panel UX.
+    selected_transport: str = "ws"
+    if prefer_webrtc and provider.name == "openai_realtime":
+        selected_transport = "webrtc"
+
     persisted = await voice_session_repo.create_session(
         user_id=user.user_id,
         child_id=request.child_id,
         provider=provider.name,
+        transport=selected_transport,
     )
 
     token = mint_voice_token(
@@ -319,8 +340,9 @@ async def start_voice_session(
     )
 
     # For the OpenAI Realtime provider we bundle the ephemeral client
-    # secret so the frontend can hold it for E4's WebRTC transport
-    # (currently unused — server-relay is the only path in E2).
+    # secret so the frontend can hold it for E4's WebRTC transport.
+    # Pre-#647 the secret was minted for both paths (so a client could
+    # try WebRTC after the fact); we keep that behavior unchanged.
     openai_secret: Optional[str] = None
     if provider.name == "openai_realtime":
         try:
@@ -362,7 +384,7 @@ async def start_voice_session(
             audio_format="pcm16",
         ),
         openai_realtime_client_secret=openai_secret,
-        transport="ws",
+        transport=selected_transport,  # type: ignore[arg-type]
     )
 
 
