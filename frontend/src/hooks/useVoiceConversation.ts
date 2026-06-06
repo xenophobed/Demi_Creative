@@ -94,6 +94,18 @@ export interface UseVoiceConversationResult {
    * Audio API (test/SSR) or when no TTS is currently playing.
    */
   outputLevel: number;
+  /**
+   * #608 captions auto-show signal. Flips ``true`` the first time a
+   * ``safety_block`` event arrives in this session; stays ``true`` for
+   * the rest of the session so the kid keeps seeing the fallback
+   * sentence on the panel. Reset to ``false`` on the next ``start``.
+   *
+   * This is a side-channel hint, not a reducer state transition — the
+   * voice state machine doesn't pivot on safety_block (we keep the
+   * session alive and continue listening). The panel reads this flag
+   * to flip ``captionsVisibleOverride`` on TalkToBuddyPanel.
+   */
+  safetyBlockedSeen: boolean;
   sessionId: string | null;
 }
 
@@ -138,6 +150,9 @@ export function useVoiceConversation(
   const [assistantText, setAssistantText] = useState("");
   const [inputLevel, setInputLevel] = useState(0);
   const [outputLevel, setOutputLevel] = useState(0);
+  // #608 captions auto-show signal. Sticky for the rest of the session
+  // once a safety_block is observed; reset on the next start().
+  const [safetyBlockedSeen, setSafetyBlockedSeen] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
 
   const stateRef = useRef<VoiceConversationState>("idle");
@@ -421,6 +436,10 @@ export function useVoiceConversation(
       case "safety_block":
         setAssistantText("");
         setPartialTranscript("");
+        // Flip the captions auto-show signal — sticky for the rest of
+        // the session so the kid keeps seeing the fallback line on
+        // the panel (#608). Reset on the next start().
+        setSafetyBlockedSeen(true);
         onCaption?.({ kind: "safety_block", text: event.fallback_text });
         break;
       case "quota_exhausted":
@@ -728,6 +747,9 @@ export function useVoiceConversation(
       setAssistantText("");
       setInputLevel(0);
       setOutputLevel(0);
+      // #608: reset the captions auto-show signal so a previous
+      // session's safety_block doesn't carry over into the new session.
+      setSafetyBlockedSeen(false);
       send({ type: "start", consentGranted: true });
 
       // #647: if the caller opted into WebRTC, request it on the wire.
@@ -873,6 +895,7 @@ export function useVoiceConversation(
     assistantText,
     inputLevel,
     outputLevel,
+    safetyBlockedSeen,
     sessionId,
   };
 }

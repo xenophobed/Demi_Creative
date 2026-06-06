@@ -855,6 +855,11 @@ function TalkToBuddyContainer({
       outputLevel={voice.outputLevel}
       childAge={childAge}
       prefersReducedMotion={prefersReducedMotion}
+      // #608: once a safety_block is observed in this session the panel
+      // auto-shows captions regardless of the per-age default, so the
+      // kid sees the fallback sentence the buddy speaks. The signal is
+      // sticky for the rest of the session — reset on next start().
+      captionsVisibleOverride={voice.safetyBlockedSeen ? true : undefined}
       onStart={() => voice.start(true)}
       onEnd={handleEnd}
       onRetry={voice.retry}

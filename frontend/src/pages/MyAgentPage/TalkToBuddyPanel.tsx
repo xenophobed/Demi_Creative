@@ -28,6 +28,7 @@ import { motion } from "framer-motion";
 import {
   isEndButtonEnabled,
   isPanelVisible,
+  resolveCaptionsVisibility,
   TALK_PANEL_STATE_COPY,
 } from "./talkToBuddyHelpers";
 import { pickOrbMode } from "./buddyOrbHelpers";
@@ -55,6 +56,14 @@ export interface TalkToBuddyPanelProps {
   /** Raw child age in years. When < 6, the BuddyOrb renders the face overlay. */
   childAge?: number | null;
   prefersReducedMotion?: boolean;
+  /**
+   * #608 captions-visibility override. When the parent surface observes
+   * a `safety_block` event from the voice hook, it sets this to ``true``
+   * so the kid sees the fallback caption regardless of the per-age
+   * default (which would otherwise hide captions for pre-readers).
+   * ``undefined`` lets the panel fall back to ``captionsDefaultForAge``.
+   */
+  captionsVisibleOverride?: boolean;
   onStart: () => void;
   onEnd: () => void;
   onRetry?: () => void;
@@ -85,6 +94,7 @@ export function TalkToBuddyPanel({
   outputLevel = 0,
   childAge = null,
   prefersReducedMotion = false,
+  captionsVisibleOverride,
   onStart,
   onEnd,
   onRetry,
@@ -97,6 +107,16 @@ export function TalkToBuddyPanel({
   const orbMode = pickOrbMode(state, prefersReducedMotion);
   const endEnabled = isEndButtonEnabled(state);
   const canStart = state === "idle" || state === "error";
+
+  // #608 captions visibility: default depends on age band (pre-readers
+  // get them off); ``captionsVisibleOverride`` lets the parent surface
+  // force them on after a `safety_block` event. The truth table is in
+  // ``resolveCaptionsVisibility`` so the unit test can lock it without
+  // mounting React.
+  const captionsVisible = resolveCaptionsVisibility(
+    childAge,
+    captionsVisibleOverride,
+  );
 
   const isInline = variant === "inline";
   const wrapperClass = PANEL_WRAPPER_CLASS[variant];
@@ -194,7 +214,7 @@ export function TalkToBuddyPanel({
           {status}
         </p>
 
-        {partialTranscript && (
+        {captionsVisible && partialTranscript && (
           <div
             className={
               isInline
@@ -209,7 +229,7 @@ export function TalkToBuddyPanel({
           </div>
         )}
 
-        {assistantText && (
+        {captionsVisible && assistantText && (
           <div
             className={
               isInline

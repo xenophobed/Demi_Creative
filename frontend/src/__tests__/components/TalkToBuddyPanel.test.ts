@@ -60,3 +60,34 @@ describe("TalkToBuddyPanel: PANEL_WRAPPER_CLASS (#635)", () => {
     expect(overlayHasFixed && inlineHasFixed).toBe(false);
   });
 });
+
+// ===========================================================================
+// (4) Caption-visibility prop surface (#608)
+// ===========================================================================
+
+import {
+  captionsDefaultForAge,
+  resolveCaptionsVisibility,
+} from "@/pages/MyAgentPage/talkToBuddyHelpers";
+
+describe("TalkToBuddyPanel: captionsVisibleOverride wiring (#608)", () => {
+  it("falls back to the per-age default when no override is supplied", () => {
+    // This locks the render-time policy the panel uses internally —
+    // the panel calls ``resolveCaptionsVisibility(childAge, override)``
+    // and the helper test pins the truth table.
+    expect(resolveCaptionsVisibility(4, undefined)).toBe(
+      captionsDefaultForAge(4),
+    );
+    expect(resolveCaptionsVisibility(7, undefined)).toBe(
+      captionsDefaultForAge(7),
+    );
+  });
+
+  it("auto-shows captions on safety_block override even for pre-readers", () => {
+    // The safety_block path is the load-bearing reason this override
+    // exists. PRD §3.16 — explicit rejection is a teachable moment;
+    // the fallback sentence MUST be visible regardless of age.
+    expect(resolveCaptionsVisibility(3, true)).toBe(true);
+    expect(resolveCaptionsVisibility(5, true)).toBe(true);
+  });
+});

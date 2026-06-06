@@ -179,7 +179,7 @@ The hybrid path is designed so partial credential outages do not take the buddy 
 ## Section 5: Safety Verification
 
 ### Contract tests that gate ship
-All six must be green on `main` before flipping `=openai`:
+All ten must be green on `main` before flipping `=openai`:
 
 | Test | File | What it locks |
 |---|---|---|
@@ -188,7 +188,11 @@ All six must be green on `main` before flipping `=openai`:
 | `test_voice_broker_openai_provider_contract` | `backend/tests/contracts/test_voice_broker_openai_provider_contract.py` | Broker correctly routes OpenAI provider events end-to-end |
 | `test_voice_function_calling_contract` | `backend/tests/contracts/test_voice_function_calling_contract.py` | Realtime function-calling envelope matches what the tool layer expects |
 | `test_launch_flow_voice_text_parity_contract` | `backend/tests/contracts/test_launch_flow_voice_text_parity_contract.py` | `launch_flow` handoff behaves identically from voice and text entry |
-| `test_voice_tool_calls_glue_contract` | `backend/tests/contracts/test_voice_tool_calls_glue_contract.py` *(planned under #658)* | Tool calls from #655 actually fire through the #657 broker |
+| `test_voice_tool_calls_glue_contract` | `backend/tests/contracts/test_voice_tool_calls_glue_contract.py` | Tool calls from #655 actually fire through the #657 broker |
+| `test_voice_safety_fallback_contract` | `backend/tests/contracts/test_voice_safety_fallback_contract.py` *(#608)* | Failing safety REPLACES the reply with the fallback; safety MCP exceptions fail closed; per-age threshold parity |
+| `test_voice_safety_review_specialist_contract` | `backend/tests/contracts/test_voice_safety_review_specialist_contract.py` *(#608)* | Heavier safety-review specialist fires on borderline content; specialist rejection / crash both fail closed |
+| `test_voice_enabled_skills_contract` | `backend/tests/contracts/test_voice_enabled_skills_contract.py` *(#608)* | `enabled_skills` refusal at token mint + tool-set filter before `session.update` (defense in depth) |
+| `test_voice_token_expired_contract` | `backend/tests/contracts/test_voice_token_expired_contract.py` *(#608)* | Expired JWT surfaces as `auth_failed` over WS handshake (consistent with bad/replayed token paths) |
 
 Run locally:
 ```bash
@@ -196,7 +200,7 @@ cd backend
 python -m pytest tests/contracts/test_voice_*_contract.py tests/contracts/test_openai_realtime_provider_contract.py tests/contracts/test_launch_flow_voice_text_parity_contract.py -v
 ```
 
-> **Status note**: as of writing, the glue test for #658 is not yet on `main`. Do not flip `=openai` until #658 ships and its contract test goes green.
+> **Status note**: as of writing, the glue test for #658 is on `main`. The four #608 tests landed alongside this update.
 
 ### Manual safety smoke checklist
 Run with a test parent + child profile (age 6-8 unless noted). Use the production frontend pointed at production backend. Each test should complete in under 2 minutes.
