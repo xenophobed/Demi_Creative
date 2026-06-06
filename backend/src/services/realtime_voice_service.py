@@ -14,17 +14,20 @@ Hard rules (PRD §3.16):
     provider-agnostic.
 
 This sub-story (#613) ships the Protocol + a deterministic Mock only.
-Real network calls land in #614.
+Real network calls land in #614. OpenAI Realtime broker integration
+lands in #645 (this revision).
 """
 
 from __future__ import annotations
 
 import asyncio
+import base64
 import io
+import json
 import logging
 import os
 from dataclasses import dataclass, field
-from typing import Any, AsyncIterator, Dict, Optional, Protocol
+from typing import Any, AsyncIterator, Dict, List, Optional, Protocol, Tuple
 from uuid import uuid4
 
 logger = logging.getLogger(__name__)
@@ -53,6 +56,18 @@ except Exception:  # pragma: no cover - import fallback for test env
     _httpx = None
     _httpx_AsyncClient = None  # type: ignore[assignment]
 
+# ``websockets`` is shipped transitively via FastAPI. Aliasing the connect
+# helper here gives the OpenAIRealtimeProvider a stable monkeypatch seam:
+# tests can swap ``rtvs._websockets_connect`` for a fake upstream without
+# touching the global ``websockets`` namespace. Import is module-level
+# (no I/O); the connect call is only made inside ``start_session``.
+try:
+    import websockets as _websockets
+    _websockets_connect = _websockets.connect
+except Exception:  # pragma: no cover - import fallback for test env
+    _websockets = None
+    _websockets_connect = None  # type: ignore[assignment]
+
 
 # ---------------------------------------------------------------------------
 # Public constants
@@ -61,6 +76,25 @@ except Exception:  # pragma: no cover - import fallback for test env
 # Same threshold as stt_service.SAFETY_THRESHOLD — kept here so providers
 # don't need to import the STT module just to know the safety floor.
 SAFETY_THRESHOLD: float = 0.85
+
+# Per-age safety floor (PRD §3.16.6). 3-5 gets a stricter floor because
+# the voice channel is the most intimate modality. The broker uses this
+# table for BOTH the per-utterance transcript gate AND the per-reply text
+# gate so a single tuning location applies to both safety checkpoints.
+SAFETY_THRESHOLD_BY_AGE: Dict[str, float] = {
+    "3-5": 0.90,
+    "6-8": 0.85,
+    "9-12": 0.85,
+}
+
+
+def safety_threshold_for_age(target_age: int) -> float:
+    """Map a numeric ``target_age`` to its per-age safety threshold."""
+    if target_age <= 5:
+        return SAFETY_THRESHOLD_BY_AGE["3-5"]
+    if target_age <= 8:
+        return SAFETY_THRESHOLD_BY_AGE["6-8"]
+    return SAFETY_THRESHOLD_BY_AGE["9-12"]
 
 # How the WS broker tells us which provider to use. "mock" forces the
 # deterministic in-memory provider; "hybrid" routes to the Whisper +
@@ -509,36 +543,141 @@ class HybridRealtimeVoiceProvider:
 
 
 # ---------------------------------------------------------------------------
-# OpenAI Realtime provider — scaffold (#644)
+# OpenAI Realtime provider — broker-integrated (#645)
 # ---------------------------------------------------------------------------
 
-# Reused message string so the #645 (E2) reviewer can grep for every
-# call-site the broker integration must replace.
+# Historical marker kept for documentation: the scaffold (#644) used this
+# string in NotImplementedError so the #645 reviewer could grep call sites.
+# All sites are now wired; the constant remains for one release as a hint
+# to anyone tracing the migration history.
 _E2_NOT_IMPLEMENTED: str = "E2 — broker integration"
+
+# Per-OpenAI Realtime API spec — the upstream WS endpoint. The model
+# query parameter is appended at connection time.
+OPENAI_REALTIME_WS_URL: str = "wss://api.openai.com/v1/realtime"
+
+# Per-age voice subset (PRD §3.16.6). 3-5 is parent-locked to the gentle
+# ``alloy`` voice; older tiers get richer choices. The broker passes the
+# chosen voice through ``persona`` → ``voice_session_config``.
+VOICE_SUBSET_BY_AGE: Dict[str, List[str]] = {
+    "3-5": ["alloy"],
+    "6-8": ["alloy", "shimmer", "echo"],
+    "9-12": ["alloy", "shimmer", "echo", "fable", "onyx", "nova", "ballad", "verse"],
+}
+
+# Per-age reply length cap (approx. tokens). 3-5 gets very short replies;
+# 9-12 can handle longer reasoning. Enforced via the system prompt.
+REPLY_LENGTH_CAP_BY_AGE: Dict[str, int] = {
+    "3-5": 40,
+    "6-8": 80,
+    "9-12": 160,
+}
+
+
+@dataclass
+class ReplyEvent:
+    """One streaming event from the model during an assistant reply.
+
+    ``kind`` is one of:
+      - ``"text_delta"``     — a partial chunk of the model's text reply
+      - ``"text_done"``      — final accumulated reply text (full string)
+      - ``"audio_chunk"``    — a chunk of synthesized audio bytes
+      - ``"response_done"``  — the model finished the current response
+    """
+    kind: str
+    text: str = ""
+    audio: bytes = b""
+
+
+def _build_openai_system_prompt(*, target_age: int, persona: str) -> str:
+    """Sectioned system prompt for the realtime model.
+
+    Structured per OpenAI gpt-realtime guidance (Role / Tone / Language /
+    Safety / Tools / Fallback). The child-safety preamble lives in the
+    Safety section and is the highest-priority instruction.
+    """
+    age_band = (
+        "3-5" if target_age <= 5
+        else "6-8" if target_age <= 8
+        else "9-12"
+    )
+    cap = REPLY_LENGTH_CAP_BY_AGE[age_band]
+    return (
+        "# Role\n"
+        f"You are Buddy, a warm and curious AI friend for a child "
+        f"in the {age_band} age band. Persona id: {persona}.\n\n"
+        "# Tone\n"
+        "Warm, playful, age-appropriate. Use short sentences for young "
+        "children and richer language for older ones. Never sound clinical "
+        "or condescending.\n\n"
+        "# Language\n"
+        "Always reply in English. Do not switch languages even if the "
+        "child speaks another language — gently redirect to English.\n\n"
+        "# Safety (highest priority)\n"
+        "- Never produce content involving violence, sexuality, scary "
+        "imagery, hate, self-harm, or unsafe instructions.\n"
+        "- Never collect personally identifying information from the child.\n"
+        "- If the child asks about an unsafe topic, gently redirect to "
+        "something creative and age-appropriate.\n"
+        "- Keep secrets only when safe — if a child mentions harm or "
+        "danger, recommend talking to a trusted adult.\n\n"
+        "# Reply Length\n"
+        f"Aim for around {cap} tokens or less. Stop at natural sentence "
+        "boundaries — never trail off mid-thought.\n\n"
+        "# Tools\n"
+        "Tool calls (launch_flow / delegate_to_specialist) are owned by "
+        "a separate orchestration layer. Do not invoke tools in this "
+        "session — focus on conversation only.\n\n"
+        "# Fallback\n"
+        "If you are unsure how to respond safely, say: "
+        "'Let's pick something different to talk about. What's something "
+        "fun you want to make today?'\n"
+    )
+
+
+def _choose_voice_for_age(*, target_age: int, persona: str) -> str:
+    """Pick a per-age voice id. ``persona`` may override if allowed."""
+    age_band = (
+        "3-5" if target_age <= 5
+        else "6-8" if target_age <= 8
+        else "9-12"
+    )
+    allowed = VOICE_SUBSET_BY_AGE[age_band]
+    # If the persona maps to an allowed voice (after stripping the
+    # ``buddy_`` prefix common in our config), honour it. Otherwise the
+    # first allowed voice is the safe default.
+    candidate = (persona or "").replace("buddy_", "").strip().lower()
+    if candidate in allowed:
+        return candidate
+    return allowed[0]
 
 
 class OpenAIRealtimeProvider:
-    """OpenAI Realtime API provider — scaffold only.
+    """OpenAI Realtime API provider — broker-integrated.
 
-    This story (#644) gives the provider class a Protocol-conformant
-    shape and a working ``start_session`` that mints an ephemeral client
-    secret via ``POST /v1/realtime/client_secrets``. Audio forwarding,
-    tool-call translation, and synthesis stream from the upstream WS
-    land in **E2 (#645)** — those methods explicitly raise
-    ``NotImplementedError(_E2_NOT_IMPLEMENTED)`` here so a reviewer can
-    grep the codebase and verify every site got wired.
+    Lifecycle:
+      1. ``start_session`` mints an ephemeral client secret AND opens a
+         server-side WebSocket to the OpenAI Realtime endpoint. The
+         session is configured with sectioned system prompt, per-age
+         voice + reply cap, and ``input_audio_buffer.append`` mode.
+      2. ``push_audio`` forwards a base64 PCM chunk as an
+         ``input_audio_buffer.append`` event.
+      3. ``finalize_utterance`` sends ``input_audio_buffer.commit`` and
+         ``response.create``, then waits for the
+         ``conversation.item.input_audio_transcription.completed``
+         event to extract the child's transcript. The broker safety-
+         checks the transcript via ``_safety_check_text``.
+      4. ``stream_assistant_reply`` yields a sequence of ``ReplyEvent``s
+         — text deltas, the final text, and audio chunks. The broker
+         buffers audio until the text passes safety; on pass, it
+         forwards the buffered audio chunks to the client.
+      5. ``close`` cancels the upstream reader task and closes the WS.
 
     Graceful degradation:
-      - Missing ``OPENAI_API_KEY`` → ``start_session`` returns a degraded
-        handle with ``provider_state["provider_unavailable"] = True``.
-        Mirrors the Hybrid provider's pattern: the broker translates
-        this into ``VoiceWSErrorEvent(code="provider_unavailable")``
-        instead of every caller wrapping ``start_session`` in try/except.
-      - Missing ``httpx`` (test env without dep) → same degraded handle.
-
-    Audio-on-disk invariant:
-      - The provider never touches disk. The client secret + model
-        metadata live in ``handle.provider_state`` (memory-only).
+      - Missing ``OPENAI_API_KEY`` → degraded handle, no WS opened.
+      - Upstream connect failure → degraded handle with ``mint_error``.
+      - Provider never touches disk. Audio chunks live in an in-memory
+        ``asyncio.Queue`` only.
     """
 
     name: str = "openai_realtime"
@@ -555,6 +694,10 @@ class OpenAIRealtimeProvider:
     @property
     def _is_available(self) -> bool:
         return bool(os.getenv("OPENAI_API_KEY")) and _httpx_AsyncClient is not None
+
+    @property
+    def _ws_available(self) -> bool:
+        return _websockets_connect is not None
 
     async def start_session(
         self,
@@ -639,6 +782,66 @@ class OpenAIRealtimeProvider:
                 },
             )
 
+        # Configure per-age voice + sectioned system prompt.
+        voice = _choose_voice_for_age(target_age=target_age, persona=persona)
+        system_prompt = _build_openai_system_prompt(
+            target_age=target_age, persona=persona,
+        )
+
+        # Open the upstream WS so the broker can ``push_audio`` /
+        # ``finalize_utterance`` immediately. Failure is non-fatal —
+        # the secret is still useful (the frontend may bypass the
+        # relay via WebRTC in E4), and the broker treats a missing
+        # ``upstream_ws`` as ``provider_unavailable`` at first use.
+        #
+        # Gated by ``OPENAI_REALTIME_OPEN_UPSTREAM`` so the historical
+        # scaffold contract tests (which only patched ``_httpx_AsyncClient``)
+        # don't accidentally hit real network. Production deploy sets
+        # this flag to "1" in env so the WS opens automatically.
+        upstream_ws = None
+        open_upstream = (
+            os.getenv("OPENAI_REALTIME_OPEN_UPSTREAM", "0").lower()
+            in ("1", "true", "yes")
+        )
+        if self._ws_available and open_upstream:
+            try:
+                ws_url = f"{OPENAI_REALTIME_WS_URL}?model={self.model}"
+                # Use the module alias so tests can monkeypatch a fake.
+                cm_or_awaitable = _websockets_connect(  # type: ignore[misc]
+                    ws_url,
+                    additional_headers={
+                        "Authorization": f"Bearer {api_key}",
+                        "OpenAI-Beta": "realtime=v1",
+                    },
+                )
+                # ``websockets.connect`` returns an object that's both
+                # an async context manager AND directly awaitable. We
+                # prefer the direct-await path so the connection stays
+                # open across method calls.
+                if hasattr(cm_or_awaitable, "__await__"):
+                    upstream_ws = await cm_or_awaitable
+                else:
+                    # Older websockets API — fall back to __aenter__.
+                    upstream_ws = await cm_or_awaitable.__aenter__()
+                # Send the session.update event configuring voice + prompt.
+                await upstream_ws.send(json.dumps({
+                    "type": "session.update",
+                    "session": {
+                        "modalities": ["audio", "text"],
+                        "voice": voice,
+                        "instructions": system_prompt,
+                        "input_audio_format": "pcm16",
+                        "output_audio_format": "pcm16",
+                        "input_audio_transcription": {"model": "whisper-1"},
+                    },
+                }))
+            except Exception as exc:
+                logger.warning(
+                    "OpenAI upstream WS open failed (continuing with relay-only mode): %s",
+                    exc,
+                )
+                upstream_ws = None
+
         return SessionHandle(
             session_id=f"voice_openai_{uuid4().hex[:12]}",
             user_id=user_id,
@@ -649,42 +852,302 @@ class OpenAIRealtimeProvider:
                 "openai_client_secret": client_secret,
                 "model": self.model,
                 "expires_at": expires_at,
+                "voice": voice,
+                "system_prompt": system_prompt,
+                "upstream_ws": upstream_ws,
+                "pending_events": [],
             },
         )
+
+    # -----------------------------------------------------------------
+    # Upstream WS helpers — small enough to keep inline so a reviewer
+    # can follow the lifecycle without bouncing between files.
+    # -----------------------------------------------------------------
+
+    async def _send_event(self, handle: SessionHandle, event: Dict[str, Any]) -> None:
+        ws = handle.provider_state.get("upstream_ws")
+        if ws is None:
+            # Degraded session — silently drop. The broker should have
+            # noticed ``provider_unavailable`` and never gotten here, but
+            # we refuse to raise mid-stream.
+            return
+        await ws.send(json.dumps(event))
 
     async def push_audio(
         self,
         handle: SessionHandle,
         audio_bytes: bytes,
     ) -> None:
-        # Audio forwarding to the upstream OpenAI Realtime WS lands in
-        # #645. Reviewer: grep for ``_E2_NOT_IMPLEMENTED`` and wire each
-        # call-site to the real WS forward.
-        raise NotImplementedError(_E2_NOT_IMPLEMENTED)
+        """Forward a chunk of child audio to the upstream model."""
+        if handle.provider_state.get("provider_unavailable"):
+            return
+        # OpenAI expects base64-encoded PCM audio in input_audio_buffer.append.
+        await self._send_event(handle, {
+            "type": "input_audio_buffer.append",
+            "audio": base64.b64encode(audio_bytes).decode("ascii"),
+        })
 
     async def finalize_utterance(
         self,
         handle: SessionHandle,
     ) -> FinalTranscript:
-        raise NotImplementedError(_E2_NOT_IMPLEMENTED)
+        """Commit the audio buffer, request a response, await transcript.
+
+        The model's transcribed user input arrives as
+        ``conversation.item.input_audio_transcription.completed``. We
+        listen for that single event and return the transcript; the
+        broker is responsible for running the per-age safety check on
+        the result.
+        """
+        if handle.provider_state.get("provider_unavailable"):
+            return FinalTranscript(
+                success=False, text="", language="en", duration_ms=0,
+                safety_passed=False, error="provider_unavailable",
+                provider=self.name,
+            )
+
+        # Tell the upstream we're done with this utterance and want a reply.
+        await self._send_event(handle, {"type": "input_audio_buffer.commit"})
+        await self._send_event(handle, {"type": "response.create"})
+
+        # Read events until we see the transcription completed signal.
+        transcript_text: str = ""
+        language: str = "en"
+        try:
+            transcript_text, language = await self._await_user_transcript(handle)
+        except Exception as exc:
+            logger.warning(
+                "[session=%s] upstream transcript wait failed: %s",
+                handle.session_id, exc,
+            )
+            return FinalTranscript(
+                success=False, text="", language="en", duration_ms=0,
+                safety_passed=False, error=f"upstream_failed: {exc}",
+                provider=self.name,
+            )
+
+        return FinalTranscript(
+            success=True,
+            text=transcript_text,
+            language=language,
+            duration_ms=0,  # OpenAI doesn't surface utterance duration here
+            # Per-age safety check happens in the broker — providers report
+            # the transcript as-is. ``safety_passed=True`` here means
+            # "transport succeeded"; the broker overrides if the safety
+            # MCP score is sub-threshold.
+            safety_passed=True,
+            provider=self.name,
+        )
+
+    async def _await_user_transcript(
+        self, handle: SessionHandle,
+    ) -> Tuple[str, str]:
+        """Pull events off the upstream WS until we see the transcript.
+
+        ``stream_assistant_reply`` consumes the remainder of the
+        response stream (text + audio). The events here are buffered
+        in ``handle.provider_state["pending_events"]`` so the next call
+        can replay them.
+        """
+        ws = handle.provider_state["upstream_ws"]
+        pending: List[Dict[str, Any]] = handle.provider_state.setdefault(
+            "pending_events", []
+        )
+
+        # First drain any events buffered by a previous call.
+        for ev in list(pending):
+            pending.remove(ev)
+            if (
+                ev.get("type")
+                == "conversation.item.input_audio_transcription.completed"
+            ):
+                return (
+                    ev.get("transcript", "") or "",
+                    ev.get("language", "en") or "en",
+                )
+
+        # Then pull new events until we see the transcript signal or
+        # the response stream completes (in which case no transcript
+        # arrived — return empty).
+        while True:
+            raw = await ws.recv()
+            try:
+                ev = json.loads(raw) if isinstance(raw, str) else json.loads(
+                    raw.decode("utf-8")
+                )
+            except Exception:
+                continue
+            ev_type = ev.get("type", "")
+            if ev_type == "conversation.item.input_audio_transcription.completed":
+                return (
+                    ev.get("transcript", "") or "",
+                    ev.get("language", "en") or "en",
+                )
+            if ev_type in ("error", "session.error"):
+                raise RuntimeError(ev.get("error", {}).get("message", "upstream error"))
+            # Buffer everything else for the reply stream.
+            pending.append(ev)
+            # If the response completes before we saw a transcript event,
+            # bail with an empty transcript rather than blocking forever.
+            if ev_type == "response.done":
+                return ("", "en")
+
+    async def stream_assistant_reply(
+        self, handle: SessionHandle,
+    ) -> AsyncIterator[ReplyEvent]:
+        """Yield text + audio deltas from the in-flight model response.
+
+        Custom to OpenAI Realtime (not in the Protocol). The broker
+        detects this method by ``hasattr(provider, "stream_assistant_reply")``
+        and consumes the events; for providers without it, the broker
+        falls back to the legacy ``synthesize_speech(text)`` path.
+        """
+        ws = handle.provider_state.get("upstream_ws")
+        pending: List[Dict[str, Any]] = handle.provider_state.get(
+            "pending_events", []
+        )
+
+        async def _gen() -> AsyncIterator[ReplyEvent]:
+            # Replay buffered events first.
+            for ev in list(pending):
+                pending.remove(ev)
+                async for out in _ev_to_reply_events(ev):
+                    yield out
+                if ev.get("type") == "response.done":
+                    return
+
+            # Then pull live events until the response is complete.
+            while True:
+                raw = await ws.recv()
+                try:
+                    ev = json.loads(raw) if isinstance(raw, str) else json.loads(
+                        raw.decode("utf-8")
+                    )
+                except Exception:
+                    continue
+                async for out in _ev_to_reply_events(ev):
+                    yield out
+                if ev.get("type") == "response.done":
+                    return
+
+        return _gen()
 
     async def synthesize_speech(
         self,
         handle: SessionHandle,
         text: str,
     ) -> AsyncIterator[bytes]:
-        # Matches the Protocol shape — the existing Mock/Hybrid impls
-        # also ``async def`` this method and return an async iterator.
-        # In E2 this will yield audio frames forwarded from the OpenAI
-        # Realtime WS ``response.output_audio.delta`` events.
-        raise NotImplementedError(_E2_NOT_IMPLEMENTED)
+        """Yield audio bytes from the in-flight upstream response.
+
+        Semantics differ from Hybrid: the OpenAI Realtime model emits
+        text + audio together, so this method *consumes the live audio
+        deltas* rather than calling a separate TTS endpoint. The
+        ``text`` argument is informational only — the broker has
+        already accepted the model's reply text via safety check and
+        we are now just relaying the corresponding audio chunks.
+        """
+        if handle.provider_state.get("provider_unavailable"):
+            async def _empty() -> AsyncIterator[bytes]:
+                if False:  # pragma: no cover
+                    yield b""
+            return _empty()
+
+        ws = handle.provider_state.get("upstream_ws")
+        pending: List[Dict[str, Any]] = handle.provider_state.get(
+            "pending_events", []
+        )
+
+        async def _gen() -> AsyncIterator[bytes]:
+            # Replay any buffered audio events first.
+            for ev in list(pending):
+                pending.remove(ev)
+                audio_chunk = _extract_audio_delta(ev)
+                if audio_chunk:
+                    yield audio_chunk
+                if ev.get("type") == "response.done":
+                    return
+            if ws is None:
+                return
+            while True:
+                try:
+                    raw = await ws.recv()
+                except Exception:
+                    return
+                try:
+                    ev = json.loads(raw) if isinstance(raw, str) else json.loads(
+                        raw.decode("utf-8")
+                    )
+                except Exception:
+                    continue
+                audio_chunk = _extract_audio_delta(ev)
+                if audio_chunk:
+                    yield audio_chunk
+                if ev.get("type") == "response.done":
+                    return
+
+        return _gen()
 
     async def close(self, handle: SessionHandle) -> None:
-        # No persistent upstream connection in the scaffold — the broker
-        # holds nothing for us to release. Closing the upstream WS is
-        # E2 territory; keep this a benign no-op so the broker's
-        # session-cleanup path doesn't fail under the scaffold.
+        """Tear down the upstream WS cleanly."""
         handle.provider_state["closed"] = True
+        ws = handle.provider_state.pop("upstream_ws", None)
+        if ws is not None:
+            try:
+                await ws.close()
+            except Exception:  # pragma: no cover - best effort
+                pass
+
+
+# ---------------------------------------------------------------------------
+# Helpers for translating OpenAI Realtime events to ReplyEvent / bytes.
+# ---------------------------------------------------------------------------
+
+def _extract_audio_delta(ev: Dict[str, Any]) -> bytes:
+    """Decode a single ``response.audio.delta`` event to raw bytes.
+
+    The upstream encodes audio chunks as base64 inside ``delta``. Any
+    other event type is silently ignored — the broker only needs the
+    audio bytes here.
+    """
+    ev_type = ev.get("type", "")
+    # OpenAI Realtime emits ``response.audio.delta`` for streamed audio
+    # bytes. Newer variants use ``response.output_audio.delta`` — accept
+    # both so a model upgrade doesn't break us silently.
+    if ev_type in ("response.audio.delta", "response.output_audio.delta"):
+        delta = ev.get("delta", "") or ""
+        if not delta:
+            return b""
+        try:
+            return base64.b64decode(delta)
+        except Exception:
+            return b""
+    return b""
+
+
+async def _ev_to_reply_events(ev: Dict[str, Any]) -> AsyncIterator[ReplyEvent]:
+    """Map one upstream event to zero-or-more ReplyEvent records."""
+    ev_type = ev.get("type", "")
+    if ev_type in ("response.audio_transcript.delta", "response.output_text.delta"):
+        delta = ev.get("delta", "") or ""
+        if delta:
+            yield ReplyEvent(kind="text_delta", text=delta)
+    elif ev_type in (
+        "response.audio_transcript.done",
+        "response.output_text.done",
+    ):
+        # OpenAI emits the full transcript text in ``transcript`` or ``text``.
+        text = (
+            ev.get("transcript")
+            or ev.get("text")
+            or ""
+        )
+        yield ReplyEvent(kind="text_done", text=text)
+    elif ev_type in ("response.audio.delta", "response.output_audio.delta"):
+        chunk = _extract_audio_delta(ev)
+        if chunk:
+            yield ReplyEvent(kind="audio_chunk", audio=chunk)
+    elif ev_type == "response.done":
+        yield ReplyEvent(kind="response_done")
 
 
 # ---------------------------------------------------------------------------

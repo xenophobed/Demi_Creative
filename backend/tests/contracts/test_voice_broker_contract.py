@@ -101,11 +101,25 @@ async def consented_child(test_db):
     return profile
 
 
+async def _bypass_safety(text: str, target_age: int):
+    """Test helper: short-circuit the safety MCP so existing broker
+    contract tests don't trigger real Anthropic calls.
+
+    The voice broker (#645) added a per-reply safety gate; this fixture
+    keeps the mock-provider happy path deterministic. Other suites
+    (test_voice_safety_pre_tts_contract.py) cover the gate semantics.
+    """
+    return {"safety_score": 0.99, "passed": True}
+
+
 @pytest_asyncio.fixture
-async def client(test_db):
+async def client(test_db, monkeypatch):
     app.dependency_overrides[get_current_user] = _override_current_user
     # Force the mock provider so we never call real Whisper/ElevenLabs.
     voice_realtime._set_test_provider_override(MockRealtimeVoiceProvider())
+    monkeypatch.setattr(
+        voice_realtime, "_safety_check_text", _bypass_safety,
+    )
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
@@ -234,11 +248,17 @@ class TestWebSocketBroker:
         """Sync TestClient with the same overrides as the async client."""
         app.dependency_overrides[get_current_user] = _override_current_user
         voice_realtime._set_test_provider_override(MockRealtimeVoiceProvider())
+        # The broker now runs a per-reply safety gate (#645). Bypass it
+        # for the sync TestClient tests so deterministic mock-provider
+        # bytes still flow through the WS without hitting Anthropic.
+        self._saved_safety = voice_realtime._safety_check_text
+        voice_realtime._safety_check_text = _bypass_safety  # type: ignore[assignment]
         return TestClient(app)
 
     def _teardown_sync_test_client(self):
         app.dependency_overrides.pop(get_current_user, None)
         voice_realtime._set_test_provider_override(None)
+        voice_realtime._safety_check_text = self._saved_safety  # type: ignore[assignment]
 
     @pytest.mark.asyncio
     async def test_bad_token_closes_with_auth_failed(
@@ -428,6 +448,9 @@ class TestSessionRowPersistence:
 
         app.dependency_overrides[get_current_user] = _override_current_user
         voice_realtime._set_test_provider_override(MockRealtimeVoiceProvider())
+        monkeypatch.setattr(
+            voice_realtime, "_safety_check_text", _bypass_safety,
+        )
         try:
             client = TestClient(app)
             with client.websocket_connect(
