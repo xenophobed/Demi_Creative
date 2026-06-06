@@ -718,6 +718,7 @@ export default function AgentChatPanel({
           childId={childId}
           persona={agent.agent_name}
           ageGroup={ageGroup}
+          childAge={ageGroupToRepresentativeAge(ageGroup)}
           onClose={() => setIsTalkOpen(false)}
         />
       )}
@@ -733,15 +734,33 @@ export default function AgentChatPanel({
  * Voice transcripts flow into `useAgentChatStore.appendVoiceCaption`
  * so they merge into the same chat history the text panel renders.
  */
+/**
+ * Map an AgeGroup band to a representative numeric age so BuddyOrb
+ * (#651) can pick a diameter + decide whether to render the face
+ * overlay. Our profile model stores the band, not raw age, so this is
+ * a stable midpoint pick: 3-5 → 4 (pre-reader), 6-8 → 7, 9-12 → 10.
+ */
+function ageGroupToRepresentativeAge(
+  ageGroup?: AgeGroup | null,
+): number | null {
+  if (!ageGroup) return null;
+  if (ageGroup === "3-5") return 4;
+  if (ageGroup === "6-8") return 7;
+  if (ageGroup === "9-12") return 10;
+  return null;
+}
+
 function TalkToBuddyContainer({
   childId,
   persona,
   ageGroup,
+  childAge,
   onClose,
 }: {
   childId: string;
   persona: string;
   ageGroup?: AgeGroup | null;
+  childAge?: number | null;
   onClose: () => void;
 }) {
   void ageGroup; // Future: thread per-age TTS preset overrides (Phase C, #608).
@@ -773,6 +792,8 @@ function TalkToBuddyContainer({
       partialTranscript={voice.partialTranscript}
       assistantText={voice.assistantText}
       inputLevel={voice.inputLevel}
+      outputLevel={voice.outputLevel}
+      childAge={childAge}
       prefersReducedMotion={prefersReducedMotion}
       onStart={() => voice.start(true)}
       onEnd={voice.end}
