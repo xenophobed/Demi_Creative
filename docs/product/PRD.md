@@ -2048,16 +2048,23 @@ Before any production traffic flows over the OpenAI Realtime path:
 
 1. **ZDR enrollment** — Zero Data Retention must be enabled on the OpenAI org. Required by OpenAI's "Under-18 API Guidance" for any data of children under 13 (our 3-5 cohort). Operator action; not self-serve. Documented in `docs/guides/voice-launch-prerequisites.md`.
 2. **Fallback validated** — `REALTIME_VOICE_PROVIDER=hybrid` smoke-tested in production env. Smoke flips the env var, waits one restart cycle, verifies the cascaded path still serves a voice session end-to-end.
-3. **Cost ceiling configured** — monthly spending cap on the OpenAI org sized to expected voice quota: 10/15/20 min/day × user count × $0.05–$0.10/min (mini cached). `gpt-realtime-2` escalation is parent-flag-gated; cost telemetry alerts when cumulative org spend crosses 80% of cap.
-4. **First-audio telemetry live** — Phase D telemetry hook reports p50/p95 to the Parent Dashboard + ops dashboard. Alert at p95 > 2500ms; provider auto-failover to hybrid considered at sustained p95 > 4000ms over 5 min.
+3. **Cost ceiling configured** — monthly spending cap on the OpenAI org sized to expected voice quota: 10/15/20 min/day × user count × $0.05–$0.10/min (mini cached). The operator↔app contract is the `OPENAI_REALTIME_MONTHLY_CAP_USD` env var — must match the OpenAI dashboard value. `gpt-realtime-2` escalation is parent-flag-gated. Alerting thresholds:
+   - **Cost:** warning at 80% of cap, hard-stop at 100%
+   - **Latency:** alert at p95 > 2500ms; provider auto-failover to hybrid considered at sustained p95 > 4000ms over 5 min
+   - **Error rate:** alert at provider-error rate > 5% over a 15-min rolling window
+4. **First-audio telemetry live** — Phase D telemetry hook reports p50/p95 to the Parent Dashboard + ops dashboard.
 5. **Safety pre-TTS gate verified** — contract test `test_voice_safety_pre_tts_contract` green; per-utterance + per-reply safety checks both fail-closed before audio streams to the client.
-6. **Tool definitions versioned** — `launch_flow` tool schema pinned with `version` field; backward-incompatible changes ship as new tool name, not edited schema. The realtime session prompt includes the tool version so we can detect drift in production.
+6. **Tool definitions versioned** — `realtime_voice_tools.TOOL_VERSION` pinned (currently `"1.0.0"`); backward-incompatible changes MUST ship as a **new tool name**, not as an edited schema on the existing name. This is the rule that actually prevents breakage — the version field on its own only detects drift, it doesn't prevent it. The realtime session prompt includes the tool version so production can log drift via `warn_on_version_drift`.
 
-**ZDR contingency**: if ZDR is denied or delayed, the under-13 cohort cannot route through OpenAI Realtime. Fallback options (in order):
-  (a) gate OpenAI Realtime to ages 9-12 only and continue serving hybrid to 3-8 (clean per-age split, mixed UX),
-  (b) switch entirely to **ElevenLabs Conversational AI with Claude Sonnet 4-6 as the custom LLM** (validated in feasibility spike E7 — preserves Anthropic data terms but ElevenLabs hosts orchestration),
-  (c) stay on hybrid and accept the latency floor for v2.
-Decision belongs to the operator + legal, not engineering.
+**ZDR contingency**: if ZDR is denied or delayed, the under-13 cohort cannot route through OpenAI Realtime. Fallback options:
+
+  - **(a) Age-gated split** — gate OpenAI Realtime to ages 9-12 only; serve hybrid to ages 3-8. *Enforcement point:* `_select_provider` in `backend/src/services/realtime_voice_service.py` returns Hybrid when the authenticated `target_age` is in the 3-8 band. Cheapest, mixed UX.
+
+  - **(b) ElevenLabs Conversational AI with Claude Sonnet 4-6 as custom LLM** — validated in feasibility spike E7 (see `docs/discovery/elevenlabs-conversational-ai-spike.md`). Preserves Anthropic data terms; ElevenLabs hosts orchestration so we lose direct safety/quota control. **Hard prerequisite: signed ElevenLabs Enterprise contract with Zero Retention Mode + DPA before any under-13 traffic flows.** ElevenLabs' public policy explicitly prohibits under-18 data and default retention is 2 years — no contract → no path. ~12 dev-days to ship the provider implementation per the spike.
+
+  - **(c) Stay on hybrid** — accept the cascaded p50 latency floor for v2 across all ages. Proven, tested today.
+
+**Operator sequencing (recommended)**: if ZDR is denied, ship (a) as a 24h stopgap so older kids still get the realtime path, negotiate (b) in parallel (contract timeline is the bottleneck), keep (c) as proven tertiary. The PRD-as-written reads "pick one of three" but the realistic operator move is sequencing all three. Decision belongs to operator + legal, not engineering.
 
 > **GitHub Epic**: tracked under the epic created by `/spec-to-backlog talk-to-buddy-realtime-voice` | **Phase**: 2 | **Milestone**: Phase 2 — Interactive + Memory + News
 
