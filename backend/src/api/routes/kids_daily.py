@@ -45,6 +45,7 @@ from ...services.models.artifact_models import (
 )
 from ...services.tts_service import generate_multi_speaker_audio
 from ...services.user_service import UserData
+from ...services.storage_adapter import storage
 from ...utils.text import count_words
 from ...paths import AUDIO_DIR, UPLOAD_DIR
 from ..deps import (
@@ -124,16 +125,65 @@ def _is_live_illustration_enabled() -> bool:
     return True
 
 
-def _save_placeholder_illustration(
+async def _store_illustration_asset(
+    filename: str,
+    content: bytes,
+    content_type: str,
+) -> str:
+    """Persist an illustration locally and via the active storage backend."""
+    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    path = UPLOAD_DIR / filename
+    path.write_bytes(content)
+    return await storage.upload("uploads", filename, content, content_type)
+
+
+async def _save_placeholder_illustration(
     episode_id: str,
     idx: int,
     kid_title: str,
     subtitle: str,
 ) -> str:
     filename = f"kids_daily_{episode_id}_{idx}.svg"
-    path = UPLOAD_DIR / filename
-    path.write_text(_make_placeholder_svg(kid_title, subtitle), encoding="utf-8")
-    return f"/data/uploads/{filename}"
+    svg = _make_placeholder_svg(kid_title, subtitle)
+    return await _store_illustration_asset(
+        filename,
+        svg.encode("utf-8"),
+        "image/svg+xml",
+    )
+
+
+async def get_legacy_kids_daily_svg_for_upload(filename: str) -> str | None:
+    """Rebuild placeholder SVGs for old kids-daily relative upload URLs.
+
+    Older production rows stored `/data/uploads/kids_daily_<episode>_0.svg`
+    without mirroring the file to durable storage. In Supabase-backed prod we
+    can synthesize the same placeholder from persisted episode metadata.
+    """
+    if not filename.startswith("kids_daily_") or not filename.endswith(".svg"):
+        return None
+
+    stem = Path(filename).stem
+    payload = stem.removeprefix("kids_daily_")
+    if "_" not in payload:
+        return None
+
+    episode_id, idx_text = payload.rsplit("_", 1)
+    if not idx_text.isdigit():
+        return None
+
+    story = await story_repo.get_by_id(episode_id)
+    if not story or story.get("story_type") not in {
+        "kids_daily",
+        "morning_show",
+        "news_to_kids",
+    }:
+        return None
+
+    analysis = story.get("analysis", {}) or {}
+    kid_title = analysis.get("kid_title") or "Kids Daily"
+    category = str(analysis.get("category") or "general")
+    subtitle = f"{category.title()} scene {int(idx_text) + 1}"
+    return _make_placeholder_svg(kid_title, subtitle)
 
 
 def _scene_prompt(kid_title: str, topic: str, age_group: str, idx: int) -> str:
@@ -186,8 +236,6 @@ async def _generate_illustrations(
 ) -> List[EpisodeIllustration]:
     count = _illustration_count(age_group)
     animation_types = ["pan", "zoom", "ken_burns"]
-    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-
     live_enabled = _is_live_illustration_enabled()
     openai_client = None
     if live_enabled and OpenAI is not None:
@@ -239,17 +287,23 @@ async def _generate_illustrations(
                 if item_b64:
                     image_bytes = base64.b64decode(item_b64)
                     filename = f"kids_daily_{episode_id}_{idx}.png"
-                    path = UPLOAD_DIR / filename
-                    path.write_bytes(image_bytes)
-                    generated_url = f"/data/uploads/{filename}"
+                    generated_url = await _store_illustration_asset(
+                        filename,
+                        image_bytes,
+                        "image/png",
+                    )
                 elif item_url:
                     generated_url = str(item_url)
                 else:
                     raise RuntimeError("OpenAI image response did not include image data")
             except Exception:
-                generated_url = _save_placeholder_illustration(episode_id, idx, kid_title, subtitle)
+                generated_url = await _save_placeholder_illustration(
+                    episode_id, idx, kid_title, subtitle
+                )
         else:
-            generated_url = _save_placeholder_illustration(episode_id, idx, kid_title, subtitle)
+            generated_url = await _save_placeholder_illustration(
+                episode_id, idx, kid_title, subtitle
+            )
 
         safe_description = await _safe_illustration_description(description, age_group)
 
