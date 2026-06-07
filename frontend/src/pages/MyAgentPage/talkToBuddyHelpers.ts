@@ -157,3 +157,46 @@ export function shouldShowHeaderTalkPill(
   if (isTalkOpen) return false;
   return true;
 }
+
+/**
+ * Captions default-on policy per age band (#608 carry-over).
+ *
+ * Pre-readers (3-5) cannot read captions, and parents in user testing
+ * said the running text felt distracting next to the BuddyOrb. We
+ * default captions OFF for that band and ON for everyone else.
+ *
+ * Override happens on the panel side when a `safety_block` event fires:
+ * captions auto-show regardless of age so the kid sees the fallback
+ * sentence the buddy speaks (PRD §3.16 — explicit rejection is a
+ * teachable moment, not a silent skip).
+ *
+ * Pure helper so the panel test can lock the truth table without
+ * mounting React. ``null`` / ``undefined`` defaults to "on" — defensive
+ * fallback for the case where the child profile hasn't loaded yet.
+ */
+export function captionsDefaultForAge(
+  age: number | null | undefined,
+): boolean {
+  if (age == null) return true;
+  if (age < 6) return false;
+  return true;
+}
+
+/**
+ * Resolve the effective caption visibility from the per-age default
+ * plus the parent surface's override (#608).
+ *
+ * Override semantics: ``true`` forces captions on (set this after a
+ * ``safety_block`` event); ``undefined`` falls back to the per-age
+ * default; ``false`` is intentionally NOT supported — leaving a panel
+ * silent for an older reader would feel broken and there's no product
+ * scenario that wants it. Mirrors the explicit-set guard inside the
+ * panel render so the helper test pins the same truth table.
+ */
+export function resolveCaptionsVisibility(
+  age: number | null | undefined,
+  override: boolean | undefined,
+): boolean {
+  if (override === true) return true;
+  return captionsDefaultForAge(age);
+}

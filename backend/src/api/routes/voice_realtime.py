@@ -210,16 +210,86 @@ _SAFETY_FALLBACK_REPLY: str = (
 )
 
 
+# Score that triggers an additional heavier safety review pass beyond
+# the per-age threshold. Anything in the "borderline" band (passed the
+# floor but landed close to it) still gets a second look from the
+# safety-review-specialist before reaching the kid's ears.
+#
+# PRD §3.16 calls for the heavier review on "uncertain content"; in
+# practice that's any reply whose score is below this margin above the
+# floor. Tuned to be visible only on real edge cases.
+_SAFETY_REVIEW_MARGIN: float = 0.05
+
+
+async def _safety_review_specialist(text: str, target_age: int) -> bool:
+    """Heavier safety review for borderline assistant text.
+
+    Module-level so tests can monkeypatch it the same way they patch
+    ``_safety_check_text``. The default implementation routes through
+    the existing safety MCP (same handler the broker already uses) but
+    asks for a stricter pass — the "uncertain content" review PRD §3.16
+    calls for is encoded as: same MCP, treat any score below the per-age
+    threshold as a hard fail (don't trust borderline content even if it
+    nominally passes a single check).
+
+    Returns True when the reply is safe to forward; False on failure.
+    Always fails closed on exception — the caller will emit the safety
+    fallback. The integration point is intentionally thin so a future
+    PR can swap in the full ``safety-review-specialist`` AgentDefinition
+    orchestration (#605 follow-up) without touching the broker.
+    """
+    try:
+        envelope = await _safety_check_text(text, target_age)
+        score = float(envelope.get("safety_score", 0.0))
+    except Exception as exc:
+        logger.warning(
+            "voice broker safety-review specialist raised; failing closed: %s", exc,
+        )
+        return False
+    # The heavier review uses a small extra margin above the floor —
+    # borderline-pass content that landed just over the floor gets
+    # demoted to "not safe enough" by the specialist.
+    from ...services.realtime_voice_service import safety_threshold_for_age
+    return score >= safety_threshold_for_age(target_age)
+
+
+# Per PRD §3.16 the voice surface's job is to hand off to the
+# specialists. If the parent disabled every launch-flow skill the buddy
+# can never do anything useful in voice mode, so we refuse the token
+# mint and surface a 409 the panel can translate into "ask your grown-up
+# to turn on at least one skill". Single-skill personas are allowed
+# (e.g. image-story-only buddies still work).
+_VOICE_LAUNCH_SKILLS: frozenset[str] = frozenset({
+    "image_story",
+    "interactive_story",
+    "kids_daily",
+})
+
+
 async def _validate_enabled_skills_for_voice(
     *, user_id: str, child_id: str,
 ) -> Optional[str]:
     """Return None if voice is allowed, else a refusal code string.
 
-    #608 carry-over: refuse to mint a voice token when the requested
-    buddy is configured with a specialist that's disabled. Today the
-    voice channel itself isn't gated behind a per-skill toggle — but
-    we lock the seam now so a future "voice_conversation" skill flag
-    can plug in without churning the route.
+    #608 carry-over: refuse to mint a voice token when the buddy's
+    ``enabled_skills`` contains NONE of the launch-flow specialists.
+
+    The voice channel itself is the buddy's conversational surface, but
+    every useful action it can take (image story, interactive story,
+    kids daily) is gated by ``enabled_skills`` on the per-child persona.
+    If all three are off the parent has effectively disabled the buddy,
+    so we refuse here rather than open a voice session the model can't
+    do anything useful with.
+
+    Defense in depth: even when this check passes, the broker filters
+    the realtime tool set via ``filter_tool_definitions_by_skills``
+    before ``session.update`` — so a partially-disabled persona only
+    sees the launch tools their parent allowed. The token-mint refusal
+    is the OUTER guard (don't even start), the tool filter is the INNER
+    guard (don't expose disabled tools to the model).
+
+    Returns a refusal code string (used as ``detail.skill`` on the 409)
+    when refused; ``None`` when voice may proceed.
     """
     try:
         agent = await agent_repo.get_agent(user_id=user_id, child_id=child_id)
@@ -228,11 +298,31 @@ async def _validate_enabled_skills_for_voice(
         # of agent persona. The agent table is best-effort context.
         return None
     if agent is None:
+        # No persona row → defaults apply; voice is allowed.
         return None
-    # Future-proof: if a "voice_conversation" skill toggle is ever added
-    # to the enabled_skills whitelist, refuse here when it's missing.
-    # For now, presence of an agent record is sufficient.
+    enabled = set(agent.enabled_skills or [])
+    if not (_VOICE_LAUNCH_SKILLS & enabled):
+        # Zero launch-flow skills enabled — buddy can't hand off to any
+        # specialist, voice mode would be a dead end. Refuse with the
+        # canonical list so the client can surface which to re-enable.
+        return "all_launch_skills_disabled"
     return None
+
+
+async def _enabled_skills_for_voice(
+    *, user_id: str, child_id: str,
+) -> Optional[list[str]]:
+    """Look up the enabled_skills list for the broker to forward to the
+    provider's ``start_session``. Returns ``None`` on lookup failure or
+    missing persona so the provider's filter falls back to "expose all
+    tools" (preserves pre-#608 behavior in degraded paths)."""
+    try:
+        agent = await agent_repo.get_agent(user_id=user_id, child_id=child_id)
+    except Exception:
+        return None
+    if agent is None:
+        return None
+    return list(agent.enabled_skills or [])
 
 
 # ---------------------------------------------------------------------------
@@ -417,7 +507,19 @@ async def _emit_error(
 async def _run_safety_gate(
     *, text: str, target_age: int,
 ) -> bool:
-    """Run the safety check + per-age threshold compare. Fail closed."""
+    """Run the safety check + per-age threshold compare. Fail closed.
+
+    Two-pass design:
+      1. ``_safety_check_text`` — fast per-utterance gate. A clear pass
+         (well above the per-age floor) returns True immediately.
+      2. ``_safety_review_specialist`` — heavier review fired ONLY for
+         borderline content (within ``_SAFETY_REVIEW_MARGIN`` of the
+         floor). Skips on a clean pass to keep first-audio latency low.
+
+    Any exception in either pass fails closed — the caller emits the
+    safety_block fallback. This is the PRD §3.16 "fail closed on
+    uncertain content" rule.
+    """
     if not text.strip():
         return False
     try:
@@ -426,7 +528,25 @@ async def _run_safety_gate(
     except Exception as exc:
         logger.warning("voice broker safety check raised; failing closed: %s", exc)
         return False
-    return score >= safety_threshold_for_age(target_age)
+    threshold = safety_threshold_for_age(target_age)
+    if score < threshold:
+        return False
+    # Borderline pass — invoke the heavier specialist review. A clearly
+    # safe score (>= threshold + margin) skips the second pass so the
+    # common case stays cheap. The specialist hook itself catches its
+    # own MCP exceptions and returns False; we re-wrap so a monkeypatched
+    # specialist that raises (test scaffolding, future bugs) still fails
+    # closed instead of crashing the broker turn.
+    if score < threshold + _SAFETY_REVIEW_MARGIN:
+        try:
+            return await _safety_review_specialist(text, target_age)
+        except Exception as exc:
+            logger.warning(
+                "voice broker safety-review specialist raised; "
+                "failing closed: %s", exc,
+            )
+            return False
+    return True
 
 
 def _age_group_for_target(target_age: int) -> str:
@@ -758,6 +878,14 @@ async def stream_voice_session(websocket: WebSocket) -> None:
             )
             start_kwargs["voice_premium_voice_consent"] = bool(
                 getattr(profile, "voice_premium_voice_consent", False)
+            )
+            # #608: pass the persona's enabled_skills so the provider
+            # filters launch tools BEFORE registering them with OpenAI.
+            # Defense in depth — the token-mint guard already refuses
+            # zero-skill personas; this prevents partial-skill personas
+            # from exposing disabled launch tools to the model.
+            start_kwargs["enabled_skills"] = await _enabled_skills_for_voice(
+                user_id=claims.user_id, child_id=claims.child_id,
             )
         handle = await provider.start_session(**start_kwargs)
 

@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  captionsDefaultForAge,
   isEndButtonEnabled,
   isPanelVisible,
   nextPendingGate,
   pickIndicator,
+  resolveCaptionsVisibility,
   shouldShowEntryButton,
   shouldShowHeaderTalkPill,
   TALK_PANEL_STATE_COPY,
@@ -215,5 +217,68 @@ describe("shouldShowHeaderTalkPill (#636)", () => {
     for (const broken of cases) {
       expect(shouldShowHeaderTalkPill(broken, false, false)).toBe(false);
     }
+  });
+});
+
+describe("captionsDefaultForAge (#608)", () => {
+  // Per PRD §3.16: pre-readers (3-5) get captions OFF by default; the
+  // running text is distracting next to the BuddyOrb and they can't
+  // read it anyway. Older bands get captions ON so they can follow
+  // along + reread tricky words.
+  it("returns false for pre-reader ages (under 6)", () => {
+    expect(captionsDefaultForAge(3)).toBe(false);
+    expect(captionsDefaultForAge(4)).toBe(false);
+    expect(captionsDefaultForAge(5)).toBe(false);
+  });
+
+  it("returns true for the 6-8 band", () => {
+    expect(captionsDefaultForAge(6)).toBe(true);
+    expect(captionsDefaultForAge(7)).toBe(true);
+    expect(captionsDefaultForAge(8)).toBe(true);
+  });
+
+  it("returns true for the 9-12 band", () => {
+    expect(captionsDefaultForAge(9)).toBe(true);
+    expect(captionsDefaultForAge(12)).toBe(true);
+  });
+
+  it("returns true when the age is unknown (null / undefined)", () => {
+    // Defensive default — if the profile hasn't loaded yet, prefer
+    // showing captions. Worst case is a 3-year-old gets a few lines
+    // of text for a beat; the alternative (silently hiding captions
+    // for an older kid) would feel broken.
+    expect(captionsDefaultForAge(null)).toBe(true);
+    expect(captionsDefaultForAge(undefined)).toBe(true);
+  });
+
+  it("treats the 6-vs-5 boundary inclusively (6 is on, 5 is off)", () => {
+    // Lock the boundary so a future contributor can't drift it.
+    expect(captionsDefaultForAge(5)).toBe(false);
+    expect(captionsDefaultForAge(6)).toBe(true);
+  });
+});
+
+describe("resolveCaptionsVisibility (#608)", () => {
+  it("uses the per-age default when no override is passed", () => {
+    expect(resolveCaptionsVisibility(4, undefined)).toBe(false);
+    expect(resolveCaptionsVisibility(7, undefined)).toBe(true);
+    expect(resolveCaptionsVisibility(11, undefined)).toBe(true);
+  });
+
+  it("forces captions on when override is true (safety_block path)", () => {
+    // The whole point of the override: after a safety_block event,
+    // captions must auto-show regardless of age. This is the load-
+    // bearing path the panel uses to surface the fallback sentence.
+    expect(resolveCaptionsVisibility(4, true)).toBe(true);
+    expect(resolveCaptionsVisibility(3, true)).toBe(true);
+    expect(resolveCaptionsVisibility(null, true)).toBe(true);
+  });
+
+  it("ignores override=false to avoid accidentally silencing readers", () => {
+    // ``false`` would hide captions for an older kid who should see
+    // them. The override semantic is "force on" — explicit-false from
+    // a half-wired parent falls back to the per-age default.
+    expect(resolveCaptionsVisibility(8, false)).toBe(true);
+    expect(resolveCaptionsVisibility(4, false)).toBe(false);
   });
 });

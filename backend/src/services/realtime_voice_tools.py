@@ -305,6 +305,63 @@ def get_tool_definitions() -> list[Dict[str, Any]]:
 
 
 # ---------------------------------------------------------------------------
+# enabled_skills filter (#608 carry-over)
+# ---------------------------------------------------------------------------
+#
+# Defense in depth: the buddy persona (`user_agents.enabled_skills`) is the
+# parent-facing toggle. If a parent disables `kids_daily`, we MUST NOT
+# expose `launch_kids_daily` to the OpenAI Realtime model. Filtering the
+# tools list before `session.update` means the model literally cannot
+# call them — there's nothing to refuse later.
+#
+# Some tools are unconditional (every voice session needs them regardless
+# of persona): `recall_memory` (the buddy can always look up the kid's
+# own stories), `safety_review_reply` (always-on internal safety pump),
+# `end_call` (kids must always be able to say goodbye). These map to
+# ``None`` so the filter passes them through.
+
+TOOL_SKILL_REQUIREMENTS: Dict[str, Optional[str]] = {
+    "launch_image_story": "image_story",
+    "launch_interactive_story": "interactive_story",
+    "launch_kids_daily": "kids_daily",
+    "recall_memory": None,
+    "safety_review_reply": None,
+    "end_call": None,
+}
+
+
+def filter_tool_definitions_by_skills(
+    enabled_skills: Optional[Any],
+) -> list[Dict[str, Any]]:
+    """Return tool definitions with persona-disabled launch tools removed.
+
+    ``enabled_skills`` is a list/set/tuple of strings from
+    ``AgentData.enabled_skills``. ``None`` (no persona row) preserves
+    pre-#608 behavior — every tool is exposed. The model is then bound
+    by the dispatch table, which is the second line of defense.
+
+    Tools with a ``None`` requirement in ``TOOL_SKILL_REQUIREMENTS`` are
+    always exposed (memory recall, safety self-check, end call).
+    """
+    definitions = get_tool_definitions()
+    if enabled_skills is None:
+        return definitions
+    try:
+        enabled = {str(s) for s in enabled_skills}
+    except TypeError:
+        # Defensive: if a caller passes a non-iterable (shouldn't happen
+        # because the repo always coerces to list), keep the surface open
+        # rather than locking the kid out of every tool.
+        return definitions
+    filtered: list[Dict[str, Any]] = []
+    for d in definitions:
+        required = TOOL_SKILL_REQUIREMENTS.get(d.get("name", ""))
+        if required is None or required in enabled:
+            filtered.append(d)
+    return filtered
+
+
+# ---------------------------------------------------------------------------
 # Launch-flow helper (voice path)
 # ---------------------------------------------------------------------------
 
@@ -542,7 +599,9 @@ async def handle_tool_call(
 # registered flow names when wiring its routing table.
 __all__ = [
     "TOOL_VERSION",
+    "TOOL_SKILL_REQUIREMENTS",
     "ToolContext",
+    "filter_tool_definitions_by_skills",
     "get_tool_definitions",
     "handle_tool_call",
     "list_launch_flow_types",

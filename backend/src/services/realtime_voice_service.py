@@ -846,6 +846,7 @@ class OpenAIRealtimeProvider:
         persona: str = "buddy_default",
         voice_premium_voice: bool = False,
         voice_premium_voice_consent: bool = False,
+        enabled_skills: Optional[List[str]] = None,
     ) -> SessionHandle:
         # Tier-selection policy (#648): default ``gpt-realtime-mini`` and
         # only escalate when BOTH the per-child opt-in flag and the
@@ -980,7 +981,17 @@ class OpenAIRealtimeProvider:
                 # without a separate WS round-trip. The model-facing schema
                 # lives in `realtime_voice_tools.get_tool_definitions()`; the
                 # broker dispatches each call back through `handle_tool_call`.
-                from .realtime_voice_tools import get_tool_definitions
+                # #608 defense in depth: filter tools by the persona's
+                # enabled_skills BEFORE registering them so the model
+                # literally can't call a disabled launch flow. Falls back
+                # to the full list when no persona context was provided
+                # (preserves pre-#608 behavior for the legacy code paths).
+                from .realtime_voice_tools import (
+                    filter_tool_definitions_by_skills,
+                )
+                tools_for_session = filter_tool_definitions_by_skills(
+                    enabled_skills,
+                )
                 await upstream_ws.send(json.dumps({
                     "type": "session.update",
                     "session": {
@@ -990,7 +1001,7 @@ class OpenAIRealtimeProvider:
                         "input_audio_format": "pcm16",
                         "output_audio_format": "pcm16",
                         "input_audio_transcription": {"model": "whisper-1"},
-                        "tools": get_tool_definitions(),
+                        "tools": tools_for_session,
                     },
                 }))
             except Exception as exc:
