@@ -1,14 +1,12 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useQuery } from '@tanstack/react-query'
 import {
   ArrowRight,
   BookOpen,
-  CheckCircle2,
   Globe2,
   ImagePlus,
-  Mail,
   MessageCircle,
   Newspaper,
   Sparkles,
@@ -17,7 +15,6 @@ import { DepthLayer } from '@/components/depth/DepthLayer'
 import useAuthStore from '@/store/useAuthStore'
 import useDailyTaskStore from '@/store/useDailyTaskStore'
 import { libraryService, type LibraryItem } from '@/api/services/libraryService'
-import { emailSubscriptionService } from '@/api/services/emailSubscriptionService'
 import { fetchDailyInspiration, toDailyContent } from '@/api/services/inspirationService'
 import StarFlyAnimation from '@/components/daily/StarFlyAnimation'
 import { useNavRef } from '@/contexts/NavRefContext'
@@ -90,20 +87,18 @@ const HERO_ACTIONS = [
 
 const HERO_IMAGES = [
   {
-    src: '/images/hero-agentic-kid.png',
+    src: '/images/hero-agentic-kid.jpg',
     alt: 'A cheerful child creating with an AI buddy',
   },
   {
-    src: '/images/hero-agentic-girl.png',
+    src: '/images/hero-agentic-girl.jpg',
     alt: 'A cheerful girl drawing with an AI buddy',
   },
   {
-    src: '/images/hero-agentic-boy.png',
+    src: '/images/hero-agentic-boy.jpg',
     alt: 'A cheerful boy sketching with an AI buddy',
   },
 ]
-
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 function getItemRoute(item: LibraryItem): string {
   switch (item.type) {
@@ -207,8 +202,6 @@ function HomePage() {
   const { profileAvatarRef } = useNavRef()
   const newspaperRef = useRef<HTMLDivElement>(null)
   const [starFlying, setStarFlying] = useState(false)
-  const [email, setEmail] = useState('')
-  const [emailStatus, setEmailStatus] = useState<'idle' | 'invalid' | 'saving' | 'saved' | 'error'>('idle')
   const [newspaperVisible, setNewspaperVisible] = useState(true)
   const [heroActionIndex, setHeroActionIndex] = useState(0)
   const [heroImageIndex, setHeroImageIndex] = useState(0)
@@ -250,24 +243,6 @@ function HomePage() {
     setStarFlying(false)
     claimStar()
   }, [claimStar])
-
-  const handleEmailSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    const normalized = email.trim().toLowerCase()
-    if (!EMAIL_RE.test(normalized)) {
-      setEmailStatus('invalid')
-      return
-    }
-
-    setEmailStatus('saving')
-    try {
-      const result = await emailSubscriptionService.subscribeKidsDaily(normalized)
-      setEmail(result.email)
-      setEmailStatus('saved')
-    } catch {
-      setEmailStatus('error')
-    }
-  }
 
   const currentUserId = user?.user_id ?? 'anonymous'
   const { data: libraryData } = useQuery({
@@ -638,44 +613,27 @@ function HomePage() {
         >
           <div className="grid gap-5 md:grid-cols-[1fr_auto] md:items-center">
             <div>
-              <h2 className="text-xl font-bold text-gray-900">Get Kids Daily previews by email</h2>
+              <h2 className="text-xl font-bold text-gray-900">Explore Kids Daily with a family account</h2>
               <p className="mt-1 text-sm text-gray-600">
-                Leave a valid email address for parent-friendly previews. Sign in to unlock the full daily newspaper and topic subscriptions.
+                Sign in to unlock the daily newspaper, topic subscriptions, and saved episodes for each child profile.
               </p>
             </div>
-            <form onSubmit={handleEmailSubmit} className="flex w-full flex-col gap-2 sm:w-[360px] sm:flex-row">
-              <label className="sr-only" htmlFor="kids-daily-email">Email address</label>
-              <input
-                id="kids-daily-email"
-                type="email"
-                value={email}
-                onChange={(event) => {
-                  setEmail(event.target.value)
-                  setEmailStatus('idle')
-                }}
-                placeholder="parent@email.com"
-                autoComplete="email"
-                className="input-kid min-h-[48px] flex-1"
-              />
-              <button
-                type="submit"
-                disabled={emailStatus === 'saving'}
-                className="btn-secondary inline-flex min-h-[48px] items-center justify-center gap-2 px-4 disabled:cursor-wait disabled:opacity-70"
+            <div className="flex flex-col gap-2 sm:flex-row md:justify-end">
+              <Link
+                to="/login"
+                className="btn-primary inline-flex min-h-[48px] items-center justify-center gap-2 px-5"
               >
-                {emailStatus === 'saved' ? <CheckCircle2 size={18} /> : <Mail size={18} />}
-                {emailStatus === 'saving' ? 'Saving...' : emailStatus === 'saved' ? 'Saved' : 'Subscribe'}
-              </button>
-            </form>
+                <Newspaper size={18} />
+                Start Kids Daily
+              </Link>
+              <Link
+                to="/about-us"
+                className="btn-secondary inline-flex min-h-[48px] items-center justify-center gap-2 px-5"
+              >
+                About Creative Workshop
+              </Link>
+            </div>
           </div>
-          {emailStatus === 'invalid' && (
-            <p className="mt-2 text-sm font-semibold text-red-600">Please enter a valid email address.</p>
-          )}
-          {emailStatus === 'saved' && (
-            <p className="mt-2 text-sm font-semibold text-teal-700">Thanks. This email is subscribed to Kids Daily previews.</p>
-          )}
-          {emailStatus === 'error' && (
-            <p className="mt-2 text-sm font-semibold text-red-600">We could not save this email right now. Please try again.</p>
-          )}
         </motion.section>
       )}
 
