@@ -32,12 +32,31 @@ class _FakeSdkTool:
 
 
 @pytest.mark.asyncio
+async def test_call_mcp_tool_accepts_sdk_wrapped_tool():
+    async def fake_handler(args):
+        assert args == {"value": "demo"}
+        return {"ok": True}
+
+    result = await image_to_story_agent._call_mcp_tool(
+        _FakeSdkTool(fake_handler),
+        {"value": "demo"},
+    )
+
+    assert result == {"ok": True}
+
+
+@pytest.mark.asyncio
 async def test_direct_stream_pipeline_accepts_sdk_wrapped_mcp_tools(monkeypatch):
     async def fake_memory_prompt(*args, **kwargs):
         return ""
 
     async def fake_story_dedup(*args, **kwargs):
         return ""
+
+    async def fake_post_gen_safety(story_text, *args, **kwargs):
+        assert kwargs["content_type"] == "image_story"
+        assert kwargs["age_group"] == "6-8"
+        return story_text, 0.96, False
 
     async def fake_analyze(args):
         assert args["child_age"] == 7
@@ -87,6 +106,11 @@ async def test_direct_stream_pipeline_accepts_sdk_wrapped_mcp_tools(monkeypatch)
         image_to_story_agent,
         "_search_story_dedup",
         fake_story_dedup,
+    )
+    monkeypatch.setattr(
+        image_to_story_agent,
+        "enforce_post_gen_safety",
+        fake_post_gen_safety,
     )
 
     fake_anthropic = ModuleType("anthropic")
