@@ -1,6 +1,19 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ComponentType } from 'react'
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
+import {
+  BookOpen,
+  Bot,
+  ChevronDown,
+  DoorOpen,
+  Globe2,
+  ImagePlus,
+  Info,
+  Library,
+  LogIn,
+  Palette,
+  Newspaper,
+} from 'lucide-react'
 import { shouldRedirectToOnboarding } from './requireOnboarded'
 import { closeMenu, toggleMenu } from './mobileMenu'
 import { AnimatedBackground } from '@/components/depth/AnimatedBackground'
@@ -14,6 +27,7 @@ import useChildStore from '@/store/useChildStore'
 import { authService } from '@/api/services/authService'
 import { performFullLogout } from '@/utils/logout'
 import { NavRefProvider, useNavRef } from '@/contexts/NavRefContext'
+import { PUBLIC_NAV_ITEMS } from './publicNav'
 
 const CHILD_SELECTION_PATHS = new Set([
   '/upload',
@@ -21,6 +35,18 @@ const CHILD_SELECTION_PATHS = new Set([
   '/kids-daily',
   '/my-agent',
 ])
+
+const CREATION_NAV_ITEMS = [
+  { to: '/upload', label: 'Art to Story', description: 'Draw into a narrated story', icon: ImagePlus },
+  { to: '/interactive', label: 'Interactive Tales', description: 'Choose the next chapter', icon: BookOpen },
+  { to: '/kids-daily', label: 'Kids Daily', description: 'Explore the world gently', icon: Newspaper },
+]
+
+const APP_NAV_ITEMS = [
+  { to: '/my-agent', icon: BotIcon, label: 'My Agent' },
+  { to: '/content-hub', icon: GlobeIcon, label: 'Content Hub' },
+  { to: '/library', icon: LibraryIcon, label: 'My Library' },
+]
 
 function PageContainer() {
   return (
@@ -43,6 +69,7 @@ function PageContainerInner() {
     switchActiveChild,
   } = useChildStore()
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [featureMenuOpen, setFeatureMenuOpen] = useState(false)
   const activeProfiles = childProfiles.filter((child) => !child.archived_at)
   const shouldPickActiveChild =
     isAuthenticated &&
@@ -89,6 +116,7 @@ function PageContainerInner() {
   // the menu open over fresh page content.
   useEffect(() => {
     setMobileOpen(closeMenu())
+    setFeatureMenuOpen(false)
   }, [location.pathname])
 
   const handleLogout = async () => {
@@ -113,16 +141,16 @@ function PageContainerInner() {
       <ConfettiController />
       {/* Navigation bar */}
       <nav className="bg-white/80 backdrop-blur-md shadow-sm sticky top-0 z-40 relative">
-        <div className="max-w-4xl mx-auto px-4 py-3">
+        <div className="mx-auto max-w-7xl px-4 py-3 sm:px-6">
           <div className="flex items-center justify-between">
             {/* Logo */}
             <Link to="/" className="flex items-center gap-2 group">
               <motion.span
-                className="text-3xl"
+                className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary"
                 whileHover={{ rotate: [0, -10, 10, 0] }}
                 transition={{ duration: 0.5 }}
               >
-                🎨
+                <Palette size={22} />
               </motion.span>
               <span className="text-xl font-bold text-gradient">
                 Creative Workshop
@@ -131,9 +159,25 @@ function PageContainerInner() {
 
             {/* Desktop navigation links — unchanged on >= 768px */}
             <div className="hidden md:flex items-center gap-4">
-              <NavLink to="/library" icon="📚" label="My Library" />
-              <NavLink to="/my-agent" icon="🤖" label="My Agent" />
-              <NavLink to="/content-hub" icon="🌐" label="Content Hub" />
+              {isAuthenticated ? (
+                <>
+                  <FeatureNavSelect
+                    onSelect={(path) => navigate(path)}
+                    currentPath={location.pathname}
+                    open={featureMenuOpen}
+                    onOpenChange={setFeatureMenuOpen}
+                  />
+                  {APP_NAV_ITEMS.map((item) => (
+                    <NavLink key={item.to} to={item.to} icon={item.icon} label={item.label} />
+                  ))}
+                </>
+              ) : (
+                <div className="flex items-center gap-1">
+                  {PUBLIC_NAV_ITEMS.map((item) => (
+                    <PublicNavLink key={item.href} href={item.href} label={item.label} />
+                  ))}
+                </div>
+              )}
 
               {/* Auth section */}
               {isAuthenticated ? (
@@ -168,7 +212,7 @@ function PageContainerInner() {
                     whileTap={{ scale: 0.95 }}
                     title="Sign Out"
                   >
-                    🚪
+                    <DoorOpen size={20} />
                   </motion.button>
                 </div>
               ) : (
@@ -178,7 +222,7 @@ function PageContainerInner() {
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                   >
-                    <span>👤</span>
+                    <LogIn size={18} />
                     <span>Sign In</span>
                   </motion.div>
                 </Link>
@@ -279,24 +323,40 @@ function PageContainerInner() {
 
               {/* Drawer nav links */}
               <div className="flex-1 overflow-y-auto px-3 py-4 flex flex-col gap-1">
-                <MobileNavLink
-                  to="/library"
-                  icon="📚"
-                  label="My Library"
-                  onNavigate={handleCloseMobile}
-                />
-                <MobileNavLink
-                  to="/my-agent"
-                  icon="🤖"
-                  label="My Agent"
-                  onNavigate={handleCloseMobile}
-                />
-                <MobileNavLink
-                  to="/content-hub"
-                  icon="🌐"
-                  label="Content Hub"
-                  onNavigate={handleCloseMobile}
-                />
+                {isAuthenticated ? (
+                  <>
+                    <MobileFeatureNavSelect
+                      onSelect={(path) => {
+                        handleCloseMobile()
+                        navigate(path)
+                      }}
+                      currentPath={location.pathname}
+                    />
+                    {APP_NAV_ITEMS.map((item) => (
+                      <MobileNavLink
+                        key={item.to}
+                        to={item.to}
+                        icon={item.icon}
+                        label={item.label}
+                        onNavigate={handleCloseMobile}
+                      />
+                    ))}
+                  </>
+                ) : (
+                  <div className="grid gap-1">
+                    {PUBLIC_NAV_ITEMS.map((item) => (
+                      <a
+                        key={item.href}
+                        href={item.href}
+                        onClick={handleCloseMobile}
+                        className="flex min-h-[44px] items-center gap-3 rounded-btn px-4 py-3 font-medium text-gray-700 hover:bg-gray-100"
+                      >
+                        <Info size={18} />
+                        <span>{item.label}</span>
+                      </a>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Drawer footer: auth */}
@@ -332,7 +392,7 @@ function PageContainerInner() {
                       }}
                       className="flex items-center gap-3 px-3 py-3 rounded-btn min-h-[44px] text-gray-500 hover:bg-gray-100 hover:text-red-500 transition-colors text-left"
                     >
-                      <span aria-hidden="true">🚪</span>
+                      <DoorOpen size={18} />
                       <span className="text-sm font-medium">Sign Out</span>
                     </button>
                   </div>
@@ -342,7 +402,7 @@ function PageContainerInner() {
                     onClick={handleCloseMobile}
                     className="flex items-center justify-center gap-2 min-h-[44px] px-4 py-3 rounded-btn font-medium bg-secondary text-white shadow-button"
                   >
-                    <span aria-hidden="true">👤</span>
+                    <LogIn size={18} />
                     <span>Sign In</span>
                   </Link>
                 )}
@@ -356,7 +416,7 @@ function PageContainerInner() {
       <GenerationStatusBar />
 
       {/* Main content area */}
-      <main className="max-w-4xl mx-auto px-4 py-8 relative z-10">
+      <main className="relative z-10 mx-auto max-w-7xl px-4 py-8 sm:px-6">
         <AnimatePresence mode="wait">
           <motion.div
             key={location.pathname}
@@ -377,33 +437,151 @@ function PageContainerInner() {
         </AnimatePresence>
       </main>
 
-      {/* Footer decoration */}
-      <footer className="py-8 text-center relative z-10">
-        <div className="flex justify-center gap-4 text-4xl mb-4">
-          <motion.span
-            animate={{ y: [0, -5, 0] }}
-            transition={{ duration: 2, repeat: Infinity, delay: 0 }}
-          >
-            🌟
-          </motion.span>
-          <motion.span
-            animate={{ y: [0, -5, 0] }}
-            transition={{ duration: 2, repeat: Infinity, delay: 0.3 }}
-          >
-            🎈
-          </motion.span>
-          <motion.span
-            animate={{ y: [0, -5, 0] }}
-            transition={{ duration: 2, repeat: Infinity, delay: 0.6 }}
-          >
-            🌈
-          </motion.span>
-        </div>
+      <footer className="relative z-10 border-t border-white/60 py-8 text-center">
         <p className="text-gray-500 text-sm">
           Paint your imagination, light up childhood with stories
         </p>
       </footer>
     </div>
+  )
+}
+
+function FeatureNavSelect({
+  onSelect,
+  currentPath,
+  open,
+  onOpenChange,
+}: {
+  onSelect: (path: string) => void
+  currentPath: string
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}) {
+  const activeItem = CREATION_NAV_ITEMS.find((item) => item.to === currentPath)
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => onOpenChange(!open)}
+        onBlur={() => window.setTimeout(() => onOpenChange(false), 120)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className={`inline-flex min-h-[42px] items-center gap-2 rounded-lg border px-3 py-2 text-sm font-bold shadow-sm transition
+          ${activeItem
+            ? 'border-primary/25 bg-primary/10 text-primary'
+            : 'border-gray-200 bg-white/80 text-gray-700 hover:border-primary/25 hover:bg-white'
+          }`}
+      >
+        <span>{activeItem?.label ?? 'Features'}</span>
+        <ChevronDown
+          size={16}
+          className={`transition-transform ${open ? 'rotate-180' : ''}`}
+        />
+      </button>
+
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            role="menu"
+            className="absolute left-0 top-[calc(100%+10px)] z-50 w-[360px] rounded-lg border border-gray-200 bg-white p-2 shadow-xl"
+            initial={{ opacity: 0, y: -6, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -6, scale: 0.98 }}
+            transition={{ duration: 0.16 }}
+          >
+            <div className="grid gap-1">
+              {CREATION_NAV_ITEMS.map((item) => {
+                const Icon = item.icon
+                const isActive = currentPath === item.to
+                return (
+                  <button
+                    key={item.to}
+                    type="button"
+                    role="menuitem"
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => {
+                      onOpenChange(false)
+                      onSelect(item.to)
+                    }}
+                    className={`rounded-lg p-3 text-left transition ${
+                      isActive
+                        ? 'bg-primary/10 text-primary'
+                        : 'text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    <Icon size={20} className="mb-2" />
+                    <span className="block text-sm font-bold">{item.label}</span>
+                    <span className="mt-0.5 block text-xs leading-snug text-gray-500">
+                      {item.description}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  )
+}
+
+function MobileFeatureNavSelect({
+  onSelect,
+  currentPath,
+}: {
+  onSelect: (path: string) => void
+  currentPath: string
+}) {
+  return (
+    <div className="mb-3 rounded-lg border border-gray-200 bg-gray-50 p-2">
+      <p className="px-2 pb-2 text-xs font-bold uppercase tracking-wide text-gray-500">
+        Features
+      </p>
+      <div className="grid gap-1">
+        {CREATION_NAV_ITEMS.map((item) => {
+          const Icon = item.icon
+          const isActive = currentPath === item.to
+          return (
+            <button
+              key={item.to}
+              type="button"
+              onClick={() => onSelect(item.to)}
+              className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-left transition ${
+                isActive
+                  ? 'bg-primary text-white shadow-button'
+                  : 'bg-white text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              <Icon size={18} />
+              <span>
+                <span className="block text-sm font-bold">{item.label}</span>
+                <span className={`block text-xs ${isActive ? 'text-white/80' : 'text-gray-500'}`}>
+                  {item.description}
+                </span>
+              </span>
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function PublicNavLink({
+  href,
+  label,
+}: {
+  href: string
+  label: string
+}) {
+  return (
+    <a
+      href={href}
+      className="rounded-lg px-3 py-2 text-sm font-bold text-gray-600 transition hover:bg-white hover:text-gray-900"
+    >
+      {label}
+    </a>
   )
 }
 
@@ -524,7 +702,7 @@ function avatarLabel(child: { avatar?: string | null }) {
   if (child.avatar?.startsWith('emoji:')) {
     return child.avatar.replace('emoji:', '')
   }
-  return '🎨'
+  return 'Child'
 }
 
 function NavLink({
@@ -533,11 +711,12 @@ function NavLink({
   label,
 }: {
   to: string
-  icon: string
+  icon: ComponentType<{ size?: number; className?: string }>
   label: string
 }) {
   const location = useLocation()
   const isActive = location.pathname === to
+  const Icon = icon
 
   return (
     <Link to={to}>
@@ -550,7 +729,7 @@ function NavLink({
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.95 }}
       >
-        <span>{icon}</span>
+        <Icon size={18} />
         <span>{label}</span>
       </motion.div>
     </Link>
@@ -564,12 +743,13 @@ function MobileNavLink({
   onNavigate,
 }: {
   to: string
-  icon: string
+  icon: ComponentType<{ size?: number; className?: string }>
   label: string
   onNavigate: () => void
 }) {
   const location = useLocation()
   const isActive = location.pathname === to
+  const Icon = icon
 
   return (
     <Link
@@ -582,12 +762,22 @@ function MobileNavLink({
             : 'text-gray-700 hover:bg-gray-100'
         }`}
     >
-      <span aria-hidden="true" className="text-xl">
-        {icon}
-      </span>
+      <Icon size={20} />
       <span>{label}</span>
     </Link>
   )
+}
+
+function BotIcon(props: { size?: number; className?: string }) {
+  return <Bot {...props} />
+}
+
+function GlobeIcon(props: { size?: number; className?: string }) {
+  return <Globe2 {...props} />
+}
+
+function LibraryIcon(props: { size?: number; className?: string }) {
+  return <Library {...props} />
 }
 
 export default PageContainer
