@@ -26,7 +26,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Optional
+from typing import Iterable, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
@@ -37,7 +37,7 @@ from ...models import (
     ListHubPostsResponse,
 )
 from ....mcp_servers import check_content_safety
-from ....services.database import group_repo, hub_post_repo
+from ....services.database import group_repo, hub_post_repo, session_repo
 from ....services.achievement_service import FIRST_SHARED_POST, achievement_service
 from ....services.user_service import UserData
 
@@ -139,6 +139,56 @@ async def _ensure_member(group_id: str, user: UserData, child_id: str) -> None:
         )
 
 
+async def _ensure_source_resolves(
+    source_artifact_type: str,
+    source_id: str,
+    *,
+    user: UserData,
+    child_id: str,
+) -> None:
+    """Reject transient interactive shares whose session cannot resume.
+
+    Art-story and Kids Daily shares point at durable story rows. The
+    dangling-post bug in #656 is specific to interactive-story posts
+    pointing at transient `sessions` rows, so this keeps the fix scoped
+    to that high-risk source type.
+    """
+    if source_artifact_type != "interactive_story":
+        return
+
+    session = await session_repo.get_session(source_id)
+    if (
+        session is None
+        or session.user_id != user.user_id
+        or session.child_id != child_id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_412_PRECONDITION_FAILED,
+            detail={"code": "SOURCE_NOT_FOUND"},
+        )
+
+
+async def _hide_unresolvable_posts(posts: Iterable) -> list:
+    """Filter and soft-remove visible posts whose interactive source vanished."""
+    visible = []
+    for post in posts:
+        if post.source_artifact_type != "interactive_story":
+            visible.append(post)
+            continue
+
+        session = await session_repo.get_session(post.source_id)
+        if (
+            session is None
+            or session.user_id != post.author_user_id
+            or session.child_id != post.author_child_id
+        ):
+            await hub_post_repo.soft_delete(post.post_id, reason="source_not_found")
+            continue
+
+        visible.append(post)
+    return visible
+
+
 # ---------------------------------------------------------------------------
 # Create
 # ---------------------------------------------------------------------------
@@ -175,6 +225,13 @@ async def create_post(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={"code": "INVALID_SOURCE_TYPE"},
         )
+
+    await _ensure_source_resolves(
+        body.source_artifact_type,
+        body.source_id,
+        user=user,
+        child_id=child_id,
+    )
 
     safety_score = 1.0
     caption = body.caption
@@ -260,13 +317,14 @@ async def list_posts(
     if cursor_created_at and cursor_post_id:
         before = (cursor_created_at, cursor_post_id)
 
-    posts = await hub_post_repo.list_by_group(
+    raw_posts = await hub_post_repo.list_by_group(
         group_id, limit=limit, before=before
     )
+    posts = await _hide_unresolvable_posts(raw_posts)
     items = [_to_response(p) for p in posts]
     next_cursor: Optional[dict] = None
-    if posts and len(posts) == limit:
-        last = posts[-1]
+    if raw_posts and len(raw_posts) == limit:
+        last = raw_posts[-1]
         next_cursor = {
             "cursor_created_at": last.created_at,
             "cursor_post_id": last.post_id,
