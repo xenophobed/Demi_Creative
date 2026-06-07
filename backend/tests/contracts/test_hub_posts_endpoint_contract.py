@@ -33,6 +33,7 @@ from backend.src.services.database import (
     db_manager,
     group_repo,
     hub_post_repo,
+    session_repo,
 )
 from backend.src.services.database.connection import DatabaseManager
 from backend.src.services.database.schema import init_schema
@@ -279,6 +280,136 @@ class TestCreateGates:
             )
         assert r.status_code == 201, r.text
         assert r.json()["source_artifact_type"] == "kids_daily"
+
+
+# ---------------------------------------------------------------------------
+# Source validation (#656)
+# ---------------------------------------------------------------------------
+
+
+class TestSourceValidation:
+    @pytest.mark.asyncio
+    async def test_missing_interactive_source_is_rejected_without_post(self, client):
+        await _seed_buddy(_OWNER)
+        gid = await _create_public_group(client)
+
+        r = await client.post(
+            f"/api/v1/hub/groups/{gid}/posts",
+            json={
+                "source_artifact_type": "interactive_story",
+                "source_id": "missing-session",
+            },
+        )
+
+        assert r.status_code == 412
+        assert r.json()["detail"]["code"] == "SOURCE_NOT_FOUND"
+        row = await db_manager.fetchone(
+            "SELECT 1 FROM hub_posts WHERE source_id = ?",
+            ("missing-session",),
+        )
+        assert row is None
+
+    @pytest.mark.asyncio
+    async def test_valid_interactive_source_can_be_shared(self, client):
+        await _seed_buddy(_OWNER)
+        gid = await _create_public_group(client)
+        session = await session_repo.create_session(
+            child_id=_OWNER.default_child_id,
+            story_title="River Quest",
+            age_group="6-8",
+            interests=["nature"],
+            user_id=_OWNER.user_id,
+        )
+
+        r = await client.post(
+            f"/api/v1/hub/groups/{gid}/posts",
+            json={
+                "source_artifact_type": "interactive_story",
+                "source_id": session.session_id,
+            },
+        )
+
+        assert r.status_code == 201, r.text
+        assert r.json()["source_id"] == session.session_id
+
+    @pytest.mark.asyncio
+    async def test_other_child_interactive_source_is_rejected_without_post(self, client):
+        await _seed_buddy(_OWNER)
+        gid = await _create_public_group(client)
+        session = await session_repo.create_session(
+            child_id=_PEER.default_child_id,
+            story_title="Peer Quest",
+            age_group="6-8",
+            interests=["nature"],
+            user_id=_PEER.user_id,
+        )
+
+        r = await client.post(
+            f"/api/v1/hub/groups/{gid}/posts",
+            json={
+                "source_artifact_type": "interactive_story",
+                "source_id": session.session_id,
+            },
+        )
+
+        assert r.status_code == 412
+        assert r.json()["detail"]["code"] == "SOURCE_NOT_FOUND"
+        row = await db_manager.fetchone(
+            "SELECT 1 FROM hub_posts WHERE source_id = ?",
+            (session.session_id,),
+        )
+        assert row is None
+
+    @pytest.mark.asyncio
+    async def test_orphaned_interactive_post_is_hidden_from_feed(self, client):
+        await _seed_buddy(_OWNER)
+        gid = await _create_public_group(client)
+        orphan = await hub_post_repo.create_post(
+            group_id=gid,
+            user_id=_OWNER.user_id,
+            child_id=_OWNER.default_child_id,
+            source_artifact_type="interactive_story",
+            source_id="missing-session",
+        )
+
+        r = await client.get(f"/api/v1/hub/groups/{gid}/posts")
+
+        assert r.status_code == 200
+        source_ids = {item["source_id"] for item in r.json()["items"]}
+        assert "missing-session" not in source_ids
+        hidden = await hub_post_repo.get_by_id(orphan.post_id)
+        assert hidden is not None
+        assert hidden.removed_at is not None
+        assert hidden.removed_reason == "source_not_found"
+
+    @pytest.mark.asyncio
+    async def test_mismatched_interactive_post_is_hidden_from_feed(self, client):
+        await _seed_buddy(_OWNER)
+        gid = await _create_public_group(client)
+        session = await session_repo.create_session(
+            child_id=_PEER.default_child_id,
+            story_title="Peer Quest",
+            age_group="6-8",
+            interests=["nature"],
+            user_id=_PEER.user_id,
+        )
+        stale = await hub_post_repo.create_post(
+            group_id=gid,
+            user_id=_OWNER.user_id,
+            child_id=_OWNER.default_child_id,
+            source_artifact_type="interactive_story",
+            source_id=session.session_id,
+        )
+
+        r = await client.get(f"/api/v1/hub/groups/{gid}/posts")
+
+        assert r.status_code == 200
+        source_ids = {item["source_id"] for item in r.json()["items"]}
+        assert session.session_id not in source_ids
+        hidden = await hub_post_repo.get_by_id(stale.post_id)
+        assert hidden is not None
+        assert hidden.removed_at is not None
+        assert hidden.removed_reason == "source_not_found"
 
 
 # ---------------------------------------------------------------------------
