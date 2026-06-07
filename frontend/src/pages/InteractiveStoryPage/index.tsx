@@ -29,8 +29,10 @@ import type { AnimationPhase } from "@/types/streaming";
 import ShareToHubModal from "@/components/hub/ShareToHubModal";
 import LoginPrompt from "@/components/common/LoginPrompt";
 import SuggestedThemes from "@/components/common/SuggestedThemes";
-
-type PageState = "setup" | "playing" | "completed";
+import {
+  getInteractiveStoryPageState,
+  type InteractiveStoryPageState,
+} from "./pageState";
 
 const AGE_GROUPS: { value: AgeGroup; label: string; emoji: string }[] = [
   { value: "3-5", label: "3-5 yrs", emoji: "🧒" },
@@ -49,20 +51,11 @@ const STORY_LENGTHS: {
   { value: "unlimited", label: "Endless Adventure", sublabel: "No limit", emoji: "🌟" },
 ];
 
-function InteractiveStoryPage() {
+function InteractiveStoryPageContent() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { isAuthenticated } = useAuthStore();
   const { currentChild, defaultChildId } = useChildStore();
   const childId = currentChild?.child_id || defaultChildId;
-
-  if (!isAuthenticated) {
-    return (
-      <div className="max-w-lg mx-auto mt-12">
-        <LoginPrompt feature="play interactive stories" />
-      </div>
-    );
-  }
 
   // Local form state
   const [selectedAge, setSelectedAge] = useState<AgeGroup | null>(
@@ -208,7 +201,7 @@ function InteractiveStoryPage() {
       const timer = setTimeout(() => setIsRevealing(false), 2000);
       return () => clearTimeout(timer);
     }
-  }, [currentSegment?.segment_id, streaming.isStreaming]);
+  }, [currentSegment, streaming.isStreaming]);
 
   // Reset on-demand audio when segment changes
   useEffect(() => {
@@ -241,14 +234,11 @@ function InteractiveStoryPage() {
   }, [isCompleted, triggerConfetti]);
 
   // Determine page state — show setup while resuming/validating
-  const getPageState = (): PageState => {
-    if (isResuming) return "setup";
-    if (isCompleted) return "completed";
-    if (currentSegment) return "playing";
-    return "setup";
-  };
-
-  const pageState = getPageState();
+  const pageState: InteractiveStoryPageState = getInteractiveStoryPageState({
+    isResuming,
+    isCompleted,
+    hasCurrentSegment: !!currentSegment,
+  });
 
   // Toggle interest selection
   const toggleInterest = (interest: string) => {
@@ -683,6 +673,26 @@ function InteractiveStoryPage() {
         </motion.div>
       )}
 
+      {/* Resume loading view */}
+      {pageState === "resuming" && (
+        <motion.div
+          className="space-y-6"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+        >
+          <Card>
+            <StreamingVisualizer
+              phase="connecting"
+              message="Opening your story..."
+              thinkingContent=""
+              layout="card"
+              showParticles={false}
+              showSparkles
+            />
+          </Card>
+        </motion.div>
+      )}
+
       {/* Playing View */}
       {pageState === "playing" && currentSegment && (
         <motion.div
@@ -867,6 +877,20 @@ function InteractiveStoryPage() {
       )}
     </div>
   );
+}
+
+function InteractiveStoryPage() {
+  const { isAuthenticated } = useAuthStore();
+
+  if (!isAuthenticated) {
+    return (
+      <div className="max-w-lg mx-auto mt-12">
+        <LoginPrompt feature="play interactive stories" />
+      </div>
+    );
+  }
+
+  return <InteractiveStoryPageContent />;
 }
 
 export default InteractiveStoryPage;
