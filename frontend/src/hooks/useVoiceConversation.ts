@@ -44,6 +44,7 @@ import {
   type VoiceConversationEvent,
   type VoiceConversationState,
 } from "./voiceConversationStateMachine";
+import { voiceTelemetry } from "@/utils/voiceTelemetry";
 
 export type VoiceErrorKind =
   | "auth"
@@ -189,6 +190,13 @@ export function useVoiceConversation(
   const lastSpeechAtRef = useRef<number | null>(null);
   const firstAboveAtRef = useRef<number | null>(null);
   const sentVadEndRef = useRef(false);
+  // #609 telemetry — session id + start timestamp read from inside WS
+  // callbacks (avoids the stale-closure trap of reading `sessionId`
+  // state). first-audio/ended guards ensure each fires at most once.
+  const sessionIdRef = useRef<string | null>(null);
+  const sessionStartedAtRef = useRef<number | null>(null);
+  const firstAudioEmittedRef = useRef(false);
+  const endedEmittedRef = useRef(false);
 
   const send = useCallback(
     (event: VoiceConversationEvent) => dispatch(event),
@@ -393,6 +401,22 @@ export function useVoiceConversation(
     });
   }
 
+  // #609 telemetry — emit the client-perceived session-end event at most
+  // once per session. Both ws.onclose and the WebRTC teardown can race to
+  // close, so the ref guard keeps the histogram honest.
+  function emitSessionEndedOnce(reason: string) {
+    if (endedEmittedRef.current) return;
+    const sid = sessionIdRef.current;
+    if (!sid) return;
+    endedEmittedRef.current = true;
+    const startedAt = sessionStartedAtRef.current;
+    voiceTelemetry.sessionEnded({
+      sessionId: sid,
+      durationSeconds: startedAt != null ? (nowMs() - startedAt) / 1000 : 0,
+      endedReason: reason,
+    });
+  }
+
   function handleServerFrame(raw: string) {
     const event = parseServerEvent(raw);
     if (event.type === "bad_json") return;
@@ -427,6 +451,20 @@ export function useVoiceConversation(
           for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
           ttsChunksRef.current.push(bytes);
           lastTtsChunkAtRef.current = nowMs();
+          // #609 telemetry — client-perceived time-to-first-audio: the
+          // gap from session open to the first audio byte the device
+          // actually received. Fires once; complements the server-side
+          // forward-time histogram.
+          if (!firstAudioEmittedRef.current && sessionIdRef.current) {
+            firstAudioEmittedRef.current = true;
+            const startedAt = sessionStartedAtRef.current;
+            if (startedAt != null) {
+              voiceTelemetry.firstAudioMs({
+                sessionId: sessionIdRef.current,
+                firstAudioMs: nowMs() - startedAt,
+              });
+            }
+          }
           scheduleTtsEndProbe();
         } catch {
           onError?.("network", "Failed to decode audio chunk");
@@ -441,6 +479,15 @@ export function useVoiceConversation(
         // the panel (#608). Reset on the next start().
         setSafetyBlockedSeen(true);
         onCaption?.({ kind: "safety_block", text: event.fallback_text });
+        // #609 telemetry — a turn was blocked; record which side without
+        // ever logging the (unsafe) text. category mirrors the direction.
+        if (sessionIdRef.current) {
+          voiceTelemetry.safetyRejection({
+            sessionId: sessionIdRef.current,
+            direction: event.direction,
+            category: `${event.direction}_blocked`,
+          });
+        }
         break;
       case "quota_exhausted":
         onError?.("quota", `Voice quota exhausted. Remaining: ${event.seconds_remaining ?? 0}s`);
@@ -775,6 +822,16 @@ export function useVoiceConversation(
       }
       send({ type: "tokenReceived" });
       setSessionId(response.session_id);
+      // #609 telemetry — client-perceived session open. Refs (not state)
+      // so the WS callbacks below read a fresh value, not a stale closure.
+      sessionIdRef.current = response.session_id;
+      sessionStartedAtRef.current = nowMs();
+      firstAudioEmittedRef.current = false;
+      endedEmittedRef.current = false;
+      voiceTelemetry.sessionStarted({
+        sessionId: response.session_id,
+        provider: response.provider_config?.provider,
+      });
 
       // #647: branch on the negotiated transport. The WebRTC path is
       // strictly an optimization — any failure path retries once with
@@ -792,6 +849,10 @@ export function useVoiceConversation(
       wsRef.current = ws;
       ws.onopen = () => send({ type: "wsOpen" });
       ws.onclose = (ev) => {
+        // #609 telemetry — client-perceived session end. Fires once for
+        // both graceful (1000) and abnormal closes; ended_reason maps the
+        // WS close code to a coarse bucket the dashboard can group on.
+        emitSessionEndedOnce(ev.code === 1000 ? "client_closed" : `ws_${ev.code}`);
         if (ev.code !== 1000) {
           send({ type: "streamError" });
           onError?.("network", `WebSocket closed: ${ev.code}`);
