@@ -1228,6 +1228,8 @@ class AgentChatMessageItem(BaseModel):
     message_id: str = Field(..., description="Stable message identifier")
     role: str = Field(..., description="'user' or 'assistant'")
     text: str = Field(..., description="Message text")
+    input_modality: Literal["text", "voice"] = Field(default="text")
+    output_modality: Literal["text", "voice"] = Field(default="text")
     result_metadata: dict = Field(default_factory=dict, description="Structured launch/result payload, if any")
     created_at: str = Field(..., description="When the message was stored")
 

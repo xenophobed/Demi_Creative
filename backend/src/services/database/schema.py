@@ -368,6 +368,8 @@ CREATE TABLE IF NOT EXISTS agent_chat_messages (
     session_id TEXT NOT NULL,
     role TEXT NOT NULL,
     text TEXT NOT NULL,
+    input_modality TEXT NOT NULL DEFAULT 'text',
+    output_modality TEXT NOT NULL DEFAULT 'text',
     result_metadata TEXT NOT NULL DEFAULT '{}',
     created_at TEXT NOT NULL,
     FOREIGN KEY(session_id) REFERENCES agent_chat_sessions(session_id) ON DELETE CASCADE
@@ -586,6 +588,7 @@ async def init_schema(db: "DatabaseManager") -> None:
     await _migrate_add_user_agent_config_columns(db)
     await _migrate_create_agent_chat_tables(db)
     await _migrate_add_agent_chat_session_columns(db)
+    await _migrate_add_agent_chat_message_modality_columns(db)
     await _migrate_create_hub_groups_table(db)
     await _migrate_create_hub_group_memberships_table(db)
     await _migrate_create_hub_posts_table(db)
@@ -1219,6 +1222,30 @@ async def _migrate_add_agent_chat_session_columns(db: "DatabaseManager") -> None
     if added:
         await db.commit()
         print("Agent chat session columns migration completed")
+
+
+async def _migrate_add_agent_chat_message_modality_columns(db: "DatabaseManager") -> None:
+    """Migration: tag My Agent chat messages by input/output modality (#668)."""
+    columns = [
+        (
+            "input_modality",
+            "ALTER TABLE agent_chat_messages ADD COLUMN input_modality TEXT NOT NULL DEFAULT 'text'",
+        ),
+        (
+            "output_modality",
+            "ALTER TABLE agent_chat_messages ADD COLUMN output_modality TEXT NOT NULL DEFAULT 'text'",
+        ),
+    ]
+    added = False
+    for column_name, ddl in columns:
+        if not await column_exists(db, "agent_chat_messages", column_name):
+            if not added:
+                print("Migrating agent_chat_messages: adding modality columns...")
+                added = True
+            await db.execute(ddl)
+    if added:
+        await db.commit()
+        print("Agent chat message modality migration completed")
 
 
 async def _migrate_create_hub_groups_table(db: "DatabaseManager") -> None:

@@ -172,13 +172,30 @@ class TestGetSessionMessages:
         s = await agent_chat_repo.get_or_create_session(
             user_id=_USER_A.user_id, child_id=_CHILD_A
         )
-        await agent_chat_repo.add_message(session_id=s.session_id, role="user", text="first")
-        await agent_chat_repo.add_message(session_id=s.session_id, role="assistant", text="second")
+        await agent_chat_repo.add_message(
+            session_id=s.session_id,
+            role="user",
+            text="first",
+            input_modality="voice",
+            output_modality="text",
+        )
+        await agent_chat_repo.add_message(
+            session_id=s.session_id,
+            role="assistant",
+            text="second",
+            input_modality="text",
+            output_modality="voice",
+        )
 
         r = await client.get(f"/api/v1/me/agent/sessions/{s.session_id}/messages")
         assert r.status_code == 200, r.text
         texts = [m["text"] for m in r.json()["messages"]]
         assert texts == ["first", "second"]
+        modalities = [
+            (m["input_modality"], m["output_modality"])
+            for m in r.json()["messages"]
+        ]
+        assert modalities == [("voice", "text"), ("text", "voice")]
 
     @pytest.mark.asyncio
     async def test_foreign_session_returns_404(self, client):

@@ -1072,6 +1072,8 @@ async def stream_my_agent_chat(
     image_path: Optional[str] = None,
     age_group: Optional[str] = None,
     interests: Optional[list[str]] = None,
+    input_modality: str = "text",
+    output_modality: str = "text",
 ) -> AsyncGenerator[str, None]:
     """Stream an SDK-orchestrated My Agent chat response as SSE."""
     chat_session = await agent_chat_repo.get_or_create_session(
@@ -1090,7 +1092,11 @@ async def stream_my_agent_chat(
             )
             session_title = derived_title
     await agent_chat_repo.add_message(
-        session_id=chat_session.session_id, role="user", text=message
+        session_id=chat_session.session_id,
+        role="user",
+        text=message,
+        input_modality=input_modality,
+        output_modality="text",
     )
 
     yield _sse(
@@ -1152,6 +1158,8 @@ async def stream_my_agent_chat(
             session_id=chat_session.session_id,
             role="assistant",
             text=final_text,
+            input_modality="text",
+            output_modality=output_modality,
             result_metadata=result_payload,
         )
         yield _sse("result", result_payload)
@@ -1183,6 +1191,8 @@ async def stream_my_agent_chat(
             session_id=chat_session.session_id,
             role="assistant",
             text=final_text,
+            input_modality="text",
+            output_modality=output_modality,
             result_metadata=result_payload,
         )
         yield _sse("result", result_payload)
@@ -1385,6 +1395,8 @@ async def stream_my_agent_chat(
         session_id=chat_session.session_id,
         role="assistant",
         text=final_text,
+        input_modality="text",
+        output_modality=output_modality,
         result_metadata=result_payload,
     )
     yield _sse("result", result_payload)

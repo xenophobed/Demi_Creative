@@ -491,6 +491,8 @@ async def get_agent_session_messages(
                 message_id=m.message_id,
                 role=m.role,
                 text=m.text,
+                input_modality=m.input_modality,
+                output_modality=m.output_modality,
                 result_metadata=m.result_metadata,
                 created_at=m.created_at,
             )
