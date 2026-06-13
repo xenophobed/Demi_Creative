@@ -15,6 +15,7 @@ import pytest
 import pytest_asyncio
 from fastapi.testclient import TestClient
 from httpx import ASGITransport, AsyncClient
+from starlette.websockets import WebSocketDisconnect
 
 from backend.src.api.deps import get_current_user
 from backend.src.api.routes import voice_realtime
@@ -457,6 +458,15 @@ class TestSessionRowPersistence:
                 f"/api/v1/me/agent/voice/stream?token={token}"
             ) as ws:
                 ws.send_json({"type": "client_done"})
+                # Drain until the server closes the socket so the broker's
+                # finally block (where end_session is called) has fully run
+                # before we assert. Without this the assertion races the
+                # portal thread — any added latency on the session-start
+                # path (e.g. the #609 telemetry agent_id lookup) could let
+                # the assertion fire before end_session is awaited.
+                with pytest.raises(WebSocketDisconnect):
+                    while True:
+                        ws.receive_json()
         finally:
             app.dependency_overrides.pop(get_current_user, None)
             voice_realtime._set_test_provider_override(None)
