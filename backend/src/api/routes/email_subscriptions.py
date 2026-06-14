@@ -1,6 +1,6 @@
 """Public email subscription routes for Kids Daily previews."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, status
 
@@ -26,7 +26,7 @@ router = APIRouter(
 async def subscribe_kids_daily_email(
     request: KidsDailyEmailSubscriptionRequest,
 ) -> KidsDailyEmailSubscriptionResponse:
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
 
     try:
         await db_manager.execute(
