@@ -810,13 +810,25 @@ export function useVoiceConversation(
           prefer_webrtc: preferWebRTC || undefined,
         });
       } catch (err) {
-        const status = (err as { response?: { status?: number } })?.response?.status;
+        const responseError = err as {
+          response?: {
+            status?: number;
+            data?: { detail?: { seconds_remaining?: number } };
+          };
+        };
+        const status = responseError.response?.status;
         const kind: VoiceErrorKind =
           status === 409 ? "auth"
           : status === 429 ? "quota"
           : status === 404 ? "auth"
           : "network";
-        onError?.(kind, err instanceof Error ? err.message : String(err));
+        const secondsRemaining =
+          responseError.response?.data?.detail?.seconds_remaining;
+        const detail =
+          kind === "quota"
+            ? `Voice quota exhausted. Remaining: ${secondsRemaining ?? 0}s`
+            : err instanceof Error ? err.message : String(err);
+        onError?.(kind, detail);
         send({ type: "streamError" });
         return;
       }

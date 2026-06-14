@@ -28,6 +28,53 @@ export const TALK_PANEL_STATE_COPY: Record<VoiceConversationState, string> = {
     "Voice chat isn't available on this device. You can keep using typed chat.",
 };
 
+export const TALK_PANEL_SCREEN_READER_COPY: Record<VoiceConversationState, string> = {
+  idle: "Voice chat is idle.",
+  connecting: "Voice chat is connecting.",
+  listening: "Voice chat is listening.",
+  thinking: "Buddy is thinking.",
+  speaking: "Buddy is speaking.",
+  interrupted: "Buddy heard the interruption.",
+  ending: "Voice chat is ending.",
+  error: "Voice chat needs attention.",
+  unsupported: "Voice chat is not supported on this device.",
+};
+
+export function talkPanelScreenReaderState(
+  state: VoiceConversationState,
+  partialTranscript: string,
+  assistantText: string,
+): string {
+  const base = TALK_PANEL_SCREEN_READER_COPY[state];
+  const heard = partialTranscript.trim();
+  const reply = assistantText.trim();
+  if (reply) return `${base} Buddy says: ${reply}`;
+  if (heard) return `${base} Heard: ${heard}`;
+  return base;
+}
+
+export function reducedMotionStatusPill(
+  state: VoiceConversationState,
+): string | null {
+  if (state === "listening" || state === "interrupted") return "Listening";
+  if (state === "thinking") return "Thinking";
+  if (state === "speaking") return "Speaking";
+  return null;
+}
+
+export function voiceQuotaNoticeCopy(
+  secondsRemaining: number | null | undefined,
+): string {
+  const remaining = Math.max(0, Math.floor(secondsRemaining ?? 0));
+  if (remaining <= 0) {
+    return "Voice time is used up for today. You can keep chatting by typing.";
+  }
+  if (remaining <= 60) {
+    return "Voice time is almost done for today. You can keep chatting by typing when it ends.";
+  }
+  return `Voice time remaining today: ${Math.ceil(remaining / 60)} minutes.`;
+}
+
 /**
  * Capability + consent + child-profile preconditions for the Talk
  * button to appear on AgentChatPanel. All four must be true.

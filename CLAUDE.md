@@ -127,6 +127,14 @@ CHROMA_PATH=./data/vectors
 All AI-generated content MUST pass through `check_content_safety` MCP tool before delivery.
 Safety score threshold: >= 0.85. The `suggest_content_improvements` tool is used to fix failing content.
 
+<a id="_safety-best-practices"></a>
+#### Safety Best Practices
+
+- Streaming surfaces must fail closed before user-visible delivery. For Talk to Buddy, this means the child utterance is checked before it reaches the My Agent proxy, and the buddy reply is checked again before any TTS/audio frame is sent.
+- Do not persist raw child audio. Durable voice history is transcript-only and must use bounded modality fields such as `input_modality` and `output_modality`.
+- Telemetry must use bounded reason codes and numeric timing/count fields only. Never log child speech, buddy reply text, raw audio, or free-form prompt content.
+- Provider fallback must preserve the same safety gates. Switching between mock, hybrid, and OpenAI realtime providers must not bypass consent, quota, enabled-skill, or pre-TTS moderation checks.
+
 ### Age Adaptation
 Stories must be adapted to the child's age group (3-5, 6-8, 9-12). See `backend/src/prompts/age-adapter.md` for rules.
 
