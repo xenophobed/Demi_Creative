@@ -121,6 +121,18 @@ def date_format_sql(column: str, fmt: str, dialect: str) -> str:
     return f"to_char({column}::timestamp, '{pg_fmt}')"
 
 
+def group_concat_sql(column: str, separator: str, dialect: str) -> str:
+    """
+    Generate SQL to concatenate grouped row values into one string.
+
+    SQLite:     GROUP_CONCAT(column, 'separator')
+    PostgreSQL: string_agg(column::text, 'separator')
+    """
+    if dialect == "sqlite":
+        return f"GROUP_CONCAT({column}, '{separator}')"
+    return f"string_agg({column}::text, '{separator}')"
+
+
 def ci_equals(column: str, dialect: str) -> str:
     """
     Generate a case-insensitive equality clause for a column.

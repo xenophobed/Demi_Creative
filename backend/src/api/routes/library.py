@@ -22,7 +22,7 @@ from ...services.database import (
 )
 from ...services.database.artifact_repository import StoryArtifactLinkRepository
 from ...services.database.connection import db_manager
-from ...services.database.sql_compat import date_format_sql
+from ...services.database.sql_compat import date_format_sql, group_concat_sql
 from ...services.user_service import UserData
 from ...utils.text import count_words
 from ..deps import get_current_user
@@ -627,8 +627,8 @@ async def get_rich_stats(
             {period_expr} AS period,
             COUNT(*) AS cnt,
             COALESCE(SUM(word_count), 0) AS total_words,
-            GROUP_CONCAT(themes, '||') AS all_themes,
-            GROUP_CONCAT(story_type, '||') AS all_types
+            {group_concat_sql("themes", "||", db_manager.dialect)} AS all_themes,
+            {group_concat_sql("story_type", "||", db_manager.dialect)} AS all_types
         FROM stories
         WHERE user_id = ?
           AND (safety_score IS NULL OR safety_score >= ?)
