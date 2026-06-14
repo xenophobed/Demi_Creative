@@ -1,6 +1,10 @@
 # Environment
 .env
 *.env
+# local/backup env variants: .env.local, .env.bak, etc.
+.env.*
+# keep tracked example/template env files
+!.env.example
 backend/.env
 venv/
 backend/venv/
@@ -37,7 +41,12 @@ data/sessions/
 data/uploads/
 data/audio/
 data/vectors/
+# runtime video job outputs
+data/video_jobs/
 backend/data/
+
+# Node (root-level deps; frontend/node_modules covered below)
+/node_modules/
 
 # Frontend artifacts
 frontend/node_modules/
