@@ -7,6 +7,7 @@
  */
 
 import type { VoiceConversationState } from "@/hooks/voiceConversationStateMachine";
+import type { AgeGroup } from "@/types/api";
 
 /**
  * User-facing status copy keyed by the voiceConversationStateMachine
@@ -199,4 +200,47 @@ export function resolveCaptionsVisibility(
 ): boolean {
   if (override === true) return true;
   return captionsDefaultForAge(age);
+}
+
+/**
+ * Age-adapted entry-surface copy for the header "Start Talking" pill
+ * (#638). Locks the labels to the PRD §3.16.6 age-adaptation table so
+ * the visible CTA can't drift away from the spec:
+ *
+ * | 3-5                | 6-8                  | 9-12              |
+ * | giant emoji + Talk!| "Talk to {buddy}"    | mic icon + Voice  |
+ *
+ * Design choices (per PRD):
+ *   - 3-5 (pre-readers): a single playful word + a big mic emoji. The
+ *     buddy name is deliberately omitted — a 4-year-old recognises the
+ *     emoji, not the persona's name.
+ *   - 6-8: the buddy NAME leads ("Talk to Sparky") because the personal
+ *     relationship is the motivator at this age; no emoji to keep it
+ *     reading like a sentence.
+ *   - 9-12: terse, tool-like "Voice" with a mic icon — older kids treat
+ *     it as a mode switch, not a character interaction.
+ *
+ * Reuses the canonical ``AgeGroup`` from ``@/types/api`` rather than a
+ * local copy so a future fourth band (there isn't one today) can't drift
+ * between modules. ``emoji`` is the empty string for 6-8 — the consuming
+ * JSX renders the emoji span only when non-empty.
+ */
+export interface HeaderCTACopy {
+  label: string;
+  emoji: string;
+}
+
+export function headerCTACopy(
+  ageGroup: AgeGroup,
+  buddyName: string,
+): HeaderCTACopy {
+  switch (ageGroup) {
+    case "3-5":
+      return { label: "Talk!", emoji: "🎤" };
+    case "9-12":
+      return { label: "Voice", emoji: "🎤" };
+    case "6-8":
+    default:
+      return { label: `Talk to ${buddyName}`, emoji: "" };
+  }
 }

@@ -42,6 +42,7 @@ import TalkToBuddyPanel, {
   type TalkToBuddyPanelVariant,
 } from "./TalkToBuddyPanel";
 import {
+  headerCTACopy,
   nextPendingGate,
   shouldShowEntryButton,
   shouldShowHeaderTalkPill,
@@ -307,6 +308,11 @@ export default function AgentChatPanel({
       isTalkOpen,
     );
 
+  // #638: age-adapt the header pill's visible label + emoji from the
+  // PRD §3.16.6 table. Falls back to the 6-8 band when the child's age
+  // group hasn't loaded — a readable, name-led default for any reader.
+  const headerCta = headerCTACopy(ageGroup ?? "6-8", agent.agent_name);
+
   const handleOpenTalk = () => {
     if (talkEntryReady) {
       setIsTalkOpen(true);
@@ -474,8 +480,10 @@ export default function AgentChatPanel({
               title={`Start talking with ${agent.agent_name}`}
               aria-label={`Start talking with ${agent.agent_name}`}
             >
-              <span aria-hidden="true">💬</span>
-              <span>Start Talking</span>
+              {headerCta.emoji && (
+                <span aria-hidden="true">{headerCta.emoji}</span>
+              )}
+              <span>{headerCta.label}</span>
             </button>
           )}
           {/* Consents-missing fallback: surface the entry as "Ask"
