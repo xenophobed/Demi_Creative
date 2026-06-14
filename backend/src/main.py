@@ -378,6 +378,7 @@ from .api.routes import (
     audio,
     audio_transcriptions,
     child_profiles,
+    email_subscriptions,
     hub,
     image_to_story,
     inspiration_daily,
@@ -399,6 +400,7 @@ app.include_router(interactive_story.router)
 app.include_router(audio.router)
 app.include_router(audio_transcriptions.router)
 app.include_router(child_profiles.router)
+app.include_router(email_subscriptions.router)
 app.include_router(video.router)
 app.include_router(voice.router)
 app.include_router(users.router)

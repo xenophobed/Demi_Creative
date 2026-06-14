@@ -217,6 +217,22 @@ CREATE INDEX IF NOT EXISTS idx_topic_subscriptions_topic ON topic_subscriptions(
 CREATE INDEX IF NOT EXISTS idx_topic_subscriptions_is_active ON topic_subscriptions(is_active);
 """
 
+KIDS_DAILY_EMAIL_SUBSCRIPTIONS_TABLE = """
+CREATE TABLE IF NOT EXISTS kids_daily_email_subscriptions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    email TEXT UNIQUE NOT NULL,
+    source TEXT NOT NULL DEFAULT 'homepage',
+    subscribed_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    is_active INTEGER DEFAULT 1
+);
+"""
+
+KIDS_DAILY_EMAIL_SUBSCRIPTIONS_INDEXES = """
+CREATE INDEX IF NOT EXISTS idx_kids_daily_email_subscriptions_email ON kids_daily_email_subscriptions(email);
+CREATE INDEX IF NOT EXISTS idx_kids_daily_email_subscriptions_active ON kids_daily_email_subscriptions(is_active);
+"""
+
 # ============================================================================
 # Characters Table (#160)
 # ============================================================================
@@ -522,6 +538,15 @@ async def init_schema(db: "DatabaseManager") -> None:
     # Create topic subscriptions table (#94)
     await db.execute(translate_ddl(TOPIC_SUBSCRIPTIONS_TABLE, d))
     for stmt in TOPIC_SUBSCRIPTIONS_INDEXES.strip().split(";"):
+        if stmt.strip():
+            try:
+                await db.execute(stmt)
+            except Exception:
+                pass
+
+    # Public Kids Daily email preview subscriptions
+    await db.execute(translate_ddl(KIDS_DAILY_EMAIL_SUBSCRIPTIONS_TABLE, d))
+    for stmt in KIDS_DAILY_EMAIL_SUBSCRIPTIONS_INDEXES.strip().split(";"):
         if stmt.strip():
             try:
                 await db.execute(stmt)

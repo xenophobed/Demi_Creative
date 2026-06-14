@@ -599,6 +599,26 @@ class SubscriptionListResponse(BaseModel):
     total: int = Field(..., description="Total subscriptions")
 
 
+class KidsDailyEmailSubscriptionRequest(BaseModel):
+    """Public Kids Daily preview email subscription request"""
+    email: str = Field(..., min_length=5, max_length=254, description="Email address")
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, v: str) -> str:
+        normalized = v.strip().lower()
+        if not re.match(r"^[^\s@]+@[^\s@]+\.[^\s@]+$", normalized):
+            raise ValueError("Invalid email format")
+        return normalized
+
+
+class KidsDailyEmailSubscriptionResponse(BaseModel):
+    """Public Kids Daily preview email subscription response"""
+    email: str = Field(..., description="Subscribed email address")
+    subscribed_at: datetime = Field(..., description="Subscription timestamp")
+    message: str = Field(default="subscribed", description="Operation result message")
+
+
 class KidsDailyTrackEvent(str, Enum):
     """Kids Daily playback event type"""
     START = "start"
