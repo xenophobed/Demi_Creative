@@ -74,6 +74,7 @@ from ...services.voice_ephemeral_token import (
     mint_voice_token,
     verify_voice_token,
 )
+from ...services import voice_telemetry
 from ...mcp_servers import check_content_safety
 from ...agents.my_agent_proxy import stream_my_agent_chat
 
@@ -308,6 +309,21 @@ async def _validate_enabled_skills_for_voice(
         # canonical list so the client can surface which to re-enable.
         return "all_launch_skills_disabled"
     return None
+
+
+async def _agent_id_for_voice(
+    *, user_id: str, child_id: str,
+) -> Optional[str]:
+    """Best-effort lookup of the persona's surrogate ``agent_id`` for the
+    ``voice_session_started`` telemetry event. Returns ``None`` on lookup
+    failure or a default (no-persona) buddy — telemetry must never block
+    a session, so this swallows errors and lets the event carry a null
+    agent_id rather than raising."""
+    try:
+        agent = await agent_repo.get_agent(user_id=user_id, child_id=child_id)
+    except Exception:
+        return None
+    return agent.agent_id if agent is not None else None
 
 
 async def _enabled_skills_for_voice(
@@ -607,6 +623,12 @@ async def _dispatch_function_call(
         # model so the client transition feels in sync with the buddy's
         # spoken handoff sentence.
         await _send_event(websocket, {"type": "launch_flow", **payload})
+        # #609 telemetry — voice drove the kid INTO a creation flow; the
+        # target flow type is the key engagement signal for the surface.
+        voice_telemetry.emit_voice_session_launch_flow_emitted(
+            session_id=handle.session_id,
+            flow=str(payload.get("flow_type") or "unknown"),
+        )
         ack_output = json.dumps({"status": "launched", "flow_type": payload.get("flow_type")})
     elif envelope_type == "end_call":
         # Don't ack the model — we're closing. Just remember to break.
@@ -695,6 +717,14 @@ async def _stream_openai_reply(
             "direction": "reply",
             "fallback_text": _SAFETY_FALLBACK_REPLY,
         })
+        # #609 telemetry — the buddy's reply text failed the pre-TTS gate
+        # and was never forwarded. Category is a bounded reason code; the
+        # rejected text itself is never logged.
+        voice_telemetry.emit_voice_session_safety_rejection(
+            session_id=handle.session_id,
+            direction="reply",
+            category="reply_unsafe",
+        )
         return
 
     # Safe path: emit the assistant text + forward the audio chunks.
@@ -797,6 +827,16 @@ async def _stream_legacy_reply(
             "direction": "reply",
             "fallback_text": _SAFETY_FALLBACK_REPLY,
         })
+        # #609 telemetry — the buddy's reply text failed the pre-TTS gate
+        # and was never forwarded. Category is a bounded reason code; the
+        # rejected text itself is never logged.
+        voice_telemetry.emit_voice_session_safety_rejection(
+            session_id=handle.session_id,
+            direction="reply",
+            category="reply_unsafe",
+        )
+        # #668 — preserve the chat_session_id return contract so the caller
+        # keeps the session id rather than losing it to a bare return.
         return chat_session_id
 
     await _send_event(websocket, {
@@ -910,6 +950,11 @@ async def stream_voice_session(websocket: WebSocket) -> None:
         "started_at_monotonic": started_at,
         "first_audio_ms": None,
         "last_activity_monotonic": started_at,
+        # #609 telemetry — barge-in tracking. No interruption signal is
+        # wired in the broker yet (full-duplex barge-in is a follow-up),
+        # so this stays 0 until that lands; the event still fires at close
+        # so the histogram schema exists from day one.
+        "interruption_count": 0,
     }
 
     idle_timeout = _idle_timeout_for(age_group)
@@ -942,6 +987,18 @@ async def stream_voice_session(websocket: WebSocket) -> None:
                 user_id=claims.user_id, child_id=claims.child_id,
             )
         handle = await provider.start_session(**start_kwargs)
+
+        # #609 telemetry — session opened. agent_id is a best-effort
+        # lookup so the dashboard can slice voice engagement by persona;
+        # a null agent_id just means a default (no-persona) buddy.
+        voice_telemetry.emit_voice_session_started(
+            session_id=claims.session_id,
+            age_group=age_group,
+            agent_id=await _agent_id_for_voice(
+                user_id=claims.user_id, child_id=claims.child_id,
+            ),
+            provider=provider.name,
+        )
 
         while True:
             # Compute the next deadline — whichever fires first wins.
@@ -1026,6 +1083,16 @@ async def stream_voice_session(websocket: WebSocket) -> None:
                             "direction": "utterance",
                             "fallback_text": _SAFETY_FALLBACK_REPLY,
                         },
+                    )
+                    # #609 telemetry — record WHICH side tripped the gate
+                    # without ever logging the (unsafe) transcript text.
+                    voice_telemetry.emit_voice_session_safety_rejection(
+                        session_id=claims.session_id,
+                        direction="utterance",
+                        category=(
+                            "empty_transcript" if not transcript.text
+                            else "transcript_unsafe"
+                        ),
                     )
                     continue
 
@@ -1119,6 +1186,26 @@ async def stream_voice_session(websocket: WebSocket) -> None:
             prompt_cache_hit=prompt_cache_hit,
             first_audio_ms=state.get("first_audio_ms") or 0,
             ended_reason=termination_reason,
+        )
+        # #609 product/engagement telemetry — distinct from the cost line
+        # above. ``voice_session_ended`` powers the abnormal-termination
+        # alerting; the first-audio + interruption events feed the latency
+        # histogram and the reply-length tuning signal. All fire exactly
+        # once per session because they live in the broker's finally block.
+        voice_telemetry.emit_voice_session_ended(
+            session_id=claims.session_id,
+            duration_seconds=elapsed,
+            ended_reason=termination_reason,
+        )
+        if state.get("first_audio_ms") is not None:
+            voice_telemetry.emit_voice_session_first_audio_ms(
+                session_id=claims.session_id,
+                first_audio_ms=state["first_audio_ms"],
+                age_group=age_group,
+            )
+        voice_telemetry.emit_voice_session_interruption_count(
+            session_id=claims.session_id,
+            count=int(state.get("interruption_count") or 0),
         )
         if handle is not None:
             try:
