@@ -1355,6 +1355,8 @@ The existing tear-to-claim-star mechanic (Epic #371) is preserved:
 
 > Each child has a customized AI companion ("creative buddy") that serves as their personal creative assistant and as the public byline whenever they share work in Content Hub (§3.12). The buddy is the privacy primitive: real names, usernames, and emails are never shown publicly — only the buddy the child crafted.
 
+> Voice cross-reference: Talk to Buddy (§3.16) is the realtime spoken surface for this same buddy. It reuses the My Agent proxy, memory, safety, and launch-flow contracts defined in §3.11.7 rather than introducing a separate voice-only assistant.
+
 #### 3.11.1 Product Vision
 
 **Core purpose**: Give every child a stable, customized creative companion that grows with them. The buddy answers: *"Who's making this with me, and who do I show up as when I share?"*
@@ -1979,6 +1981,8 @@ Two parallel tracks:
 
 Two-way spoken conversation between the child and their My Agent buddy on `/my-agent`. Voice is a new I/O surface on top of the existing My Agent proxy (§3.11.7) — the proxy, memory wiring (§3.5), safety pipeline (§3.4), `launch_flow` handoffs, and Content Hub byline (§3.12) are all unchanged. Text-chat replies stay text-only in v1; voice is a separate surface, not a TTS overlay on text chat.
 
+Architecture reference: `docs/architecture/talk-to-buddy.md` documents the provider abstraction, fail-closed safety pipeline, transcript-only persistence invariant, and telemetry events.
+
 ### 3.16.1 Problem
 The buddy promise is companionship. Ages 3-5 cannot read the buddy's text replies, and ages 6-12 find typing slow on tablets. The existing one-shot `VoiceInputButton` (§3.15) lets a child speak a single prompt, but the buddy still answers in silence. That breaks the "creative buddy" pitch for the core pre-reader cohort and creates an unnatural rhythm for tablet users.
 
@@ -2007,7 +2011,7 @@ Both are parent-PIN-gated via `ParentApprovalPage`. The consent screen explicitl
 
 ### 3.16.5 Frontend Entry & Layout
 - **Entry surface (v2 — supersedes the FAB pattern from PR #633):** a prominent "Start Talking" pill in the **`AgentChatPanel` header**, gated by `shouldShowEntryButton` (capability + both consents + active child + not currently text-streaming + not already in voice mode).
-- **In-place layout (replaces the full-screen overlay):** tapping the header pill swaps the composer textarea/send region for an **inline voice bubble** — the `TalkToBuddyPanel` mounted with `variant="inline"`. The message list above stays scrollable and visible; voice transcripts merge into the same list via `useAgentChatStore.appendVoiceCaption`. Tapping **End** unmounts the bubble and re-mounts the composer with focus restored to the textarea.
+- **In-place layout (replaces the full-screen overlay):** tapping the header pill swaps the composer textarea/send region for an **inline voice bubble** — the `TalkToBuddyPanel` mounted with `variant="inline"`. The message list above stays scrollable and visible; finalized voice turns persist into the same chat history as text turns with voice modality fields. Tapping **End** unmounts the bubble and re-mounts the composer with focus restored to the textarea.
 - **Why this beats the overlay+FAB pattern**: a single conversation surface, no modality jump, kid never sees two input affordances at once, scroll history stays anchored.
 - **Why the entry stays inside `AgentChatPanel` (not global `PageContainer` chrome)**: only meaningful on `/my-agent` with a buddy + consents; cross-page header would re-litigate the "Ask"/"Talk" header-pill decision from commit `e31c2aa0`. The same rule applies — the entry surface lives where the action lives.
 - **Setup path unchanged**: when `talkEntryReady === false`, the header pill is hidden. The empty-state onboarding banner from PR #633 (when consents are missing) remains the parent-setup affordance.

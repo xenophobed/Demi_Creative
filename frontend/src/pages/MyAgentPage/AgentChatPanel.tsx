@@ -46,6 +46,7 @@ import {
   nextPendingGate,
   shouldShowEntryButton,
   shouldShowHeaderTalkPill,
+  voiceQuotaNoticeCopy,
   type PendingGate,
 } from "./talkToBuddyHelpers";
 import {
@@ -821,9 +822,27 @@ function TalkToBuddyContainer({
 }) {
   void ageGroup; // Future: thread per-age TTS preset overrides (Phase C, #608).
 
+  const [voiceNotice, setVoiceNotice] = useState<string | null>(null);
   const voice = useVoiceConversation({
     childId,
     persona,
+    onError: (kind, detail) => {
+      if (kind === "quota") {
+        const match = detail?.match(/Remaining:\s*(\d+)s/i);
+        const remaining = match ? Number(match[1]) : 0;
+        setVoiceNotice(voiceQuotaNoticeCopy(remaining));
+        return;
+      }
+      if (kind === "auth") {
+        setVoiceNotice("A grown-up needs to allow voice before you can talk.");
+        return;
+      }
+      if (kind === "safety") {
+        setVoiceNotice("Buddy paused that part. You can try a different idea.");
+        return;
+      }
+      setVoiceNotice("Voice chat had a problem. You can keep chatting by typing.");
+    },
   });
 
   const prefersReducedMotion =
@@ -857,10 +876,17 @@ function TalkToBuddyContainer({
       // kid sees the fallback sentence the buddy speaks. The signal is
       // sticky for the rest of the session — reset on next start().
       captionsVisibleOverride={voice.safetyBlockedSeen ? true : undefined}
-      onStart={() => voice.start(true)}
+      onStart={() => {
+        setVoiceNotice(null);
+        void voice.start(true);
+      }}
       onEnd={handleEnd}
-      onRetry={voice.retry}
+      onRetry={() => {
+        setVoiceNotice(null);
+        voice.retry();
+      }}
       onClose={onClose}
+      noticeText={voiceNotice}
       variant={variant}
     />
   );

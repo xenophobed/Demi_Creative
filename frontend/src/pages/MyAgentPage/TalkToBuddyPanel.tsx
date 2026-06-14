@@ -28,8 +28,10 @@ import { motion } from "framer-motion";
 import {
   isEndButtonEnabled,
   isPanelVisible,
+  reducedMotionStatusPill,
   resolveCaptionsVisibility,
   TALK_PANEL_STATE_COPY,
+  talkPanelScreenReaderState,
 } from "./talkToBuddyHelpers";
 import { pickOrbMode } from "./buddyOrbHelpers";
 import { BuddyOrb } from "./BuddyOrb";
@@ -70,6 +72,8 @@ export interface TalkToBuddyPanelProps {
   /** Optional close button for the panel itself (separate from End).
    *  Hidden in `inline` variant where the bubble unmounts on End. */
   onClose?: () => void;
+  /** Optional non-transcript notice from the voice hook (quota, auth, network). */
+  noticeText?: string | null;
   /** Layout. Default `overlay` preserves PR #620's behavior. */
   variant?: TalkToBuddyPanelVariant;
 }
@@ -99,11 +103,20 @@ export function TalkToBuddyPanel({
   onEnd,
   onRetry,
   onClose,
+  noticeText,
   variant = "overlay",
 }: TalkToBuddyPanelProps) {
   if (!isPanelVisible(state)) return null;
 
   const status = TALK_PANEL_STATE_COPY[state];
+  const screenReaderStatus = talkPanelScreenReaderState(
+    state,
+    partialTranscript,
+    assistantText,
+  );
+  const staticMotionLabel = prefersReducedMotion
+    ? reducedMotionStatusPill(state)
+    : null;
   const orbMode = pickOrbMode(state, prefersReducedMotion);
   const endEnabled = isEndButtonEnabled(state);
   const canStart = state === "idle" || state === "error";
@@ -213,6 +226,34 @@ export function TalkToBuddyPanel({
         >
           {status}
         </p>
+        <p role="status" aria-live="polite" className="sr-only">
+          {screenReaderStatus}
+        </p>
+
+        {staticMotionLabel && (
+          <div
+            className={
+              isInline
+                ? "mx-auto mb-2 w-fit rounded-full border border-violet-200 bg-white px-3 py-1 text-[11px] font-semibold text-violet-700"
+                : "mx-auto mb-3 w-fit rounded-full border border-violet-200 bg-white px-3 py-1 text-xs font-semibold text-violet-700"
+            }
+          >
+            {staticMotionLabel}
+          </div>
+        )}
+
+        {noticeText && (
+          <div
+            role="status"
+            className={
+              isInline
+                ? "mb-2 rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900"
+                : "mb-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900"
+            }
+          >
+            {noticeText}
+          </div>
+        )}
 
         {captionsVisible && partialTranscript && (
           <div
@@ -250,7 +291,7 @@ export function TalkToBuddyPanel({
           <motion.button
             type="button"
             onClick={onStart}
-            whileTap={{ scale: 0.97 }}
+            whileTap={prefersReducedMotion ? undefined : { scale: 0.97 }}
             className={startButtonClass}
           >
             {state === "error" ? "Try Again" : "Start Talking"}

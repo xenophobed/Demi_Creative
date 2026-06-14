@@ -6,10 +6,13 @@ import {
   isPanelVisible,
   nextPendingGate,
   pickIndicator,
+  reducedMotionStatusPill,
   resolveCaptionsVisibility,
   shouldShowEntryButton,
   shouldShowHeaderTalkPill,
   TALK_PANEL_STATE_COPY,
+  talkPanelScreenReaderState,
+  voiceQuotaNoticeCopy,
 } from "@/pages/MyAgentPage/talkToBuddyHelpers";
 import type { VoiceConversationState } from "@/hooks/voiceConversationStateMachine";
 
@@ -143,6 +146,40 @@ describe("pickIndicator (#618)", () => {
     for (const state of staticStates) {
       expect(pickIndicator(state, false)).toBe("static");
     }
+  });
+});
+
+describe("Talk-to-Buddy accessibility and quota copy (#609)", () => {
+  it("announces transcript text when the child is being heard", () => {
+    expect(
+      talkPanelScreenReaderState("listening", "hi buddy", ""),
+    ).toContain("Heard: hi buddy");
+  });
+
+  it("announces buddy text ahead of partial transcript text", () => {
+    const copy = talkPanelScreenReaderState(
+      "speaking",
+      "hi buddy",
+      "Hello there",
+    );
+    expect(copy).toContain("Buddy says: Hello there");
+    expect(copy).not.toContain("Heard: hi buddy");
+  });
+
+  it("uses static reduced-motion labels only for active voice states", () => {
+    expect(reducedMotionStatusPill("listening")).toBe("Listening");
+    expect(reducedMotionStatusPill("thinking")).toBe("Thinking");
+    expect(reducedMotionStatusPill("speaking")).toBe("Speaking");
+    expect(reducedMotionStatusPill("idle")).toBeNull();
+  });
+
+  it("turns exhausted quota into typed-chat fallback copy", () => {
+    expect(voiceQuotaNoticeCopy(0).toLowerCase()).toContain("typing");
+    expect(voiceQuotaNoticeCopy(undefined).toLowerCase()).toContain("typing");
+  });
+
+  it("warns when less than one minute of voice time remains", () => {
+    expect(voiceQuotaNoticeCopy(45).toLowerCase()).toContain("almost done");
   });
 });
 
