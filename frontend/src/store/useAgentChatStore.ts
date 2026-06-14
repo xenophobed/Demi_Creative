@@ -95,6 +95,10 @@ const useAgentChatStore = create<AgentChatState>((set, get) => ({
           id: m.message_id,
           role: m.role,
           text: m.text,
+          source:
+            m.input_modality === "voice" || m.output_modality === "voice"
+              ? "voice"
+              : undefined,
         })),
       });
     } catch (err) {

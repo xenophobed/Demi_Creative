@@ -783,8 +783,8 @@ export default function AgentChatPanel({
  * is mounted. Keeps the WebSocket / MediaStream / AudioContext out of
  * the always-rendered parent so idle cost stays zero.
  *
- * Voice transcripts flow into `useAgentChatStore.appendVoiceCaption`
- * so they merge into the same chat history the text panel renders.
+ * Voice captions stay inside the panel while the backend persists the
+ * durable voice turns through the My Agent chat history (#668).
  */
 /**
  * Map an AgeGroup band to a representative numeric age so BuddyOrb
@@ -820,21 +820,10 @@ function TalkToBuddyContainer({
   variant?: TalkToBuddyPanelVariant;
 }) {
   void ageGroup; // Future: thread per-age TTS preset overrides (Phase C, #608).
-  const appendVoiceCaption = useAgentChatStore((s) => s.appendVoiceCaption);
 
   const voice = useVoiceConversation({
     childId,
     persona,
-    onCaption: (caption) => {
-      // Only persist finalized turns so the chat history doesn't get
-      // spammed with partial-transcript noise. Safety-blocked utterances
-      // also surface in the timeline so the kid can see what happened.
-      if (caption.kind === "final") {
-        appendVoiceCaption({ role: "user", text: caption.text });
-      } else if (caption.kind === "assistant" && caption.isFinal) {
-        appendVoiceCaption({ role: "assistant", text: caption.text });
-      }
-    },
   });
 
   const prefersReducedMotion =

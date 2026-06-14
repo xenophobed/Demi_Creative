@@ -76,6 +76,7 @@ from ...services.voice_ephemeral_token import (
 )
 from ...services import voice_telemetry
 from ...mcp_servers import check_content_safety
+from ...agents.my_agent_proxy import stream_my_agent_chat
 
 logger = logging.getLogger(__name__)
 
@@ -750,6 +751,25 @@ async def _stream_openai_reply(
             state["first_audio_ms"] = max(0, elapsed_ms)
 
 
+def _parse_sse_event(chunk: str) -> tuple[str, Dict[str, Any]]:
+    """Parse one SSE chunk from stream_my_agent_chat into (event, data)."""
+    event_type = "message"
+    data_lines: list[str] = []
+    for raw_line in chunk.splitlines():
+        line = raw_line.strip()
+        if line.startswith("event:"):
+            event_type = line.split(":", 1)[1].strip()
+        elif line.startswith("data:"):
+            data_lines.append(line.split(":", 1)[1].strip())
+    if not data_lines:
+        return event_type, {}
+    try:
+        data = json.loads("\n".join(data_lines))
+    except ValueError:
+        data = {}
+    return event_type, data if isinstance(data, dict) else {}
+
+
 async def _stream_legacy_reply(
     *,
     websocket: WebSocket,
@@ -758,18 +778,47 @@ async def _stream_legacy_reply(
     transcript: FinalTranscript,
     target_age: int,
     state: Dict[str, Any],
-) -> None:
-    """Hybrid / Mock provider path — text is determined locally then TTS.
+    chat_session_id: Optional[str] = None,
+) -> Optional[str]:
+    """Hybrid / Mock provider path — My Agent proxy text then TTS.
 
-    The reply text for these providers is a stand-in until the
-    ``stream_my_agent_chat`` integration lands. The pre-TTS safety gate
-    still runs so the parity invariant holds across providers.
+    The existing My Agent proxy owns buddy orchestration, durable chat
+    history, launch-flow metadata, and its own reply safety gate. The
+    voice broker translates that SSE stream into WS envelopes and still
+    runs the voice-surface pre-TTS safety gate before audio leaves.
     """
-    # Stand-in reply. The mock provider's canned transcript flows
-    # through unchanged for contract-test stability; the hybrid path
-    # will later route through ``stream_my_agent_chat`` (out of scope
-    # for this story — E3 / #646).
-    reply_text = f"Heard you say: {transcript.text}"
+    reply_text = ""
+
+    async for chunk in stream_my_agent_chat(
+        user_id=handle.user_id,
+        child_id=handle.child_id,
+        message=transcript.text,
+        session_id=chat_session_id,
+        input_modality="voice",
+        output_modality="voice",
+    ):
+        event_type, event_data = _parse_sse_event(chunk)
+        if event_type == "session":
+            chat_session_id = str(event_data.get("session_id") or "") or chat_session_id
+        elif event_type == "launch_flow":
+            await _send_event(websocket, {"type": "launch_flow", "payload": event_data})
+        elif event_type == "safety_blocked":
+            await _send_event(websocket, {
+                "type": "safety_block",
+                "direction": "reply",
+                "fallback_text": _SAFETY_FALLBACK_REPLY,
+            })
+        elif event_type == "error":
+            await _emit_error(
+                websocket,
+                code=str(event_data.get("error") or "agent_error"),
+                message=str(event_data.get("message") or ""),
+            )
+        elif event_type == "result":
+            reply_text = str(event_data.get("message") or "").strip()
+
+    if not reply_text:
+        reply_text = "I'm here and ready to create with you."
 
     safe = await _run_safety_gate(text=reply_text, target_age=target_age)
     if not safe:
@@ -786,7 +835,9 @@ async def _stream_legacy_reply(
             direction="reply",
             category="reply_unsafe",
         )
-        return
+        # #668 — preserve the chat_session_id return contract so the caller
+        # keeps the session id rather than losing it to a bare return.
+        return chat_session_id
 
     await _send_event(websocket, {
         "type": "assistant_text",
@@ -817,6 +868,7 @@ async def _stream_legacy_reply(
             handle.session_id, exc,
         )
         await _emit_error(websocket, code="tts_failed", message=str(exc))
+    return chat_session_id
 
 
 async def _run_assistant_turn(
@@ -827,7 +879,8 @@ async def _run_assistant_turn(
     transcript: FinalTranscript,
     target_age: int,
     state: Dict[str, Any],
-) -> None:
+    chat_session_id: Optional[str] = None,
+) -> Optional[str]:
     """Dispatch to the provider-appropriate reply flow.
 
     OpenAI Realtime exposes ``stream_assistant_reply`` — text + audio
@@ -843,10 +896,12 @@ async def _run_assistant_turn(
             websocket=websocket, provider=provider, handle=handle,
             target_age=target_age, state=state,
         )
+        return chat_session_id
     else:
-        await _stream_legacy_reply(
+        return await _stream_legacy_reply(
             websocket=websocket, provider=provider, handle=handle,
             transcript=transcript, target_age=target_age, state=state,
+            chat_session_id=chat_session_id,
         )
 
 
@@ -885,6 +940,7 @@ async def stream_voice_session(websocket: WebSocket) -> None:
     target_age = _target_age_for(profile.age_group)
     age_group = profile.age_group
     handle: Optional[SessionHandle] = None
+    chat_session_id: Optional[str] = None
     started_at = time.monotonic()
     termination_reason = "user_ended"
     # Per-session mutable state shared with helpers — telemetry,
@@ -1048,13 +1104,14 @@ async def stream_voice_session(websocket: WebSocket) -> None:
                         "safety_passed": True,
                     },
                 )
-                await _run_assistant_turn(
+                chat_session_id = await _run_assistant_turn(
                     websocket=websocket,
                     provider=provider,
                     handle=handle,
                     transcript=transcript,
                     target_age=target_age,
                     state=state,
+                    chat_session_id=chat_session_id,
                 )
                 # A tool dispatched an end_call envelope this turn —
                 # close cleanly with the dedicated reason so Parent
