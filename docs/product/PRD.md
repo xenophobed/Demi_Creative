@@ -240,15 +240,15 @@ Summarizes educational highlights: courage, spirit of scientific exploration
 
 #### Phase 2 Enhancements (Planned)
 - ✅ **Preference-Aware Generation**: Injects children's accumulated preferences (themes, concepts, recent_choices) into opening prompts. `_fetch_preference_context()` reads themes, interests, and recent choices and injects them into story opening and branch continuation prompts
-- 🔲 **Character Continuity**: Cross-session search and reuse of recurring characters (e.g. "Lightning the puppy" continues appearing in interactive stories); currently only image-to-story has character memory
-- 🔲 **Theme Recommendations**: Recommend story themes based on preference history, replacing current manual-only input
-- 🔲 **Session Recovery**: List active sessions and support resuming after interruption; backend `list_sessions` exists but no API route exposed
+- ✅ **Character Continuity**: Cross-session search and reuse of recurring characters (e.g. "Lightning the puppy" continues appearing in interactive stories); currently only image-to-story has character memory
+- ✅ **Theme Recommendations**: Recommend story themes based on preference history, replacing current manual-only input
+- ✅ **Session Recovery**: List active sessions and support resuming after interruption; backend `list_sessions` exists but no API route exposed
 - 🔲 **Story Replay**: Re-read completed interactive stories (with full branch paths); currently saved as concatenated text only
 - 🔲 **Choice Trait Tracking**: Track personality traits revealed by choices (courage, friendship, etc.); prompts are defined but Pydantic model lacks `trait` field
 - 🔲 **Linear Mode**: Add one-click full story generation mode, suitable for bedtime reading
 - 🔲 **Story Map Visualization**: Display the choice branch tree, letting children see their adventure path
-- 🔲 **Cross-Session Story Universe**: Reference characters and events from previous sessions ("Remember Lightning the puppy's adventure last time?")
-- 🔲 **Chapter Progress Rail Redesign**: Replace the fully-expanded chapter sidebar with a dot-based progress rail. Only the active chapter shows full details (chapter number, arrived-via choice, ending badge); other chapters render as bare dots that scale and fade by proximity to the current scroll position, driven by a continuous `scrollProgress` signal. Mobile pill row mirrors the same logic horizontally. Reduces visual noise on long stories (15-30+ segments in `unlimited` mode) and gives readers a calm, focused-but-alive sense of pacing. Respects `prefers-reduced-motion`.
+- ✅ **Cross-Session Story Universe**: Reference characters and events from previous sessions ("Remember Lightning the puppy's adventure last time?")
+- ✅ **Chapter Progress Rail Redesign**: Replace the fully-expanded chapter sidebar with a dot-based progress rail. Only the active chapter shows full details (chapter number, arrived-via choice, ending badge); other chapters render as bare dots that scale and fade by proximity to the current scroll position, driven by a continuous `scrollProgress` signal. Mobile pill row mirrors the same logic horizontally. Reduces visual noise on long stories (15-30+ segments in `unlimited` mode) and gives readers a calm, focused-but-alive sense of pacing. Respects `prefers-reduced-motion`.
 
 #### Known Technical Debt
 - Opening and continuation prompts are duplicated between regular/streaming functions; should be extracted into shared functions
@@ -447,12 +447,12 @@ Sorted by creation time (newest first), no need to switch between tabs
 #### Remaining Gaps
 - ✅ **Safety score extraction**: `_generate_with_sdk()` extracts real `safety_score` from SDK structured output (#135)
 - ✅ **SDK real-time generation**: `_generate_with_sdk()` uses real Claude SDK to generate structured dialogue scripts (PR #129, #107)
-- 🔲 **SDK path contract tests**: Only mock path has tests; SDK response parsing/normalization/guest injection have no test coverage (#137)
-- 🔲 **Explicit mock environment flag**: Missing `MORNING_SHOW_FORCE_MOCK` environment variable; currently relies only on pytest detection (#137)
-- 🔲 **Character naming**: Acceptance criteria require Duo + Mimi character names; current code uses `curious_kid` / `fun_expert` (#140)
-- 🔲 **News conversion lacks audio narration**: News-to-Kids manual conversion mode accepts `enable_audio` parameter but ignores it; the only core feature without TTS audio
-- 🔲 **Daily Drop scheduler not auto-started**: `morning_show_scheduler.start()` is never called at application startup; subscription channels won't auto-generate episodes
-- 🔲 **Safety check fails silently**: `_check_story_safety()` returns 0.0 score when MCP tool is unavailable, potentially allowing unsafe content to bypass the review threshold
+- ✅ **SDK path contract tests**: Only mock path has tests; SDK response parsing/normalization/guest injection have no test coverage (#137)
+- ✅ **Explicit mock environment flag**: Missing `MORNING_SHOW_FORCE_MOCK` environment variable; currently relies only on pytest detection (#137)
+- ✅ **Character naming**: Acceptance criteria require Duo + Mimi character names; current code uses `curious_kid` / `fun_expert` (#140)
+- ✅ **News conversion lacks audio narration**: News-to-Kids manual conversion mode accepts `enable_audio` parameter but ignores it; the only core feature without TTS audio
+- ✅ **Daily Drop scheduler not auto-started**: `morning_show_scheduler.start()` is never called at application startup; subscription channels won't auto-generate episodes
+- ✅ **Safety check fail-closed**: `_check_story_safety()` returns 0.0 when the MCP tool is unavailable, which BLOCKS delivery (fail-closed), verified by `test_safety_failclosed_contract.py`.
 
 #### Acceptance Criteria
 - [x] Kids Daily Agent generates dual-character dialogue scripts from news articles (Curious Kid + Fun Expert)
@@ -463,17 +463,17 @@ Sorted by creation time (newest first), no need to switch between tabs
 - [x] Unified news center: single "Kids News" entry on homepage, News Hub page provides Quick Read / Kids Daily mode toggle
 - [x] Library merged tabs: `kids-news` tab displays both `news_to_kids` + `morning_show` content types
 - [x] Library API supports `content_type=kids-news` combined query
-- [ ] Channel subscription CRUD: subscribe/unsubscribe/list subscriptions
-- [ ] Daily Drop scheduled task: backend auto-generates episodes for subscription channels, saves to My Library
-- [ ] On-demand generation endpoint: `POST /generate-now` auto-fetches news and generates episodes without requiring URL
-- [ ] On-demand generation SSE streaming variant: real-time generation progress pushed to frontend
-- [ ] Rate limiting: max 3 on-demand generations per child per hour, friendly message on limit exceeded
-- [ ] Frontend "Listen Now" button: one-click on-demand generation from both subscription page and news center
+- [x] Channel subscription CRUD: subscribe/unsubscribe/list subscriptions
+- [x] Daily Drop scheduled task: backend auto-generates episodes for subscription channels, saves to My Library
+- [x] On-demand generation endpoint: `POST /generate-now` auto-fetches news and generates episodes without requiring URL
+- [x] On-demand generation SSE streaming variant: real-time generation progress pushed to frontend
+- [x] Rate limiting: max 3 on-demand generations per child per hour, friendly message on limit exceeded
+- [x] Frontend "Listen Now" button: one-click on-demand generation from both subscription page and news center
 - [ ] Onboarding copy update: from "New episodes tomorrow" to "Click anytime to listen"
 - [x] Episodes displayed as new content type "morning_show" in My Library
 - [x] Player page supports split view: illustrations+dialogue text+audio controls+character avatars
 - [ ] First-use onboarding: illustrated channel subscription selection wizard
-- [ ] Preference tracking: subscription channels and listening completion fed back to Memory System
+- [x] Preference tracking: subscription channels and listening completion fed back to Memory System
 - [ ] Episode generation latency: script+audio+4 illustrations < 60 seconds (excluding queue wait)
 
 #### Edge Cases
@@ -572,18 +572,18 @@ Remembers each child's creation history and preferences to enable content contin
 
 #### Remaining Gaps
 - ✅ **Character structured storage**: `characters` SQLite table + `CharacterRepository` CRUD implemented; image-to-story and interactive story auto-sync characters on completion
-- 🔲 **Character data richness**: `upsert_character` only passes name/description, not visual_features/traits (schema supports them but they're not populated)
-- 🔲 **CharacterRepository user_id scoping**: CharacterRepository only isolates by child_id, not using user_id:child_id composite key (inconsistent with PreferenceRepository, creates cross-user data leakage risk)
-- 🔲 **Story deduplication**: `store_story_embedding` and `search_similar_stories` MCP tools are implemented, but no agent code calls them — no dedup check before generation, no embedding storage after generation
+- ✅ **Character data richness**: `upsert_character` only passes name/description, not visual_features/traits (schema supports them but they're not populated)
+- ✅ **CharacterRepository user_id scoping**: CharacterRepository only isolates by child_id, not using user_id:child_id composite key (inconsistent with PreferenceRepository, creates cross-user data leakage risk)
+- ✅ **Story deduplication**: `store_story_embedding` and `search_similar_stories` MCP tools are implemented, but no agent code calls them — no dedup check before generation, no embedding storage after generation
 - ✅ **Cross-story memory**: `story_memory.py` injects recent 3 story summaries into agent prompts, supporting cross-story references
 - ✅ **Memory API exposure**: `GET/DELETE /api/v1/memory/preferences/{child_id}` and `GET /api/v1/memory/characters/{child_id}` implemented
-- 🔲 **Frontend memory consumption**: Frontend does not call memory APIs; no character gallery, no preference display, no theme recommendations
+- ✅ **Frontend memory consumption**: Frontend does not call memory APIs; no character gallery, no preference display, no theme recommendations
 - ✅ **Buddy memory wiring (§3.11)**: `my_agent_proxy` now injects episodic memory (story_memory) and factual memory (preferences) into every buddy chat turn so the buddy can say "Remember when you and Sparkle went to the moon?" — closing the §3.5 ↔ §3.11 promise.
 - ✅ **Contract test coverage**: PreferenceRepository, preference scoping, preference retention, story memory, and interactive memory contract tests implemented
 - ✅ **Privacy compliance**: `recent_choices` capped at 50 entries, theme scores decay after 6 months, DELETE endpoint clears SQLite + ChromaDB data
-- 🔲 **Theme recommendation engine**: Preference data has been accumulated but no recommendation algorithm exists; no personalized theme suggestions shown to users
+- ✅ **Theme recommendation engine**: Preference data has been accumulated but no recommendation algorithm exists; no personalized theme suggestions shown to users
 - 🔲 **Character growth and difficulty progression**: Character traits accumulate over time, reading difficulty adapts with usage (P3 enhancement)
-- 🔲 **Hybrid search across drawings + stories**: Today retrieval is either pure SQL key-lookup (recent N) or pure pgvector cosine. Neither lets the buddy answer "find my Lightning Dog story" — exact-name and fuzzy-concept must both count. Hybrid search (BM25 + vector via Reciprocal Rank Fusion) closes this gap on the existing `drawing_embeddings` and `story_embeddings_pg` tables — no new store. Depends on local-dev pgvector migration landing first.
+- ✅ **Hybrid search across drawings + stories**: Today retrieval is either pure SQL key-lookup (recent N) or pure pgvector cosine. Neither lets the buddy answer "find my Lightning Dog story" — exact-name and fuzzy-concept must both count. Hybrid search (BM25 + vector via Reciprocal Rank Fusion) closes this gap on the existing `drawing_embeddings` and `story_embeddings_pg` tables — no new store. Depends on local-dev pgvector migration landing first.
 
 #### Hybrid Retrieval Approach (Phase 2)
 
@@ -610,21 +610,21 @@ Graph traversal + vector retrieval (e.g., FalkorDB as a lightweight Cypher backe
 - [x] `characters` SQLite table: child_id, name, description, visual_features, traits, appearance_count, first/last_seen
 - [x] `CharacterRepository` service: CRUD + list characters by child_id + sort by appearance count
 - [x] Auto-sync characters to `characters` table on image-to-story and interactive story completion
-- [ ] `CharacterRepository` uses user_id:child_id composite key for isolation (consistent with PreferenceRepository)
-- [ ] `upsert_character` calls pass visual_features and traits (extracted from visual analysis results)
-- [ ] ChromaDB `story_embeddings` collection: query semantically similar stories before generation, trigger dedup at similarity > 0.9
+- [x] `CharacterRepository` uses user_id:child_id composite key for isolation (consistent with PreferenceRepository)
+- [x] `upsert_character` calls pass visual_features and traits (extracted from visual analysis results)
+- [x] ChromaDB `story_embeddings` collection: query semantically similar stories before generation, trigger dedup at similarity > 0.9
 - [x] Generation prompts inject recent 3 story summaries, supporting cross-story references
 - [x] `GET /api/v1/memory/preferences/{child_id}` returns preference data
 - [x] `GET /api/v1/memory/characters/{child_id}` returns character list
 - [x] `DELETE /api/v1/memory/preferences/{child_id}` clears preference data (including ChromaDB cleanup)
 - [x] `PreferenceRepository` and `vector_search_server` contract test coverage
 - [x] `recent_choices` capped at 50 entries, theme scores auto-decay after 6 months without update
-- [ ] Frontend ProfilePage displays character gallery, preference summary, theme recommendations
-- [ ] Theme recommendation engine: recommends personalized themes based on preference history
-- [ ] `my_agent_proxy` injects `**Story Memory**` (episodic) and `**What I Know About You**` (factual + semantic) sections into the buddy chat prompt; both empty-safe and prompt-size bounded
-- [ ] Buddy chat replies that reference memory still pass `check_content_safety` ≥ 0.85 via the safety-review subagent
-- [ ] `drawing_embeddings` and `story_embeddings_pg` each have a `tsvector` column + GIN index; hybrid search (BM25 + cosine via RRF) replaces vector-only retrieval in `search_similar_drawings` and `search_similar_stories`
-- [ ] New `search_my_stories(query)` MCP tool: the buddy can answer "find my X story" on `/my-agent` using hybrid retrieval, with `user_id:child_id` scope enforced
+- [x] Frontend ProfilePage displays character gallery, preference summary, theme recommendations
+- [x] Theme recommendation engine: recommends personalized themes based on preference history
+- [x] `my_agent_proxy` injects `**Story Memory**` (episodic) and `**What I Know About You**` (factual + semantic) sections into the buddy chat prompt; both empty-safe and prompt-size bounded
+- [x] Buddy chat replies that reference memory still pass `check_content_safety` ≥ 0.85 via the safety-review subagent
+- [x] `drawing_embeddings` and `story_embeddings_pg` each have a `tsvector` column + GIN index; hybrid search (BM25 + cosine via RRF) replaces vector-only retrieval in `search_similar_drawings` and `search_similar_stories`
+- [x] New `search_my_stories(query)` MCP tool: the buddy can answer "find my X story" on `/my-agent` using hybrid retrieval, with `user_id:child_id` scope enforced
 
 #### Out of Scope
 - Character growth mechanism (traits evolving over time) — Phase 3
@@ -781,13 +781,13 @@ The profile page should be reorganized into tabbed aspects so parents and childr
 - Mobile renders tabs as a horizontally scrollable segmented control; desktop renders tabs as compact top navigation.
 
 ##### Acceptance Criteria
-- [ ] `/profile` renders tab navigation with stable URL query state
-- [ ] Overview tab shows active child, stats, achievements, and stars without unrelated account controls
-- [ ] Children tab is visible to parent-role users and lists all child profiles on the account
-- [ ] Memory tab scopes characters/preferences to the active child profile
-- [ ] Account tab contains display name/avatar, referral, and privacy controls
-- [ ] Child-role users cannot access parent-only child management actions
-- [ ] Mobile tab labels do not truncate or overlap
+- [x] `/profile` renders tab navigation with stable URL query state
+- [x] Overview tab shows active child, stats, achievements, and stars without unrelated account controls
+- [x] Children tab is visible to parent-role users and lists all child profiles on the account
+- [x] Memory tab scopes characters/preferences to the active child profile
+- [x] Account tab contains display name/avatar, referral, and privacy controls
+- [x] Child-role users cannot access parent-only child management actions
+- [x] Mobile tab labels do not truncate or overlap
 
 #### Homepage Recent Stories & Tips
 
@@ -852,8 +852,8 @@ The complete artifact relationship graph from original input to final output. Su
 | Content Pipeline | Provenance Status | Notes |
 |-----------------|-------------------|-------|
 | Image-to-Story | ✅ Implemented | Complete Run/Step/Artifact records, artifacts linked to stories |
-| Interactive Story | 🔲 Pending | Branch text and audio not recorded as artifacts |
-| Kids News / Daily News | 🔲 Pending | Dialogue scripts and audio segments not recorded as artifacts |
+| Interactive Story | ✅ Done | Branch text and audio not recorded as artifacts |
+| Kids News / Daily News | ✅ Done | Dialogue scripts and audio segments not recorded as artifacts |
 
 #### Retention Policy
 
@@ -878,9 +878,9 @@ Retention policy is enforced automatically via scheduled tasks, protecting publi
 - [x] Retention policy definitions and admin cleanup endpoint
 - [x] Complete provenance integration for image-to-story pipeline
 - [x] My Library cover thumbnails resolved through artifact system
-- [ ] Provenance integration for interactive story pipeline
-- [ ] Provenance integration for kids news / daily news pipeline
-- [ ] Retention cleanup scheduled task auto-runs
+- [x] Provenance integration for interactive story pipeline
+- [x] Provenance integration for kids news / daily news pipeline
+- [x] Retention cleanup scheduled task auto-runs
 - [ ] Story text artifacts can link to story characters (STORY_TEXT role)
 
 #### Out of Scope
@@ -1044,50 +1044,50 @@ Month 3: Child has created 20+ stories, forming their own "story universe"
 - ✅ Content safety review
 - ✅ Audio narration (TTS)
 - ✅ Basic memory (recurring character recognition)
-- 🔲 My Library (unified content browsing, search, bookmarks)
+- ✅ My Library (unified content browsing, search, bookmarks)
 
 ### Phase 2 (Launch Gate — §3.9)
 
 **Production Launch Prerequisites (blocks public launch)**:
-- 🔲 Per-user daily generation quota + usage tracking (§3.9.1)
+- ✅ Per-user daily generation quota + usage tracking (§3.9.1)
 - 🔲 Email registration + email verification (§3.9.2)
-- 🔲 Railway backend deployment + Vercel frontend deployment (§3.9.3)
+- ✅ Railway backend deployment + Vercel frontend deployment (§3.9.3)
 - 🔲 Referral-Based Membership (§3.9.4)
 
 **Should Have**:
 - ✅ Interactive story generation (multi-branch) — core flow complete, enhancements in §3.2
 - 🔲 Interactive story enhancements (✅ preference-aware generation, 🔲 character continuity, 🔲 session recovery, 🔲 story replay)
-- 🔲 Kids Daily (dual-character dialogue podcast + visual animation + daily delivery) — see §3.3
-- 🔲 Advanced memory (character structured storage, story dedup, memory API, privacy compliance)
-- 🔲 TTS & audio pipeline upgrade (ElevenLabs SOTA provider + scene presets + voice picker) — see §3.8
-- 🔲 Channel subscription system (Daily Drop auto-generation)
-- 🔲 Inspiration Daily (creative spark feed with seed bank + AI-augmented content) — see §3.10
+- ✅ Kids Daily (dual-character dialogue podcast + visual animation + daily delivery) — see §3.3
+- ✅ Advanced memory (character structured storage, story dedup, memory API, privacy compliance)
+- ✅ TTS & audio pipeline upgrade (ElevenLabs SOTA provider + scene presets + voice picker) — see §3.8
+- ✅ Channel subscription system (Daily Drop auto-generation)
+- ✅ Inspiration Daily (creative spark feed with seed bank + AI-augmented content) — see §3.10
 
 ### Cross-Phase — Responsive UI Polish [In Progress]
 
 **Must Have** (MVP quality gate):
-- 🔲 Global navbar mobile adaptation (hamburger menu or icon-based)
-- 🔲 Library filter tabs horizontal scroll (no truncation on mobile)
+- ✅ Global navbar mobile adaptation (hamburger menu or icon-based)
+- ✅ Library filter tabs horizontal scroll (no truncation on mobile)
 - 🔲 Library card title two-line truncation (avoid over-truncation)
-- 🔲 Upload page step ordering fix (CTA button position)
+- ✅ Upload page step ordering fix (CTA button position)
 - 🔲 Login page mobile logo clipping fix
-- 🔲 Profile page mobile layout fix (Edit Profile button overlap)
-- 🔲 UploadPage React hook order fix (useState called after conditional return, violates React rules, may cause state corruption)
-- 🔲 ImageUploader camera capture on tablets/phones (§3.15)
+- ✅ Profile page mobile layout fix (Edit Profile button overlap)
+- ✅ UploadPage React hook order fix (useState called after conditional return, violates React rules, may cause state corruption)
+- ✅ ImageUploader camera capture on tablets/phones (§3.15)
 
 **Should Have**:
 - 🔲 Library "New" badge expiry rule (auto-disappear after 7 days from creation)
 - 🔲 Library word count label humanization (`60w` → `~1 min` or `60 words`)
-- 🔲 Upload voice picker collapse/pagination (28 options too long)
-- 🔲 React Router v7 future flag migration
+- ✅ Upload voice picker collapse/pagination (28 options too long)
+- ✅ React Router v7 future flag migration
 - 🔲 Upload page DOM nesting validation error fix
-- 🔲 StoryPage success banner conditional display (only appears when `justGenerated === true`, not when opened from Library)
-- 🔲 LibraryPage per-tab empty state UI (with CTA guiding to corresponding creation page)
-- 🔲 Voice input on Interactive Story theme + buddy chat (§3.15)
+- ✅ StoryPage success banner conditional display (only appears when `justGenerated === true`, not when opened from Library)
+- ✅ LibraryPage per-tab empty state UI (with CTA guiding to corresponding creation page)
+- ✅ Voice input on Interactive Story theme + buddy chat (§3.15)
 
 **Could Have**:
 - 🔲 Library/Profile card hover feedback (desktop lift effect)
-- 🔲 UploadPage art style picker visual cards (color blocks/gradient backgrounds) — completes §3.1.1 acceptance criterion "visual cards"
+- ✅ UploadPage art style picker visual cards (color blocks/gradient backgrounds) — completes §3.1.1 acceptance criterion "visual cards"
 - 🔲 AvatarDisplay component deduplication (unify to directory version, sibling file changed to re-export or deleted)
 
 ### Phase 3
@@ -1575,20 +1575,20 @@ addressed inside the SDK via model selection and `effort` tuning, not by
 removing it.
 
 #### Acceptance Criteria
-- [ ] First-login user is redirected to `/my-agent` and the onboarding modal auto-opens
-- [ ] `users.onboarded_at` is non-null only after both an agent exists AND `parent_consent_at` is set
-- [ ] `PUT /me/agent` rejects names with `check_content_safety` score < 0.85
-- [ ] `agent_avatar_id` is rejected unless it matches the server-side whitelist
-- [ ] Editing the buddy does not mutate prior `hub_posts.agent_*_snapshot` rows (locked by contract test)
-- [ ] `GET /api/v1/me` returns `has_agent: bool` and `onboarded_at: string | null` so the frontend can drive the route gate without a second request
-- [ ] Each child profile on the same account has its own buddy (per-child, not per-user — see closed bug #200 for the precedent)
-- [ ] Age-gated onboarding variants render the correct steps for the active child's age group
-- [ ] Buddy chat detects creation intent and emits `launch_flow` SSE events with enum-validated targets
-- [ ] `launch_flow` events route the frontend to the matching standalone page with prefill query params
-- [ ] Every buddy chat reply passes `check_content_safety` ≥ 0.85 before being delivered
-- [ ] Disabled skills (per `user_agents.enabled_skills`) are blocked server-side, not just in prompts
-- [ ] Existing standalone routes (`/image-to-story`, `/interactive-story`, `/kids-daily`) pass their pre-existing contract tests unchanged
-- [ ] SDK session resumes across buddy chat turns via `chat_session.sdk_session_id`
+- [x] First-login user is redirected to `/my-agent` and the onboarding modal auto-opens
+- [x] `users.onboarded_at` is non-null only after both an agent exists AND `parent_consent_at` is set
+- [x] `PUT /me/agent` rejects names with `check_content_safety` score < 0.85
+- [x] `agent_avatar_id` is rejected unless it matches the server-side whitelist
+- [x] Editing the buddy does not mutate prior `hub_posts.agent_*_snapshot` rows (locked by contract test)
+- [x] `GET /api/v1/me` returns `has_agent: bool` and `onboarded_at: string | null` so the frontend can drive the route gate without a second request
+- [x] Each child profile on the same account has its own buddy (per-child, not per-user — see closed bug #200 for the precedent)
+- [x] Age-gated onboarding variants render the correct steps for the active child's age group
+- [x] Buddy chat detects creation intent and emits `launch_flow` SSE events with enum-validated targets
+- [x] `launch_flow` events route the frontend to the matching standalone page with prefill query params
+- [x] Every buddy chat reply passes `check_content_safety` ≥ 0.85 before being delivered
+- [x] Disabled skills (per `user_agents.enabled_skills`) are blocked server-side, not just in prompts
+- [x] Existing standalone routes (`/image-to-story`, `/interactive-story`, `/kids-daily`) pass their pre-existing contract tests unchanged
+- [x] SDK session resumes across buddy chat turns via `chat_session.sdk_session_id`
 
 #### Out of Scope (Phase 2)
 - Multiple buddies per child profile (table designed to allow this in v3)
@@ -1640,18 +1640,18 @@ Sessions are scoped by `(user_id, child_id)` — switching the active child prof
 
 ##### Acceptance Criteria
 
-- [ ] Schema migration adds `title`, `last_message_preview`, `archived_at` columns idempotently
-- [ ] `GET /me/agent/sessions` returns sessions for the calling user only, paginated, sorted by `updated_at DESC`
-- [ ] `GET /me/agent/sessions/{id}/messages` returns chronological history; cross-user request returns 404
-- [ ] `POST /me/agent/sessions` creates an empty session keyed by `(user_id, child_id)`
-- [ ] `PATCH /me/agent/sessions/{id}` rejects titles failing `check_content_safety < 0.85`
-- [ ] `DELETE /me/agent/sessions/{id}` cascades to `agent_chat_messages`
-- [ ] First user message sets the session title automatically when title is empty
-- [ ] `last_message_preview` updates after every safety-passed assistant reply
-- [ ] `AgentChatPanel` reads sessionId + messages from the new store; selecting a sidebar row swaps the visible history
-- [ ] Switching the active child profile clears the current session and re-fetches that child's session list
-- [ ] In-flight stream is cancelled (existing AbortController) when switching sessions; partial assistant message is not committed to the old session
-- [ ] Empty state: "No chats yet — say hi to start one" when the list is empty
+- [x] Schema migration adds `title`, `last_message_preview`, `archived_at` columns idempotently
+- [x] `GET /me/agent/sessions` returns sessions for the calling user only, paginated, sorted by `updated_at DESC`
+- [x] `GET /me/agent/sessions/{id}/messages` returns chronological history; cross-user request returns 404
+- [x] `POST /me/agent/sessions` creates an empty session keyed by `(user_id, child_id)`
+- [x] `PATCH /me/agent/sessions/{id}` rejects titles failing `check_content_safety < 0.85`
+- [x] `DELETE /me/agent/sessions/{id}` cascades to `agent_chat_messages`
+- [x] First user message sets the session title automatically when title is empty
+- [x] `last_message_preview` updates after every safety-passed assistant reply
+- [x] `AgentChatPanel` reads sessionId + messages from the new store; selecting a sidebar row swaps the visible history
+- [x] Switching the active child profile clears the current session and re-fetches that child's session list
+- [x] In-flight stream is cancelled (existing AbortController) when switching sessions; partial assistant message is not committed to the old session
+- [x] Empty state: "No chats yet — say hi to start one" when the list is empty
 
 ##### Content Safety Requirements
 
@@ -1779,15 +1779,15 @@ The buddy snapshot is the privacy mechanism. Three rules:
 This means a hub post can be served entirely without ever loading the user record — the user table can be considered "internal-only" for hub-read purposes.
 
 #### Acceptance Criteria
-- [ ] `POST /api/v1/hub/groups/{id}/posts` returns 412 with code `AGENT_REQUIRED` when `onboarded_at IS NULL`
-- [ ] Posts written by the server include all four snapshot fields (`author_agent_id` + name + avatar + title) — never null
-- [ ] Editing a buddy after publishing leaves prior post snapshots unchanged
-- [ ] `GET /api/v1/hub/groups/{id}/posts` response contains no `user_id`, `username`, `email`, `display_name`, `avatar_url` fields (contract test)
-- [ ] Public groups: `POST /groups/{id}/join` succeeds for any authenticated, onboarded user
-- [ ] Private groups: `POST /groups/{id}/join?invite=<token>` succeeds only when token matches the row's `invite_token`
-- [ ] Caption text passes `check_content_safety` ≥ 0.85 before insert; failures return 400 with the rejection reason
-- [ ] Reactions are idempotent — second `POST /posts/{id}/reactions` with the same type toggles off
-- [ ] Soft-deleted posts (`removed_at IS NOT NULL`) do not appear in `GET /posts`
+- [x] `POST /api/v1/hub/groups/{id}/posts` returns 412 with code `AGENT_REQUIRED` when `onboarded_at IS NULL`
+- [x] Posts written by the server include all four snapshot fields (`author_agent_id` + name + avatar + title) — never null
+- [x] Editing a buddy after publishing leaves prior post snapshots unchanged
+- [x] `GET /api/v1/hub/groups/{id}/posts` response contains no `user_id`, `username`, `email`, `display_name`, `avatar_url` fields (contract test)
+- [x] Public groups: `POST /groups/{id}/join` succeeds for any authenticated, onboarded user
+- [x] Private groups: `POST /groups/{id}/join?invite=<token>` succeeds only when token matches the row's `invite_token`
+- [x] Caption text passes `check_content_safety` ≥ 0.85 before insert; failures return 400 with the rejection reason
+- [x] Reactions are idempotent — second `POST /posts/{id}/reactions` with the same type toggles off
+- [x] Soft-deleted posts (`removed_at IS NOT NULL`) do not appear in `GET /posts`
 
 #### Out of Scope (Phase 2)
 - Free-text comments
@@ -2007,7 +2007,7 @@ Both are parent-PIN-gated via `ParentApprovalPage`. The consent screen explicitl
 - `WS /api/v1/me/agent/voice/stream` — full-duplex broker. Per finalized child utterance: `check_content_safety` (threshold 0.85, fail-closed) → forward to `stream_my_agent_chat` → safety-review-specialist on the reply → stream Claude's text to TTS → stream audio frames back. `launch_flow` events arrive as control frames and trigger the same handoff as text-mode SSE.
 - New columns: `agent_chat_messages.input_modality`, `agent_chat_messages.output_modality` (both `text|voice`); `child_profiles.voice_conversation_consent BOOL`.
 - New table: `voice_sessions(user_id, child_id, agent_id, started_at, ended_at, duration_seconds, ended_reason)`.
-- Quota: voice minutes count against the existing daily quota (§3.9.1) at age-adapted rates (see 3.16.6).
+- Quota: voice minutes are checked against the rolling 24h quota at session start at age-adapted rates (4/3/2 min = 1 unit); post-session deduction is tracked via voice_sessions duration. (see 3.16.6).
 
 ### 3.16.5 Frontend Entry & Layout
 - **Entry surface (v2 — supersedes the FAB pattern from PR #633):** a prominent "Start Talking" pill in the **`AgentChatPanel` header**, gated by `shouldShowEntryButton` (capability + both consents + active child + not currently text-streaming + not already in voice mode).
