@@ -26,14 +26,15 @@ Production (Railway + Vercel):
 | Variable | Purpose | Where to Get It |
 |----------|---------|-----------------|
 | `ANTHROPIC_API_KEY` | Claude API for agents, vision, safety checks | console.anthropic.com |
-| `OPENAI_API_KEY` | TTS audio generation (OpenAI voices) | platform.openai.com |
+| `OPENAI_API_KEY` | OpenAI services: story TTS, Whisper STT for Talk-to-Buddy `hybrid` voice | platform.openai.com |
 | `DATABASE_URL` | PostgreSQL connection string | Supabase project settings |
 | `SUPABASE_URL` | Supabase project URL (for JWKS fetch) | Supabase project settings |
 | `SUPABASE_JWT_SECRET` | JWT validation fallback (HS256) | Supabase project settings |
 | `SUPABASE_SERVICE_ROLE_KEY` | Admin operations (bypass RLS) | Supabase project settings |
 | `RESEND_API_KEY` | Email delivery via Resend SMTP | resend.com dashboard |
 | `TAVILY_API_KEY` | News headline search for Kids Daily | tavily.com |
-| `ELEVENLABS_API_KEY` | ElevenLabs TTS voices | elevenlabs.io |
+| `ELEVENLABS_API_KEY` | ElevenLabs TTS voices; required for spoken Talk-to-Buddy audio in `hybrid` mode | elevenlabs.io |
+| `REALTIME_VOICE_PROVIDER` | Talk-to-Buddy provider: `mock` for deterministic offline testing, `hybrid` for Whisper + My Agent + ElevenLabs | Set manually |
 | `ALLOWED_ORIGINS` | CORS whitelist for frontend URLs | Set manually |
 | `ADMIN_API_KEY` | Admin endpoint authentication | Generate a random secret |
 
@@ -54,6 +55,19 @@ Production (Railway + Vercel):
 **.env File**: A plain text file (`KEY=value`, one per line) that's loaded at startup. `.env` is in `.gitignore` — it never gets committed to GitHub. `.env.example` shows the required keys without real values, so new developers know what to set up.
 
 **Build-Time vs Runtime**: Vite `VITE_*` variables are replaced during `npm run build` — they become literal strings in the output JavaScript. Backend `os.environ` variables are read at runtime — you can change them by restarting the server without rebuilding.
+
+## Local Talk-to-Buddy Voice
+
+Talk-to-Buddy uses `REALTIME_VOICE_PROVIDER` on the backend:
+
+| Value | Behavior | Required Keys |
+|-------|----------|---------------|
+| `mock` | Offline deterministic provider. Every finalized utterance returns the canned transcript `hello buddy this is a mock transcript`; useful for contract tests and UI plumbing. | None |
+| `hybrid` | Real local voice path: OpenAI Whisper transcribes the child, My Agent generates the reply, and ElevenLabs streams spoken audio. | `OPENAI_API_KEY`, `ELEVENLABS_API_KEY` |
+
+If `REALTIME_VOICE_PROVIDER` is missing, the current local-safe default is the mock provider. If `hybrid` is set but `ELEVENLABS_API_KEY` is missing, transcription and text replies can still work, but spoken reply audio may be silent.
+
+After changing `REALTIME_VOICE_PROVIDER` or voice keys, restart the backend process. Existing WebSocket voice sessions keep using the provider selected when that session started.
 
 ## Connections
 
