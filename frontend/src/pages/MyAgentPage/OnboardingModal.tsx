@@ -18,7 +18,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { AxiosError } from "axios";
+import { Shuffle } from "lucide-react";
 import { ANIMAL_EMOJIS } from "@/lib/avatars";
+import { AnimalAvatarIcon } from "@/lib/avatarIcons";
 import { CURATED_TITLES, customTitleAllowed } from "@/lib/agentTitles";
 import { useUpsertAgent } from "@/hooks/useAgent";
 import { onboardingService } from "@/api/services/onboardingService";
@@ -219,10 +221,10 @@ export default function OnboardingModal({
           {currentStep === "avatar" && (
             <div className="flex flex-col gap-2">
               <span className="text-sm font-medium text-gray-700">
-                Pick an animal
+                Pick a buddy icon
               </span>
               <div role="radiogroup" className="grid grid-cols-5 gap-2">
-                {ANIMAL_EMOJIS.map((emoji) => {
+                {ANIMAL_EMOJIS.map((emoji, index) => {
                   const id = avatarIdFor(emoji);
                   const selected = avatarId === id;
                   return (
@@ -231,16 +233,16 @@ export default function OnboardingModal({
                       type="button"
                       role="radio"
                       aria-checked={selected}
-                      aria-label={`Choose ${emoji}`}
+                      aria-label={`Choose buddy icon ${index + 1}`}
                       onClick={() => setAvatarId(id)}
                       className={[
-                        "flex aspect-square items-center justify-center rounded-lg border-2 text-2xl transition-colors",
+                        "flex aspect-square items-center justify-center rounded-lg border-2 text-primary transition-colors",
                         selected
                           ? "border-primary bg-primary/10"
                           : "border-gray-200 hover:border-primary/35 hover:bg-primary/5",
                       ].join(" ")}
                     >
-                      {emoji}
+                      <AnimalAvatarIcon avatarId={id} size={22} />
                     </button>
                   );
                 })}
@@ -250,10 +252,10 @@ export default function OnboardingModal({
                   We'll call your buddy <strong>{name}</strong>. Tap{" "}
                   <button
                     type="button"
-                    className="text-primary-dark underline"
+                    className="inline-flex items-center gap-1 text-primary-dark underline"
                     onClick={() => setName(pickRandomName())}
                   >
-                    🔀 shuffle
+                    <Shuffle className="h-3 w-3" aria-hidden="true" /> shuffle
                   </button>{" "}
                   for a different name.
                 </p>
@@ -280,7 +282,7 @@ export default function OnboardingModal({
                   </option>
                 ))}
                 {customTitleAllowed(ageGroup) && (
-                  <option value="__custom__">✏️ Custom title</option>
+                  <option value="__custom__">Custom title</option>
                 )}
               </select>
               {customTitleAllowed(ageGroup) &&

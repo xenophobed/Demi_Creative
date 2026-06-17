@@ -323,15 +323,15 @@ describe("resolveCaptionsVisibility (#608)", () => {
 
 describe("headerCTACopy (#638)", () => {
   // Locks the per-age entry-surface copy to PRD §3.16.6:
-  //   | 3-5            | 6-8                  | 9-12            |
-  //   | emoji + "Talk!"| "Talk to {buddy}"    | mic + "Voice"   |
+  //   | 3-5    | 6-8                  | 9-12    |
+  //   | "Talk!"| "Talk to {buddy}"    | "Voice" |
   // Pure helper so the labels can't drift away from the table. One
   // assertion per age band — the AC's "three tests, one per age".
 
-  it("3-5 → giant mic emoji + 'Talk!' (pre-readers get the emoji, no name)", () => {
+  it("3-5 → 'Talk!' without emoji", () => {
     expect(headerCTACopy("3-5", "Sparky")).toEqual({
       label: "Talk!",
-      emoji: "🎤",
+      emoji: "",
     });
   });
 
@@ -347,7 +347,7 @@ describe("headerCTACopy (#638)", () => {
   it("9-12 → mic icon + 'Voice' (older kids get the terse, tool-like label)", () => {
     expect(headerCTACopy("9-12", "Sparky")).toEqual({
       label: "Voice",
-      emoji: "🎤",
+      emoji: "",
     });
   });
 

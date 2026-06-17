@@ -16,6 +16,7 @@ import { useEffect, useState } from "react";
 import { AxiosError } from "axios";
 import { X } from "lucide-react";
 import { ANIMAL_EMOJIS } from "@/lib/avatars";
+import { AnimalAvatarIcon } from "@/lib/avatarIcons";
 import { useUpsertAgent } from "@/hooks/useAgent";
 import type { Agent, AgentErrorDetail } from "@/types/agent";
 import type { AgeGroup } from "@/types/api";
@@ -214,14 +215,14 @@ export default function PersonaEditorSheet({
           {/* Avatar */}
           <div className="flex flex-col gap-2">
             <span className="text-sm font-medium text-gray-700">
-              Buddy animal
+              Buddy icon
             </span>
             <div
               role="radiogroup"
-              aria-label="Buddy animal"
+              aria-label="Buddy icon"
               className="grid grid-cols-5 gap-2"
             >
-              {ANIMAL_EMOJIS.map((emoji) => {
+              {ANIMAL_EMOJIS.map((emoji, index) => {
                 const id = avatarIdFor(emoji);
                 const selected = avatarId === id;
                 return (
@@ -230,17 +231,17 @@ export default function PersonaEditorSheet({
                     type="button"
                     role="radio"
                     aria-checked={selected}
-                    aria-label={`Choose ${emoji}`}
+                    aria-label={`Choose buddy icon ${index + 1}`}
                     disabled={upsert.isPending}
                     onClick={() => setAvatarId(id)}
                     className={[
-                      "flex aspect-square items-center justify-center rounded-xl border-2 text-2xl transition-colors focus:outline-none focus:ring-2 focus:ring-violet-500",
+                      "flex aspect-square items-center justify-center rounded-xl border-2 text-violet-600 transition-colors focus:outline-none focus:ring-2 focus:ring-violet-500",
                       selected
                         ? "border-violet-500 bg-violet-50"
                         : "border-gray-200 hover:border-gray-300",
                     ].join(" ")}
                   >
-                    {emoji}
+                    <AnimalAvatarIcon avatarId={id} size={22} />
                   </button>
                 );
               })}

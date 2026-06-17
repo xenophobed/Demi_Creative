@@ -12,6 +12,8 @@ import Button from "@/components/common/Button";
 import Card from "@/components/common/Card";
 import useChildStore, { DEFAULT_INTERESTS } from "@/store/useChildStore";
 import type { AgeGroup, ChildProfile } from "@/types/api";
+import { AnimalAvatarIcon } from "@/lib/avatarIcons";
+import { ANIMAL_EMOJIS } from "@/lib/avatars";
 
 const AGE_OPTIONS: AgeGroup[] = ["3-5", "6-8", "9-12"];
 
@@ -26,8 +28,12 @@ const EMPTY_FORM: FormState = {
   name: "",
   age_group: "6-8",
   interestsText: "",
-  avatar: "",
+  avatar: avatarIdFor(ANIMAL_EMOJIS[0]),
 };
+
+function avatarIdFor(emoji: string): string {
+  return `emoji:${emoji}`;
+}
 
 interface ChildrenTabProps {
   isParent: boolean;
@@ -219,7 +225,10 @@ function ChildrenTab({ isParent }: ChildrenTabProps) {
                     }`}
                     onClick={() => switchActiveChild(child.child_id)}
                   >
-                    {avatarLabel(child)}
+                    <AnimalAvatarIcon
+                      avatarId={child.avatar ?? child.child_id}
+                      size={16}
+                    />
                     <span>{child.name}</span>
                     {isActive && (
                       <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
@@ -282,6 +291,40 @@ function ChildrenTab({ isParent }: ChildrenTabProps) {
                   ))}
                 </select>
               </label>
+            </div>
+
+            <div>
+              <span className="mb-2 block text-sm font-medium text-gray-600">
+                Avatar
+              </span>
+              <div
+                role="radiogroup"
+                aria-label="Child avatar"
+                className="grid grid-cols-5 gap-2 sm:grid-cols-10"
+              >
+                {ANIMAL_EMOJIS.map((emoji, index) => {
+                  const avatarId = avatarIdFor(emoji);
+                  const selected = form.avatar === avatarId;
+                  return (
+                    <button
+                      key={avatarId}
+                      type="button"
+                      role="radio"
+                      aria-checked={selected}
+                      aria-label={`Choose child avatar ${index + 1}`}
+                      onClick={() => setForm({ ...form, avatar: avatarId })}
+                      className={[
+                        "flex aspect-square items-center justify-center rounded-lg border-2 text-primary transition-colors",
+                        selected
+                          ? "border-primary bg-primary/10"
+                          : "border-gray-200 hover:border-primary/35 hover:bg-primary/5",
+                      ].join(" ")}
+                    >
+                      <AnimalAvatarIcon avatarId={avatarId} size={20} />
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             <label className="block">
@@ -388,7 +431,12 @@ function ChildrenTab({ isParent }: ChildrenTabProps) {
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-2xl">{avatarLabel(child)}</span>
+                      <span className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+                        <AnimalAvatarIcon
+                          avatarId={child.avatar ?? child.child_id}
+                          size={20}
+                        />
+                      </span>
                       <h3 className="truncate text-lg font-bold text-gray-800">
                         {child.name}
                       </h3>
@@ -492,13 +540,6 @@ function StatusPill({
       {children}
     </span>
   );
-}
-
-function avatarLabel(child: ChildProfile): string {
-  if (child.avatar?.startsWith("emoji:")) {
-    return child.avatar.replace("emoji:", "");
-  }
-  return "🎨";
 }
 
 export default ChildrenTab;

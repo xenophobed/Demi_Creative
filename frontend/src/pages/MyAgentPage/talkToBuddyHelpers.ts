@@ -269,8 +269,8 @@ export function resolveCaptionsVisibility(
  *
  * Reuses the canonical ``AgeGroup`` from ``@/types/api`` rather than a
  * local copy so a future fourth band (there isn't one today) can't drift
- * between modules. ``emoji`` is the empty string for 6-8 — the consuming
- * JSX renders the emoji span only when non-empty.
+ * between modules. ``emoji`` remains in the return shape for backwards
+ * compatibility, but it is intentionally empty so the UI stays on flat icons.
  */
 export interface HeaderCTACopy {
   label: string;
@@ -283,9 +283,9 @@ export function headerCTACopy(
 ): HeaderCTACopy {
   switch (ageGroup) {
     case "3-5":
-      return { label: "Talk!", emoji: "🎤" };
+      return { label: "Talk!", emoji: "" };
     case "9-12":
-      return { label: "Voice", emoji: "🎤" };
+      return { label: "Voice", emoji: "" };
     case "6-8":
     default:
       return { label: `Talk to ${buddyName}`, emoji: "" };

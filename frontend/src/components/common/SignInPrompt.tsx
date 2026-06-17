@@ -7,9 +7,11 @@
  */
 
 import { Link } from "react-router-dom";
+import { LogIn } from "lucide-react";
+import type { ReactNode } from "react";
 
 interface Props {
-  icon?: string;
+  icon?: ReactNode;
   title: string;
   description: string;
   /** Where to come back to after sign-in. Optional — defaults to current path. */
@@ -17,7 +19,7 @@ interface Props {
 }
 
 export default function SignInPrompt({
-  icon = "👋",
+  icon = <LogIn className="h-9 w-9" aria-hidden="true" />,
   title,
   description,
   returnPath,
@@ -27,7 +29,7 @@ export default function SignInPrompt({
   const href = `/login?return=${encodeURIComponent(ret)}`;
   return (
     <div className="mx-auto flex max-w-2xl flex-col items-center gap-3 rounded-lg border-2 border-dashed border-primary/20 bg-white px-6 py-10 text-center">
-      <span className="text-4xl" aria-hidden="true">
+      <span className="text-primary" aria-hidden="true">
         {icon}
       </span>
       <h2 className="text-xl font-semibold text-gray-900">{title}</h2>
