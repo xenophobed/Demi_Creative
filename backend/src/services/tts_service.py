@@ -566,17 +566,25 @@ async def generate_multi_speaker_audio(dialogue_script: Any, age_group: str) -> 
                 role = str(line.get("role", "guest"))
                 role_to_batch.setdefault(role, []).append({"segment_id": index, "text": line.get("text", "")})
 
-            for role, segments in role_to_batch.items():
-                if not segments:
-                    continue
+            async def _role_batch(role: str, segments: List[Dict[str, Any]]):
                 voice_cfg = voices.get(role, {"voice": "alloy", "speed": 1.0})
-                raw = await generate_audio_batch(
+                return await generate_audio_batch(
                     {
                         "story_segments": segments,
                         "voice": voice_cfg["voice"],
                         "speed": voice_cfg["speed"],
                     }
                 )
+
+            # Generate each role's batch concurrently instead of role-by-role.
+            active_roles = [(r, s) for r, s in role_to_batch.items() if s]
+            raws = await asyncio.gather(
+                *[_role_batch(r, s) for r, s in active_roles],
+                return_exceptions=True,
+            )
+            for raw in raws:
+                if isinstance(raw, Exception):
+                    continue
                 content = raw.get("content", []) if isinstance(raw, dict) else []
                 if not content:
                     continue
@@ -591,26 +599,36 @@ async def generate_multi_speaker_audio(dialogue_script: Any, age_group: str) -> 
         # Fall through to per-line generation
         pass
 
-    # Fill missing lines with direct TTS generation (or deterministic placeholders).
+    # Fill any lines the batch path missed with direct TTS — concurrently.
+    missing: List[tuple] = []
     for index, line in enumerate(lines):
         key = str(index)
         if key in audio_urls:
             continue
-
-        role = str(line.get("role", "guest"))
-        voice_cfg = voices.get(role, {"voice": "alloy", "speed": 1.0})
         text = str(line.get("text", "")).strip()
-
         if not text:
             continue
+        role = str(line.get("role", "guest"))
+        voice_cfg = voices.get(role, {"voice": "alloy", "speed": 1.0})
+        missing.append((key, text, voice_cfg))
 
-        generated = await generate_story_audio_file(
-            text=text,
-            voice=str(voice_cfg["voice"]),
-            speed=float(voice_cfg["speed"]),
+    if missing:
+        async def _one_line(text: str, voice_cfg: Dict[str, Any]):
+            return await generate_story_audio_file(
+                text=text,
+                voice=str(voice_cfg["voice"]),
+                speed=float(voice_cfg["speed"]),
+            )
+
+        gens = await asyncio.gather(
+            *[_one_line(t, vc) for _, t, vc in missing],
+            return_exceptions=True,
         )
-        url = _audio_url_from_path(generated.get("audio_path"))
-        if url:
-            audio_urls[key] = url
+        for (key, _text, _vc), gen in zip(missing, gens):
+            if isinstance(gen, Exception) or not isinstance(gen, dict):
+                continue
+            url = _audio_url_from_path(gen.get("audio_path"))
+            if url:
+                audio_urls[key] = url
 
     return audio_urls
