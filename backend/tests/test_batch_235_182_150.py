@@ -51,20 +51,22 @@ class TestVideoFailFast:
 
     @pytest.mark.asyncio
     async def test_generate_painting_video_fails_with_status_failed(self, tmp_path):
-        """When Sora API fails, job status must be 'failed', not 'pending'."""
+        """When the video provider fails, job status must be 'failed', not 'pending'."""
+        from src.mcp_servers import video_generator_server as vgs
         from src.mcp_servers.video_generator_server import generate_painting_video, load_job_status
 
         # Create a dummy image
         img = tmp_path / "test.png"
         img.write_bytes(b"\x89PNG" + b"\x00" * 100)
 
-        with patch.dict("os.environ", {"OPENAI_API_KEY": "test-key"}):
-            with patch("src.mcp_servers.video_generator_server.OpenAI") as mock_openai:
-                # Simulate Sora API failure
-                mock_client = MagicMock()
-                mock_client.images.generate.side_effect = RuntimeError("Sora model not available")
-                mock_openai.return_value = mock_client
+        # Simulate Replicate i2v failure → must fail fast.
+        fake_replicate = MagicMock()
+        fake_replicate.Client.return_value.run.side_effect = RuntimeError(
+            "video model not available"
+        )
 
+        with patch.dict("os.environ", {"REPLICATE_API_TOKEN": "r8_test"}):
+            with patch.object(vgs, "_replicate", fake_replicate):
                 result = await generate_painting_video({
                     "image_path": str(img),
                     "style": "gentle_animation",

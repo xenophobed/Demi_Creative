@@ -1,9 +1,9 @@
-"""Unit tests for the Sora-backed video generation MCP tool.
+"""Unit tests for the Replicate-backed video generation MCP tool.
 
-Regression guard for the bug where generate_painting_video called
-client.images.generate(image=...), which raises
-"Images.generate() got an unexpected keyword argument 'image'" — that
-endpoint accepts no image input and returns stills, not video.
+Cheapest-everywhere (best-value) policy: video uses a low-cost, speed-optimized
+Replicate image-to-video model (default ``wan-video/wan-2.2-i2v-fast`` @ 480p)
+instead of the expensive, slow OpenAI Sora. These tests lock the provider call
+shape, the env override, and the fail-fast error path.
 """
 
 import json
@@ -13,77 +13,72 @@ import pytest
 from backend.src.mcp_servers import video_generator_server as vgs
 
 
-class _FakeBinaryContent:
+class _FakeFileOutput:
+    """Mimics replicate's FileOutput return value (has ``.read()``)."""
+
     def __init__(self, payload: bytes):
         self._payload = payload
-        self.written_to = None
 
-    def write_to_file(self, path):
-        self.written_to = str(path)
-        with open(path, "wb") as f:
-            f.write(self._payload)
+    def read(self) -> bytes:
+        return self._payload
 
 
-class _FakeVideo:
-    def __init__(self, status="completed", error=None):
-        self.id = "vid_123"
-        self.status = status
-        self.error = error
+class _FakeReplicate:
+    """Stand-in for the replicate module: ``.Client(...).run(...)``."""
+
+    def __init__(self, output=None, raises=None):
+        self._output = output
+        self._raises = raises
+        self.run_calls = []
+
+    def Client(self, api_token=None, timeout=None):
+        outer = self
+
+        class _Client:
+            def run(self, model, input=None, use_file_output=None):
+                outer.run_calls.append({"model": model, "input": input})
+                if outer._raises:
+                    raise outer._raises
+                return outer._output
+
+        return _Client()
 
 
-class _FakeVideos:
-    def __init__(self, video):
-        self._video = video
-        self.create_calls = []
-        self.download_calls = []
+class _FakeHttpx:
+    """Minimal httpx stand-in for the URL-output download branch."""
 
-    def create_and_poll(self, **kwargs):
-        self.create_calls.append(kwargs)
-        return self._video
+    class _Resp:
+        content = b"url-mp4-bytes"
 
-    def download_content(self, video_id, variant="video"):
-        self.download_calls.append((video_id, variant))
-        return _FakeBinaryContent(b"fake-mp4-bytes")
+    @staticmethod
+    def get(*_a, **_k):
+        return _FakeHttpx._Resp()
 
-
-class _FakeImages:
-    def generate(self, **kwargs):  # pragma: no cover - must never be called
-        raise AssertionError("images.generate must not be used for video")
-
-
-class _FakeOpenAI:
-    last_instance = None
-
-    def __init__(self, api_key=None, video=None):
-        self.api_key = api_key
-        self.videos = _FakeVideos(video or _FakeVideo())
-        self.images = _FakeImages()
-        _FakeOpenAI.last_instance = self
-
-
-def _patch_openai(monkeypatch, video=None):
-    def factory(api_key=None):
-        return _FakeOpenAI(api_key=api_key, video=video)
-
-    monkeypatch.setattr(vgs, "OpenAI", factory)
+    @staticmethod
+    def Timeout(*_a, **_k):
+        return None
 
 
 @pytest.mark.parametrize(
     "requested,expected",
-    [(4, "4"), (8, "8"), (12, "12"), (10, "8"), (1, "4"), (100, "12")],
+    [(4, 4), (8, 8), (10, 8), (1, 4), (100, 8), ("6", 6), (None, 5)],
 )
-def test_nearest_supported_duration_snaps_to_sora_lengths(requested, expected):
-    assert vgs.nearest_supported_duration(requested) == expected
+def test_normalize_duration_clamps_to_cost_window(requested, expected):
+    assert vgs.normalize_duration_seconds(requested) == expected
 
 
 @pytest.mark.asyncio
-async def test_generate_painting_video_uses_sora_videos_api(monkeypatch, tmp_path):
+async def test_generate_painting_video_uses_replicate_i2v(monkeypatch, tmp_path):
     image_path = tmp_path / "drawing.png"
     image_path.write_bytes(b"fake-png")
     monkeypatch.setattr(vgs, "get_video_output_path", lambda: str(tmp_path))
     monkeypatch.setattr(vgs, "save_job_status", lambda *_a, **_k: None)
-    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
-    _patch_openai(monkeypatch)
+    monkeypatch.setenv("REPLICATE_API_TOKEN", "r8_test")
+    monkeypatch.delenv("VIDEO_MODEL", raising=False)
+    monkeypatch.delenv("VIDEO_RESOLUTION", raising=False)
+
+    fake = _FakeReplicate(output=_FakeFileOutput(b"fake-mp4-bytes"))
+    monkeypatch.setattr(vgs, "_replicate", fake)
 
     result = await vgs.generate_painting_video(
         {
@@ -98,14 +93,13 @@ async def test_generate_painting_video_uses_sora_videos_api(monkeypatch, tmp_pat
     assert payload["success"] is True
     assert payload["status"] == "completed"
 
-    client = _FakeOpenAI.last_instance
-    # The bug path (images.generate) must never run.
-    assert client.videos.create_calls, "expected videos.create_and_poll to be called"
-    call = client.videos.create_calls[0]
-    assert call["model"] == "sora-2"
-    assert call["seconds"] == "8"  # 10s request snapped to nearest Sora length
-    assert "input_reference" in call  # painting passed as a reference, not a kwarg
-    assert client.videos.download_calls == [("vid_123", "video")]
+    assert fake.run_calls, "expected replicate.run to be called"
+    call = fake.run_calls[0]
+    assert call["model"] == "wan-video/wan-2.2-i2v-fast"  # cheapest default
+    # Painting is the conditioning frame; the per-style prompt drives motion.
+    assert "image" in call["input"]
+    assert call["input"]["prompt"]  # non-empty style prompt
+    assert call["input"]["resolution"] == "480p"  # cheap tier by default
 
     # Video bytes were written to disk at the advertised path.
     written = tmp_path / payload["video_filename"]
@@ -113,15 +107,50 @@ async def test_generate_painting_video_uses_sora_videos_api(monkeypatch, tmp_pat
 
 
 @pytest.mark.asyncio
-async def test_generate_painting_video_fails_fast_on_incomplete_job(
+async def test_video_model_and_resolution_are_env_overridable(monkeypatch, tmp_path):
+    image_path = tmp_path / "drawing.png"
+    image_path.write_bytes(b"fake-png")
+    monkeypatch.setattr(vgs, "get_video_output_path", lambda: str(tmp_path))
+    monkeypatch.setattr(vgs, "save_job_status", lambda *_a, **_k: None)
+    monkeypatch.setenv("REPLICATE_API_TOKEN", "r8_test")
+    monkeypatch.setenv("VIDEO_MODEL", "some/other-model")
+    monkeypatch.setenv("VIDEO_RESOLUTION", "720p")
+
+    fake = _FakeReplicate(output="https://replicate.delivery/out.mp4")
+    monkeypatch.setattr(vgs, "_replicate", fake)
+    monkeypatch.setattr(vgs, "_httpx", _FakeHttpx)
+
+    result = await vgs.generate_painting_video(
+        {
+            "image_path": str(image_path),
+            "style": "playful",
+            "duration_seconds": 6,
+            "story_id": "s2",
+        }
+    )
+
+    payload = json.loads(result["content"][0]["text"])
+    assert payload["success"] is True
+    call = fake.run_calls[0]
+    assert call["model"] == "some/other-model"
+    assert call["input"]["resolution"] == "720p"
+    # URL output goes through the httpx download branch.
+    written = tmp_path / payload["video_filename"]
+    assert written.read_bytes() == b"url-mp4-bytes"
+
+
+@pytest.mark.asyncio
+async def test_generate_painting_video_fails_fast_on_provider_error(
     monkeypatch, tmp_path
 ):
     image_path = tmp_path / "drawing.png"
     image_path.write_bytes(b"fake-png")
     monkeypatch.setattr(vgs, "get_video_output_path", lambda: str(tmp_path))
     monkeypatch.setattr(vgs, "save_job_status", lambda *_a, **_k: None)
-    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
-    _patch_openai(monkeypatch, video=_FakeVideo(status="failed", error="moderation"))
+    monkeypatch.setenv("REPLICATE_API_TOKEN", "r8_test")
+
+    fake = _FakeReplicate(raises=Exception("moderation rejected"))
+    monkeypatch.setattr(vgs, "_replicate", fake)
 
     result = await vgs.generate_painting_video(
         {
@@ -136,3 +165,26 @@ async def test_generate_painting_video_fails_fast_on_incomplete_job(
     assert payload["success"] is False
     assert payload["status"] == "failed"
     assert "failed" in payload["error"]
+
+
+@pytest.mark.asyncio
+async def test_generate_painting_video_requires_replicate_token(monkeypatch, tmp_path):
+    image_path = tmp_path / "drawing.png"
+    image_path.write_bytes(b"fake-png")
+    monkeypatch.delenv("REPLICATE_API_TOKEN", raising=False)
+    # SDKs present but no token → clear, non-crashing error.
+    monkeypatch.setattr(vgs, "_replicate", _FakeReplicate(output=_FakeFileOutput(b"x")))
+    monkeypatch.setattr(vgs, "_httpx", _FakeHttpx)
+
+    result = await vgs.generate_painting_video(
+        {
+            "image_path": str(image_path),
+            "style": "playful",
+            "duration_seconds": 8,
+            "story_id": "s",
+        }
+    )
+
+    payload = json.loads(result["content"][0]["text"])
+    assert payload["success"] is False
+    assert "REPLICATE_API_TOKEN" in payload["error"]

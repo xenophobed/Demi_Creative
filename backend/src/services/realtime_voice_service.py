@@ -832,7 +832,16 @@ class OpenAIRealtimeProvider:
         The constructor's ``self.model`` is ignored — selection is
         decided at session start so a long-lived provider instance
         can serve sessions for many children with different tiers.
+
+        Cheapest-everywhere cost policy: premium realtime is disabled by
+        default — every session uses the ``gpt-realtime-mini`` tier
+        regardless of the per-child opt-in flags. To re-enable the
+        dual-opt-in escalation to ``gpt-realtime-2`` later, set the env
+        var ``VOICE_ALLOW_PREMIUM_REALTIME=1`` (no redeploy of code
+        needed; the escalation logic below is preserved).
         """
+        if os.getenv("VOICE_ALLOW_PREMIUM_REALTIME", "0") != "1":
+            return OPENAI_REALTIME_MODEL_DEFAULT
         if voice_premium_voice and voice_premium_voice_consent:
             return OPENAI_REALTIME_MODEL_ESCALATED
         return OPENAI_REALTIME_MODEL_DEFAULT
