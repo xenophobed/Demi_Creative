@@ -48,6 +48,31 @@ Production (Railway + Vercel):
 
 **Important**: Frontend variables prefixed with `VITE_` are embedded in the JavaScript bundle at build time. They are visible to anyone who inspects the page source. Never put secret keys in `VITE_` variables.
 
+## Model & Cost Controls (Optional)
+
+Every AI call defaults to the **cheapest capable model** for that job. These
+optional variables override the model per feature **without a code change** —
+leave them unset for the cost-efficient defaults.
+
+| Variable | Default | What it controls |
+|----------|---------|------------------|
+| `CLAUDE_AGENT_MODEL` / `ANTHROPIC_MODEL` | `claude-haiku-4-5` | Claude model for story / My Agent / interactive / Kids Daily orchestration |
+| `SAFETY_CHECK_MODEL` | `claude-haiku-4-5` | Model for the content-safety MCP server |
+| `VISION_ANALYSIS_MODEL` | `claude-haiku-4-5` | Model for drawing / vision analysis |
+| `VIDEO_MODEL` | `wan-video/wan-2.2-i2v-fast` | Replicate image-to-video model (replaced OpenAI Sora — cheaper **and** faster) |
+| `VIDEO_RESOLUTION` | `480p` | Video render resolution; set `720p` for sharper output at higher cost |
+| `VIDEO_RENDER_TIMEOUT_S` | `300` | Max seconds to wait for a video render before failing |
+| `IMAGE_STYLE_MODEL` | `black-forest-labs/flux-kontext-pro` | Replicate art-style transfer model; `…-dev` is cheaper but slower/lower-fidelity |
+| `KIDS_DAILY_IMAGE_MODEL` / `MORNING_SHOW_IMAGE_MODEL` | `gpt-image-1-mini` | OpenAI image model for Kids Daily illustrations |
+| `OPENAI_REALTIME_MODEL` | `gpt-realtime-mini` | OpenAI realtime model for Talk-to-Buddy voice |
+| `VOICE_ALLOW_PREMIUM_REALTIME` | unset (off) | Set `1` to allow the pricier `gpt-realtime-2` tier on dual opt-in; default keeps **every** session on `mini` |
+| `REPLICATE_API_TOKEN` | — | **Required** for video, art-style transfer, and voice cloning (Replicate models) |
+
+**Cheapest-everywhere policy**: the defaults pick the cheapest tier that still
+delivers good quality and acceptable latency (e.g. video uses a fast 480p
+Replicate model instead of Sora). To raise quality for a single feature, set
+just that feature's variable — no redeploy of logic required.
+
 ## Key Concepts
 
 **Secret vs Public**: Secret variables (API keys, database passwords) must never appear in code or frontend bundles. Public variables (Supabase URL, anon key) are safe to embed because they only grant limited access controlled by Supabase's Row Level Security.
