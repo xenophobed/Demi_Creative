@@ -2,6 +2,16 @@ import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
+import {
+  Check,
+  Flame,
+  Gift,
+  Newspaper,
+  Palette,
+  PartyPopper,
+  Star,
+  Theater,
+} from "lucide-react";
 import Button from "@/components/common/Button";
 import Card from "@/components/common/Card";
 import TiltCard from "@/components/depth/TiltCard";
@@ -21,6 +31,7 @@ import ChildrenTab from "./ChildrenTab";
 import { useMemoryApi } from "@/hooks/useMemoryApi";
 import type { MemoryPreferenceCategory } from "@/types/api";
 import { ANIMAL_EMOJIS } from "@/lib/avatars";
+import { AnimalAvatarIcon, normalizeAvatarId } from "@/lib/avatarIcons";
 
 const PROFILE_TABS = [
   { id: "overview", label: "Overview" },
@@ -83,13 +94,13 @@ function StarBoard() {
     <Card className="overflow-hidden">
       <div className="bg-gradient-to-r from-amber-400 via-yellow-400 to-orange-400 px-5 py-4">
         <div className="flex items-center gap-3">
-          <div className="text-3xl">🫙</div>
+          <Star className="h-8 w-8 text-white" aria-hidden="true" />
           <div>
             <h2 className="text-base font-bold text-white flex items-center gap-2">
               My Star Collection
               {streak >= 2 && (
                 <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-white/25 text-white backdrop-blur-sm border border-white/30">
-                  🔥 {streak} day streak
+                  <Flame className="h-3 w-3" aria-hidden="true" /> {streak} day streak
                 </span>
               )}
             </h2>
@@ -329,7 +340,7 @@ function ProfilePage() {
           onClick={() => navigate("/library?tab=art-stories")}
         >
           <div className="bg-gradient-to-br from-primary/10 to-primary/5 rounded-card p-5 text-center">
-            <div className="text-4xl mb-2">🎨</div>
+            <Palette className="mx-auto mb-2 h-9 w-9 text-primary" aria-hidden="true" />
             <div className="text-3xl font-bold text-gray-800">
               {statsLoading ? "..." : (stats?.art_story_count ?? 0)}
             </div>
@@ -343,7 +354,7 @@ function ProfilePage() {
           onClick={() => navigate("/library?tab=interactive")}
         >
           <div className="bg-gradient-to-br from-accent/20 to-accent/10 rounded-card p-5 text-center">
-            <div className="text-4xl mb-2">🎭</div>
+            <Theater className="mx-auto mb-2 h-9 w-9 text-emerald-600" aria-hidden="true" />
             <div className="text-3xl font-bold text-gray-800">
               {statsLoading ? "..." : (stats?.interactive_count ?? 0)}
             </div>
@@ -357,7 +368,7 @@ function ProfilePage() {
           onClick={() => navigate("/library?tab=kids-news")}
         >
           <div className="bg-gradient-to-br from-secondary/20 to-secondary/10 rounded-card p-5 text-center">
-            <div className="text-4xl mb-2">📰</div>
+            <Newspaper className="mx-auto mb-2 h-9 w-9 text-amber-600" aria-hidden="true" />
             <div className="text-3xl font-bold text-gray-800">
               {statsLoading ? "..." : (stats?.news_count ?? 0)}
             </div>
@@ -492,20 +503,22 @@ function ProfilePage() {
                     size="md"
                   />
                   <span className="text-sm text-gray-500">
-                    {editForm.avatar_url?.startsWith("emoji:")
-                      ? "Tap an animal to change"
-                      : "Pick your favorite animal!"}
+                    {normalizeAvatarId(editForm.avatar_url)?.startsWith("emoji:")
+                      ? "Tap an icon to change"
+                      : "Pick your profile icon"}
                   </span>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {ANIMAL_EMOJIS.map((emoji) => {
+                  {ANIMAL_EMOJIS.map((emoji, index) => {
                     const emojiValue = `emoji:${emoji}`;
-                    const isSelected = editForm.avatar_url === emojiValue;
+                    const isSelected =
+                      normalizeAvatarId(editForm.avatar_url) === emojiValue;
                     return (
                       <motion.button
                         key={emoji}
                         type="button"
-                        className={`flex h-10 w-10 items-center justify-center rounded-lg text-xl transition-all ${
+                        aria-label={`Choose profile icon ${index + 1}`}
+                        className={`flex h-10 w-10 items-center justify-center rounded-lg text-primary transition-all ${
                           isSelected
                             ? "border-2 border-primary bg-primary/10 shadow-md"
                             : "border border-gray-200 hover:border-gray-300 hover:shadow-sm"
@@ -516,7 +529,7 @@ function ProfilePage() {
                         whileHover={{ scale: 1.15, y: -2 }}
                         whileTap={{ scale: 0.9 }}
                       >
-                        {emoji}
+                        <AnimalAvatarIcon avatarId={emojiValue} size={20} />
                       </motion.button>
                     );
                   })}
@@ -540,7 +553,7 @@ function ProfilePage() {
           {/* Header banner */}
           <div className="bg-gradient-to-r from-violet-500 via-purple-500 to-indigo-500 px-5 py-4">
             <div className="flex items-center gap-3">
-              <div className="text-3xl">🎁</div>
+              <Gift className="h-8 w-8 text-white" aria-hidden="true" />
               <div>
                 <h2 className="text-base font-bold text-white flex items-center gap-2">
                   Share the Fun!
@@ -584,7 +597,13 @@ function ProfilePage() {
                         : "bg-gradient-to-r from-violet-500 to-purple-500 text-white hover:from-violet-600 hover:to-purple-600 shadow-purple-200 shadow-md hover:shadow-lg"
                     }`}
                   >
-                    {linkCopied ? "Copied ✓" : "Copy Link"}
+                    {linkCopied ? (
+                      <span className="inline-flex items-center gap-1">
+                        Copied <Check className="h-3.5 w-3.5" aria-hidden="true" />
+                      </span>
+                    ) : (
+                      "Copy Link"
+                    )}
                   </button>
                 </div>
               </div>
@@ -612,7 +631,12 @@ function ProfilePage() {
                 </div>
                 <p className="text-xs text-gray-400 mt-2">
                   {referral.membership_tier === "plus"
-                    ? "🎉 You're a Plus member — enjoy 3x daily creations!"
+                    ? (
+                      <span className="inline-flex items-center gap-1">
+                        <PartyPopper className="h-3.5 w-3.5" aria-hidden="true" />
+                        You're a Plus member — enjoy 3x daily creations!
+                      </span>
+                    )
                     : `Invite ${referral.upgrade_threshold - referral.qualified_count} more friends to upgrade to Plus and get 3x daily uses`}
                 </p>
               </div>

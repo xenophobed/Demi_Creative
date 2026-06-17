@@ -30,6 +30,7 @@ import OnboardingModal from "./OnboardingModal";
 import PersonaEditorSheet from "./PersonaEditorSheet";
 import { shouldAutoOpenOnboarding } from "./onboardingState";
 import SignInPrompt from "@/components/common/SignInPrompt";
+import { AnimalAvatarIcon } from "@/lib/avatarIcons";
 
 export default function MyAgentPage() {
   const currentChild = useChildStore((s) => s.currentChild);
@@ -128,7 +129,7 @@ export default function MyAgentPage() {
           </p>
         </header>
         <SignInPrompt
-          icon="🦊"
+          icon={<AnimalAvatarIcon avatarId="emoji:🦊" size={36} />}
           title="Sign in to meet your buddy"
           description="Once you sign in, we'll walk you through naming your creative buddy and picking its animal — takes under a minute."
         />
@@ -223,7 +224,9 @@ export default function MyAgentPage() {
           </p>
         </header>
         <div className="rounded-2xl border border-dashed border-violet-200 bg-violet-50/60 p-8 text-center">
-          <div className="mx-auto mb-3 text-5xl">🦊</div>
+          <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-white text-violet-600 shadow-sm ring-1 ring-violet-100">
+            <AnimalAvatarIcon avatarId="emoji:🦊" size={30} />
+          </div>
           <p className="text-sm text-gray-700">
             Your buddy isn't set up yet. Take a minute to introduce yourselves.
           </p>

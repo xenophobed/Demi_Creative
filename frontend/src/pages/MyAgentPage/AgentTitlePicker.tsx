@@ -74,7 +74,7 @@ export default function AgentTitlePicker({
           </option>
         ))}
         {allowCustom && (
-          <option value={CUSTOM_SENTINEL}>✏️ Custom title</option>
+          <option value={CUSTOM_SENTINEL}>Custom title</option>
         )}
       </select>
       {mode === "custom" && allowCustom && (

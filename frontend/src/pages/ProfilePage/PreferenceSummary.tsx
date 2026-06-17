@@ -1,4 +1,5 @@
 import { motion } from "framer-motion";
+import { Rainbow } from "lucide-react";
 import Card from "@/components/common/Card";
 import type { MemoryPreferenceCategory, PreferenceProfile } from "@/types/api";
 
@@ -123,7 +124,7 @@ function PreferenceSummary({
 
       {!hasData ? (
         <div className="text-center py-6">
-          <div className="text-4xl mb-3">🌈</div>
+          <Rainbow className="mx-auto mb-3 h-10 w-10 text-primary" aria-hidden="true" />
           <p className="text-gray-500 text-sm">
             Your favorite themes will appear here as you explore stories!
           </p>

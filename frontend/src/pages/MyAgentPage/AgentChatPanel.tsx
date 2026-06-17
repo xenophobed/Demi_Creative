@@ -70,6 +70,7 @@ import {
   chipPrefillForCharacter,
   pickRecurringCharacter,
 } from "./recurringCharacter";
+import { AnimalAvatarIcon } from "@/lib/avatarIcons";
 
 interface Props {
   agent: Agent;
@@ -101,12 +102,6 @@ const STARTER_PROMPTS: string[] = [
 const TALK_TO_BUDDY_ENABLED =
   (import.meta as { env?: { VITE_TALK_TO_BUDDY_ENABLED?: string } }).env
     ?.VITE_TALK_TO_BUDDY_ENABLED === "true";
-
-function avatarGlyph(agent: Agent): string {
-  return agent.agent_avatar_id.startsWith("emoji:")
-    ? agent.agent_avatar_id.slice("emoji:".length)
-    : "✦";
-}
 
 function launchLabel(flow: SSELaunchFlowData): string {
   switch (flow.flow_type) {
@@ -233,7 +228,6 @@ export default function AgentChatPanel({
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages.length, tail]);
 
-  const buddyGlyph = useMemo(() => avatarGlyph(agent), [agent]);
   const canSend = Boolean(draft.trim()) && !isStreaming && Boolean(childId);
   const imageInputId = `agent-chat-image-${agent.agent_id}`;
   const currentChild = useChildStore((s) => s.currentChild);
@@ -465,10 +459,10 @@ export default function AgentChatPanel({
       <header className="flex items-center justify-between gap-3 border-b border-gray-100 bg-gradient-to-r from-violet-50 to-pink-50 px-5 py-3.5">
         <div className="flex items-center gap-3">
           <div
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white text-2xl shadow-sm ring-1 ring-violet-100"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white text-violet-600 shadow-sm ring-1 ring-violet-100"
             aria-hidden="true"
           >
-            {buddyGlyph}
+            <AnimalAvatarIcon avatarId={agent.agent_avatar_id} size={22} />
           </div>
           <div className="min-w-0">
             <h2 className="truncate text-base font-semibold text-gray-900">
@@ -544,8 +538,8 @@ export default function AgentChatPanel({
                 </div>
               </div>
             )}
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white text-3xl shadow-md ring-2 ring-violet-100">
-              {buddyGlyph}
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white text-violet-600 shadow-md ring-2 ring-violet-100">
+              <AnimalAvatarIcon avatarId={agent.agent_avatar_id} size={32} />
             </div>
             <div>
               <p className="text-base font-semibold text-gray-900">
@@ -582,9 +576,9 @@ export default function AgentChatPanel({
                 {message.role === "assistant" && (
                   <div
                     aria-hidden="true"
-                    className="mr-2 mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white text-base shadow-sm ring-1 ring-violet-100"
+                    className="mr-2 mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white text-violet-600 shadow-sm ring-1 ring-violet-100"
                   >
-                    {buddyGlyph}
+                    <AnimalAvatarIcon avatarId={agent.agent_avatar_id} size={16} />
                   </div>
                 )}
                 <div
@@ -741,7 +735,7 @@ export default function AgentChatPanel({
                 className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-gray-300 text-gray-600 hover:bg-gray-50 disabled:pointer-events-none disabled:bg-gray-100 disabled:text-gray-300"
                 title="Ask a grown-up to allow the microphone"
               >
-                <span aria-hidden="true">🎤</span>
+                <Mic size={18} aria-hidden="true" />
                 <span className="sr-only">Ask a grown-up to allow the microphone</span>
               </button>
             ))}

@@ -1,5 +1,6 @@
 import { useRef } from "react";
 import { motion } from "framer-motion";
+import { Palette, Star, Users } from "lucide-react";
 import Card from "@/components/common/Card";
 import type { MemoryCharacter } from "@/types/api";
 
@@ -133,7 +134,7 @@ function CharacterGallery({
 
       {characters.length === 0 ? (
         <div className="text-center py-8">
-          <div className="text-4xl mb-3">🎨</div>
+          <Palette className="mx-auto mb-3 h-10 w-10 text-primary" aria-hidden="true" />
           <p className="text-gray-500 text-sm">
             Create your first story to meet your characters!
           </p>
@@ -141,8 +142,9 @@ function CharacterGallery({
       ) : (
         <div className="space-y-4">
           <div>
-            <p className="text-sm font-semibold text-gray-700 mb-2">
-              🌟 Main Characters ({resolvedMainCharacters.length})
+            <p className="mb-2 inline-flex items-center gap-1.5 text-sm font-semibold text-gray-700">
+              <Star className="h-4 w-4 text-amber-500" aria-hidden="true" />
+              Main Characters ({resolvedMainCharacters.length})
             </p>
             {resolvedMainCharacters.length > 0 ? (
               <div ref={scrollRef} className="character-carousel">
@@ -154,8 +156,9 @@ function CharacterGallery({
           </div>
 
           <div>
-            <p className="text-sm font-semibold text-gray-700 mb-2">
-              👥 Other Characters ({resolvedOtherCharacters.length})
+            <p className="mb-2 inline-flex items-center gap-1.5 text-sm font-semibold text-gray-700">
+              <Users className="h-4 w-4 text-gray-500" aria-hidden="true" />
+              Other Characters ({resolvedOtherCharacters.length})
             </p>
             {resolvedOtherCharacters.length > 0 ? (
               <div className="character-carousel">

@@ -28,6 +28,7 @@ import { authService } from '@/api/services/authService'
 import { performFullLogout } from '@/utils/logout'
 import { NavRefProvider, useNavRef } from '@/contexts/NavRefContext'
 import { PUBLIC_NAV_ITEMS } from './publicNav'
+import { AnimalAvatarIcon } from '@/lib/avatarIcons'
 
 const CHILD_SELECTION_PATHS = new Set([
   '/upload',
@@ -618,8 +619,11 @@ function ActiveChildPicker({
             onClick={() => onSelect(child.child_id)}
           >
             <div className="flex items-center gap-3">
-              <span className="flex h-11 w-11 items-center justify-center rounded-full bg-primary/10 text-2xl">
-                {avatarLabel(child)}
+              <span className="flex h-11 w-11 items-center justify-center rounded-full bg-primary/10 text-primary">
+                <AnimalAvatarIcon
+                  avatarId={child.avatar ?? child.child_id}
+                  size={22}
+                />
               </span>
               <div className="min-w-0">
                 <h2 className="truncate text-base font-bold text-gray-800">
@@ -690,19 +694,12 @@ function ActiveChildSwitcher({
         )}
         {profiles.map((child) => (
           <option key={child.child_id} value={child.child_id}>
-            {avatarLabel(child)} {child.name}
+            {child.name}
           </option>
         ))}
       </select>
     </label>
   )
-}
-
-function avatarLabel(child: { avatar?: string | null }) {
-  if (child.avatar?.startsWith('emoji:')) {
-    return child.avatar.replace('emoji:', '')
-  }
-  return 'Child'
 }
 
 function NavLink({
