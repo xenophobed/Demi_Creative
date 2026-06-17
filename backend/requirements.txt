@@ -13,6 +13,7 @@ anthropic>=0.18.1,<1
 openai>=1.12.0,<2
 replicate>=1.0.7
 elevenlabs>=1.0.0
+mutagen>=1.47.0  # portable audio duration probing (voice-clone validation)
 
 # Vector Database (Local)
 chromadb>=1.4.1
