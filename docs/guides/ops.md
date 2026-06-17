@@ -125,10 +125,17 @@ railway variables delete KEY
 | `ANTHROPIC_API_KEY` | Claude API key | Set |
 | `OPENAI_API_KEY` | OpenAI TTS key | Set |
 | `DATABASE_URL` | PostgreSQL connection string (Supabase pooler) | Set |
-| `REPLICATE_API_TOKEN` | Replicate API token (voice cloning) | Set |
+| `REPLICATE_API_TOKEN` | Replicate token — **video, art-style transfer, voice cloning** | Set |
 | `TAVILY_API_KEY` | Web search for Daily Drop | Set |
 | `DAILY_DROP_ENABLED` | `0` = disabled, `1` = enabled | Set to `0` |
 | `ALLOWED_ORIGINS` | Comma-separated frontend URLs | Set |
+
+**Model & cost controls (optional):** every AI call defaults to the cheapest
+capable model. Override per feature without a code change via `VIDEO_MODEL`,
+`VIDEO_RESOLUTION`, `IMAGE_STYLE_MODEL`, `VOICE_ALLOW_PREMIUM_REALTIME`,
+`CLAUDE_AGENT_MODEL`, etc. — see
+[environment-variables.md](../learning/infrastructure/environment-variables.md)
+→ *Model & Cost Controls*. Video runs on Replicate WAN (not Sora).
 
 ### Health Check
 
@@ -136,7 +143,20 @@ railway variables delete KEY
 curl https://kids-creative-backend-production.up.railway.app/health
 ```
 
-Status will show `degraded` until `ANTHROPIC_API_KEY` and `OPENAI_API_KEY` are set to real values.
+Status shows `degraded` only when `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` are
+**unset**. ⚠️ **Gotcha:** `/health` only checks that the keys are *present*,
+not that they *work*. A key that is set but **revoked or out of credits** (e.g.
+Anthropic billing) still reports `healthy` while every generation fails. If the
+site loads but all AI features error, test the key directly before debugging
+code:
+
+```bash
+curl -s https://api.anthropic.com/v1/messages \
+  -H "x-api-key: $ANTHROPIC_API_KEY" -H "anthropic-version: 2023-06-01" \
+  -H "content-type: application/json" \
+  -d '{"model":"claude-haiku-4-5","max_tokens":5,"messages":[{"role":"user","content":"hi"}]}'
+# "credit balance is too low" → top up at console.anthropic.com → Plans & Billing
+```
 
 ---
 
