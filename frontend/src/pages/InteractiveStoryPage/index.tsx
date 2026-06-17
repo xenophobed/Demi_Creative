@@ -3,8 +3,6 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import Button from "@/components/common/Button";
 import Card from "@/components/common/Card";
-import VoiceInputButton from "@/components/common/VoiceInputButton";
-import ParentConsentGate from "@/components/common/ParentConsentGate";
 import AgeAwareContent from "@/components/common/AgeAwareContent";
 import EducationalTags from "@/components/story/EducationalTags";
 import StorySegmentDisplay from "@/components/interactive/StorySegmentDisplay";
@@ -66,7 +64,6 @@ function InteractiveStoryPageContent() {
     currentChild?.interests?.slice(0, 5) || [],
   );
   const [theme, setTheme] = useState("");
-  const [showMicConsentGate, setShowMicConsentGate] = useState(false);
   const [quotaDismissed, setQuotaDismissed] = useState(false);
 
   // Story hook - use streaming versions for better UX
@@ -593,47 +590,14 @@ function InteractiveStoryPageContent() {
                 (Optional)
               </span>
             </h2>
-            <div className="flex items-center gap-2">
-              <input
-                type="text"
-                value={theme}
-                onChange={(e) => setTheme(e.target.value)}
-                placeholder="e.g., Finding lost treasure, Space adventure..."
-                className="flex-1 px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-primary focus:outline-none transition-colors"
-                maxLength={50}
-              />
-              {currentChild?.child_id && currentChild?.age_group && (
-                currentChild.microphone_consent === true ? (
-                  <VoiceInputButton
-                    ageGroup={currentChild.age_group}
-                    consentGranted
-                    onText={(text) => setTheme(text.slice(0, 50))}
-                    className="shrink-0"
-                  />
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setShowMicConsentGate(true)}
-                    className="shrink-0 inline-flex h-12 items-center gap-1 rounded-full bg-gray-100 px-3 text-sm font-semibold text-gray-700"
-                    aria-label="Ask a grown-up to allow the microphone"
-                  >
-                    <span aria-hidden="true">🎤</span>
-                    <span>Ask permission</span>
-                  </button>
-                )
-              )}
-            </div>
-            {showMicConsentGate &&
-              currentChild?.child_id &&
-              currentChild?.age_group && (
-                <ParentConsentGate
-                  kind="microphone"
-                  ageGroup={currentChild.age_group}
-                  childId={currentChild.child_id}
-                  onGranted={() => setShowMicConsentGate(false)}
-                  onDismiss={() => setShowMicConsentGate(false)}
-                />
-              )}
+            <input
+              type="text"
+              value={theme}
+              onChange={(e) => setTheme(e.target.value)}
+              placeholder="e.g., Finding lost treasure, Space adventure..."
+              className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-primary focus:outline-none transition-colors"
+              maxLength={50}
+            />
             <div className="mt-4">
               <SuggestedThemes
                 mode="prompt"

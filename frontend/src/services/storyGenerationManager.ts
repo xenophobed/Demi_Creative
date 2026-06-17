@@ -51,6 +51,8 @@ export const storyGenerationManager = {
     store.setUploadError(null)
     store.startStreaming()
 
+    let resultNavigationStarted = false
+
     const callbacks: StreamCallbacks = {
       onStatus: (data) => {
         const s = useStoryStore.getState()
@@ -68,10 +70,9 @@ export const storyGenerationManager = {
       onResult: (data) => {
         const storyData = data as ImageToStoryResponse
         const s = useStoryStore.getState()
-        s.setUploadStatus('success')
         s.setCurrentStory(storyData)
         s.setJustGenerated(true)
-        s.stopStreaming()
+        resultNavigationStarted = true
 
         const path = `/story/${storyData.story_id}`
         if (navigateFn) {
@@ -79,8 +80,18 @@ export const storyGenerationManager = {
         } else {
           pendingNavigation = path
         }
+        s.setUploadStatus('success')
+        globalThis.setTimeout(() => {
+          useStoryStore.getState().stopStreaming()
+        }, 0)
       },
       onComplete: () => {
+        if (resultNavigationStarted) {
+          globalThis.setTimeout(() => {
+            useStoryStore.getState().stopStreaming()
+          }, 0)
+          return
+        }
         useStoryStore.getState().stopStreaming()
       },
       onError: (data) => {
