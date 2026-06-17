@@ -124,6 +124,12 @@ async def lifespan(app: FastAPI):
     if retention_enabled and os.getenv("ENVIRONMENT") != "test":
         await retention_scheduler.start()
 
+    # Guard the in-process voice-token replay nonce (#684): warn loudly if
+    # multiple workers/replicas are configured, since _USED_JTIS is per-process.
+    from .services.voice_ephemeral_token import assert_single_process_or_warn
+
+    assert_single_process_or_warn()
+
     # MCP server diagnostics
     from .mcp_servers import MCP_SERVER_STATUS
 
