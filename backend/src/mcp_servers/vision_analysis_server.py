@@ -124,6 +124,41 @@ def _ensure_image_fits(
     return buf.getvalue(), "image/jpeg", True
 
 
+def _parse_vision_json_response(response_text: str) -> Dict[str, Any]:
+    """Parse Claude Vision JSON even when wrapped in markdown or prose."""
+    text = response_text.strip()
+
+    # Prefer fenced code blocks when present. Claude sometimes emits
+    # ```json ... ``` and sometimes a plain fence without a language.
+    for marker in ("```json", "```"):
+        if marker in text:
+            json_start = text.find(marker) + len(marker)
+            json_end = text.find("```", json_start)
+            if json_end != -1:
+                fenced = text[json_start:json_end].strip()
+                return json.loads(fenced)
+
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+
+    # Last resort: scan for the first valid JSON object embedded in prose.
+    # This covers responses like "Here is the analysis: { ... }".
+    decoder = json.JSONDecoder()
+    for index, char in enumerate(text):
+        if char != "{":
+            continue
+        try:
+            parsed, _ = decoder.raw_decode(text[index:])
+        except json.JSONDecodeError:
+            continue
+        if isinstance(parsed, dict):
+            return parsed
+
+    raise json.JSONDecodeError("No JSON object found", response_text, 0)
+
+
 @tool(
     "analyze_children_drawing",
     """Analyze a children's drawing, identifying objects, scenes, emotions, and colors.
@@ -273,17 +308,7 @@ Always respond in English."""
 
         # Try to parse JSON
         try:
-            # If response contains code blocks, extract JSON
-            if "```json" in response_text:
-                json_start = response_text.find("```json") + 7
-                json_end = response_text.find("```", json_start)
-                response_text = response_text[json_start:json_end].strip()
-            elif "```" in response_text:
-                json_start = response_text.find("```") + 3
-                json_end = response_text.find("```", json_start)
-                response_text = response_text[json_start:json_end].strip()
-
-            result = json.loads(response_text)
+            result = _parse_vision_json_response(response_text)
 
             # Validate required fields
             required_fields = ["objects", "scene", "mood", "confidence_score"]
@@ -311,18 +336,27 @@ Always respond in English."""
             }
 
         except json.JSONDecodeError:
-            # If JSON parsing fails, return raw text with error flag
+            # If the model gives a descriptive prose answer instead of JSON,
+            # keep the feature usable. The story generator can still consume
+            # the raw description as low-confidence drawing analysis.
+            logger.warning(
+                "Vision API response was not JSON; using raw text fallback: %s",
+                response_text[:500],
+            )
             return {
                 "content": [
                     {
                         "type": "text",
                         "text": json.dumps(
                             {
-                                "error": "Failed to parse Vision API response",
                                 "raw_response": response_text,
+                                "vision_analysis": response_text,
                                 "objects": [],
                                 "scene": "unknown",
                                 "mood": "unknown",
+                                "colors": [],
+                                "recurring_characters": [],
+                                "story_potential": response_text,
                                 "confidence_score": 0.0,
                             },
                             ensure_ascii=False,
