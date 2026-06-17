@@ -18,6 +18,7 @@ from ...services.voice_service import (
     list_cloned_voices,
     delete_cloned_voice,
     validate_voice_file,
+    validate_voice_duration,
 )
 from ...paths import UPLOAD_DIR
 
@@ -78,6 +79,13 @@ async def clone_voice_endpoint(
     voice_dir.mkdir(parents=True, exist_ok=True)
     temp_path = voice_dir / filename
     temp_path.write_bytes(file_data)
+
+    # Reject too-short/-long samples upfront with a friendly message instead of
+    # surfacing minimax's opaque provider error (needs 10s-5min of audio).
+    duration_error = validate_voice_duration(str(temp_path))
+    if duration_error:
+        temp_path.unlink(missing_ok=True)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=duration_error)
 
     try:
         result = await clone_voice(

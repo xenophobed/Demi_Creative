@@ -9,6 +9,7 @@ Parent Epic: #45
 import hashlib
 import logging
 import os
+import subprocess
 import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -39,6 +40,60 @@ def validate_voice_file(file_path: str, file_size: int) -> Optional[str]:
         return f"File too large ({file_size / (1024*1024):.1f} MB). Maximum: {max_mb:.0f} MB"
     if file_size == 0:
         return "File is empty"
+    return None
+
+
+def get_audio_duration_seconds(file_path: str) -> Optional[float]:
+    """Best-effort audio duration. Tries mutagen (pure-python, available in
+    every environment incl. the slim prod image) first, then ffprobe. Returns
+    None when neither can determine it, so callers never hard-block on a probe
+    failure — the provider stays the final gate."""
+    # 1. mutagen — portable, no system binary required.
+    try:
+        from mutagen import File as _MutagenFile
+        info = getattr(_MutagenFile(file_path), "info", None)
+        length = getattr(info, "length", None)
+        if length and length > 0:
+            return float(length)
+    except Exception:
+        pass
+    # 2. ffprobe fallback — present in local dev, may be absent in prod.
+    try:
+        result = subprocess.run(
+            [
+                "ffprobe", "-v", "error",
+                "-show_entries", "format=duration",
+                "-of", "default=noprint_wrappers=1:nokey=1",
+                file_path,
+            ],
+            capture_output=True, text=True, timeout=15,
+        )
+        out = (result.stdout or "").strip()
+        return float(out) if result.returncode == 0 and out else None
+    except Exception:
+        return None
+
+
+def validate_voice_duration(file_path: str) -> Optional[str]:
+    """Enforce minimax's 10s-5min clone window with a friendly message.
+
+    Best-effort: if the duration can't be measured (no ffprobe), returns None
+    and lets the provider remain the final gate — so we never block a valid
+    upload just because probing failed.
+    """
+    duration = get_audio_duration_seconds(file_path)
+    if duration is None:
+        return None
+    if duration < MIN_DURATION_SECONDS:
+        return (
+            f"Voice sample is too short ({duration:.0f}s). Please upload "
+            f"{MIN_DURATION_SECONDS}-{MAX_DURATION_SECONDS}s of clear speech."
+        )
+    if duration > MAX_DURATION_SECONDS:
+        return (
+            f"Voice sample is too long ({duration:.0f}s). Maximum "
+            f"{MAX_DURATION_SECONDS // 60} minutes."
+        )
     return None
 
 

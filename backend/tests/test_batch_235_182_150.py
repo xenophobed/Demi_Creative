@@ -158,6 +158,29 @@ class TestVoiceCloneValidation:
         assert error is not None
         assert "empty" in error
 
+    def test_reject_too_short_duration(self):
+        from src.services import voice_service as vs
+        with patch.object(vs, "get_audio_duration_seconds", return_value=5.0):
+            error = vs.validate_voice_duration("sample.mp3")
+        assert error is not None and "too short" in error
+
+    def test_reject_too_long_duration(self):
+        from src.services import voice_service as vs
+        with patch.object(vs, "get_audio_duration_seconds", return_value=400.0):
+            error = vs.validate_voice_duration("sample.mp3")
+        assert error is not None and "too long" in error
+
+    def test_accept_valid_duration(self):
+        from src.services import voice_service as vs
+        with patch.object(vs, "get_audio_duration_seconds", return_value=30.0):
+            assert vs.validate_voice_duration("sample.mp3") is None
+
+    def test_indeterminate_duration_allows_upload(self):
+        # ffprobe unavailable / unprobeable → don't block; provider is final gate.
+        from src.services import voice_service as vs
+        with patch.object(vs, "get_audio_duration_seconds", return_value=None):
+            assert vs.validate_voice_duration("sample.mp3") is None
+
 
 class TestVoiceCloneService:
     """Voice cloning service must call Replicate and persist result."""
