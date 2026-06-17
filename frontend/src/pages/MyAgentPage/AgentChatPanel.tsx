@@ -40,12 +40,15 @@ import useAgentChatStore from "@/store/useAgentChatStore";
 import useChildStore from "@/store/useChildStore";
 import VoiceInputButton from "@/components/common/VoiceInputButton";
 import ParentConsentGate from "@/components/common/ParentConsentGate";
-import TalkToBuddyPanel from "./TalkToBuddyPanel";
+import TalkToBuddyPanel, {
+  type TalkToBuddyPanelVariant,
+} from "./TalkToBuddyPanel";
 import {
   nextPendingGate,
   shouldShowEntryButton,
   shouldShowOnboardingBanner,
   voiceBannerStorageKey,
+  voiceQuotaNoticeCopy,
   type PendingGate,
 } from "./talkToBuddyHelpers";
 import {
@@ -259,7 +262,21 @@ export default function AgentChatPanel({
     [],
   );
   const [isTalkOpen, setIsTalkOpen] = useState(false);
+  const wasTalkOpenRef = useRef(false);
   const [pendingTalkGate, setPendingTalkGate] = useState<PendingGate>(null);
+
+  // #636: when the inline voice bubble unmounts (user tapped End), put
+  // focus back on the textarea so the kid can immediately keep typing
+  // without a second tap. Only fires on the true → false transition so
+  // typing in the textarea between sessions doesn't get stolen.
+  useEffect(() => {
+    if (wasTalkOpenRef.current && !isTalkOpen) {
+      // Defer one tick so the composer form has remounted.
+      const id = setTimeout(() => textareaRef.current?.focus(), 0);
+      return () => clearTimeout(id);
+    }
+    wasTalkOpenRef.current = isTalkOpen;
+  }, [isTalkOpen]);
 
   const talkEntryReady = shouldShowEntryButton({
     supportsVoice: voiceCaps.supported,
@@ -629,6 +646,18 @@ export default function AgentChatPanel({
         </div>
       )}
 
+      {isTalkOpen ? (
+        <div className="border-t border-gray-100 bg-white px-4 py-3">
+          <TalkToBuddyContainer
+            childId={childId}
+            persona={agent.agent_name}
+            ageGroup={ageGroup}
+            childAge={ageGroupToRepresentativeAge(ageGroup)}
+            variant="inline"
+            onClose={() => setIsTalkOpen(false)}
+          />
+        </div>
+      ) : (
       <form
         className="border-t border-gray-100 bg-white px-4 py-3"
         onSubmit={onSubmit}
@@ -738,6 +767,7 @@ export default function AgentChatPanel({
           )}
         </div>
       </form>
+      )}
       {showMicConsentGate && ageGroup && (
         <ParentConsentGate
           kind="microphone"
@@ -763,14 +793,6 @@ export default function AgentChatPanel({
           childId={childId}
           onGranted={advancePendingGate}
           onDismiss={() => setPendingTalkGate(null)}
-        />
-      )}
-      {isTalkOpen && (
-        <TalkToBuddyContainer
-          childId={childId}
-          persona={agent.agent_name}
-          ageGroup={ageGroup}
-          onClose={() => setIsTalkOpen(false)}
         />
       )}
       {fabVisible && !isTalkOpen && (
@@ -804,35 +826,64 @@ export default function AgentChatPanel({
  * is mounted. Keeps the WebSocket / MediaStream / AudioContext out of
  * the always-rendered parent so idle cost stays zero.
  *
- * Voice transcripts flow into `useAgentChatStore.appendVoiceCaption`
- * so they merge into the same chat history the text panel renders.
+ * Voice captions stay inside the panel while the backend persists the
+ * durable voice turns through the My Agent chat history (#668).
  */
+/**
+ * Map an AgeGroup band to a representative numeric age so BuddyOrb
+ * (#651) can pick a diameter + decide whether to render the face
+ * overlay. Our profile model stores the band, not raw age, so this is
+ * a stable midpoint pick: 3-5 → 4 (pre-reader), 6-8 → 7, 9-12 → 10.
+ */
+function ageGroupToRepresentativeAge(
+  ageGroup?: AgeGroup | null,
+): number | null {
+  if (!ageGroup) return null;
+  if (ageGroup === "3-5") return 4;
+  if (ageGroup === "6-8") return 7;
+  if (ageGroup === "9-12") return 10;
+  return null;
+}
+
 function TalkToBuddyContainer({
   childId,
   persona,
   ageGroup,
+  childAge,
   onClose,
+  variant = "overlay",
 }: {
   childId: string;
   persona: string;
   ageGroup?: AgeGroup | null;
+  childAge?: number | null;
   onClose: () => void;
+  /** When `inline`, the End button also unmounts the bubble (no
+   *  separate X close affordance — see PRD §3.16.5 v2 + #635). */
+  variant?: TalkToBuddyPanelVariant;
 }) {
   void ageGroup; // Future: thread per-age TTS preset overrides (Phase C, #608).
-  const appendVoiceCaption = useAgentChatStore((s) => s.appendVoiceCaption);
 
+  const [voiceNotice, setVoiceNotice] = useState<string | null>(null);
   const voice = useVoiceConversation({
     childId,
     persona,
-    onCaption: (caption) => {
-      // Only persist finalized turns so the chat history doesn't get
-      // spammed with partial-transcript noise. Safety-blocked utterances
-      // also surface in the timeline so the kid can see what happened.
-      if (caption.kind === "final") {
-        appendVoiceCaption({ role: "user", text: caption.text });
-      } else if (caption.kind === "assistant" && caption.isFinal) {
-        appendVoiceCaption({ role: "assistant", text: caption.text });
+    onError: (kind, detail) => {
+      if (kind === "quota") {
+        const match = detail?.match(/Remaining:\s*(\d+)s/i);
+        const remaining = match ? Number(match[1]) : 0;
+        setVoiceNotice(voiceQuotaNoticeCopy(remaining));
+        return;
       }
+      if (kind === "auth") {
+        setVoiceNotice("A grown-up needs to allow voice before you can talk.");
+        return;
+      }
+      if (kind === "safety") {
+        setVoiceNotice("Buddy paused that part. You can try a different idea.");
+        return;
+      }
+      setVoiceNotice("Voice chat had a problem. You can keep chatting by typing.");
     },
   });
 
@@ -841,17 +892,44 @@ function TalkToBuddyContainer({
       ? window.matchMedia("(prefers-reduced-motion: reduce)").matches
       : false;
 
+  // Inline mode collapses End + Close into a single affordance: the
+  // user expects "End" to dismiss the bubble and return the textarea,
+  // not just transition to idle. Audio cleanup still runs via the
+  // hook's useEffect on unmount (#617), so eager close is safe.
+  const handleEnd =
+    variant === "inline"
+      ? () => {
+          voice.end();
+          onClose();
+        }
+      : voice.end;
+
   return (
     <TalkToBuddyPanel
       state={voice.state}
       partialTranscript={voice.partialTranscript}
       assistantText={voice.assistantText}
       inputLevel={voice.inputLevel}
+      outputLevel={voice.outputLevel}
+      childAge={childAge}
       prefersReducedMotion={prefersReducedMotion}
-      onStart={() => voice.start(true)}
-      onEnd={voice.end}
-      onRetry={voice.retry}
+      // #608: once a safety_block is observed in this session the panel
+      // auto-shows captions regardless of the per-age default, so the
+      // kid sees the fallback sentence the buddy speaks. The signal is
+      // sticky for the rest of the session — reset on next start().
+      captionsVisibleOverride={voice.safetyBlockedSeen ? true : undefined}
+      onStart={() => {
+        setVoiceNotice(null);
+        void voice.start(true);
+      }}
+      onEnd={handleEnd}
+      onRetry={() => {
+        setVoiceNotice(null);
+        voice.retry();
+      }}
       onClose={onClose}
+      noticeText={voiceNotice}
+      variant={variant}
     />
   );
 }

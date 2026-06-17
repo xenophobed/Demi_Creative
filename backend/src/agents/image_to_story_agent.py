@@ -6,6 +6,7 @@ Supports streaming responses to reduce timeouts and improve user experience.
 """
 
 import json
+import inspect
 import os
 from pathlib import Path
 from typing import Any, AsyncGenerator, AsyncIterator, Dict, List, Optional
@@ -190,7 +191,8 @@ async def _search_story_dedup(
     if not child_id or not description:
         return ""
     try:
-        result = await search_similar_stories(
+        result = await _call_mcp_tool(
+            search_similar_stories,
             {
                 "child_id": child_id,
                 "story_description": description,
@@ -215,6 +217,20 @@ Please create a FRESH, DIFFERENT story with a new angle, different plot structur
 """
     except Exception:
         return ""  # Best-effort: proceed without dedup
+
+
+async def _call_mcp_tool(tool_ref: Any, args: Dict[str, Any]) -> Dict[str, Any]:
+    """Invoke an MCP tool, unwrapping SDK tool objects when needed.
+
+    claude_agent_sdk's @tool decorator returns an SdkMcpTool wrapper with a
+    `.handler` coroutine instead of a directly-callable async function.
+    The direct production pipeline must support both shapes.
+    """
+    handler = getattr(tool_ref, "handler", tool_ref)
+    result = handler(args)
+    if inspect.isawaitable(result):
+        return await result
+    return result
 
 
 def _should_use_mock() -> bool:
@@ -695,7 +711,10 @@ async def _direct_stream_image_to_story(
     # Step 1: Vision analysis
     yield {"type": "tool_use", "data": {"tool": "mcp__vision-analysis__analyze_children_drawing", "message": "Analyzing drawing..."}}
 
-    analysis_result = await analyze_children_drawing({"image_path": image_path, "child_age": child_age})
+    analysis_result = await _call_mcp_tool(
+        analyze_children_drawing,
+        {"image_path": image_path, "child_age": child_age},
+    )
     analysis_text = analysis_result.get("content", [{}])[0].get("text", "{}")
     try:
         analysis_data = json.loads(analysis_text)
@@ -827,12 +846,15 @@ Return your response as JSON:
     if art_theme and art_theme != "none":
         yield {"type": "tool_use", "data": {"tool": "mcp__image-style__transform_art_style", "message": "Applying art style..."}}
         try:
-            style_result = await transform_art_style({
-                "image_path": image_path,
-                "theme": art_theme,
-                "child_age": child_age,
-                "session_id": child_id,
-            })
+            style_result = await _call_mcp_tool(
+                transform_art_style,
+                {
+                    "image_path": image_path,
+                    "theme": art_theme,
+                    "child_age": child_age,
+                    "session_id": child_id,
+                },
+            )
             style_text = style_result.get("content", [{}])[0].get("text", "{}")
             style_data = json.loads(style_text)
             styled_image_path = style_data.get("styled_image_path")
@@ -845,13 +867,16 @@ Return your response as JSON:
     if should_generate_audio:
         yield {"type": "tool_use", "data": {"tool": "mcp__tts-generation__generate_story_audio", "message": "Generating audio..."}}
         try:
-            audio_result = await generate_story_audio({
-                "story_text": story_data.get("story", ""),
-                "voice": actual_voice,
-                "speed": audio_speed,
-                "child_age": child_age,
-                "provider": provider or "openai",
-            })
+            audio_result = await _call_mcp_tool(
+                generate_story_audio,
+                {
+                    "story_text": story_data.get("story", ""),
+                    "voice": actual_voice,
+                    "speed": audio_speed,
+                    "child_age": child_age,
+                    "provider": provider or "openai",
+                },
+            )
             audio_text = audio_result.get("content", [{}])[0].get("text", "{}")
             audio_data = json.loads(audio_text)
             audio_path = audio_data.get("audio_path")

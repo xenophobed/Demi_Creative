@@ -599,6 +599,26 @@ class SubscriptionListResponse(BaseModel):
     total: int = Field(..., description="Total subscriptions")
 
 
+class KidsDailyEmailSubscriptionRequest(BaseModel):
+    """Public Kids Daily preview email subscription request"""
+    email: str = Field(..., min_length=5, max_length=254, description="Email address")
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, v: str) -> str:
+        normalized = v.strip().lower()
+        if not re.match(r"^[^\s@]+@[^\s@]+\.[^\s@]+$", normalized):
+            raise ValueError("Invalid email format")
+        return normalized
+
+
+class KidsDailyEmailSubscriptionResponse(BaseModel):
+    """Public Kids Daily preview email subscription response"""
+    email: str = Field(..., description="Subscribed email address")
+    subscribed_at: datetime = Field(..., description="Subscription timestamp")
+    message: str = Field(default="subscribed", description="Operation result message")
+
+
 class KidsDailyTrackEvent(str, Enum):
     """Kids Daily playback event type"""
     START = "start"
@@ -959,7 +979,7 @@ class VoiceSessionStartRequest(BaseModel):
 
 class VoiceProviderConfig(BaseModel):
     """Sub-shape of VoiceSessionStartResponse — provider-specific runtime hints."""
-    provider: Literal["mock", "hybrid"] = Field(
+    provider: Literal["mock", "hybrid", "openai_realtime"] = Field(
         ..., description="Which RealtimeVoiceProvider impl backs this session."
     )
     sample_rate_hz: int = Field(default=16_000, ge=8_000, le=48_000)
@@ -970,13 +990,33 @@ class VoiceSessionStartResponse(BaseModel):
     """REST response — what the client needs to open the WS handshake.
 
     Returns 501 in the foundation PR (#611). Real implementation lands in
-    sub-story #606.5 once the broker is wired.
+    sub-story #606.5 once the broker is wired. In #645 we add the OpenAI
+    Realtime client secret + transport hint so E4 (#647 WebRTC) can
+    layer in without breaking the contract.
     """
     session_id: str
     ephemeral_token: str = Field(..., min_length=20, max_length=512)
     expires_at: datetime
     ws_url: str = Field(..., description="Absolute or relative WebSocket URL")
     provider_config: VoiceProviderConfig
+    openai_realtime_client_secret: Optional[str] = Field(
+        default=None,
+        description=(
+            "Ephemeral OpenAI Realtime client secret. Populated only when "
+            "the OpenAI Realtime provider backs the session. The frontend "
+            "stores it for E4's WebRTC transport — for E2's server-relay "
+            "(WS) path it's unused."
+        ),
+    )
+    transport: Literal["ws", "webrtc"] = Field(
+        default="ws",
+        description=(
+            "Selected client transport. ``ws`` = server-relay broker (E2, "
+            "default). ``webrtc`` = browser-direct RTCPeerConnection against "
+            "OpenAI Realtime (E4 / #647) — opt-in via the ``prefer_webrtc`` "
+            "query parameter. Non-OpenAI providers always degrade to ``ws``."
+        ),
+    )
 
 
 # ── WS Event envelopes ───────────────────────────────────────────────────────
@@ -1208,6 +1248,8 @@ class AgentChatMessageItem(BaseModel):
     message_id: str = Field(..., description="Stable message identifier")
     role: str = Field(..., description="'user' or 'assistant'")
     text: str = Field(..., description="Message text")
+    input_modality: Literal["text", "voice"] = Field(default="text")
+    output_modality: Literal["text", "voice"] = Field(default="text")
     result_metadata: dict = Field(default_factory=dict, description="Structured launch/result payload, if any")
     created_at: str = Field(..., description="When the message was stored")
 

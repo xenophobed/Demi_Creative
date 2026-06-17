@@ -8,6 +8,7 @@ import { getErrorMessage } from '@/api/client'
 import useAuthStore from '@/store/useAuthStore'
 import useChildStore, { DEFAULT_INTERESTS, generateChildId } from '@/store/useChildStore'
 import type { AgeGroup } from '@/types/api'
+import { isValidRegistrationUsername } from './validation'
 
 type AuthMode = 'login' | 'register'
 type RegistrationRole = 'parent' | 'child'
@@ -83,6 +84,8 @@ function LoginPage() {
       if (!password) return 'Please enter your password'
     } else {
       if (!username.trim()) return 'Please enter a username'
+      if (!isValidRegistrationUsername(username))
+        return 'Username can only contain letters, numbers, underscores, and hyphens'
       if (!email.trim()) return 'Please enter your email'
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return 'Please enter a valid email'
       if (registrationRole === 'parent') {
@@ -209,12 +212,14 @@ function LoginPage() {
 
   // Switch between login and register
   const switchMode = () => {
-    setMode(mode === 'login' ? 'register' : 'login')
+    const nextMode = mode === 'login' ? 'register' : 'login'
+    setMode(nextMode)
     setError(null)
     setConfirmationPending(false)
     setEmailConfirmation(false)
     setConfirmationEmail('')
     setConfirmationNotice(null)
+    if (nextMode === 'register' && username.includes('@')) setUsername('')
     setPassword('')
     setConfirmPassword('')
     setParentEmail('')

@@ -1,13 +1,19 @@
 import { describe, expect, it } from "vitest";
 import {
+  captionsDefaultForAge,
   isEndButtonEnabled,
   isPanelVisible,
   nextPendingGate,
   pickIndicator,
+  reducedMotionStatusPill,
+  resolveCaptionsVisibility,
   shouldShowEntryButton,
+  shouldShowHeaderTalkPill,
   shouldShowOnboardingBanner,
   TALK_PANEL_STATE_COPY,
+  talkPanelScreenReaderState,
   voiceBannerStorageKey,
+  voiceQuotaNoticeCopy,
 } from "@/pages/MyAgentPage/talkToBuddyHelpers";
 import type { VoiceConversationState } from "@/hooks/voiceConversationStateMachine";
 
@@ -144,6 +150,40 @@ describe("pickIndicator (#618)", () => {
   });
 });
 
+describe("Talk-to-Buddy accessibility and quota copy (#609)", () => {
+  it("announces transcript text when the child is being heard", () => {
+    expect(
+      talkPanelScreenReaderState("listening", "hi buddy", ""),
+    ).toContain("Heard: hi buddy");
+  });
+
+  it("announces buddy text ahead of partial transcript text", () => {
+    const copy = talkPanelScreenReaderState(
+      "speaking",
+      "hi buddy",
+      "Hello there",
+    );
+    expect(copy).toContain("Buddy says: Hello there");
+    expect(copy).not.toContain("Heard: hi buddy");
+  });
+
+  it("uses static reduced-motion labels only for active voice states", () => {
+    expect(reducedMotionStatusPill("listening")).toBe("Listening");
+    expect(reducedMotionStatusPill("thinking")).toBe("Thinking");
+    expect(reducedMotionStatusPill("speaking")).toBe("Speaking");
+    expect(reducedMotionStatusPill("idle")).toBeNull();
+  });
+
+  it("turns exhausted quota into typed-chat fallback copy", () => {
+    expect(voiceQuotaNoticeCopy(0).toLowerCase()).toContain("typing");
+    expect(voiceQuotaNoticeCopy(undefined).toLowerCase()).toContain("typing");
+  });
+
+  it("warns when less than one minute of voice time remains", () => {
+    expect(voiceQuotaNoticeCopy(45).toLowerCase()).toContain("almost done");
+  });
+});
+
 describe("nextPendingGate (#620)", () => {
   it("returns 'mic' when both consents are missing", () => {
     expect(
@@ -244,5 +284,110 @@ describe("voiceBannerStorageKey (UX rework)", () => {
     expect(voiceBannerStorageKey("child_xyz")).not.toBe(
       voiceBannerStorageKey("child_abc"),
     );
+  });
+});
+
+describe("shouldShowHeaderTalkPill (#636)", () => {
+  const allGranted = {
+    supportsVoice: true,
+    micConsentGranted: true,
+    voiceConversationConsentGranted: true,
+    hasCurrentChild: true,
+  };
+
+  it("shows the pill when consents + capability are ready and no stream/bubble is active", () => {
+    expect(shouldShowHeaderTalkPill(allGranted, false, false)).toBe(true);
+  });
+
+  it("hides while the chat is streaming a text response", () => {
+    // Pressing Start mid-stream would race the AbortController flow.
+    expect(shouldShowHeaderTalkPill(allGranted, true, false)).toBe(false);
+  });
+
+  it("hides while the inline voice bubble is already open", () => {
+    // The bubble has replaced the composer; a second entry point in
+    // the header would be redundant + confusing.
+    expect(shouldShowHeaderTalkPill(allGranted, false, true)).toBe(false);
+  });
+
+  it("hides when both streaming and talk-open are true (sanity)", () => {
+    expect(shouldShowHeaderTalkPill(allGranted, true, true)).toBe(false);
+  });
+
+  it("delegates capability/consent gating to shouldShowEntryButton", () => {
+    // Any single precondition failure must hide the pill, no matter
+    // what the streaming/talk-open state is.
+    const cases = [
+      { ...allGranted, supportsVoice: false },
+      { ...allGranted, micConsentGranted: false },
+      { ...allGranted, voiceConversationConsentGranted: false },
+      { ...allGranted, hasCurrentChild: false },
+    ];
+    for (const broken of cases) {
+      expect(shouldShowHeaderTalkPill(broken, false, false)).toBe(false);
+    }
+  });
+});
+
+describe("captionsDefaultForAge (#608)", () => {
+  // Per PRD §3.16: pre-readers (3-5) get captions OFF by default; the
+  // running text is distracting next to the BuddyOrb and they can't
+  // read it anyway. Older bands get captions ON so they can follow
+  // along + reread tricky words.
+  it("returns false for pre-reader ages (under 6)", () => {
+    expect(captionsDefaultForAge(3)).toBe(false);
+    expect(captionsDefaultForAge(4)).toBe(false);
+    expect(captionsDefaultForAge(5)).toBe(false);
+  });
+
+  it("returns true for the 6-8 band", () => {
+    expect(captionsDefaultForAge(6)).toBe(true);
+    expect(captionsDefaultForAge(7)).toBe(true);
+    expect(captionsDefaultForAge(8)).toBe(true);
+  });
+
+  it("returns true for the 9-12 band", () => {
+    expect(captionsDefaultForAge(9)).toBe(true);
+    expect(captionsDefaultForAge(12)).toBe(true);
+  });
+
+  it("returns true when the age is unknown (null / undefined)", () => {
+    // Defensive default — if the profile hasn't loaded yet, prefer
+    // showing captions. Worst case is a 3-year-old gets a few lines
+    // of text for a beat; the alternative (silently hiding captions
+    // for an older kid) would feel broken.
+    expect(captionsDefaultForAge(null)).toBe(true);
+    expect(captionsDefaultForAge(undefined)).toBe(true);
+  });
+
+  it("treats the 6-vs-5 boundary inclusively (6 is on, 5 is off)", () => {
+    // Lock the boundary so a future contributor can't drift it.
+    expect(captionsDefaultForAge(5)).toBe(false);
+    expect(captionsDefaultForAge(6)).toBe(true);
+  });
+});
+
+describe("resolveCaptionsVisibility (#608)", () => {
+  it("uses the per-age default when no override is passed", () => {
+    expect(resolveCaptionsVisibility(4, undefined)).toBe(false);
+    expect(resolveCaptionsVisibility(7, undefined)).toBe(true);
+    expect(resolveCaptionsVisibility(11, undefined)).toBe(true);
+  });
+
+  it("forces captions on when override is true (safety_block path)", () => {
+    // The whole point of the override: after a safety_block event,
+    // captions must auto-show regardless of age. This is the load-
+    // bearing path the panel uses to surface the fallback sentence.
+    expect(resolveCaptionsVisibility(4, true)).toBe(true);
+    expect(resolveCaptionsVisibility(3, true)).toBe(true);
+    expect(resolveCaptionsVisibility(null, true)).toBe(true);
+  });
+
+  it("ignores override=false to avoid accidentally silencing readers", () => {
+    // ``false`` would hide captions for an older kid who should see
+    // them. The override semantic is "force on" — explicit-false from
+    // a half-wired parent falls back to the per-age default.
+    expect(resolveCaptionsVisibility(8, false)).toBe(true);
+    expect(resolveCaptionsVisibility(4, false)).toBe(false);
   });
 });

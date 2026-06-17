@@ -679,6 +679,8 @@ export interface AgentChatMessageItem {
   message_id: string;
   role: "user" | "assistant";
   text: string;
+  input_modality?: "text" | "voice";
+  output_modality?: "text" | "voice";
   result_metadata: Record<string, unknown>;
   created_at: string;
 }

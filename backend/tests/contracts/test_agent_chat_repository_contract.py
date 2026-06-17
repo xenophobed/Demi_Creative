@@ -75,6 +75,12 @@ class TestSchemaColumns:
         assert await column_exists(db, "agent_chat_sessions", "last_message_preview")
         assert await column_exists(db, "agent_chat_sessions", "archived_at")
 
+    @pytest.mark.asyncio
+    async def test_message_modality_columns_exist_after_migration(self, repo):
+        db = repo._db
+        assert await column_exists(db, "agent_chat_messages", "input_modality")
+        assert await column_exists(db, "agent_chat_messages", "output_modality")
+
 
 class TestListSessionsForUser:
     @pytest.mark.asyncio
@@ -152,6 +158,32 @@ class TestListMessages:
 
         msgs = await repo.list_messages(s.session_id, user_id=_USER_A)
         assert [m.text for m in msgs] == ["first", "second"]
+        assert [m.input_modality for m in msgs] == ["text", "text"]
+        assert [m.output_modality for m in msgs] == ["text", "text"]
+
+    @pytest.mark.asyncio
+    async def test_add_message_persists_voice_modalities(self, repo):
+        s = await repo.get_or_create_session(user_id=_USER_A, child_id=_CHILD_1)
+        await repo.add_message(
+            session_id=s.session_id,
+            role="user",
+            text="spoken words",
+            input_modality="voice",
+            output_modality="text",
+        )
+        await repo.add_message(
+            session_id=s.session_id,
+            role="assistant",
+            text="spoken reply",
+            input_modality="text",
+            output_modality="voice",
+        )
+
+        msgs = await repo.list_messages(s.session_id, user_id=_USER_A)
+        assert [(m.role, m.input_modality, m.output_modality) for m in msgs] == [
+            ("user", "voice", "text"),
+            ("assistant", "text", "voice"),
+        ]
 
     @pytest.mark.asyncio
     async def test_foreign_user_gets_empty_list(self, repo):

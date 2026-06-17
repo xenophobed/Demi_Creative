@@ -74,6 +74,11 @@ export function getErrorMessage(error: unknown): string {
     // FastAPI uses "detail", custom APIs use "message"
     const detail = data?.detail
     if (typeof detail === 'string') return detail
+    const details = data?.details
+    if (Array.isArray(details) && details.length > 0) {
+      const first = details[0] as Record<string, unknown>
+      if (typeof first.message === 'string') return first.message
+    }
     if (data?.message && typeof data.message === 'string') return data.message
     if (axiosError.message) return axiosError.message
   }

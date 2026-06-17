@@ -40,8 +40,36 @@ TOKEN_PURPOSE: str = "voice_realtime"
 # out in ≤60s so the set can never grow past TOKEN_TTL_SECONDS × mint
 # rate. Bytes-wise this is O(KB) even at 100 req/s.
 #
-# TODO(scale): replace with Redis when we add a second uvicorn worker.
+# TODO(scale): in-process nonce set is only correct with exactly one
+# process/replica — see assert_single_process_or_warn() + #684. Future
+# fix = DB-backed nonce on the voice_sessions row (or Redis) so the
+# replay guard holds across multiple uvicorn workers.
 _USED_JTIS: Dict[str, float] = {}
+
+
+def assert_single_process_or_warn() -> None:
+    """Warn loudly if multiple workers are configured while the nonce
+    store is in-process. The in-memory _USED_JTIS replay guard is only
+    correct with exactly one process/replica. See #684 for the
+    DB-backed nonce migration path."""
+    for var in ("WEB_CONCURRENCY", "UVICORN_WORKERS"):
+        raw = os.getenv(var)
+        if not raw:
+            continue
+        try:
+            workers = int(raw)
+        except (TypeError, ValueError):
+            continue
+        if workers > 1:
+            logger.warning(
+                "%s=%s configured but the voice token replay guard "
+                "(_USED_JTIS) is an in-process nonce store — single-use "
+                "voice tokens are NOT safe across multiple workers/replicas. "
+                "See #684: migrate to a DB-backed nonce on the voice_sessions "
+                "row before scaling out.",
+                var,
+                workers,
+            )
 
 
 def _signing_secret() -> str:

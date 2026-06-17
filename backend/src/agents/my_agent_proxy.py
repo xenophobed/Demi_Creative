@@ -131,6 +131,12 @@ async def _check_reply_safety(text: str) -> tuple[Optional[float], Optional[str]
 # navigate to and the payload field that carries the resource ID, if any.
 # Centralised so adding a new specialist requires updating exactly one
 # table — the contract test_invalid_response_type pins this whitelist.
+#
+# #646 — agent_settings / child_settings are voice-only handoffs for
+# now. The text proxy never emits them today, but they live in the same
+# registry so the voice-vs-text parity contract has a single source of
+# truth. When/if text mode wants them later, it just calls into the
+# same ``build_launch_flow_payload`` helper.
 _LAUNCH_FLOW_REGISTRY: dict[str, dict[str, Any]] = {
     "image_story": {
         "id_field": "story_id",
@@ -148,6 +154,23 @@ _LAUNCH_FLOW_REGISTRY: dict[str, dict[str, Any]] = {
         "id_field": "episode_id",
         "detail_route": "/kids-daily",
         "landing_route": "/kids-daily",
+    },
+    "agent_settings": {
+        # Settings flows have no resource ID — the route is always the
+        # landing surface; prefill carries child_id so the page knows
+        # whose buddy to configure.
+        "id_field": "child_id",
+        "detail_route": "/my-agent/settings",
+        "landing_route": "/my-agent/settings",
+        "id_location": "query",
+        "query_id_param": "child_id",
+    },
+    "child_settings": {
+        "id_field": "child_id",
+        "detail_route": "/profile",
+        "landing_route": "/profile",
+        "id_location": "query",
+        "query_id_param": "child_id",
     },
 }
 
@@ -170,33 +193,88 @@ _LAUNCH_FLOW_PREFILL_KEYS: frozenset[str] = frozenset(
 )
 
 
-def _build_launch_flow_data(parsed: dict[str, Any]) -> Optional[dict[str, Any]]:
-    """Translate a specialist tool result into a launch_flow event payload.
+async def invoke_specialist_for_voice(
+    specialist_name: str,
+    prompt: str,
+    user_id: str,
+    child_id: str,
+) -> dict[str, Any]:
+    """Voice-path entry to the existing specialist orchestration (#646).
 
-    The proxy receives tool results shaped as
-    ``{"response_type": "<flow>", "payload": {...}}``. This helper returns
-    the SSE event body (``flow_type`` / ``route`` / ``prefill``) or
-    ``None`` when the response type is not in the whitelist (e.g.
-    plain chat replies, or an unknown future type) — the caller then
-    skips the event entirely rather than navigating somewhere undefined.
+    The broker (#645) calls this when the OpenAI Realtime model picks a
+    launch tool but also wants the specialist to actually run (vs just
+    handing off the URL). In v1 we ship a minimal stub that returns a
+    launch_flow-style envelope — the full specialist invocation lands
+    when E2 wires the broker.
 
-    Trade-off: we whitelist routes server-side rather than letting the
-    subagent choose freely. That costs flexibility but eliminates the
-    risk of an LLM-generated route navigating the child to an unrelated
-    page on an open-redirect-style mistake.
+    Returns a dict the broker can forward as a tool result. We never
+    raise; an exception here would orphan the model's turn.
     """
-    if not isinstance(parsed, dict):
-        return None
-    response_type = parsed.get("response_type")
-    spec = _LAUNCH_FLOW_REGISTRY.get(response_type)
+    if not specialist_name:
+        return {"error": "missing_specialist", "specialist": specialist_name}
+
+    # Map specialist → flow_type so the voice path can re-use the
+    # text-mode registry. The broker passes child_id/user_id; the model
+    # picks the specialist (image-story-specialist, etc.).
+    flow_for = {
+        "image-story-specialist": "image_story",
+        "interactive-story-specialist": "interactive_story",
+        "kids-daily-specialist": "kids_daily",
+    }
+    flow_type = flow_for.get(specialist_name)
+    if flow_type is None:
+        return {"error": "unknown_specialist", "specialist": specialist_name}
+
+    payload = build_launch_flow_payload(flow_type, {"child_id": child_id})
+    return {
+        "flow_type": flow_type,
+        "specialist": specialist_name,
+        "prompt": prompt,
+        "user_id": user_id,
+        "launch_flow": payload,
+    }
+
+
+def list_launch_flow_types() -> list[str]:
+    """Return all registered launch_flow type strings.
+
+    Used by the voice-mode tool layer (#646) to confirm the registry
+    covers the surface it advertises to the OpenAI Realtime model.
+    Order is stable (dict iteration order) so tests can assert on
+    structure without sorting.
+    """
+    return list(_LAUNCH_FLOW_REGISTRY.keys())
+
+
+def build_launch_flow_payload(
+    flow_type: str,
+    prefill: Optional[dict[str, Any]],
+) -> Optional[dict[str, Any]]:
+    """Build a launch_flow event body from a flow type and prefill bag.
+
+    This is the **single source of truth** for the launch_flow payload
+    shape consumed by ``useLaunchFlowNavigation`` on the frontend (#496).
+    Both the text-mode SSE pipeline and the voice-mode Realtime tool
+    handlers (#646) call into this helper, so a behaviour change can
+    only ship by editing one function — the voice/text parity contract
+    test fails the build if either side drifts.
+
+    Returns ``None`` when ``flow_type`` is not in the registry. Callers
+    skip emitting an event in that case rather than navigating to an
+    undefined surface (open-redirect hardening).
+
+    Trade-off: server-side whitelist instead of letting the model pick
+    a route freely. We give up flexibility for safety — an LLM that
+    hallucinated ``/admin`` could otherwise hand the child the wrong UI.
+    """
+    spec = _LAUNCH_FLOW_REGISTRY.get(flow_type)
     if spec is None:
         return None
-    payload_raw = parsed.get("payload")
-    payload = payload_raw if isinstance(payload_raw, dict) else {}
+    payload = prefill if isinstance(prefill, dict) else {}
 
     resource_id = payload.get(spec["id_field"])
     if resource_id and spec.get("id_location") == "query":
-        # The SPA resumes interactive stories at /interactive?session=<id>.
+        # e.g. /interactive?session=<id>, /my-agent/settings?child_id=<id>.
         route = spec["detail_route"]
     elif resource_id:
         route = f"{spec['detail_route']}/{resource_id}"
@@ -205,20 +283,36 @@ def _build_launch_flow_data(parsed: dict[str, Any]) -> Optional[dict[str, Any]]:
         # can finish the flow with prefilled defaults.
         route = spec["landing_route"]
 
-    prefill = {
+    prefill_out = {
         key: payload[key]
         for key in _LAUNCH_FLOW_PREFILL_KEYS
         if key in payload and payload[key] is not None
     }
     query_id_param = spec.get("query_id_param")
     if resource_id and query_id_param:
-        prefill.pop(spec["id_field"], None)
-        prefill[query_id_param] = resource_id
+        prefill_out.pop(spec["id_field"], None)
+        prefill_out[query_id_param] = resource_id
     return {
-        "flow_type": response_type,
+        "flow_type": flow_type,
         "route": route,
-        "prefill": prefill,
+        "prefill": prefill_out,
     }
+
+
+def _build_launch_flow_data(parsed: dict[str, Any]) -> Optional[dict[str, Any]]:
+    """Translate a specialist tool result into a launch_flow event payload.
+
+    Thin wrapper around :func:`build_launch_flow_payload` that unwraps
+    the ``{"response_type", "payload"}`` envelope SDK tools return. Kept
+    private so the public API is the single source of truth helper,
+    not this legacy entry point — but kept callable so existing call
+    sites in ``stream_my_agent_chat`` don't need to change in lockstep.
+    """
+    if not isinstance(parsed, dict):
+        return None
+    payload_raw = parsed.get("payload")
+    prefill = payload_raw if isinstance(payload_raw, dict) else {}
+    return build_launch_flow_payload(parsed.get("response_type") or "", prefill)
 
 
 def _supports_callable(cls: Any, kwargs: dict[str, Any]) -> dict[str, Any]:
@@ -978,6 +1072,8 @@ async def stream_my_agent_chat(
     image_path: Optional[str] = None,
     age_group: Optional[str] = None,
     interests: Optional[list[str]] = None,
+    input_modality: str = "text",
+    output_modality: str = "text",
 ) -> AsyncGenerator[str, None]:
     """Stream an SDK-orchestrated My Agent chat response as SSE."""
     chat_session = await agent_chat_repo.get_or_create_session(
@@ -996,7 +1092,11 @@ async def stream_my_agent_chat(
             )
             session_title = derived_title
     await agent_chat_repo.add_message(
-        session_id=chat_session.session_id, role="user", text=message
+        session_id=chat_session.session_id,
+        role="user",
+        text=message,
+        input_modality=input_modality,
+        output_modality="text",
     )
 
     yield _sse(
@@ -1058,6 +1158,8 @@ async def stream_my_agent_chat(
             session_id=chat_session.session_id,
             role="assistant",
             text=final_text,
+            input_modality="text",
+            output_modality=output_modality,
             result_metadata=result_payload,
         )
         yield _sse("result", result_payload)
@@ -1089,6 +1191,8 @@ async def stream_my_agent_chat(
             session_id=chat_session.session_id,
             role="assistant",
             text=final_text,
+            input_modality="text",
+            output_modality=output_modality,
             result_metadata=result_payload,
         )
         yield _sse("result", result_payload)
@@ -1291,6 +1395,8 @@ async def stream_my_agent_chat(
         session_id=chat_session.session_id,
         role="assistant",
         text=final_text,
+        input_modality="text",
+        output_modality=output_modality,
         result_metadata=result_payload,
     )
     yield _sse("result", result_payload)

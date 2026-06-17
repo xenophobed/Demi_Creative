@@ -15,6 +15,7 @@ import pytest
 import pytest_asyncio
 from fastapi.testclient import TestClient
 from httpx import ASGITransport, AsyncClient
+from starlette.websockets import WebSocketDisconnect
 
 from backend.src.api.deps import get_current_user
 from backend.src.api.routes import voice_realtime
@@ -101,11 +102,25 @@ async def consented_child(test_db):
     return profile
 
 
+async def _bypass_safety(text: str, target_age: int):
+    """Test helper: short-circuit the safety MCP so existing broker
+    contract tests don't trigger real Anthropic calls.
+
+    The voice broker (#645) added a per-reply safety gate; this fixture
+    keeps the mock-provider happy path deterministic. Other suites
+    (test_voice_safety_pre_tts_contract.py) cover the gate semantics.
+    """
+    return {"safety_score": 0.99, "passed": True}
+
+
 @pytest_asyncio.fixture
-async def client(test_db):
+async def client(test_db, monkeypatch):
     app.dependency_overrides[get_current_user] = _override_current_user
     # Force the mock provider so we never call real Whisper/ElevenLabs.
     voice_realtime._set_test_provider_override(MockRealtimeVoiceProvider())
+    monkeypatch.setattr(
+        voice_realtime, "_safety_check_text", _bypass_safety,
+    )
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
@@ -234,11 +249,17 @@ class TestWebSocketBroker:
         """Sync TestClient with the same overrides as the async client."""
         app.dependency_overrides[get_current_user] = _override_current_user
         voice_realtime._set_test_provider_override(MockRealtimeVoiceProvider())
+        # The broker now runs a per-reply safety gate (#645). Bypass it
+        # for the sync TestClient tests so deterministic mock-provider
+        # bytes still flow through the WS without hitting Anthropic.
+        self._saved_safety = voice_realtime._safety_check_text
+        voice_realtime._safety_check_text = _bypass_safety  # type: ignore[assignment]
         return TestClient(app)
 
     def _teardown_sync_test_client(self):
         app.dependency_overrides.pop(get_current_user, None)
         voice_realtime._set_test_provider_override(None)
+        voice_realtime._safety_check_text = self._saved_safety  # type: ignore[assignment]
 
     @pytest.mark.asyncio
     async def test_bad_token_closes_with_auth_failed(
@@ -272,7 +293,7 @@ class TestWebSocketBroker:
 
     @pytest.mark.asyncio
     async def test_happy_path_vad_end_emits_transcript_and_audio(
-        self, test_db, consented_child,
+        self, test_db, consented_child, monkeypatch,
     ):
         # First mint a valid token via REST so the token has a real
         # session_id row in voice_sessions (end_session lookup needs it).
@@ -287,6 +308,19 @@ class TestWebSocketBroker:
             session_id=persisted.session_id,
             user_id=PARENT_USER.user_id,
             child_id=consented_child.child_id,
+        )
+
+        async def fake_stream_my_agent_chat(**_kwargs):
+            yield (
+                "event: result\n"
+                "data: {\"response_type\":\"chat\",\"message\":\"A real buddy reply\",\"session_id\":\"agtchat_voice_1\"}\n\n"
+            )
+            yield "event: complete\ndata: {\"status\":\"completed\"}\n\n"
+
+        monkeypatch.setattr(
+            voice_realtime,
+            "stream_my_agent_chat",
+            fake_stream_my_agent_chat,
         )
 
         client = self._setup_sync_test_client()
@@ -428,12 +462,24 @@ class TestSessionRowPersistence:
 
         app.dependency_overrides[get_current_user] = _override_current_user
         voice_realtime._set_test_provider_override(MockRealtimeVoiceProvider())
+        monkeypatch.setattr(
+            voice_realtime, "_safety_check_text", _bypass_safety,
+        )
         try:
             client = TestClient(app)
             with client.websocket_connect(
                 f"/api/v1/me/agent/voice/stream?token={token}"
             ) as ws:
                 ws.send_json({"type": "client_done"})
+                # Drain until the server closes the socket so the broker's
+                # finally block (where end_session is called) has fully run
+                # before we assert. Without this the assertion races the
+                # portal thread — any added latency on the session-start
+                # path (e.g. the #609 telemetry agent_id lookup) could let
+                # the assertion fire before end_session is awaited.
+                with pytest.raises(WebSocketDisconnect):
+                    while True:
+                        ws.receive_json()
         finally:
             app.dependency_overrides.pop(get_current_user, None)
             voice_realtime._set_test_provider_override(None)
@@ -444,3 +490,111 @@ class TestSessionRowPersistence:
         assert call_kwargs["reason"] == "user_ended"
         assert call_kwargs["duration_seconds"] is not None
         assert call_kwargs["duration_seconds"] >= 0
+
+
+# ============================================================================
+# Chat telemetry persistence
+# ============================================================================
+
+class TestVoiceChatTelemetry:
+    @pytest.mark.asyncio
+    async def test_voice_turn_persists_into_agent_chat_messages(
+        self, test_db, consented_child, monkeypatch,
+    ):
+        """A finalized voice utterance should be durable My Agent chat history.
+
+        The real stream_my_agent_chat path owns persistence. This test stubs
+        the stream so the broker contract verifies that it passes the voice
+        modality flags and forwards the resulting reply over the WS.
+        """
+        from backend.src.services.voice_ephemeral_token import mint_voice_token
+
+        persisted = await voice_session_repo.create_session(
+            user_id=PARENT_USER.user_id,
+            child_id=consented_child.child_id,
+            provider="mock",
+        )
+        token = mint_voice_token(
+            session_id=persisted.session_id,
+            user_id=PARENT_USER.user_id,
+            child_id=consented_child.child_id,
+        )
+
+        calls = []
+
+        async def fake_stream_my_agent_chat(**kwargs):
+            calls.append(kwargs)
+            yield (
+                "event: session\n"
+                "data: {\"session_id\":\"agtchat_voice_1\",\"story_title\":\"Voice chat\"}\n\n"
+            )
+            yield (
+                "event: result\n"
+                "data: {\"response_type\":\"chat\",\"message\":\"A real buddy reply\",\"session_id\":\"agtchat_voice_1\"}\n\n"
+            )
+            yield "event: complete\ndata: {\"status\":\"completed\"}\n\n"
+
+        monkeypatch.setattr(
+            voice_realtime,
+            "stream_my_agent_chat",
+            fake_stream_my_agent_chat,
+        )
+
+        app.dependency_overrides[get_current_user] = _override_current_user
+        voice_realtime._set_test_provider_override(MockRealtimeVoiceProvider())
+        monkeypatch.setattr(
+            voice_realtime, "_safety_check_text", _bypass_safety,
+        )
+        client = TestClient(app)
+        try:
+            with client.websocket_connect(
+                f"/api/v1/me/agent/voice/stream?token={token}"
+            ) as ws:
+                audio_b64 = base64.b64encode(b"\x00" * 200).decode("ascii")
+                ws.send_json({
+                    "type": "audio_chunk",
+                    "seq": 0,
+                    "audio_b64": audio_b64,
+                })
+                ws.send_json({"type": "vad_end", "seq": 0})
+
+                events = []
+                while True:
+                    ev = ws.receive_json()
+                    events.append(ev)
+                    if ev["type"] == "audio_chunk":
+                        break
+
+                ws.send_json({
+                    "type": "audio_chunk",
+                    "seq": 1,
+                    "audio_b64": audio_b64,
+                })
+                ws.send_json({"type": "vad_end", "seq": 1})
+                while True:
+                    ev = ws.receive_json()
+                    events.append(ev)
+                    if (
+                        ev["type"] == "audio_chunk"
+                        and len([e for e in events if e["type"] == "audio_chunk"]) >= 2
+                    ):
+                        break
+
+                ws.send_json({"type": "client_done"})
+        finally:
+            app.dependency_overrides.pop(get_current_user, None)
+            voice_realtime._set_test_provider_override(None)
+
+        assert calls, "broker must delegate finalized voice turns to My Agent"
+        assert calls[0]["message"] == "hello buddy this is a mock transcript"
+        assert calls[0]["input_modality"] == "voice"
+        assert calls[0]["output_modality"] == "voice"
+        assert len(calls) == 2
+        assert calls[1]["session_id"] == "agtchat_voice_1"
+        event_types = [e["type"] for e in events]
+        assert "final_transcript" in event_types
+        assert {
+            "type": "assistant_text",
+            "delta": "A real buddy reply",
+            "is_final": True,
+        } in events

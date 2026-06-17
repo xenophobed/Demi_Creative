@@ -9,6 +9,8 @@ Parent Epic: #42 | Issues: #161, #290
 
 import importlib
 import json
+
+import chromadb  # noqa: F401 — hard dep; fail loudly if missing (#685)
 import pytest
 
 
@@ -50,7 +52,6 @@ class TestStoreStoryEmbedding:
 
     @pytest.mark.asyncio
     async def test_stores_successfully(self, vs, tmp_path):
-        pytest.importorskip("chromadb")
         import os
         os.environ["CHROMA_PATH"] = str(tmp_path / "vectors")
 
@@ -69,7 +70,6 @@ class TestStoreStoryEmbedding:
 class TestSearchSimilarStories:
     @pytest.mark.asyncio
     async def test_returns_empty_for_unknown_child(self, vs, tmp_path):
-        pytest.importorskip("chromadb")
         import os
         os.environ["CHROMA_PATH"] = str(tmp_path / "vectors")
 
@@ -84,7 +84,6 @@ class TestSearchSimilarStories:
 
     @pytest.mark.asyncio
     async def test_finds_similar_story(self, vs, tmp_path):
-        pytest.importorskip("chromadb")
         import os
         os.environ["CHROMA_PATH"] = str(tmp_path / "vectors")
 
@@ -107,7 +106,6 @@ class TestSearchSimilarStories:
 
     @pytest.mark.asyncio
     async def test_response_shape(self, vs, tmp_path):
-        pytest.importorskip("chromadb")
         import os
         os.environ["CHROMA_PATH"] = str(tmp_path / "vectors")
 
@@ -128,7 +126,6 @@ class TestStoryDedupRoundTrip:
     @pytest.mark.asyncio
     async def test_near_duplicate_detected(self, vs, tmp_path):
         """Store a story, then search with nearly identical text; expect high similarity."""
-        pytest.importorskip("chromadb")
         import os
         os.environ["CHROMA_PATH"] = str(tmp_path / "vectors")
 
@@ -159,7 +156,6 @@ class TestStoryDedupRoundTrip:
     @pytest.mark.asyncio
     async def test_different_child_not_found(self, vs, tmp_path):
         """Stories from one child should not appear in another child's search."""
-        pytest.importorskip("chromadb")
         import os
         os.environ["CHROMA_PATH"] = str(tmp_path / "vectors")
 
@@ -184,7 +180,6 @@ class TestStoryDedupRoundTrip:
     @pytest.mark.asyncio
     async def test_upsert_updates_existing(self, vs, tmp_path):
         """Calling store with the same story_id should upsert, not duplicate."""
-        pytest.importorskip("chromadb")
         import os
         os.environ["CHROMA_PATH"] = str(tmp_path / "vectors")
 

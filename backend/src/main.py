@@ -10,6 +10,7 @@ import os
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
+from pathlib import PurePosixPath
 
 from dotenv import load_dotenv
 
@@ -24,7 +25,7 @@ load_dotenv(_backend_dir / ".env")
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from .api.models import ErrorDetail, ErrorResponse, HealthCheckResponse
@@ -40,6 +41,7 @@ from .services.database import db_manager, session_repo
 from .services.database.schema import init_schema, migrate_json_sessions
 from .services.kids_daily_scheduler import daily_drop_scheduler
 from .services.retention_scheduler import retention_scheduler
+from .services.storage_adapter import storage
 
 logger = logging.getLogger(__name__)
 
@@ -121,6 +123,12 @@ async def lifespan(app: FastAPI):
     retention_enabled = os.getenv("RETENTION_CLEANUP_ENABLED", "1") != "0"
     if retention_enabled and os.getenv("ENVIRONMENT") != "test":
         await retention_scheduler.start()
+
+    # Guard the in-process voice-token replay nonce (#684): warn loudly if
+    # multiple workers/replicas are configured, since _USED_JTIS is per-process.
+    from .services.voice_ephemeral_token import assert_single_process_or_warn
+
+    assert_single_process_or_warn()
 
     # MCP server diagnostics
     from .mcp_servers import MCP_SERVER_STATUS
@@ -337,6 +345,30 @@ if os.getenv("STORAGE_BACKEND", "local").lower() != "supabase":
     app.mount("/data/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
     app.mount("/data/videos", StaticFiles(directory=str(VIDEO_DIR)), name="videos")
     app.mount("/data/styled", StaticFiles(directory=str(STYLED_DIR)), name="styled")
+else:
+
+    @app.get("/data/uploads/{file_path:path}", include_in_schema=False)
+    async def resolve_remote_upload(file_path: str):
+        """Serve legacy relative upload URLs when production storage is remote.
+
+        - Old rows still reference `/data/uploads/...`
+        - New remote files should redirect to the public storage URL
+        - Legacy kids-daily placeholder SVGs are rebuilt from episode metadata
+        """
+        normalized = PurePosixPath(file_path)
+        if normalized.is_absolute() or any(part in {"", ".", ".."} for part in normalized.parts):
+            return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"detail": "Not found"})
+
+        filename = normalized.name
+        if filename.startswith("kids_daily_") and filename.endswith(".svg"):
+            from .api.routes.kids_daily import get_legacy_kids_daily_svg_for_upload
+
+            svg = await get_legacy_kids_daily_svg_for_upload(filename)
+            if svg is not None:
+                return Response(content=svg, media_type="image/svg+xml")
+
+        target = await storage.get_url("uploads", normalized.as_posix())
+        return RedirectResponse(url=target, status_code=status.HTTP_307_TEMPORARY_REDIRECT)
 
 
 # ============================================================================
@@ -352,6 +384,7 @@ from .api.routes import (
     audio,
     audio_transcriptions,
     child_profiles,
+    email_subscriptions,
     hub,
     image_to_story,
     inspiration_daily,
@@ -373,6 +406,7 @@ app.include_router(interactive_story.router)
 app.include_router(audio.router)
 app.include_router(audio_transcriptions.router)
 app.include_router(child_profiles.router)
+app.include_router(email_subscriptions.router)
 app.include_router(video.router)
 app.include_router(voice.router)
 app.include_router(users.router)

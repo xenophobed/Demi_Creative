@@ -71,6 +71,24 @@ def get_image_mime_type(image_path: str) -> str:
     return mime_types.get(ext, "image/png")
 
 
+# Sora only renders fixed clip lengths; map any requested duration onto one.
+SORA_SUPPORTED_DURATIONS = (4, 8, 12)
+
+
+def nearest_supported_duration(duration_seconds: int) -> str:
+    """Snap a requested duration to the nearest Sora-supported clip length.
+
+    Sora's videos API only accepts 4, 8, or 12 second clips, so an arbitrary
+    request (e.g. the legacy default of 10) must be coerced or the call fails.
+    """
+    try:
+        requested = int(duration_seconds)
+    except (TypeError, ValueError):
+        requested = SORA_SUPPORTED_DURATIONS[0]
+    closest = min(SORA_SUPPORTED_DURATIONS, key=lambda s: abs(s - requested))
+    return str(closest)
+
+
 def save_job_status(job_id: str, job_data: Dict[str, Any]) -> None:
     """Save job status to file"""
     jobs_dir = get_video_jobs_path()
@@ -162,67 +180,68 @@ async def generate_painting_video(args: Dict[str, Any]) -> Dict[str, Any]:
             VIDEO_STYLE_PROMPTS["gentle_animation"]
         )
 
-        # Encode image
-        image_base64 = encode_image_to_base64(image_path)
-        mime_type = get_image_mime_type(image_path)
+        # Generate the animation with OpenAI Sora. The painting is supplied as a
+        # visual reference through the dedicated videos API.
+        #
+        # The previous implementation called client.images.generate(image=...),
+        # which raises "unexpected keyword argument 'image'": images.generate()
+        # accepts no image input and returns stills, not video. Sora is exposed
+        # via client.videos.* instead.
+        seconds = nearest_supported_duration(duration_seconds)
 
-        # Call OpenAI Sora API to generate video
-        # Note: Using OpenAI's video generation API (Sora)
-        response = client.images.generate(
-            model="sora",
-            prompt=style_prompt,
-            image=f"data:{mime_type};base64,{image_base64}",
-            n=1,
-            size="1024x1024",
-            response_format="url"
-        )
+        with open(image_path, "rb") as image_file:
+            video_job = client.videos.create_and_poll(
+                model="sora-2",
+                prompt=style_prompt,
+                input_reference=image_file,
+                seconds=seconds,
+                size="1280x720",
+            )
 
-        # Get generated video URL
-        if response.data and len(response.data) > 0:
-            video_url = response.data[0].url
+        if getattr(video_job, "status", None) != "completed":
+            failure = getattr(video_job, "error", None)
+            reason = getattr(failure, "message", None) or failure or "unknown error"
+            raise Exception(
+                f"Sora video job ended with status "
+                f"'{getattr(video_job, 'status', 'unknown')}': {reason}"
+            )
 
-            # Download video locally
-            video_dir = get_video_output_path()
-            video_filename = f"video_{job_id}.mp4"
-            video_path = Path(video_dir) / video_filename
+        # Download the rendered video locally.
+        video_dir = get_video_output_path()
+        video_filename = f"video_{job_id}.mp4"
+        video_path = Path(video_dir) / video_filename
+        client.videos.download_content(
+            video_job.id, variant="video"
+        ).write_to_file(str(video_path))
 
-            # Use httpx to download video
-            import httpx
-            async with httpx.AsyncClient() as http_client:
-                video_response = await http_client.get(video_url)
-                with open(video_path, "wb") as f:
-                    f.write(video_response.content)
+        # Save job status
+        job_data = {
+            "job_id": job_id,
+            "story_id": story_id,
+            "status": "completed",
+            "progress_percent": 100,
+            "video_path": str(video_path),
+            "video_filename": video_filename,
+            "style": style,
+            "duration_seconds": int(seconds),
+            "created_at": timestamp.isoformat(),
+            "completed_at": datetime.now().isoformat()
+        }
+        save_job_status(job_id, job_data)
 
-            # Save job status
-            job_data = {
-                "job_id": job_id,
-                "story_id": story_id,
-                "status": "completed",
-                "progress_percent": 100,
-                "video_path": str(video_path),
-                "video_filename": video_filename,
-                "style": style,
-                "duration_seconds": duration_seconds,
-                "created_at": timestamp.isoformat(),
-                "completed_at": datetime.now().isoformat()
-            }
-            save_job_status(job_id, job_data)
-
-            return {
-                "content": [{
-                    "type": "text",
-                    "text": json.dumps({
-                        "success": True,
-                        "job_id": job_id,
-                        "status": "completed",
-                        "video_path": str(video_path),
-                        "video_filename": video_filename,
-                        "video_url": f"/data/videos/{video_filename}"
-                    }, ensure_ascii=False, indent=2)
-                }]
-            }
-        else:
-            raise Exception("No video generated from API response")
+        return {
+            "content": [{
+                "type": "text",
+                "text": json.dumps({
+                    "success": True,
+                    "job_id": job_id,
+                    "status": "completed",
+                    "video_path": str(video_path),
+                    "video_filename": video_filename,
+                    "video_url": f"/data/videos/{video_filename}"
+                }, ensure_ascii=False, indent=2)
+            }]
+        }
 
     except Exception as e:
         error_message = str(e)

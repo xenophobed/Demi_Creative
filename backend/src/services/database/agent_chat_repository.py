@@ -35,6 +35,8 @@ class AgentChatMessage:
     session_id: str
     role: str
     text: str
+    input_modality: str
+    output_modality: str
     result_metadata: dict[str, Any]
     created_at: str
 
@@ -164,7 +166,9 @@ class AgentChatRepository:
         if before_created_at:
             rows = await self._db.fetchall(
                 """
-                SELECT message_id, session_id, role, text, result_metadata, created_at
+                SELECT message_id, session_id, role, text,
+                       input_modality, output_modality,
+                       result_metadata, created_at
                 FROM agent_chat_messages
                 WHERE session_id = ? AND created_at < ?
                 ORDER BY created_at ASC
@@ -175,7 +179,9 @@ class AgentChatRepository:
         else:
             rows = await self._db.fetchall(
                 """
-                SELECT message_id, session_id, role, text, result_metadata, created_at
+                SELECT message_id, session_id, role, text,
+                       input_modality, output_modality,
+                       result_metadata, created_at
                 FROM agent_chat_messages
                 WHERE session_id = ?
                 ORDER BY created_at ASC
@@ -248,22 +254,30 @@ class AgentChatRepository:
         session_id: str,
         role: str,
         text: str,
+        input_modality: str = "text",
+        output_modality: str = "text",
         result_metadata: Optional[dict[str, Any]] = None,
     ) -> AgentChatMessage:
         now = datetime.now().isoformat()
         message_id = f"agtmsg_{uuid4().hex[:16]}"
         metadata = result_metadata or {}
+        normalized_input = _normalize_modality(input_modality)
+        normalized_output = _normalize_modality(output_modality)
         await self._db.execute(
             """
             INSERT INTO agent_chat_messages (
-                message_id, session_id, role, text, result_metadata, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?)
+                message_id, session_id, role, text,
+                input_modality, output_modality,
+                result_metadata, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 message_id,
                 session_id,
                 role,
                 text,
+                normalized_input,
+                normalized_output,
                 json.dumps(metadata, ensure_ascii=False),
                 now,
             ),
@@ -291,6 +305,8 @@ class AgentChatRepository:
             session_id=session_id,
             role=role,
             text=text,
+            input_modality=normalized_input,
+            output_modality=normalized_output,
             result_metadata=metadata,
             created_at=now,
         )
@@ -300,7 +316,9 @@ class AgentChatRepository:
     ) -> list[AgentChatMessage]:
         rows = await self._db.fetchall(
             """
-            SELECT message_id, session_id, role, text, result_metadata, created_at
+            SELECT message_id, session_id, role, text,
+                   input_modality, output_modality,
+                   result_metadata, created_at
             FROM agent_chat_messages
             WHERE session_id = ?
             ORDER BY created_at DESC
@@ -335,9 +353,15 @@ class AgentChatRepository:
             session_id=row["session_id"],
             role=row["role"],
             text=row["text"],
+            input_modality=row.get("input_modality") or "text",
+            output_modality=row.get("output_modality") or "text",
             result_metadata=metadata,
             created_at=row["created_at"],
         )
+
+
+def _normalize_modality(value: str) -> str:
+    return value if value in {"text", "voice"} else "text"
 
 
 agent_chat_repo = AgentChatRepository()

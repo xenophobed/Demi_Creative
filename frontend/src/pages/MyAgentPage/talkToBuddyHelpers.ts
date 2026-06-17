@@ -27,6 +27,53 @@ export const TALK_PANEL_STATE_COPY: Record<VoiceConversationState, string> = {
     "Voice chat isn't available on this device. You can keep using typed chat.",
 };
 
+export const TALK_PANEL_SCREEN_READER_COPY: Record<VoiceConversationState, string> = {
+  idle: "Voice chat is idle.",
+  connecting: "Voice chat is connecting.",
+  listening: "Voice chat is listening.",
+  thinking: "Buddy is thinking.",
+  speaking: "Buddy is speaking.",
+  interrupted: "Buddy heard the interruption.",
+  ending: "Voice chat is ending.",
+  error: "Voice chat needs attention.",
+  unsupported: "Voice chat is not supported on this device.",
+};
+
+export function talkPanelScreenReaderState(
+  state: VoiceConversationState,
+  partialTranscript: string,
+  assistantText: string,
+): string {
+  const base = TALK_PANEL_SCREEN_READER_COPY[state];
+  const heard = partialTranscript.trim();
+  const reply = assistantText.trim();
+  if (reply) return `${base} Buddy says: ${reply}`;
+  if (heard) return `${base} Heard: ${heard}`;
+  return base;
+}
+
+export function reducedMotionStatusPill(
+  state: VoiceConversationState,
+): string | null {
+  if (state === "listening" || state === "interrupted") return "Listening";
+  if (state === "thinking") return "Thinking";
+  if (state === "speaking") return "Speaking";
+  return null;
+}
+
+export function voiceQuotaNoticeCopy(
+  secondsRemaining: number | null | undefined,
+): string {
+  const remaining = Math.max(0, Math.floor(secondsRemaining ?? 0));
+  if (remaining <= 0) {
+    return "Voice time is used up for today. You can keep chatting by typing.";
+  }
+  if (remaining <= 60) {
+    return "Voice time is almost done for today. You can keep chatting by typing when it ends.";
+  }
+  return `Voice time remaining today: ${Math.ceil(remaining / 60)} minutes.`;
+}
+
 /**
  * Capability + consent + child-profile preconditions for the Talk
  * button to appear on AgentChatPanel. All four must be true.
@@ -171,4 +218,75 @@ export function shouldShowOnboardingBanner(
  */
 export function voiceBannerStorageKey(childId: string): string {
   return `talk_to_buddy_banner_dismissed:${childId}`;
+}
+
+/**
+ * Whether the new "Start Talking" header pill in AgentChatPanel should
+ * render (#636). Three conditions, all of them gating:
+ *
+ * 1. Capability + consent + child preconditions are met (delegates to
+ *    `shouldShowEntryButton`).
+ * 2. The chat is not currently streaming a text response — pressing
+ *    Start Talking mid-stream would race the existing AbortController
+ *    flow and create a confusing "buddy is typing AND listening?" state.
+ * 3. The inline voice bubble is not already open — when `isTalkOpen` is
+ *    true, the bubble has replaced the composer and there's no second
+ *    entry point to surface in the header.
+ *
+ * Pure helper so the composer-swap story (#636) can lock the truth
+ * table without mounting AgentChatPanel — same pattern as the entry
+ * button (#618) and the variant CSS (#635).
+ */
+export function shouldShowHeaderTalkPill(
+  preconditions: TalkButtonPreconditions,
+  isStreaming: boolean,
+  isTalkOpen: boolean,
+): boolean {
+  if (!shouldShowEntryButton(preconditions)) return false;
+  if (isStreaming) return false;
+  if (isTalkOpen) return false;
+  return true;
+}
+
+/**
+ * Captions default-on policy per age band (#608 carry-over).
+ *
+ * Pre-readers (3-5) cannot read captions, and parents in user testing
+ * said the running text felt distracting next to the BuddyOrb. We
+ * default captions OFF for that band and ON for everyone else.
+ *
+ * Override happens on the panel side when a `safety_block` event fires:
+ * captions auto-show regardless of age so the kid sees the fallback
+ * sentence the buddy speaks (PRD §3.16 — explicit rejection is a
+ * teachable moment, not a silent skip).
+ *
+ * Pure helper so the panel test can lock the truth table without
+ * mounting React. ``null`` / ``undefined`` defaults to "on" — defensive
+ * fallback for the case where the child profile hasn't loaded yet.
+ */
+export function captionsDefaultForAge(
+  age: number | null | undefined,
+): boolean {
+  if (age == null) return true;
+  if (age < 6) return false;
+  return true;
+}
+
+/**
+ * Resolve the effective caption visibility from the per-age default
+ * plus the parent surface's override (#608).
+ *
+ * Override semantics: ``true`` forces captions on (set this after a
+ * ``safety_block`` event); ``undefined`` falls back to the per-age
+ * default; ``false`` is intentionally NOT supported — leaving a panel
+ * silent for an older reader would feel broken and there's no product
+ * scenario that wants it. Mirrors the explicit-set guard inside the
+ * panel render so the helper test pins the same truth table.
+ */
+export function resolveCaptionsVisibility(
+  age: number | null | undefined,
+  override: boolean | undefined,
+): boolean {
+  if (override === true) return true;
+  return captionsDefaultForAge(age);
 }

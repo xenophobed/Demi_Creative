@@ -6,6 +6,7 @@ import { AudioProvider } from "./contexts/AudioContext";
 
 // Lazy load pages for better performance
 const HomePage = lazy(() => import("./pages/HomePage"));
+const AboutUsPage = lazy(() => import("./pages/AboutUsPage"));
 const UploadPage = lazy(() => import("./pages/UploadPage"));
 const StoryPage = lazy(() => import("./pages/StoryPage"));
 const LibraryPage = lazy(() => import("./pages/LibraryPage"));
@@ -39,6 +40,7 @@ function App() {
           {/* Main app routes */}
           <Route path="/" element={<PageContainer />}>
             <Route index element={<HomePage />} />
+            <Route path="about-us" element={<AboutUsPage />} />
             <Route path="upload" element={<UploadPage />} />
             <Route path="story/:storyId" element={<StoryPage />} />
             {/* /history redirects to /library for backwards compatibility */}

@@ -89,6 +89,16 @@ event: result    → Final story data
 event: complete  → Generation finished
 ```
 
+### Talk-to-Buddy Voice Provider
+Realtime voice sessions use `backend/src/services/realtime_voice_service.py` to pick a provider from `REALTIME_VOICE_PROVIDER`.
+
+| Provider | Local behavior |
+|----------|----------------|
+| `mock` | Deterministic offline path for UI and contract tests. It always returns the canned transcript `hello buddy this is a mock transcript`. |
+| `hybrid` | Real local path: OpenAI Whisper STT → My Agent reply → ElevenLabs TTS audio. Requires `OPENAI_API_KEY` for transcription and `ELEVENLABS_API_KEY` for spoken reply audio. |
+
+If the provider flag is unset, local development falls back to `mock`, so hearing or seeing the canned transcript usually means the backend is not running with `REALTIME_VOICE_PROVIDER=hybrid`. Restart the backend after changing this env var; existing voice WebSocket sessions keep the provider they started with.
+
 ## Key Concepts
 
 **FastAPI**: A modern Python web framework that uses type hints for automatic request validation, documentation generation, and async support. Think of it as the receptionist who takes requests and routes them to the right department.

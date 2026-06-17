@@ -27,20 +27,24 @@ import {
 } from "@/api/services/realtimeVoiceService";
 import {
   buildAudioChunkFrame,
+  buildSdpExchangeRequest,
   buildWsUrl,
   computeRms,
   detectBargeIn,
   detectSilenceVad,
   detectVoiceCapabilities,
   dispatchForServerEvent,
+  parseRealtimeEvent,
   parseServerEvent,
   pickAudioMimeType,
+  RTC_HANDSHAKE_BUDGET_MS,
 } from "./voiceConversationHelpers";
 import {
   voiceConversationReducer,
   type VoiceConversationEvent,
   type VoiceConversationState,
 } from "./voiceConversationStateMachine";
+import { voiceTelemetry } from "@/utils/voiceTelemetry";
 
 export type VoiceErrorKind =
   | "auth"
@@ -64,6 +68,11 @@ export interface UseVoiceConversationOptions {
   bargeInRmsThreshold?: number;
   bargeInSustainedMs?: number;
   silenceVadMs?: number;
+  /** #647: Ask the backend for the WebRTC direct-mode transport. The
+   *  hook still falls back to the WS server-relay path if the RTC
+   *  handshake fails within `RTC_HANDSHAKE_BUDGET_MS`. Default false
+   *  preserves pre-#647 behavior so the WS path stays the safe default. */
+  preferWebRTC?: boolean;
   onCaption?: (caption: VoiceCaption) => void;
   onError?: (kind: VoiceErrorKind, detail?: string) => void;
 }
@@ -78,6 +87,26 @@ export interface UseVoiceConversationResult {
   partialTranscript: string;
   assistantText: string;
   inputLevel: number;
+  /**
+   * RMS-derived TTS output level 0..1 (#651). Mirrors `inputLevel` but
+   * is sourced from the AnalyserNode wired between the assistant audio
+   * element and the AudioContext destination. Used by BuddyOrb to drive
+   * the speaking animation. Stays at 0 in environments without the Web
+   * Audio API (test/SSR) or when no TTS is currently playing.
+   */
+  outputLevel: number;
+  /**
+   * #608 captions auto-show signal. Flips ``true`` the first time a
+   * ``safety_block`` event arrives in this session; stays ``true`` for
+   * the rest of the session so the kid keeps seeing the fallback
+   * sentence on the panel. Reset to ``false`` on the next ``start``.
+   *
+   * This is a side-channel hint, not a reducer state transition — the
+   * voice state machine doesn't pivot on safety_block (we keep the
+   * session alive and continue listening). The panel reads this flag
+   * to flip ``captionsVisibleOverride`` on TalkToBuddyPanel.
+   */
+  safetyBlockedSeen: boolean;
   sessionId: string | null;
 }
 
@@ -109,6 +138,7 @@ export function useVoiceConversation(
     bargeInRmsThreshold = DEFAULT_BARGE_IN_RMS,
     bargeInSustainedMs = DEFAULT_BARGE_IN_SUSTAINED_MS,
     silenceVadMs = DEFAULT_SILENCE_VAD_MS,
+    preferWebRTC = false,
     onCaption,
     onError,
   } = options;
@@ -120,18 +150,36 @@ export function useVoiceConversation(
   const [partialTranscript, setPartialTranscript] = useState("");
   const [assistantText, setAssistantText] = useState("");
   const [inputLevel, setInputLevel] = useState(0);
+  const [outputLevel, setOutputLevel] = useState(0);
+  // #608 captions auto-show signal. Sticky for the rest of the session
+  // once a safety_block is observed; reset on the next start().
+  const [safetyBlockedSeen, setSafetyBlockedSeen] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
 
   const stateRef = useRef<VoiceConversationState>("idle");
   stateRef.current = state;
 
   const wsRef = useRef<WebSocket | null>(null);
+  // #647: WebRTC peer connection + data channel for the direct-mode path.
+  // Both stay null on the WS path so cleanup is a no-op.
+  const pcRef = useRef<RTCPeerConnection | null>(null);
+  const dcRef = useRef<RTCDataChannel | null>(null);
+  // Remote audio analyser node — same shape as outputAnalyserRef on the
+  // WS path so BuddyOrb still gets `outputLevel` while the buddy talks.
+  const remoteStreamSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const rafRef = useRef<number | null>(null);
+  // Output-side analyser (#651): the assistant's TTS audio element fed
+  // through createMediaElementSource → AnalyserNode → destination. RMS
+  // from this analyser becomes `outputLevel` so the BuddyOrb can react
+  // to the buddy talking, not just the kid talking.
+  const outputAnalyserRef = useRef<AnalyserNode | null>(null);
+  const outputSourceRef = useRef<MediaElementAudioSourceNode | null>(null);
+  const outputRafRef = useRef<number | null>(null);
   const audioElementRef = useRef<HTMLAudioElement | null>(null);
   const blobUrlRef = useRef<string | null>(null);
   const ttsChunksRef = useRef<Uint8Array[]>([]);
@@ -142,6 +190,13 @@ export function useVoiceConversation(
   const lastSpeechAtRef = useRef<number | null>(null);
   const firstAboveAtRef = useRef<number | null>(null);
   const sentVadEndRef = useRef(false);
+  // #609 telemetry — session id + start timestamp read from inside WS
+  // callbacks (avoids the stale-closure trap of reading `sessionId`
+  // state). first-audio/ended guards ensure each fires at most once.
+  const sessionIdRef = useRef<string | null>(null);
+  const sessionStartedAtRef = useRef<number | null>(null);
+  const firstAudioEmittedRef = useRef(false);
+  const endedEmittedRef = useRef(false);
 
   const send = useCallback(
     (event: VoiceConversationEvent) => dispatch(event),
@@ -169,6 +224,14 @@ export function useVoiceConversation(
       try { cancelAnimationFrame(rafRef.current); } catch { /* ignore */ }
       rafRef.current = null;
     }
+  }, []);
+
+  const stopOutputAnalyserLoop = useCallback(() => {
+    if (outputRafRef.current != null) {
+      try { cancelAnimationFrame(outputRafRef.current); } catch { /* ignore */ }
+      outputRafRef.current = null;
+    }
+    setOutputLevel(0);
   }, []);
 
   const stopRecorder = useCallback(() => {
@@ -215,11 +278,33 @@ export function useVoiceConversation(
     if (ctx) {
       try { analyserRef.current?.disconnect(); } catch { /* ignore */ }
       try { sourceRef.current?.disconnect(); } catch { /* ignore */ }
+      try { outputAnalyserRef.current?.disconnect(); } catch { /* ignore */ }
+      try { outputSourceRef.current?.disconnect(); } catch { /* ignore */ }
+      try { remoteStreamSourceRef.current?.disconnect(); } catch { /* ignore */ }
       ctx.close().catch(() => { /* ignore */ });
     }
     audioCtxRef.current = null;
     analyserRef.current = null;
     sourceRef.current = null;
+    outputAnalyserRef.current = null;
+    outputSourceRef.current = null;
+    remoteStreamSourceRef.current = null;
+  }, []);
+
+  const closeRtc = useCallback(() => {
+    // #647: tear down WebRTC peer + data channel. Order matters: data
+    // channel first (so the model sees a clean shutdown), then the
+    // peer connection. Per-track stops live with `stopStream`.
+    const dc = dcRef.current;
+    if (dc) {
+      try { dc.close(); } catch { /* ignore */ }
+    }
+    dcRef.current = null;
+    const pc = pcRef.current;
+    if (pc) {
+      try { pc.close(); } catch { /* ignore */ }
+    }
+    pcRef.current = null;
   }, []);
 
   const closeWebSocket = useCallback((code: number = 1000, reason = "") => {
@@ -232,16 +317,18 @@ export function useVoiceConversation(
 
   const teardown = useCallback(() => {
     stopAnalyserLoop();
+    stopOutputAnalyserLoop();
     stopRecorder();
     stopStream();
     stopPlayback();
+    closeRtc();
     closeAudioContext();
     closeWebSocket(1000, "teardown");
     seqRef.current = 0;
     lastSpeechAtRef.current = null;
     firstAboveAtRef.current = null;
     sentVadEndRef.current = false;
-  }, [stopAnalyserLoop, stopRecorder, stopStream, stopPlayback, closeAudioContext, closeWebSocket]);
+  }, [stopAnalyserLoop, stopOutputAnalyserLoop, stopRecorder, stopStream, stopPlayback, closeRtc, closeAudioContext, closeWebSocket]);
 
   useEffect(() => () => teardown(), [teardown]);
 
@@ -252,6 +339,43 @@ export function useVoiceConversation(
       const last = lastTtsChunkAtRef.current ?? now;
       if (now - last >= TTS_END_QUIET_WINDOW_MS) send({ type: "ttsEnd" });
     }, TTS_END_QUIET_WINDOW_MS + 50);
+  }
+
+  function startOutputAnalyserLoop() {
+    const analyser = outputAnalyserRef.current;
+    if (!analyser) return;
+    const buf = new Uint8Array(analyser.fftSize);
+    const tick = () => {
+      const a = outputAnalyserRef.current;
+      if (!a) return;
+      a.getByteTimeDomainData(buf);
+      const rms = computeRms(buf);
+      setOutputLevel(rms);
+      outputRafRef.current = requestAnimationFrame(tick);
+    };
+    outputRafRef.current = requestAnimationFrame(tick);
+  }
+
+  function ensureOutputAnalyserWired(audio: HTMLAudioElement) {
+    // Lazy-wire on the first TTS playback so we don't pay the cost on
+    // sessions that never reach speaking. Skip cleanly if Web Audio
+    // isn't available (test env, older browsers).
+    const ctx = audioCtxRef.current;
+    if (!ctx) return;
+    if (outputAnalyserRef.current && outputSourceRef.current) return;
+    try {
+      const source = ctx.createMediaElementSource(audio);
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 512;
+      source.connect(analyser);
+      // Keep audible: also connect through to the destination.
+      analyser.connect(ctx.destination);
+      outputSourceRef.current = source;
+      outputAnalyserRef.current = analyser;
+    } catch {
+      // createMediaElementSource throws if called twice on the same
+      // element — that's fine, we already wired it earlier.
+    }
   }
 
   function playAssembledAudio() {
@@ -266,9 +390,30 @@ export function useVoiceConversation(
     if (!audioElementRef.current) audioElementRef.current = new Audio();
     const audio = audioElementRef.current;
     audio.src = url;
-    audio.onended = () => send({ type: "ttsEnd" });
+    audio.onended = () => {
+      stopOutputAnalyserLoop();
+      send({ type: "ttsEnd" });
+    };
+    ensureOutputAnalyserWired(audio);
+    startOutputAnalyserLoop();
     void audio.play().catch(() => {
       onError?.("network", "Audio playback was blocked by the browser");
+    });
+  }
+
+  // #609 telemetry — emit the client-perceived session-end event at most
+  // once per session. Both ws.onclose and the WebRTC teardown can race to
+  // close, so the ref guard keeps the histogram honest.
+  function emitSessionEndedOnce(reason: string) {
+    if (endedEmittedRef.current) return;
+    const sid = sessionIdRef.current;
+    if (!sid) return;
+    endedEmittedRef.current = true;
+    const startedAt = sessionStartedAtRef.current;
+    voiceTelemetry.sessionEnded({
+      sessionId: sid,
+      durationSeconds: startedAt != null ? (nowMs() - startedAt) / 1000 : 0,
+      endedReason: reason,
     });
   }
 
@@ -306,6 +451,20 @@ export function useVoiceConversation(
           for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
           ttsChunksRef.current.push(bytes);
           lastTtsChunkAtRef.current = nowMs();
+          // #609 telemetry — client-perceived time-to-first-audio: the
+          // gap from session open to the first audio byte the device
+          // actually received. Fires once; complements the server-side
+          // forward-time histogram.
+          if (!firstAudioEmittedRef.current && sessionIdRef.current) {
+            firstAudioEmittedRef.current = true;
+            const startedAt = sessionStartedAtRef.current;
+            if (startedAt != null) {
+              voiceTelemetry.firstAudioMs({
+                sessionId: sessionIdRef.current,
+                firstAudioMs: nowMs() - startedAt,
+              });
+            }
+          }
           scheduleTtsEndProbe();
         } catch {
           onError?.("network", "Failed to decode audio chunk");
@@ -315,7 +474,20 @@ export function useVoiceConversation(
       case "safety_block":
         setAssistantText("");
         setPartialTranscript("");
+        // Flip the captions auto-show signal — sticky for the rest of
+        // the session so the kid keeps seeing the fallback line on
+        // the panel (#608). Reset on the next start().
+        setSafetyBlockedSeen(true);
         onCaption?.({ kind: "safety_block", text: event.fallback_text });
+        // #609 telemetry — a turn was blocked; record which side without
+        // ever logging the (unsafe) text. category mirrors the direction.
+        if (sessionIdRef.current) {
+          voiceTelemetry.safetyRejection({
+            sessionId: sessionIdRef.current,
+            direction: event.direction,
+            category: `${event.direction}_blocked`,
+          });
+        }
         break;
       case "quota_exhausted":
         onError?.("quota", `Voice quota exhausted. Remaining: ${event.seconds_remaining ?? 0}s`);
@@ -381,39 +553,318 @@ export function useVoiceConversation(
     rafRef.current = requestAnimationFrame(tick);
   }
 
+  // #647: WebRTC remote audio → AudioContext analyser. Wires the same
+  // analyser-node graph the WS path uses for `outputLevel`, so BuddyOrb
+  // keeps reacting to the buddy's voice on the direct-mode transport.
+  function wireRemoteTrackToAnalyser(stream: MediaStream) {
+    const ctx = audioCtxRef.current;
+    if (!ctx) return;
+    try {
+      const source = ctx.createMediaStreamSource(stream);
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 512;
+      source.connect(analyser);
+      // Note: we do NOT connect to ctx.destination — the remote audio
+      // element handles playback. Wiring to destination would double the
+      // output.
+      remoteStreamSourceRef.current = source;
+      outputAnalyserRef.current = analyser;
+      startOutputAnalyserLoop();
+    } catch {
+      // Already wired or browser refused — keep going with no analyser.
+    }
+  }
+
+  // #647: data-channel events → caption + state-machine ticks. The
+  // shapes differ from the WS broker but the downstream effects are the
+  // same; we reuse `setAssistantText` etc. so the reducer never changes.
+  function handleRtcDataChannelMessage(raw: string) {
+    const ev = parseRealtimeEvent(raw);
+    switch (ev.kind) {
+      case "text_delta":
+        setAssistantText((prev) => prev + ev.text);
+        onCaption?.({ kind: "assistant", text: ev.text, isFinal: false });
+        // First text delta acts as the "tts is about to start" signal
+        // for the reducer; subsequent deltas are data only.
+        if (!hasReceivedTtsStartRef.current) {
+          hasReceivedTtsStartRef.current = true;
+          send({ type: "ttsStart" });
+        }
+        send({ type: "assistantTextDelta" });
+        break;
+      case "audio_chunk":
+        // Audio bytes flow over the RTC media track — the data channel
+        // delta is informational. We don't buffer it; the remote track
+        // is already audible via the <audio> element.
+        break;
+      case "tool_call":
+        // Tool-call dispatch (#658 territory). For the frontend we just
+        // surface the call so the panel can flash a "thinking" cue if
+        // it wants to; the actual dispatch is the server's job via a
+        // side WS. For v2 of #647 we keep this lightweight.
+        break;
+      case "response_done":
+        // Final delta arrived — flag the reducer.
+        send({ type: "assistantTextDelta" });
+        scheduleTtsEndProbe();
+        break;
+      case "unknown":
+      default:
+        break;
+    }
+  }
+
+  async function tryStartWebRtcPath(
+    response: VoiceSessionStartResponse,
+  ): Promise<boolean> {
+    if (typeof window === "undefined" || typeof RTCPeerConnection === "undefined") {
+      return false;
+    }
+    const clientSecret = response.openai_realtime_client_secret;
+    if (!clientSecret) return false;
+
+    const startedAtMs = nowMs();
+    let pc: RTCPeerConnection;
+    try {
+      pc = new RTCPeerConnection({
+        iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+      });
+    } catch {
+      return false;
+    }
+    pcRef.current = pc;
+
+    // Mic input first — needed for `pc.addTrack` before the offer.
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+        video: false,
+      });
+    } catch (err) {
+      onError?.("auth", err instanceof Error ? err.message : "Mic denied");
+      closeRtc();
+      return false;
+    }
+    streamRef.current = stream;
+
+    // Local mic analyser (for `inputLevel` + barge-in / silence-VAD).
+    const Ctor = pickAudioContextCtor();
+    if (Ctor) {
+      const ctx = new Ctor();
+      try { await ctx.resume(); } catch { /* ignore */ }
+      audioCtxRef.current = ctx;
+      const source = ctx.createMediaStreamSource(stream);
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 512;
+      source.connect(analyser);
+      sourceRef.current = source;
+      analyserRef.current = analyser;
+      startAnalyserLoop();
+    }
+
+    for (const track of stream.getAudioTracks()) {
+      try { pc.addTrack(track, stream); } catch { /* ignore */ }
+    }
+    try {
+      pc.addTransceiver("audio", { direction: "sendrecv" });
+    } catch { /* some older browsers; addTrack covers most */ }
+
+    // Remote audio → <audio> element + analyser for BuddyOrb.
+    pc.ontrack = (ev) => {
+      const remoteStream = ev.streams[0];
+      if (!remoteStream) return;
+      if (!audioElementRef.current) audioElementRef.current = new Audio();
+      const audio = audioElementRef.current;
+      audio.srcObject = remoteStream;
+      void audio.play().catch(() => {
+        onError?.("network", "Audio playback was blocked by the browser");
+      });
+      wireRemoteTrackToAnalyser(remoteStream);
+    };
+
+    // Data channel — tool calls + text deltas. Open BEFORE the offer
+    // is created so the SDP includes the m=application section.
+    const dc = pc.createDataChannel("oai-events");
+    dcRef.current = dc;
+    dc.onmessage = (ev) => handleRtcDataChannelMessage(String(ev.data));
+
+    // SDP exchange against OpenAI. Pure helper builds the request shape.
+    let offer: RTCSessionDescriptionInit;
+    try {
+      offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+    } catch {
+      closeRtc();
+      return false;
+    }
+
+    const model = "gpt-realtime-mini";
+    const reqShape = buildSdpExchangeRequest(clientSecret, model, offer);
+
+    // The handshake budget is enforced by `Promise.race` — if the SDP
+    // exchange or ICE connection hasn't completed in 3s, abort and
+    // let the caller retry on WS. This matches `shouldFallbackToWs`'s
+    // policy (kept as a pure helper so tests cover the decision).
+    const deadlineMs = RTC_HANDSHAKE_BUDGET_MS;
+
+    let answerSdp: string;
+    try {
+      const ctrl = new AbortController();
+      const budget = setTimeout(() => ctrl.abort(), deadlineMs);
+      const res = await fetch(reqShape.url, {
+        method: "POST",
+        headers: reqShape.headers,
+        body: reqShape.body,
+        signal: ctrl.signal,
+      });
+      clearTimeout(budget);
+      if (!res.ok) {
+        closeRtc();
+        return false;
+      }
+      answerSdp = await res.text();
+    } catch {
+      closeRtc();
+      return false;
+    }
+
+    try {
+      await pc.setRemoteDescription({
+        type: "answer",
+        sdp: answerSdp,
+      });
+    } catch {
+      closeRtc();
+      return false;
+    }
+
+    // Wait for the peer connection to reach "connected" within the rest
+    // of the budget. If it doesn't, fall back to WS.
+    const settled = await new Promise<boolean>((resolve) => {
+      const timer = setTimeout(() => {
+        const elapsed = nowMs() - startedAtMs;
+        if (elapsed >= deadlineMs && pc.connectionState !== "connected") {
+          resolve(false);
+        } else {
+          resolve(true);
+        }
+      }, Math.max(0, deadlineMs - (nowMs() - startedAtMs)));
+      pc.onconnectionstatechange = () => {
+        if (pc.connectionState === "connected") {
+          clearTimeout(timer);
+          resolve(true);
+        } else if (pc.connectionState === "failed") {
+          clearTimeout(timer);
+          resolve(false);
+        }
+      };
+    });
+
+    if (!settled) {
+      closeRtc();
+      // Surface a brief transition so the panel can show "Switching..."
+      // before the WS path takes over. Reusing `sttPartial` would muddy
+      // the reducer; instead the panel can listen for this caption.
+      onCaption?.({ kind: "partial", text: "Switching..." });
+      // Reset state so the WS path can re-grab the mic + analysers.
+      stopAnalyserLoop();
+      stopStream();
+      closeAudioContext();
+      return false;
+    }
+
+    // Connected — emulate the WS open signal so the reducer reaches
+    // `listening` without learning about WebRTC. The mic recorder is not
+    // used on this path (RTC sends audio via the peer connection track)
+    // — listening + speaking transitions are driven by data-channel
+    // text deltas + the local analyser loop.
+    send({ type: "wsOpen" });
+    return true;
+  }
+
   const start = useCallback(
     async (consentGranted: boolean) => {
       if (!consentGranted) return;
       setPartialTranscript("");
       setAssistantText("");
       setInputLevel(0);
+      setOutputLevel(0);
+      // #608: reset the captions auto-show signal so a previous
+      // session's safety_block doesn't carry over into the new session.
+      setSafetyBlockedSeen(false);
       send({ type: "start", consentGranted: true });
 
+      // #647: if the caller opted into WebRTC, request it on the wire.
+      // The backend silently degrades to WS for non-OpenAI providers
+      // so the hook never needs to special-case the response shape.
       let response: VoiceSessionStartResponse;
       try {
         response = await realtimeVoiceService.startSession({
           child_id: childId,
           persona,
+          prefer_webrtc: preferWebRTC || undefined,
         });
       } catch (err) {
-        const status = (err as { response?: { status?: number } })?.response?.status;
+        const responseError = err as {
+          response?: {
+            status?: number;
+            data?: { detail?: { seconds_remaining?: number } };
+          };
+        };
+        const status = responseError.response?.status;
         const kind: VoiceErrorKind =
           status === 409 ? "auth"
           : status === 429 ? "quota"
           : status === 404 ? "auth"
           : "network";
-        onError?.(kind, err instanceof Error ? err.message : String(err));
+        const secondsRemaining =
+          responseError.response?.data?.detail?.seconds_remaining;
+        const detail =
+          kind === "quota"
+            ? `Voice quota exhausted. Remaining: ${secondsRemaining ?? 0}s`
+            : err instanceof Error ? err.message : String(err);
+        onError?.(kind, detail);
         send({ type: "streamError" });
         return;
       }
       send({ type: "tokenReceived" });
       setSessionId(response.session_id);
+      // #609 telemetry — client-perceived session open. Refs (not state)
+      // so the WS callbacks below read a fresh value, not a stale closure.
+      sessionIdRef.current = response.session_id;
+      sessionStartedAtRef.current = nowMs();
+      firstAudioEmittedRef.current = false;
+      endedEmittedRef.current = false;
+      voiceTelemetry.sessionStarted({
+        sessionId: response.session_id,
+        provider: response.provider_config?.provider,
+      });
+
+      // #647: branch on the negotiated transport. The WebRTC path is
+      // strictly an optimization — any failure path retries once with
+      // ``transport: "ws"`` so the UX never loses a session to a
+      // handshake glitch.
+      if (response.transport === "webrtc" && response.openai_realtime_client_secret) {
+        const ok = await tryStartWebRtcPath(response);
+        if (ok) return;
+        // Fallback into the WS path below using the same response —
+        // the broker accepts the same ephemeral_token for either route.
+      }
 
       const wsUrl = buildWsUrl(window.location.origin, response.ws_url, response.ephemeral_token);
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
       ws.onopen = () => send({ type: "wsOpen" });
       ws.onclose = (ev) => {
+        // #609 telemetry — client-perceived session end. Fires once for
+        // both graceful (1000) and abnormal closes; ended_reason maps the
+        // WS close code to a coarse bucket the dashboard can group on.
+        emitSessionEndedOnce(ev.code === 1000 ? "client_closed" : `ws_${ev.code}`);
         if (ev.code !== 1000) {
           send({ type: "streamError" });
           onError?.("network", `WebSocket closed: ${ev.code}`);
@@ -482,7 +933,7 @@ export function useVoiceConversation(
       recorderRef.current = recorder;
       recorder.start(AUDIO_CHUNK_TIMESLICE_MS);
     },
-    [childId, persona, bargeInRmsThreshold, bargeInSustainedMs, silenceVadMs, onCaption, onError, send],
+    [childId, persona, preferWebRTC, bargeInRmsThreshold, bargeInSustainedMs, silenceVadMs, onCaption, onError, send],
   );
 
   const end = useCallback(() => {
@@ -498,6 +949,7 @@ export function useVoiceConversation(
     setPartialTranscript("");
     setAssistantText("");
     setInputLevel(0);
+    setOutputLevel(0);
     setSessionId(null);
     send({ type: "reset" });
   }, [send, teardown]);
@@ -515,6 +967,8 @@ export function useVoiceConversation(
     partialTranscript,
     assistantText,
     inputLevel,
+    outputLevel,
+    safetyBlockedSeen,
     sessionId,
   };
 }
