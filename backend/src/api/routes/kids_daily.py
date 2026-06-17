@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import json
 import logging
@@ -244,8 +245,7 @@ async def _generate_illustrations(
                             os.getenv("MORNING_SHOW_IMAGE_MODEL", "gpt-image-1-mini"))
     api_key = (os.getenv("OPENAI_API_KEY") or "").strip()
 
-    illustrations: List[EpisodeIllustration] = []
-    for idx in range(count):
+    async def _gen_one(idx: int) -> EpisodeIllustration:
         subtitle = f"{topic.title()} scene {idx + 1}"
         animation_type = animation_types[idx % len(animation_types)]
         description = f"{topic.title()} illustration #{idx + 1}"
@@ -256,7 +256,10 @@ async def _generate_illustrations(
                 item_url = None
                 item_b64 = None
                 if openai_client is not None:
-                    response = openai_client.images.generate(
+                    # Run the blocking OpenAI image call off the event loop so
+                    # scenes render concurrently and other requests aren't stalled.
+                    response = await asyncio.to_thread(
+                        openai_client.images.generate,
                         model=image_model,
                         prompt=_scene_prompt(kid_title, topic, age_group, idx),
                         size="1024x1024",
@@ -307,16 +310,18 @@ async def _generate_illustrations(
 
         safe_description = await _safe_illustration_description(description, age_group)
 
-        illustrations.append(
-            EpisodeIllustration(
-                url=generated_url,
-                description=safe_description,
-                display_order=idx,
-                animation_type=animation_type,
-            )
+        return EpisodeIllustration(
+            url=generated_url,
+            description=safe_description,
+            display_order=idx,
+            animation_type=animation_type,
         )
 
-    return illustrations
+    # Generate all scenes concurrently. gather preserves input order so
+    # display_order stays correct; per-scene errors fall back to a
+    # placeholder inside _gen_one, so gather itself won't raise.
+    illustrations = await asyncio.gather(*[_gen_one(idx) for idx in range(count)])
+    return list(illustrations)
 
 
 # ===========================================================================
@@ -528,14 +533,18 @@ async def _build_episode(
         }
 
     dialogue_script = DialogueScript(**generated["dialogue_script"])
-    audio_urls = await generate_multi_speaker_audio(dialogue_script, request.age_group.value)
-
     episode_id = str(uuid.uuid4())
-    illustrations = await _generate_illustrations(
-        episode_id=episode_id,
-        kid_title=generated.get("kid_title", "Kids Daily"),
-        topic=request.category.value,
-        age_group=request.age_group.value,
+
+    # Audio (per-line TTS) and illustration generation are independent, so run
+    # them concurrently instead of back-to-back to cut episode latency.
+    audio_urls, illustrations = await asyncio.gather(
+        generate_multi_speaker_audio(dialogue_script, request.age_group.value),
+        _generate_illustrations(
+            episode_id=episode_id,
+            kid_title=generated.get("kid_title", "Kids Daily"),
+            topic=request.category.value,
+            age_group=request.age_group.value,
+        ),
     )
 
     key_concepts = _as_key_concepts(generated.get("key_concepts", []))
