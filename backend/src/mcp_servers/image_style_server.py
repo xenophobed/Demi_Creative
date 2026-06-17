@@ -289,10 +289,17 @@ async def _transform_art_style_tool(args: Dict[str, Any]) -> Dict[str, Any]:
     try:
         prompt = ART_THEME_PROMPTS[theme]
 
-        # Call Replicate flux-kontext-pro model
+        # Best-value policy: ``flux-kontext-pro`` is already cheap (~$0.04/img),
+        # fast (hosted, no GPU cold start), and high quality — the right
+        # quality/speed/cost balance for a user-facing styled image. The
+        # cheaper open-weights ``dev`` tier saves ~$0.02 but is slower and
+        # lower fidelity, so it is opt-in via the IMAGE_STYLE_MODEL env var.
+        style_model = os.getenv(
+            "IMAGE_STYLE_MODEL", "black-forest-labs/flux-kontext-pro"
+        )
         with open(image_path, "rb") as img_file:
             output = replicate.run(
-                "black-forest-labs/flux-kontext-pro",
+                style_model,
                 input={
                     "prompt": prompt,
                     "input_image": img_file,

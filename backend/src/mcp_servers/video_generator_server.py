@@ -1,7 +1,11 @@
 """
 Video Generation MCP Server
 
-Provides tools for generating animated videos from children's paintings using OpenAI Sora.
+Provides tools for generating animated videos from children's paintings.
+
+Cheapest-everywhere policy: video uses a low-cost Replicate image-to-video
+model (default ``wan-video/wan-2.2-i2v-fast``) instead of OpenAI Sora. The
+model is overridable via the ``VIDEO_MODEL`` env var with no code change.
 """
 
 import os
@@ -14,9 +18,14 @@ import uuid
 from datetime import datetime, timedelta
 
 try:
-    from openai import OpenAI
+    import replicate as _replicate
 except Exception:  # pragma: no cover - import fallback for test env
-    OpenAI = None
+    _replicate = None
+
+try:
+    import httpx as _httpx
+except Exception:  # pragma: no cover - import fallback for test env
+    _httpx = None
 
 try:
     from claude_agent_sdk import tool, create_sdk_mcp_server
@@ -36,6 +45,29 @@ VIDEO_STYLE_PROMPTS = {
     "playful": "Create a playful animation from this children's painting. Add bouncy, fun movements to the characters and elements. Keep the whimsical, child-drawn quality while making elements dance and move joyfully.",
     "storybook": "Transform this children's painting into a storybook-style animation. Add gentle page-turning effects and bring elements to life as if the drawing is coming alive from a magical book."
 }
+
+
+# Cheapest-everywhere policy: a low-cost, maintained, prompt-capable Replicate
+# image-to-video model. Overridable via env without a redeploy of code.
+DEFAULT_VIDEO_MODEL = "wan-video/wan-2.2-i2v-fast"
+
+
+def get_video_model() -> str:
+    return os.getenv("VIDEO_MODEL", DEFAULT_VIDEO_MODEL)
+
+
+def get_video_resolution() -> str:
+    # 480p is the cheaper tier; bump to 720p via env only if needed.
+    return os.getenv("VIDEO_RESOLUTION", "480p")
+
+
+def get_video_render_timeout() -> float:
+    """Max seconds to wait for a render. i2v jobs routinely take 1-2+ min
+    (plus cold start), well beyond replicate.run()'s ~60s default wait."""
+    try:
+        return float(os.getenv("VIDEO_RENDER_TIMEOUT_S", "300"))
+    except (TypeError, ValueError):
+        return 300.0
 
 
 def get_video_output_path():
@@ -71,22 +103,18 @@ def get_image_mime_type(image_path: str) -> str:
     return mime_types.get(ext, "image/png")
 
 
-# Sora only renders fixed clip lengths; map any requested duration onto one.
-SORA_SUPPORTED_DURATIONS = (4, 8, 12)
+def normalize_duration_seconds(duration_seconds) -> int:
+    """Coerce a requested clip length to a small, cost-friendly integer.
 
-
-def nearest_supported_duration(duration_seconds: int) -> str:
-    """Snap a requested duration to the nearest Sora-supported clip length.
-
-    Sora's videos API only accepts 4, 8, or 12 second clips, so an arbitrary
-    request (e.g. the legacy default of 10) must be coerced or the call fails.
+    The Replicate i2v model renders a short clip from its own frame defaults;
+    we only record the requested duration in the job metadata. Clamp to a
+    cheap 4-8s window so a stray large request can't drive up cost.
     """
     try:
         requested = int(duration_seconds)
     except (TypeError, ValueError):
-        requested = SORA_SUPPORTED_DURATIONS[0]
-    closest = min(SORA_SUPPORTED_DURATIONS, key=lambda s: abs(s - requested))
-    return str(closest)
+        requested = 5
+    return max(4, min(8, requested))
 
 
 def save_job_status(job_id: str, job_data: Dict[str, Any]) -> None:
@@ -153,66 +181,81 @@ async def generate_painting_video(args: Dict[str, Any]) -> Dict[str, Any]:
             }]
         }
 
-    # Check OpenAI API Key
-    api_key = os.getenv("OPENAI_API_KEY")
+    # Check Replicate availability + token (cheapest-everywhere video provider).
+    if _replicate is None or _httpx is None:
+        return {
+            "content": [{
+                "type": "text",
+                "text": json.dumps({
+                    "success": False,
+                    "error": "replicate/httpx SDK not installed",
+                    "job_id": None
+                }, ensure_ascii=False)
+            }]
+        }
+    api_key = os.getenv("REPLICATE_API_TOKEN")
     if not api_key:
         return {
             "content": [{
                 "type": "text",
                 "text": json.dumps({
                     "success": False,
-                    "error": "OPENAI_API_KEY environment variable not configured",
+                    "error": "REPLICATE_API_TOKEN environment variable not configured",
                     "job_id": None
                 }, ensure_ascii=False)
             }]
         }
 
     try:
-        client = OpenAI(api_key=api_key)
-
         # Generate job ID
         job_id = str(uuid.uuid4())
         timestamp = datetime.now()
 
-        # Get style prompt
+        # Get style prompt + cost-clamped clip length
         style_prompt = VIDEO_STYLE_PROMPTS.get(
             style,
             VIDEO_STYLE_PROMPTS["gentle_animation"]
         )
+        clip_seconds = normalize_duration_seconds(duration_seconds)
+        model = get_video_model()
 
-        # Generate the animation with OpenAI Sora. The painting is supplied as a
-        # visual reference through the dedicated videos API.
-        #
-        # The previous implementation called client.images.generate(image=...),
-        # which raises "unexpected keyword argument 'image'": images.generate()
-        # accepts no image input and returns stills, not video. Sora is exposed
-        # via client.videos.* instead.
-        seconds = nearest_supported_duration(duration_seconds)
-
+        # Generate the animation via a Replicate image-to-video model. The
+        # painting is the conditioning frame and the per-style prompt drives
+        # the motion. ``resolution``/``go_fast`` keep the render on the cheap
+        # tier (valid for the default WAN model). A generous client timeout is
+        # required: i2v renders routinely exceed run()'s ~60s default wait and
+        # would otherwise raise "read operation timed out".
+        client = _replicate.Client(
+            api_token=api_key,
+            timeout=_httpx.Timeout(get_video_render_timeout(), connect=15.0),
+        )
         with open(image_path, "rb") as image_file:
-            video_job = client.videos.create_and_poll(
-                model="sora-2",
-                prompt=style_prompt,
-                input_reference=image_file,
-                seconds=seconds,
-                size="1280x720",
+            output = client.run(
+                model,
+                input={
+                    "prompt": style_prompt,
+                    "image": image_file,
+                    "resolution": get_video_resolution(),
+                    "go_fast": True,
+                },
+                use_file_output=False,
             )
 
-        if getattr(video_job, "status", None) != "completed":
-            failure = getattr(video_job, "error", None)
-            reason = getattr(failure, "message", None) or failure or "unknown error"
-            raise Exception(
-                f"Sora video job ended with status "
-                f"'{getattr(video_job, 'status', 'unknown')}': {reason}"
-            )
+        # Replicate returns a single video URL (str / FileOutput) or a list.
+        video_ref = output[0] if isinstance(output, (list, tuple)) else output
+        if video_ref is None:
+            raise Exception(f"{model} returned no video output")
 
         # Download the rendered video locally.
         video_dir = get_video_output_path()
         video_filename = f"video_{job_id}.mp4"
         video_path = Path(video_dir) / video_filename
-        client.videos.download_content(
-            video_job.id, variant="video"
-        ).write_to_file(str(video_path))
+        if hasattr(video_ref, "read"):
+            data = video_ref.read()
+        else:
+            data = _httpx.get(str(video_ref), timeout=180).content
+        with open(video_path, "wb") as f:
+            f.write(data)
 
         # Save job status
         job_data = {
@@ -223,7 +266,8 @@ async def generate_painting_video(args: Dict[str, Any]) -> Dict[str, Any]:
             "video_path": str(video_path),
             "video_filename": video_filename,
             "style": style,
-            "duration_seconds": int(seconds),
+            "duration_seconds": clip_seconds,
+            "model": model,
             "created_at": timestamp.isoformat(),
             "completed_at": datetime.now().isoformat()
         }

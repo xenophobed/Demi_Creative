@@ -107,8 +107,25 @@ class TestTierSelection:
         assert handle.provider_state["model"] == "gpt-realtime-mini"
 
     @pytest.mark.asyncio
+    async def test_premium_disabled_by_default_stays_mini(self, monkeypatch):
+        # Cheapest-everywhere cost policy: without VOICE_ALLOW_PREMIUM_REALTIME=1,
+        # even a dual opt-in profile stays on the mini tier.
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        monkeypatch.delenv("VOICE_ALLOW_PREMIUM_REALTIME", raising=False)
+        provider = rtvs.OpenAIRealtimeProvider()
+        handle = await provider.start_session(
+            user_id="u", child_id="c", target_age=7,
+            voice_premium_voice=True,
+            voice_premium_voice_consent=True,
+        )
+        assert handle.provider_state["model"] == "gpt-realtime-mini"
+
+    @pytest.mark.asyncio
     async def test_escalation_requires_both_flags_true(self, monkeypatch):
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        # Premium escalation is opt-in via env (cheapest-everywhere default is
+        # OFF). Enable it here to exercise the dual-flag escalation policy.
+        monkeypatch.setenv("VOICE_ALLOW_PREMIUM_REALTIME", "1")
         provider = rtvs.OpenAIRealtimeProvider()
 
         # Only opt-in flag set → still mini (fail closed).
@@ -127,7 +144,7 @@ class TestTierSelection:
         )
         assert h2.provider_state["model"] == "gpt-realtime-mini"
 
-        # Both flags set → escalate.
+        # Both flags set AND premium allowed → escalate.
         h3 = await provider.start_session(
             user_id="u", child_id="c", target_age=7,
             voice_premium_voice=True,
