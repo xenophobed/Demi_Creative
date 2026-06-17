@@ -7,7 +7,6 @@
  */
 
 import type { VoiceConversationState } from "@/hooks/voiceConversationStateMachine";
-import type { AgeGroup } from "@/types/api";
 
 /**
  * User-facing status copy keyed by the voiceConversationStateMachine
@@ -179,6 +178,49 @@ export function nextPendingGate(
 }
 
 /**
+ * Inline onboarding banner truth table. Renders only when:
+ *   - The feature flag is on (no banner in prod canary)
+ *   - The device supports voice (don't tease an unavailable feature)
+ *   - A child profile is loaded (banner is per-child)
+ *   - At least one consent is still missing (nothing to surface otherwise)
+ *   - The parent hasn't dismissed it for THIS child profile
+ *
+ * The new UX (post "Ask"-button removal): instead of a button in the
+ * header that mixes "set up" with "use", we surface a one-time inline
+ * banner in the chat empty state. The CTA opens the same consent gate
+ * chain (mic → voice) but the surface only appears when there's actually
+ * something for the parent to do.
+ */
+export interface OnboardingBannerArgs {
+  flagEnabled: boolean;
+  supportsVoice: boolean;
+  hasCurrentChild: boolean;
+  micConsentGranted: boolean;
+  voiceConversationConsentGranted: boolean;
+  dismissed: boolean;
+}
+
+export function shouldShowOnboardingBanner(
+  args: OnboardingBannerArgs,
+): boolean {
+  if (!args.flagEnabled) return false;
+  if (!args.supportsVoice) return false;
+  if (!args.hasCurrentChild) return false;
+  if (args.dismissed) return false;
+  // Banner only appears when there IS setup work left.
+  return !args.micConsentGranted || !args.voiceConversationConsentGranted;
+}
+
+/**
+ * localStorage key for the per-child banner-dismissal flag. Per-child
+ * so a parent who's set up voice for kid A still sees the banner the
+ * first time kid B's profile loads.
+ */
+export function voiceBannerStorageKey(childId: string): string {
+  return `talk_to_buddy_banner_dismissed:${childId}`;
+}
+
+/**
  * Whether the new "Start Talking" header pill in AgentChatPanel should
  * render (#636). Three conditions, all of them gating:
  *
@@ -247,47 +289,4 @@ export function resolveCaptionsVisibility(
 ): boolean {
   if (override === true) return true;
   return captionsDefaultForAge(age);
-}
-
-/**
- * Age-adapted entry-surface copy for the header "Start Talking" pill
- * (#638). Locks the labels to the PRD §3.16.6 age-adaptation table so
- * the visible CTA can't drift away from the spec:
- *
- * | 3-5                | 6-8                  | 9-12              |
- * | giant emoji + Talk!| "Talk to {buddy}"    | mic icon + Voice  |
- *
- * Design choices (per PRD):
- *   - 3-5 (pre-readers): a single playful word + a big mic emoji. The
- *     buddy name is deliberately omitted — a 4-year-old recognises the
- *     emoji, not the persona's name.
- *   - 6-8: the buddy NAME leads ("Talk to Sparky") because the personal
- *     relationship is the motivator at this age; no emoji to keep it
- *     reading like a sentence.
- *   - 9-12: terse, tool-like "Voice" with a mic icon — older kids treat
- *     it as a mode switch, not a character interaction.
- *
- * Reuses the canonical ``AgeGroup`` from ``@/types/api`` rather than a
- * local copy so a future fourth band (there isn't one today) can't drift
- * between modules. ``emoji`` is the empty string for 6-8 — the consuming
- * JSX renders the emoji span only when non-empty.
- */
-export interface HeaderCTACopy {
-  label: string;
-  emoji: string;
-}
-
-export function headerCTACopy(
-  ageGroup: AgeGroup,
-  buddyName: string,
-): HeaderCTACopy {
-  switch (ageGroup) {
-    case "3-5":
-      return { label: "Talk!", emoji: "🎤" };
-    case "9-12":
-      return { label: "Voice", emoji: "🎤" };
-    case "6-8":
-    default:
-      return { label: `Talk to ${buddyName}`, emoji: "" };
-  }
 }

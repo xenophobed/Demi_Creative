@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   captionsDefaultForAge,
-  headerCTACopy,
   isEndButtonEnabled,
   isPanelVisible,
   nextPendingGate,
@@ -10,8 +9,10 @@ import {
   resolveCaptionsVisibility,
   shouldShowEntryButton,
   shouldShowHeaderTalkPill,
+  shouldShowOnboardingBanner,
   TALK_PANEL_STATE_COPY,
   talkPanelScreenReaderState,
+  voiceBannerStorageKey,
   voiceQuotaNoticeCopy,
 } from "@/pages/MyAgentPage/talkToBuddyHelpers";
 import type { VoiceConversationState } from "@/hooks/voiceConversationStateMachine";
@@ -216,6 +217,76 @@ describe("nextPendingGate (#620)", () => {
   });
 });
 
+describe("shouldShowOnboardingBanner (UX rework)", () => {
+  const baseline = {
+    flagEnabled: true,
+    supportsVoice: true,
+    hasCurrentChild: true,
+    micConsentGranted: false,
+    voiceConversationConsentGranted: false,
+    dismissed: false,
+  };
+
+  it("shows when feature flag on + capable + child loaded + setup left + not dismissed", () => {
+    expect(shouldShowOnboardingBanner(baseline)).toBe(true);
+  });
+
+  it("hides when the feature flag is off (prod default)", () => {
+    expect(
+      shouldShowOnboardingBanner({ ...baseline, flagEnabled: false }),
+    ).toBe(false);
+  });
+
+  it("hides when the device cannot support voice", () => {
+    expect(
+      shouldShowOnboardingBanner({ ...baseline, supportsVoice: false }),
+    ).toBe(false);
+  });
+
+  it("hides when no child profile is loaded", () => {
+    expect(
+      shouldShowOnboardingBanner({ ...baseline, hasCurrentChild: false }),
+    ).toBe(false);
+  });
+
+  it("hides when the parent has dismissed it", () => {
+    expect(
+      shouldShowOnboardingBanner({ ...baseline, dismissed: true }),
+    ).toBe(false);
+  });
+
+  it("hides when both consents are already granted (nothing to do)", () => {
+    expect(
+      shouldShowOnboardingBanner({
+        ...baseline,
+        micConsentGranted: true,
+        voiceConversationConsentGranted: true,
+      }),
+    ).toBe(false);
+  });
+
+  it("still shows when only one consent is missing (setup left)", () => {
+    expect(
+      shouldShowOnboardingBanner({
+        ...baseline,
+        micConsentGranted: true,
+        voiceConversationConsentGranted: false,
+      }),
+    ).toBe(true);
+  });
+});
+
+describe("voiceBannerStorageKey (UX rework)", () => {
+  it("namespaces per child profile so different children get fresh banners", () => {
+    expect(voiceBannerStorageKey("child_abc")).toBe(
+      "talk_to_buddy_banner_dismissed:child_abc",
+    );
+    expect(voiceBannerStorageKey("child_xyz")).not.toBe(
+      voiceBannerStorageKey("child_abc"),
+    );
+  });
+});
+
 describe("shouldShowHeaderTalkPill (#636)", () => {
   const allGranted = {
     supportsVoice: true,
@@ -318,44 +389,5 @@ describe("resolveCaptionsVisibility (#608)", () => {
     // a half-wired parent falls back to the per-age default.
     expect(resolveCaptionsVisibility(8, false)).toBe(true);
     expect(resolveCaptionsVisibility(4, false)).toBe(false);
-  });
-});
-
-describe("headerCTACopy (#638)", () => {
-  // Locks the per-age entry-surface copy to PRD §3.16.6:
-  //   | 3-5            | 6-8                  | 9-12            |
-  //   | emoji + "Talk!"| "Talk to {buddy}"    | mic + "Voice"   |
-  // Pure helper so the labels can't drift away from the table. One
-  // assertion per age band — the AC's "three tests, one per age".
-
-  it("3-5 → giant mic emoji + 'Talk!' (pre-readers get the emoji, no name)", () => {
-    expect(headerCTACopy("3-5", "Sparky")).toEqual({
-      label: "Talk!",
-      emoji: "🎤",
-    });
-  });
-
-  it("6-8 → 'Talk to {buddy_name}', no emoji", () => {
-    // The mid band reads fluently and is motivated by the personal
-    // relationship, so the buddy's name leads and there's no emoji.
-    expect(headerCTACopy("6-8", "Sparky")).toEqual({
-      label: "Talk to Sparky",
-      emoji: "",
-    });
-  });
-
-  it("9-12 → mic icon + 'Voice' (older kids get the terse, tool-like label)", () => {
-    expect(headerCTACopy("9-12", "Sparky")).toEqual({
-      label: "Voice",
-      emoji: "🎤",
-    });
-  });
-
-  it("interpolates the buddy name only for the 6-8 band", () => {
-    // The name is load-bearing only in the mid band's label; the other
-    // bands ignore it. A renamed buddy must not leak into 3-5 / 9-12.
-    expect(headerCTACopy("3-5", "Rex").label).toBe("Talk!");
-    expect(headerCTACopy("9-12", "Rex").label).toBe("Voice");
-    expect(headerCTACopy("6-8", "Rex").label).toBe("Talk to Rex");
   });
 });
