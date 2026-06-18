@@ -172,6 +172,10 @@ class EducationalValue(BaseModel):
     themes: List[str] = Field(..., description="Themes (e.g., friendship, courage)")
     concepts: List[str] = Field(..., description="Concepts (e.g., colors, numbers)")
     moral: Optional[str] = Field(None, description="Moral lesson")
+    traits: List[str] = Field(
+        default_factory=list,
+        description="Character traits surfaced by the child's choices (e.g., courage, caution)",
+    )
 
 
 class CharacterMemory(BaseModel):
