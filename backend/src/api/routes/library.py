@@ -46,6 +46,13 @@ from ..models import (
 # Content safety threshold — items below this score are hidden (#81)
 SAFETY_THRESHOLD = 0.85
 
+# Lifecycle states whose stories are visible in My Library + search.
+# Per PRD §3.6 / §3.7, only published or candidate content is surfaced;
+# intermediate (work-in-progress) and archived content must never appear.
+# Legacy stories with NO primary artifact link have no lifecycle state and
+# are treated as visible so we don't hide a user's existing library (#712/#713).
+VISIBLE_LIFECYCLE_STATES = {"published", "candidate"}
+
 router = APIRouter(prefix="/api/v1/library", tags=["Library"])
 
 
@@ -126,6 +133,42 @@ def _is_safe(item: LibraryItem) -> bool:
     if item.safety_score is None:
         return True  # No score = not yet checked, allow through
     return item.safety_score >= SAFETY_THRESHOLD
+
+
+async def _get_visible_story_ids(story_ids: List[str]) -> set:
+    """Resolve which story IDs are lifecycle-visible in the library (#712/#713).
+
+    A story is visible when its primary/canonical artifact is in a visible
+    lifecycle state (published or candidate). Legacy stories that have NO
+    primary artifact link have no lifecycle state at all, so we keep them
+    visible to avoid hiding a user's existing content. Stories whose primary
+    artifacts exist but are all intermediate/archived are hidden.
+
+    Returns the set of story_ids that should be shown. Batched to one query
+    set (chunked) to avoid N+1 lookups.
+    """
+    if not story_ids:
+        return set()
+
+    link_repo = StoryArtifactLinkRepository(db_manager)
+    try:
+        states_by_story = await link_repo.get_primary_lifecycle_states(story_ids)
+    except Exception:
+        # On lookup failure, fail open rather than hide the whole library —
+        # safety_score filtering still applies independently.
+        return set(story_ids)
+
+    visible: set = set()
+    for sid in story_ids:
+        states = states_by_story.get(sid)
+        if not states:
+            # Legacy / no primary artifact link → treat as visible.
+            visible.add(sid)
+        elif states & VISIBLE_LIFECYCLE_STATES:
+            # At least one primary artifact is published or candidate.
+            visible.add(sid)
+        # else: primary artifacts exist but are all intermediate/archived → hide
+    return visible
 
 
 def _session_to_library_item(session, is_favorited: bool = False) -> LibraryItem:
@@ -459,6 +502,11 @@ async def get_library(
         )
         fav_story_ids = fav_art_ids | fav_kids_daily_ids
 
+        # Resolve lifecycle visibility in one batched lookup (#712)
+        visible_story_ids = await _get_visible_story_ids(
+            [s["story_id"] for s in stories]
+        )
+
         for s in stories:
             thumb = await _resolve_thumbnail(s["story_id"])
             item = _story_to_library_item(
@@ -469,6 +517,9 @@ async def get_library(
                 continue
             # Apply safety filter (#81)
             if not _is_safe(item):
+                continue
+            # Apply lifecycle filter — only published/candidate are visible (#712)
+            if s["story_id"] not in visible_story_ids:
                 continue
             all_items.append(item)
 
@@ -814,6 +865,11 @@ async def search_library(
         )
         fav_ids = fav_art | fav_kids_daily
 
+        # Resolve lifecycle visibility in one batched lookup (#713)
+        visible_story_ids = await _get_visible_story_ids(
+            [s["story_id"] for s in stories]
+        )
+
         for s in stories:
             thumb = await _resolve_thumbnail(s["story_id"])
             item = _story_to_library_item(
@@ -824,6 +880,9 @@ async def search_library(
                 continue
             # Apply safety filter (#81)
             if not _is_safe(item):
+                continue
+            # Apply lifecycle filter — only published/candidate are visible (#713)
+            if s["story_id"] not in visible_story_ids:
                 continue
 
             text = s.get("story", {}).get("text", "")

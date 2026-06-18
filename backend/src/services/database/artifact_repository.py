@@ -1001,6 +1001,46 @@ class StoryArtifactLinkRepository:
         artifact_repo = ArtifactRepository(self.db)
         return artifact_repo._row_to_artifact(result)
 
+    async def get_primary_lifecycle_states(
+        self, story_ids: List[str]
+    ) -> Dict[str, set]:
+        """
+        Batch-fetch the lifecycle states of each story's primary artifacts.
+
+        For each story_id, collects the lifecycle_state of every artifact that
+        is linked to it as a primary (canonical) artifact, across all roles.
+
+        Args:
+            story_ids: List of story IDs to look up.
+
+        Returns:
+            Dict mapping story_id -> set of lifecycle states for its primary
+            artifacts. Stories with NO primary artifact link are absent from
+            the dict (caller should treat absence as "legacy/unknown").
+        """
+        if not story_ids:
+            return {}
+
+        result: Dict[str, set] = {}
+        BATCH_SIZE = 500
+        for i in range(0, len(story_ids), BATCH_SIZE):
+            chunk = story_ids[i:i + BATCH_SIZE]
+            placeholders = ", ".join(["?"] * len(chunk))
+            rows = await self.db.fetchall(
+                f"""
+                SELECT l.story_id AS story_id, a.lifecycle_state AS lifecycle_state
+                FROM story_artifact_links l
+                JOIN artifacts a ON a.artifact_id = l.artifact_id
+                WHERE l.story_id IN ({placeholders}) AND l.is_primary = 1
+                """,
+                tuple(chunk),
+            )
+            for row in rows:
+                result.setdefault(row["story_id"], set()).add(
+                    row["lifecycle_state"]
+                )
+        return result
+
     async def list_by_story(self, story_id: str) -> List[StoryArtifactLink]:
         """
         List all artifacts linked to a story.
