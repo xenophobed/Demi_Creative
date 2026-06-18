@@ -53,6 +53,11 @@ from ..services.story_memory import get_story_memory_prompt
 from ..services.my_agent_context import build_my_agent_context
 from ..utils.model_config import get_claude_agent_model
 from ._safety import enforce_post_gen_safety
+from .image_to_story_agent import (
+    AGE_GROUP_WORD_RANGES,
+    repair_story_length,
+    validate_story_length,
+)
 
 
 async def _direct_generate(prompt: str, max_tokens: int = 4096) -> str:
@@ -171,6 +176,7 @@ class StoryChoiceOutput(BaseModel):
     choice_id: str
     text: str
     emoji: str
+    trait: Optional[str] = None
 
 
 class StorySegmentOutput(BaseModel):
@@ -257,6 +263,55 @@ UNLIMITED_SOFT_CAP = {
     "6-8": 30,
     "9-12": 50,
 }
+
+
+# Per-segment word ranges derived from AGE_CONFIG (#705).
+# Interactive segments use shorter, per-segment targets than full image-to-story
+# stories, so we register interactive-namespaced ranges and reuse the shared
+# ``repair_story_length`` guardrail (no extra LLM calls; over-long is trimmed
+# locally, too-short is flagged as degraded). The 3-5 "50-100" range is a
+# deliberate product choice tracked separately in #706 and stays unchanged.
+def _parse_word_range(word_count: str) -> tuple[int, int]:
+    """Parse an AGE_CONFIG ``word_count`` string like "50-100" into (min, max)."""
+    try:
+        low, high = (int(part.strip()) for part in str(word_count).split("-", 1))
+        return low, high
+    except (ValueError, TypeError):
+        return AGE_GROUP_WORD_RANGES["6-8"]
+
+
+# Register interactive per-segment ranges under namespaced keys so the shared
+# repair helper enforces interactive targets without affecting image-to-story.
+INTERACTIVE_RANGE_KEYS = {
+    age_group: f"interactive:{age_group}" for age_group in AGE_CONFIG
+}
+for _age_group, _cfg in AGE_CONFIG.items():
+    AGE_GROUP_WORD_RANGES[INTERACTIVE_RANGE_KEYS[_age_group]] = _parse_word_range(
+        _cfg["word_count"]
+    )
+
+
+def _repair_segment_length(segment_text: str, age_group: str) -> tuple[str, dict]:
+    """Trim/flag a segment against the interactive per-segment word range (#705).
+
+    Reuses the shared ``repair_story_length`` trim path for over-long segments
+    (purely local, no LLM call). Too-short segments are left untouched and flagged
+    as ``degraded_length`` rather than padded with generic filler, because an
+    interactive branch must read naturally and we never call the model to expand.
+    """
+    if not segment_text:
+        return segment_text, {"repaired": False}
+
+    range_key = INTERACTIVE_RANGE_KEYS.get(age_group, INTERACTIVE_RANGE_KEYS["6-8"])
+    info = validate_story_length(segment_text, range_key)
+    _min_words, max_words = AGE_GROUP_WORD_RANGES[range_key]
+
+    if info["word_count"] > max_words:
+        # Over-long: reuse the shared local trimmer.
+        return repair_story_length(segment_text, range_key)
+
+    # In-range or too-short: keep the text; surface degraded flag for telemetry.
+    return segment_text, {**info, "repaired": False}
 
 
 def get_total_segments(story_length_mode: str, age_group: str) -> int:
@@ -545,12 +600,12 @@ def _normalize_choices(
     segment_id: int,
     is_final_segment: bool,
     age_group: str,
-) -> List[Dict[str, str]]:
+) -> List[Dict[str, Any]]:
     """Guarantee non-ending segments always have 2-3 valid choices."""
     if is_final_segment:
         return []
 
-    normalized: List[Dict[str, str]] = []
+    normalized: List[Dict[str, Any]] = []
     seen_texts: set[str] = set()
     emoji_defaults = ["✨", "🧭", "🤝"]
 
@@ -568,7 +623,10 @@ def _normalize_choices(
                 str(choice.get("emoji", "")).strip()
                 or emoji_defaults[idx % len(emoji_defaults)]
             )
-            normalized.append({"choice_id": "", "text": text, "emoji": emoji})
+            trait = str(choice.get("trait", "")).strip() or None
+            normalized.append(
+                {"choice_id": "", "text": text, "emoji": emoji, "trait": trait}
+            )
 
     if len(normalized) < 2:
         for fb in _build_fallback_choices(segment_id, age_group):
@@ -576,7 +634,7 @@ def _normalize_choices(
                 continue
             seen_texts.add(fb["text"])
             normalized.append(
-                {"choice_id": "", "text": fb["text"], "emoji": fb["emoji"]}
+                {"choice_id": "", "text": fb["text"], "emoji": fb["emoji"], "trait": None}
             )
             if len(normalized) >= 2:
                 break
@@ -586,6 +644,31 @@ def _normalize_choices(
         choice["choice_id"] = f"choice_{segment_id}_{chr(97 + i)}"
 
     return normalized[:3]
+
+
+def _collect_selected_traits(
+    segments: List[Dict[str, Any]], choice_history: List[str]
+) -> List[str]:
+    """Aggregate unique traits from the choices the child actually selected.
+
+    Matches each selected ``choice_id`` against the choices stored on prior
+    segments and collects their ``trait`` (preserving order, de-duplicated).
+    """
+    traits: List[str] = []
+    seen: set[str] = set()
+    for choice_id in choice_history or []:
+        for segment in segments or []:
+            seg_choices = segment.get("choices", [])
+            if not isinstance(seg_choices, list):
+                continue
+            for choice in seg_choices:
+                if not isinstance(choice, dict) or choice.get("choice_id") != choice_id:
+                    continue
+                trait = str(choice.get("trait") or "").strip()
+                if trait and trait not in seen:
+                    seen.add(trait)
+                    traits.append(trait)
+    return traits
 
 
 def _build_choice_history_context(
@@ -1050,6 +1133,16 @@ async def generate_story_opening(
                 result_data = _create_default_opening(theme_str, interests, config)
                 result_data["safety_score"] = 0.95
                 result_data["degraded_reason"] = "safety_below_threshold_after_retry"
+
+    # Enforce per-age segment word range — trim over-long, flag too-short (#705).
+    # Local guardrail only; never issues an extra LLM call.
+    if result_data and "segment" in result_data:
+        opening_text = result_data["segment"].get("text", "")
+        if opening_text:
+            repaired_text, length_info = _repair_segment_length(opening_text, age_group)
+            result_data["segment"]["text"] = repaired_text
+            if length_info.get("degraded_length"):
+                result_data["degraded_length"] = True
 
     # Generate TTS audio if enabled
     if enable_audio and result_data and "segment" in result_data:
@@ -1733,6 +1826,16 @@ async def generate_next_segment(
                 result_data["safety_score"] = 0.95
                 result_data["degraded_reason"] = "safety_below_threshold_after_retry"
 
+    # Enforce per-age segment word range — trim over-long, flag too-short (#705).
+    # Local guardrail only; never issues an extra LLM call.
+    if result_data and "segment" in result_data:
+        segment_text = result_data["segment"].get("text", "")
+        if segment_text:
+            repaired_text, length_info = _repair_segment_length(segment_text, age_group)
+            result_data["segment"]["text"] = repaired_text
+            if length_info.get("degraded_length"):
+                result_data["degraded_length"] = True
+
     # Generate TTS audio if enabled
     if enable_audio and result_data and "segment" in result_data:
         story_text = result_data["segment"].get("text", "")
@@ -1783,12 +1886,21 @@ async def generate_next_segment(
         result_data["audio_path"] = audio_path
 
     # Add educational summary for endings
-    if is_final_segment and "educational_summary" not in result_data:
-        result_data["educational_summary"] = {
-            "themes": ["courage", "friendship"],
-            "concepts": ["decision-making", "exploration"],
-            "moral": "By bravely facing challenges and working with friends, you become stronger.",
-        }
+    if is_final_segment:
+        if "educational_summary" not in result_data:
+            result_data["educational_summary"] = {
+                "themes": ["courage", "friendship"],
+                "concepts": ["decision-making", "exploration"],
+                "moral": "By bravely facing challenges and working with friends, you become stronger.",
+            }
+        # Aggregate traits surfaced by the choices the child actually made (#707)
+        summary = result_data["educational_summary"]
+        if isinstance(summary, dict):
+            selected_traits = _collect_selected_traits(segments, choice_history)
+            if selected_traits:
+                summary["traits"] = selected_traits
+            else:
+                summary.setdefault("traits", [])
 
     return result_data
 

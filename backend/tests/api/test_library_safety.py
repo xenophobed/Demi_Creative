@@ -14,10 +14,25 @@ import pytest
 import uuid
 from datetime import datetime
 
-from backend.src.api.routes.library import _is_safe, SAFETY_THRESHOLD
+from backend.src.api.routes.library import (
+    _is_safe,
+    _get_visible_story_ids,
+    SAFETY_THRESHOLD,
+    VISIBLE_LIFECYCLE_STATES,
+)
 from backend.src.api.models import LibraryItem, LibraryItemType
 from backend.src.services.database import story_repo, db_manager
 from backend.src.services.database.schema import init_schema
+from backend.src.services.database.artifact_repository import (
+    ArtifactRepository,
+    StoryArtifactLinkRepository,
+)
+from backend.src.services.models.artifact_models import (
+    ArtifactCreate,
+    ArtifactType,
+    StoryArtifactLinkCreate,
+    StoryArtifactRole,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -205,3 +220,145 @@ class TestLibrarySafetyFiltering:
             item_ids = [item["id"] for item in data["items"]]
 
             assert self.borderline_id in item_ids, "Borderline (0.85) story should appear"
+
+
+# ---------------------------------------------------------------------------
+# Lifecycle-state visibility filtering (#712 library, #713 search)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+class TestLibraryLifecycleFiltering:
+    """Library + search must only surface published/candidate content.
+
+    Per PRD §3.6 / §3.7, intermediate (work-in-progress) and archived stories
+    must never appear in My Library or search. Legacy stories with no primary
+    artifact link have no lifecycle state and stay visible (we don't hide a
+    user's existing content).
+    """
+
+    @pytest.fixture(autouse=True)
+    async def setup_lifecycle_stories(self):
+        if not db_manager.is_connected:
+            await db_manager.connect()
+            await init_schema(db_manager)
+
+        self.arepo = ArtifactRepository(db_manager)
+        self.lrepo = StoryArtifactLinkRepository(db_manager)
+        now = datetime.now().isoformat()
+
+        async def make_story(tag: str) -> str:
+            sid = f"lc-{tag}-{uuid.uuid4().hex[:8]}"
+            await story_repo.create({
+                "story_id": sid,
+                "user_id": "test_user",
+                "child_id": "child_lc",
+                "age_group": "6-8",
+                "story": {
+                    "text": f"A lifecycle {tag} story about dragons.",
+                    "word_count": 6,
+                },
+                "educational_value": {"themes": ["adventure"]},
+                "characters": [],
+                "safety_score": 0.99,  # always safe — isolate lifecycle effect
+                "story_type": "image_to_story",
+                "created_at": now,
+            })
+            return sid
+
+        async def link_primary(story_id: str, state: str) -> None:
+            aid = await self.arepo.create(
+                ArtifactCreate(
+                    artifact_type=ArtifactType.TEXT,
+                    artifact_payload=uuid.uuid4().hex,
+                )
+            )
+            # Walk the valid lifecycle transitions to reach the target state.
+            if state == "candidate":
+                await self.arepo.update_lifecycle_state(aid, "candidate")
+            elif state == "published":
+                await self.arepo.update_lifecycle_state(aid, "candidate")
+                await self.arepo.update_lifecycle_state(aid, "published")
+            elif state == "archived":
+                await self.arepo.update_lifecycle_state(aid, "archived")
+            # "intermediate" is the default; no transition needed.
+            await self.lrepo.upsert(
+                StoryArtifactLinkCreate(
+                    story_id=story_id,
+                    artifact_id=aid,
+                    role=StoryArtifactRole.STORY_TEXT,
+                    is_primary=True,
+                )
+            )
+
+        self.published_id = await make_story("pub")
+        await link_primary(self.published_id, "published")
+        self.candidate_id = await make_story("cand")
+        await link_primary(self.candidate_id, "candidate")
+        self.intermediate_id = await make_story("inter")
+        await link_primary(self.intermediate_id, "intermediate")
+        self.archived_id = await make_story("arch")
+        await link_primary(self.archived_id, "archived")
+        self.legacy_id = await make_story("legacy")  # no artifact link
+
+        self.all_ids = [
+            self.published_id,
+            self.candidate_id,
+            self.intermediate_id,
+            self.archived_id,
+            self.legacy_id,
+        ]
+
+        yield
+
+        for sid in self.all_ids:
+            await db_manager.execute(
+                "DELETE FROM stories WHERE story_id = ?", (sid,)
+            )
+        await db_manager.commit()
+
+    async def test_visible_states_constant(self):
+        """Only published and candidate are visible states."""
+        assert VISIBLE_LIFECYCLE_STATES == {"published", "candidate"}
+
+    async def test_get_visible_story_ids_helper(self):
+        """The batch helper classifies each lifecycle state correctly."""
+        visible = await _get_visible_story_ids(self.all_ids)
+        assert self.published_id in visible
+        assert self.candidate_id in visible
+        assert self.intermediate_id not in visible
+        assert self.archived_id not in visible
+        assert self.legacy_id in visible, "Legacy (no link) must stay visible"
+
+    async def test_get_visible_story_ids_empty(self):
+        """Empty input returns an empty set (no query)."""
+        assert await _get_visible_story_ids([]) == set()
+
+    async def test_library_filters_by_lifecycle(self, test_client):
+        """GET /api/v1/library hides intermediate/archived, keeps the rest."""
+        async with test_client as client:
+            resp = await client.get("/api/v1/library", params={"limit": 100})
+            assert resp.status_code == 200
+            item_ids = [item["id"] for item in resp.json()["items"]]
+
+            assert self.published_id in item_ids
+            assert self.candidate_id in item_ids
+            assert self.legacy_id in item_ids
+            assert self.intermediate_id not in item_ids
+            assert self.archived_id not in item_ids
+
+    async def test_search_filters_by_lifecycle(self, test_client):
+        """GET /api/v1/library/search hides intermediate/archived stories."""
+        async with test_client as client:
+            resp = await client.get(
+                "/api/v1/library/search",
+                params={"q": "dragons", "limit": 100},
+            )
+            assert resp.status_code == 200
+            item_ids = [item["id"] for item in resp.json()["items"]]
+
+            assert self.published_id in item_ids
+            assert self.candidate_id in item_ids
+            assert self.legacy_id in item_ids
+            assert self.intermediate_id not in item_ids
+            assert self.archived_id not in item_ids
