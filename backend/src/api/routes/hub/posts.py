@@ -37,7 +37,12 @@ from ...models import (
     ListHubPostsResponse,
 )
 from ....mcp_servers import check_content_safety
-from ....services.database import group_repo, hub_post_repo, session_repo
+from ....services.database import (
+    group_repo,
+    hub_post_repo,
+    hub_reaction_repo,
+    session_repo,
+)
 from ....services.achievement_service import FIRST_SHARED_POST, achievement_service
 from ....services.user_service import UserData
 
@@ -88,16 +93,26 @@ async def _run_caption_safety(text: str) -> float:
     return float(score)
 
 
-def _to_response(post) -> HubPostResponse:
+async def _to_response(post, viewer_user_id: str) -> HubPostResponse:
     """Project a HubPostData onto the COPPA-safe response shape.
 
     Critically: this picks ONLY the persona snapshot fields plus the
     post's own metadata — never any users-table column. The contract
     test in #450 asserts this projection is structurally sound.
+
+    Reaction aggregates (#717) and the byline ``agent_id`` (#718) come
+    from hub tables (``hub_post_reactions`` / ``hub_posts``), so they stay
+    within the COPPA-safe boundary. ``viewer_reactions`` is scoped to the
+    requesting user only.
     """
+    reaction_counts = await hub_reaction_repo.counts_for_post(post.post_id)
+    viewer_reactions = await hub_reaction_repo.reactions_by_user(
+        post.post_id, viewer_user_id
+    )
     return HubPostResponse(
         post_id=post.post_id,
         group_id=post.group_id,
+        agent_id=post.author_agent_id,
         agent_name=post.agent_name_snapshot,
         agent_avatar_id=post.agent_avatar_id_snapshot,
         agent_title=post.agent_title_snapshot,
@@ -105,6 +120,8 @@ def _to_response(post) -> HubPostResponse:
         source_id=post.source_id,
         caption=post.caption,
         created_at=post.created_at,
+        reaction_counts=reaction_counts,
+        viewer_reactions=viewer_reactions,
     )
 
 
@@ -278,7 +295,7 @@ async def create_post(
         user.user_id, child_id, FIRST_SHARED_POST
     )
 
-    return _to_response(post)
+    return await _to_response(post, user.user_id)
 
 
 # ---------------------------------------------------------------------------
@@ -321,7 +338,7 @@ async def list_posts(
         group_id, limit=limit, before=before
     )
     posts = await _hide_unresolvable_posts(raw_posts)
-    items = [_to_response(p) for p in posts]
+    items = [await _to_response(p, user.user_id) for p in posts]
     next_cursor: Optional[dict] = None
     if raw_posts and len(raw_posts) == limit:
         last = raw_posts[-1]

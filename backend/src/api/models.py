@@ -1342,6 +1342,7 @@ class HubPostResponse(BaseModel):
     """
     post_id: str
     group_id: str
+    agent_id: str
     agent_name: str
     agent_avatar_id: str
     agent_title: str
@@ -1349,6 +1350,8 @@ class HubPostResponse(BaseModel):
     source_id: str
     caption: Optional[str] = None
     created_at: str
+    reaction_counts: Dict[str, int] = Field(default_factory=dict)
+    viewer_reactions: List[str] = Field(default_factory=list)
 
 
 class HubPostCursor(BaseModel):
