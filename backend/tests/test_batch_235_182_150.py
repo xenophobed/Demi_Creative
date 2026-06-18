@@ -22,8 +22,11 @@ class TestStreamingCharacterSync:
         """Verify the streaming event_generator has character sync logic."""
         source = Path(__file__).resolve().parents[1] / "src" / "api" / "routes" / "image_to_story.py"
         code = source.read_text(encoding="utf-8")
-        # Must contain #235 comment and upsert call in the streaming section
-        assert "# Sync detected characters to characters table (#235)" in code
+        # Must contain the #235 comment marker and the upsert call in the
+        # streaming section. Match the comment prefix only (no closing paren) so
+        # the assertion stays robust when more issue refs are appended, e.g.
+        # "(#235, #288, #289)".
+        assert "# Sync detected characters to characters table (#235" in code
         assert "character_repo.upsert_character" in code
 
     def test_sync_and_streaming_both_have_character_upsert(self):
