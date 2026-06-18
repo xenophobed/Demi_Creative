@@ -860,6 +860,31 @@ Return your response as JSON:
             styled_image_path = style_data.get("styled_image_path")
         except Exception:
             pass
+        # Step 5b: Re-validate the styled image for child safety (#710).
+        # The API routes already gate stylized images via validate_and_fallback;
+        # the agent-direct path (used by My Agent) bypassed that check, so the
+        # styled image could be returned without a vision safety pass. We
+        # fail closed here — discard the styled image and fall back to the
+        # original drawing if validation fails or errors.
+        if styled_image_path and Path(styled_image_path).exists():
+            try:
+                from ..mcp_servers.image_style_server import validate_and_fallback
+
+                styled_image_safety = await validate_and_fallback(
+                    styled_image_path=styled_image_path,
+                    original_image_path=str(image_path),
+                    child_age=child_age,
+                    theme=art_theme,
+                    session_id=child_id,
+                )
+                if not styled_image_safety.get("safety_passed"):
+                    styled_image_path = None
+            except Exception:
+                logger.warning(
+                    "Styled image safety validation failed (agent path), using original",
+                    exc_info=True,
+                )
+                styled_image_path = None
         yield {"type": "tool_result", "data": {"status": "completed"}}
 
     # Step 6: Audio generation (if enabled)

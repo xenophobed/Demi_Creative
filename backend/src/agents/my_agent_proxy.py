@@ -73,8 +73,32 @@ def _json_tool_result(data: dict[str, Any]) -> dict[str, Any]:
 
 # Threshold matches the project-wide convention used in routes/agents.py
 # and PRD §3.4. Replies scoring below this are blocked and replaced with
-# a child-friendly fallback before delivery.
+# a child-friendly fallback before delivery. The youngest cohort (3-5)
+# uses a stricter bar because younger children are less able to contextualize
+# borderline content (#716).
 _REPLY_SAFETY_THRESHOLD = 0.85
+_REPLY_SAFETY_THRESHOLD_YOUNGEST = 0.90
+
+
+def _age_group_to_target_age(child_age_group: Optional[str]) -> int:
+    """Derive a representative numeric age from a child's age group.
+
+    The safety MCP wants a concrete ``target_age`` so it can calibrate how
+    strict to be; we map each cohort to its midpoint-ish age (#716).
+    """
+    group = (child_age_group or "").strip()
+    if group == "3-5":
+        return 4
+    if group == "9-12":
+        return 10
+    return 7  # "6-8" and any unexpected value default to the middle cohort
+
+
+def _reply_safety_threshold(child_age_group: Optional[str]) -> float:
+    """Stricter safety bar for the youngest cohort, standard otherwise (#716)."""
+    if (child_age_group or "").strip() == "3-5":
+        return _REPLY_SAFETY_THRESHOLD_YOUNGEST
+    return _REPLY_SAFETY_THRESHOLD
 
 # Warm, age-neutral fallback. Children are the audience — corporate
 # phrasing would feel jarring, but we also avoid implying the child did
@@ -84,7 +108,9 @@ _SAFETY_FALLBACK_MESSAGE = (
 )
 
 
-async def _check_reply_safety(text: str) -> tuple[Optional[float], Optional[str]]:
+async def _check_reply_safety(
+    text: str, child_age_group: Optional[str] = None
+) -> tuple[Optional[float], Optional[str]]:
     """Run the child-safety MCP against a buddy chat reply.
 
     Returns ``(score, None)`` on success or ``(None, reason)`` when the
@@ -92,6 +118,9 @@ async def _check_reply_safety(text: str) -> tuple[Optional[float], Optional[str]
     caller can fail closed without trusting a partial result. We never
     raise — the proxy is mid-stream and an exception here would orphan
     the SSE connection.
+
+    ``target_age`` is derived from the child's actual age group (#716) so
+    the safety bar tracks the real audience instead of a hardcoded 7.
 
     ``check_content_safety`` is decorated with the SDK's ``@tool``, which
     wraps it in a non-callable ``SdkMcpTool`` registration object; the
@@ -102,7 +131,7 @@ async def _check_reply_safety(text: str) -> tuple[Optional[float], Optional[str]
         result = await check_content_safety.handler({
             "content_text": text,
             "content_type": "story",
-            "target_age": 7,
+            "target_age": _age_group_to_target_age(child_age_group),
         })
     except Exception as exc:  # noqa: BLE001 — fail closed on any error
         logger.warning("My Agent reply safety MCP unavailable: %s", exc)
@@ -1096,7 +1125,7 @@ async def stream_my_agent_chat(
         role="user",
         text=message,
         input_modality=input_modality,
-        output_modality="text",
+        output_modality=output_modality,
     )
 
     yield _sse(
@@ -1347,7 +1376,8 @@ async def stream_my_agent_chat(
     # experience cost of a fallback message is far less than the cost
     # of delivering unsafe text. The original (blocked) text is logged
     # for telemetry but never re-emitted on the SSE stream.
-    safety_score, safety_error = await _check_reply_safety(final_text)
+    reply_safety_threshold = _reply_safety_threshold(child_age_group)
+    safety_score, safety_error = await _check_reply_safety(final_text, child_age_group)
     if safety_error is not None:
         logger.warning(
             "Replacing buddy reply with safe fallback (reason=%s, len=%d)",
@@ -1364,7 +1394,7 @@ async def stream_my_agent_chat(
         )
         final_text = _SAFETY_FALLBACK_MESSAGE
         result_metadata = {"response_type": "chat"}
-    elif safety_score is not None and safety_score < _REPLY_SAFETY_THRESHOLD:
+    elif safety_score is not None and safety_score < reply_safety_threshold:
         logger.warning(
             "Replacing buddy reply with safe fallback (score=%.2f, len=%d)",
             safety_score,
@@ -1375,7 +1405,7 @@ async def stream_my_agent_chat(
             {
                 "reason": "below_threshold",
                 "safety_score": safety_score,
-                "threshold": _REPLY_SAFETY_THRESHOLD,
+                "threshold": reply_safety_threshold,
                 "original_length": len(final_text),
             },
         )
