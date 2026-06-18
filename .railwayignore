@@ -1,0 +1,19 @@
+# Railway builds only the backend (see railway.toml). Exclude everything else
+# so `railway up` uploads a small payload (avoids upload timeouts).
+frontend/
+node_modules/
+**/node_modules/
+backend/venv/
+data/
+backend/data/
+logs/
+backend/logs/
+.playwright-mcp/
+.claude/
+docs/
+supabase/
+.git/
+*.png
+*.mp4
+*.mp3
+*.wav
