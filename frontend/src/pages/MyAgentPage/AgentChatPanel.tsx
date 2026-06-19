@@ -152,17 +152,22 @@ export default function AgentChatPanel({
   const appendStreamingDelta = useAgentChatStore((s) => s.appendStreamingDelta);
   const settleAssistant = useAgentChatStore((s) => s.settleAssistantMessage);
   const adoptServerSession = useAgentChatStore((s) => s.adoptServerSession);
-  const [isStreaming, setIsStreaming] = useState(false);
-  const [statusText, setStatusText] = useState<string | null>(null);
-  const [toolText, setToolText] = useState<string | null>(null);
-  const [errorText, setErrorText] = useState<string | null>(null);
+  // Streaming state lives in the store (#727) so an in-flight reply keeps
+  // running and reappears when the user navigates away and back.
+  const isStreaming = useAgentChatStore((s) => s.isStreaming);
+  const statusText = useAgentChatStore((s) => s.streamStatus);
+  const toolText = useAgentChatStore((s) => s.streamTool);
+  const errorText = useAgentChatStore((s) => s.streamError);
+  const beginStream = useAgentChatStore((s) => s.beginStream);
+  const setStreamStatus = useAgentChatStore((s) => s.setStreamStatus);
+  const setStreamTool = useAgentChatStore((s) => s.setStreamTool);
+  const setStreamError = useAgentChatStore((s) => s.setStreamError);
+  const adoptStreamSession = useAgentChatStore((s) => s.adoptStreamSession);
+  const endStream = useAgentChatStore((s) => s.endStream);
+  const cancelStreamAction = useAgentChatStore((s) => s.cancelStream);
+  const abortIfSessionChanged = useAgentChatStore((s) => s.abortIfSessionChanged);
   const [recurringCharacter, setRecurringCharacter] =
     useState<MemoryCharacter | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
-  // The session id the in-flight stream belongs to. Lets us tell a
-  // user-initiated session switch (abort) apart from the proxy adopting
-  // a server-issued session mid-stream (do not abort).
-  const streamSessionRef = useRef<string | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -173,28 +178,18 @@ export default function AgentChatPanel({
     resetPendingFlow,
   } = useLaunchFlowNavigation();
 
-  useEffect(() => {
-    return () => abortRef.current?.abort();
-  }, []);
+  // NOTE: we deliberately do NOT abort on unmount (#727). Navigating to
+  // another page must let the buddy reply finish — the stream writes into
+  // the shared store, so the message is intact when the user returns.
 
   // Abort an in-flight stream when the user switches to a *different*
   // session than the stream belongs to, so partial deltas don't bleed
-  // into the newly selected session's history (#570). A mid-stream
-  // adopt of the server session keeps streamSessionRef in sync, so that
-  // case does not trip this guard.
+  // into the newly selected session's history (#570). A mid-stream adopt
+  // of the server session keeps the stream's owning session in sync (via
+  // adoptStreamSession), so that case does not trip this guard.
   useEffect(() => {
-    if (
-      abortRef.current &&
-      streamSessionRef.current !== null &&
-      sessionId !== streamSessionRef.current
-    ) {
-      abortRef.current.abort();
-      abortRef.current = null;
-      setIsStreaming(false);
-      setStatusText(null);
-      setToolText(null);
-    }
-  }, [sessionId]);
+    abortIfSessionChanged(sessionId);
+  }, [sessionId, abortIfSessionChanged]);
 
   // Fetch recurring characters for the active child to surface a
   // "Remember…" chip above the composer (#560). Cancelled on
@@ -378,12 +373,7 @@ export default function AgentChatPanel({
   };
 
   const cancelStream = () => {
-    abortRef.current?.abort();
-    abortRef.current = null;
-    streamSessionRef.current = null;
-    setIsStreaming(false);
-    setToolText(null);
-    setStatusText(`${agent.agent_name} stopped.`);
+    cancelStreamAction(`${agent.agent_name} stopped.`);
   };
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -391,19 +381,15 @@ export default function AgentChatPanel({
     const message = draft.trim();
     if (!message || isStreaming) return;
 
-    const controller = new AbortController();
     const attachedImage = image;
-    abortRef.current?.abort();
-    abortRef.current = controller;
+    // Arm a module-scoped controller in the store (survives unmount, #727)
+    // and capture its signal for this turn's lifecycle checks.
+    const signal = beginStream(sessionId);
     setDraft("");
     clearImage();
-    setErrorText(null);
-    setToolText(null);
-    setStatusText(`${agent.agent_name} is thinking...`);
+    setStreamStatus(`${agent.agent_name} is thinking...`);
     resetPendingFlow();
     appendUserMessage(message);
-    streamSessionRef.current = sessionId;
-    setIsStreaming(true);
 
     try {
       await agentService.streamAgentChat(
@@ -417,40 +403,38 @@ export default function AgentChatPanel({
         },
         {
           onSession: (data: SSESessionData) => {
-            streamSessionRef.current = data.session_id;
+            adoptStreamSession(data.session_id);
             adoptServerSession(data.session_id);
           },
-          onStatus: (data: SSEStatusData) => setStatusText(data.message),
+          onStatus: (data: SSEStatusData) => setStreamStatus(data.message),
           onThinking: (data: SSEThinkingData) => appendStreamingDelta(data.content),
-          onToolUse: (data: SSEToolUseData) => setToolText(data.message),
+          onToolUse: (data: SSEToolUseData) => setStreamTool(data.message),
           onToolResult: (data: SSEToolResultData) =>
-            setToolText(data.message ?? "Specialist finished."),
+            setStreamTool(data.message ?? "Specialist finished."),
           onLaunchFlow,
           onResult: (data) => settleAssistant(resultMessage(data)),
           onError: (data: SSEErrorData) => {
-            setErrorText(data.message);
+            setStreamError(data.message);
             settleAssistant(data.message);
           },
           onComplete: (data: SSEStatusData) => {
-            setStatusText(data.message);
+            setStreamStatus(data.message);
             settleAssistant("");
           },
         },
-        controller.signal,
+        signal,
       );
     } catch (err) {
-      if (!controller.signal.aborted) {
+      if (!signal.aborted) {
         const messageText =
           err instanceof Error
             ? err.message
             : "My Agent chat is temporarily unavailable.";
-        setErrorText(messageText);
+        setStreamError(messageText);
         settleAssistant(messageText);
       }
     } finally {
-      if (abortRef.current === controller) abortRef.current = null;
-      streamSessionRef.current = null;
-      setIsStreaming(false);
+      endStream(signal);
     }
   };
 

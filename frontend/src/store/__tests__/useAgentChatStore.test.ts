@@ -198,6 +198,88 @@ describe("streaming pipeline", () => {
   });
 });
 
+// #727 — generation must survive navigation. The store owns the
+// AbortController + progress flags so an unmount of AgentChatPanel does
+// not cancel the buddy reply, while explicit Stop / session-switch still do.
+describe("streaming lifecycle (#727)", () => {
+  it("beginStream arms streaming state and returns a live signal", () => {
+    const store = useAgentChatStore.getState();
+    const signal = store.beginStream("s1");
+    const st = useAgentChatStore.getState();
+    expect(st.isStreaming).toBe(true);
+    expect(st.streamingSessionId).toBe("s1");
+    expect(signal.aborted).toBe(false);
+  });
+
+  it("beginStream supersedes (aborts) a prior in-flight stream", () => {
+    const store = useAgentChatStore.getState();
+    const first = store.beginStream("s1");
+    const second = store.beginStream("s1");
+    expect(first.aborted).toBe(true); // superseded
+    expect(second.aborted).toBe(false);
+  });
+
+  it("endStream clears progress for the owning signal", () => {
+    const store = useAgentChatStore.getState();
+    const signal = store.beginStream("s1");
+    store.setStreamStatus("thinking");
+    store.endStream(signal);
+    const st = useAgentChatStore.getState();
+    expect(st.isStreaming).toBe(false);
+    expect(st.streamStatus).toBeNull();
+    expect(st.streamingSessionId).toBeNull();
+  });
+
+  it("endStream is a no-op when a newer stream has taken over", () => {
+    const store = useAgentChatStore.getState();
+    const stale = store.beginStream("s1");
+    store.beginStream("s1"); // newer stream wins the controller
+    store.endStream(stale); // late finally from the stale turn
+    expect(useAgentChatStore.getState().isStreaming).toBe(true);
+  });
+
+  it("cancelStream aborts and leaves a stopped note", () => {
+    const store = useAgentChatStore.getState();
+    const signal = store.beginStream("s1");
+    store.cancelStream("Buddy stopped.");
+    const st = useAgentChatStore.getState();
+    expect(signal.aborted).toBe(true);
+    expect(st.isStreaming).toBe(false);
+    expect(st.streamStatus).toBe("Buddy stopped.");
+  });
+
+  it("abortIfSessionChanged aborts only when switching to a different session", () => {
+    const store = useAgentChatStore.getState();
+    const signal = store.beginStream("s1");
+    // Same session — must NOT abort.
+    store.abortIfSessionChanged("s1");
+    expect(signal.aborted).toBe(false);
+    expect(useAgentChatStore.getState().isStreaming).toBe(true);
+    // Different session — abort to stop cross-session bleed.
+    store.abortIfSessionChanged("s2");
+    expect(signal.aborted).toBe(true);
+    expect(useAgentChatStore.getState().isStreaming).toBe(false);
+  });
+
+  it("adoptStreamSession keeps the guard aligned with a server-issued id", () => {
+    const store = useAgentChatStore.getState();
+    const signal = store.beginStream(null);
+    store.adoptStreamSession("server_1");
+    // The selected session now equals the adopted one — no abort.
+    store.abortIfSessionChanged("server_1");
+    expect(signal.aborted).toBe(false);
+    expect(useAgentChatStore.getState().streamingSessionId).toBe("server_1");
+  });
+
+  it("reset aborts an active stream", () => {
+    const store = useAgentChatStore.getState();
+    const signal = store.beginStream("s1");
+    useAgentChatStore.getState().reset();
+    expect(signal.aborted).toBe(true);
+    expect(useAgentChatStore.getState().isStreaming).toBe(false);
+  });
+});
+
 describe("adoptServerSession", () => {
   it("sets currentSessionId only when none is selected", () => {
     useAgentChatStore.getState().adoptServerSession("server_1");

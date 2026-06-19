@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { storyGenerationManager } from "@/services/storyGenerationManager";
 import { interactiveStoryGenerationManager } from "@/services/interactiveStoryGenerationManager";
+import { kidsDailyGenerationManager } from "@/services/kidsDailyGenerationManager";
 
 /**
  * Registers React Router's navigate function with the generation manager
@@ -14,6 +15,7 @@ export function useGenerationNavigator() {
   useEffect(() => {
     storyGenerationManager.registerNavigate(navigate);
     interactiveStoryGenerationManager.registerNavigate(navigate);
+    kidsDailyGenerationManager.registerNavigate(navigate);
   }, [navigate]);
 }
 
