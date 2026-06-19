@@ -2,7 +2,15 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { BookOpen, Film, Globe2, Library, Sparkles } from "lucide-react";
+import {
+  BookOpen,
+  Film,
+  Frown,
+  Globe2,
+  Library,
+  PartyPopper,
+  Sparkles,
+} from "lucide-react";
 import Button from "@/components/common/Button";
 import Loading from "@/components/common/Loading";
 import AgeAwareContent from "@/components/common/AgeAwareContent";
@@ -289,9 +297,9 @@ function StoryPage() {
         <motion.div
           initial={{ scale: 0 }}
           animate={{ scale: 1 }}
-          className="text-6xl mb-4"
+          className="mb-4 flex justify-center"
         >
-          😢
+          <Frown className="h-16 w-16 text-gray-400" strokeWidth={2} />
         </motion.div>
         <h2 className="text-xl font-bold text-gray-800 mb-2">
           {isForbidden ? "Story not available for this account" : "Story not found"}
@@ -353,11 +361,11 @@ function StoryPage() {
           transition={{ delay: 0.1 }}
         >
           <motion.span
-            className="text-2xl"
+            className="inline-flex text-primary"
             animate={{ scale: [1, 1.2, 1] }}
             transition={{ duration: 0.5 }}
           >
-            🎉
+            <PartyPopper className="h-6 w-6" />
           </motion.span>
           <div>
             <p className="font-bold text-gray-800">
