@@ -7,10 +7,12 @@ shape, the env override, and the fail-fast error path.
 """
 
 import json
+from pathlib import Path
 
 import pytest
 
 from backend.src.mcp_servers import video_generator_server as vgs
+from backend.src.paths import VIDEO_DIR, VIDEO_JOBS_DIR
 
 
 class _FakeFileOutput:
@@ -65,6 +67,31 @@ class _FakeHttpx:
 )
 def test_normalize_duration_clamps_to_cost_window(requested, expected):
     assert vgs.normalize_duration_seconds(requested) == expected
+
+
+def test_video_paths_default_to_backend_data_dirs(monkeypatch):
+    monkeypatch.delenv("VIDEO_OUTPUT_PATH", raising=False)
+
+    assert Path(vgs.get_video_output_path()) == VIDEO_DIR
+    assert Path(vgs.get_video_jobs_path()) == VIDEO_JOBS_DIR
+
+
+def test_load_job_status_reads_legacy_root_job(monkeypatch, tmp_path):
+    primary = tmp_path / "backend_jobs"
+    legacy = tmp_path / "legacy_jobs"
+    legacy.mkdir()
+    (legacy / "job-1.json").write_text(
+        json.dumps({"job_id": "job-1", "story_id": "story-1"}),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(vgs, "get_video_jobs_path", lambda: str(primary))
+    monkeypatch.setattr(vgs, "_LEGACY_VIDEO_JOBS_DIR", legacy)
+
+    assert vgs.load_job_status("job-1") == {
+        "job_id": "job-1",
+        "story_id": "story-1",
+    }
 
 
 @pytest.mark.asyncio
