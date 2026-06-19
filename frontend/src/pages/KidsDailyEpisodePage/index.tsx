@@ -9,11 +9,12 @@ import useChildStore from "@/store/useChildStore";
 import useAuthStore from "@/store/useAuthStore";
 import { resolveMediaUrl } from "@/utils/mediaUrl";
 import ShareToHubModal from "@/components/hub/ShareToHubModal";
+import { GraduationCap, Mic2, UserRound, Globe2 } from "lucide-react";
 
 const ROLE_META = {
-  curious_kid: { label: "Curious Kid", emoji: "🧒" },
-  fun_expert: { label: "Fun Expert", emoji: "🧑‍🏫" },
-  guest: { label: "Guest Anchor", emoji: "🦉" },
+  curious_kid: { label: "Curious Kid", icon: UserRound },
+  fun_expert: { label: "Fun Expert", icon: GraduationCap },
+  guest: { label: "Guest Anchor", icon: Mic2 },
 } as const;
 
 function morningShowAudioSrc(url?: string | null): string | null {
@@ -301,6 +302,7 @@ function KidsDailyEpisodePage() {
             <div className="flex flex-wrap items-center gap-3">
               {(["curious_kid", "fun_expert", "guest"] as const).map((role) => {
                 const active = currentLine?.role === role;
+                const RoleIcon = ROLE_META[role].icon;
                 return (
                   <motion.div
                     key={role}
@@ -311,8 +313,8 @@ function KidsDailyEpisodePage() {
                       repeat: active ? Infinity : 0,
                     }}
                   >
-                    <span className={`${avatarSize} mr-2`}>
-                      {ROLE_META[role].emoji}
+                    <span className={`${avatarSize} mr-2 inline-flex align-middle`}>
+                      <RoleIcon size={16} />
                     </span>
                     {ROLE_META[role].label}
                   </motion.div>
@@ -366,6 +368,7 @@ function KidsDailyEpisodePage() {
               <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
                 {lines.map((line, index) => {
                   const active = index === currentLineIndex;
+                  const RoleIcon = ROLE_META[line.role].icon;
                   return (
                     <div
                       key={`${line.role}-${index}`}
@@ -375,8 +378,8 @@ function KidsDailyEpisodePage() {
                           : "border-gray-200 bg-white"
                       }`}
                     >
-                      <p className="font-semibold text-xs text-gray-500 mb-1">
-                        {ROLE_META[line.role].emoji}{" "}
+                      <p className="flex items-center gap-1.5 font-semibold text-xs text-gray-500 mb-1">
+                        <RoleIcon size={14} />
                         {ROLE_META[line.role].label}
                       </p>
                       <p className="text-gray-700">{line.text}</p>
@@ -402,7 +405,10 @@ function KidsDailyEpisodePage() {
                 className="mt-4 w-full rounded-2xl bg-gradient-to-r from-rose-300 via-pink-300 to-rose-300 hover:from-rose-400 hover:via-pink-400 hover:to-rose-400 px-5 py-3 text-base font-bold text-white shadow-md hover:shadow-lg transition-all"
                 onClick={() => setShareOpen(true)}
               >
-                🌐 Share to Content Hub
+                <span className="inline-flex items-center justify-center gap-2">
+                  <Globe2 size={18} />
+                  Share to Content Hub
+                </span>
               </button>
             )}
           </Card>

@@ -1,6 +1,21 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
+import {
+  Atom,
+  Bot,
+  Clock3,
+  Compass,
+  Drama,
+  Globe2,
+  Leaf,
+  Newspaper,
+  PawPrint,
+  Play,
+  Rocket,
+  Trophy,
+  type LucideIcon,
+} from "lucide-react";
 import Card from "@/components/common/Card";
 import { storyService } from "@/api/services/storyService";
 import useAuthStore from "@/store/useAuthStore";
@@ -14,55 +29,55 @@ import QuotaExceededOverlay, {
 const ALL_TOPICS: Array<{
   topic: NewsCategory;
   label: string;
-  icon: string;
+  icon: LucideIcon;
   tagline: string;
 }> = [
   {
     topic: "space",
     label: "Space",
-    icon: "\ud83d\ude80",
+    icon: Rocket,
     tagline: "Rockets, planets & stars",
   },
   {
     topic: "animals",
     label: "Animals",
-    icon: "\ud83d\udc3c",
+    icon: PawPrint,
     tagline: "Cute, wild & amazing",
   },
   {
     topic: "technology",
     label: "Robots",
-    icon: "\ud83e\udd16",
+    icon: Bot,
     tagline: "Inventions & gadgets",
   },
   {
     topic: "science",
     label: "Science",
-    icon: "\ud83d\udd2c",
+    icon: Atom,
     tagline: "Experiments & discoveries",
   },
   {
     topic: "nature",
     label: "Nature",
-    icon: "\ud83c\udf3f",
+    icon: Leaf,
     tagline: "Oceans, forests & weather",
   },
   {
     topic: "culture",
     label: "Culture",
-    icon: "\ud83c\udfad",
+    icon: Drama,
     tagline: "Art, music & stories",
   },
   {
     topic: "sports",
     label: "Sports",
-    icon: "\u26bd",
+    icon: Trophy,
     tagline: "Goals, records & teamwork",
   },
   {
     topic: "general",
     label: "General",
-    icon: "\ud83d\udcf0",
+    icon: Newspaper,
     tagline: "A bit of everything",
   },
 ];
@@ -179,12 +194,12 @@ function BouncingDots() {
 
 /** Full-card overlay shown while generating a podcast */
 function GeneratingOverlay({
-  icon,
+  Icon,
   topic,
   message,
   onCancel,
 }: {
-  icon: string;
+  Icon: LucideIcon;
   topic: string;
   message?: string | null;
   onCancel: () => void;
@@ -207,11 +222,11 @@ function GeneratingOverlay({
     >
       {/* Spinning topic icon */}
       <motion.div
-        className="text-5xl mb-3"
+        className="mb-3 flex h-16 w-16 items-center justify-center rounded-2xl border border-white/30 bg-white/20"
         animate={{ rotate: 360 }}
         transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
       >
-        {icon}
+        <Icon className="h-9 w-9" strokeWidth={2.25} />
       </motion.div>
 
       {/* Pulsing ring */}
@@ -424,10 +439,10 @@ function KidsDailyPage() {
           setError("Follow this news club first, then tap Listen Now.");
         } else if (status === 502) {
           setError(
-            "Our story-makers are taking a quick break — try again in a moment! 🌟",
+            "Our story-makers are taking a quick break — try again in a moment!",
           );
         } else {
-          setError("Something went wrong — let's give it another go in a sec! 🦊");
+          setError("Something went wrong — let's give it another go in a sec!");
         }
       } finally {
         abortRef.current = null;
@@ -462,11 +477,11 @@ function KidsDailyPage() {
         animate={{ opacity: 1, y: 0 }}
       >
         <motion.span
-          className="text-5xl inline-block"
+          className="inline-flex h-16 w-16 items-center justify-center rounded-3xl border border-secondary/25 bg-white shadow-kid-md text-primary"
           animate={{ scale: [1, 1.15, 1], rotate: [0, -5, 5, 0] }}
           transition={{ duration: 3, repeat: Infinity }}
         >
-          🌍
+          <Globe2 className="h-9 w-9" strokeWidth={2.1} />
         </motion.span>
         <h1 className="text-2xl md:text-3xl font-bold text-gray-800 mt-2">
           Pick Your News Club
@@ -475,7 +490,7 @@ function KidsDailyPage() {
           Choose a topic card, keep your favorites, and listen anytime
         </p>
         <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/80 border border-primary/20 shadow-sm">
-          <span className="text-sm">🌈</span>
+          <Compass className="h-4 w-4 text-primary" strokeWidth={2.25} />
           <span className="text-sm font-semibold text-gray-700">
             {ALL_TOPICS.length} story channels — pick any to listen
           </span>
@@ -513,6 +528,7 @@ function KidsDailyPage() {
             const isRateLimited = rateLimitRetry?.topic === item.topic;
             const isSubscribed = subscribedTopicList.has(item.topic);
             const isToggling = togglingTopic === item.topic;
+            const TopicIcon = item.icon;
 
             return (
               <motion.div
@@ -536,11 +552,11 @@ function KidsDailyPage() {
                         className={`w-14 h-14 rounded-3xl bg-gradient-to-br ${theme.iconBubble} flex items-center justify-center shadow-sm border border-white/60`}
                       >
                         <motion.div
-                          className="text-4xl"
+                          className="text-gray-800/85"
                           animate={{ scale: [1, 1.04, 1] }}
                           transition={{ duration: 4, repeat: Infinity }}
                         >
-                          {item.icon}
+                          <TopicIcon className="h-8 w-8" strokeWidth={2.1} />
                         </motion.div>
                       </div>
                     </div>
@@ -620,13 +636,16 @@ function KidsDailyPage() {
                               animate={{ rotate: [0, 180] }}
                               transition={{ duration: 1, repeat: Infinity }}
                             >
-                              ⏳
+                              <Clock3 className="h-4 w-4" strokeWidth={2.25} />
                             </motion.span>
                             Wait {rateLimitRetry!.seconds}s
                           </>
                         ) : (
                           <>
-                            <span>▶</span>
+                            <Play
+                              className="h-4 w-4 fill-current"
+                              strokeWidth={2.25}
+                            />
                             Listen Now
                           </>
                         )}
@@ -638,7 +657,7 @@ function KidsDailyPage() {
                   <AnimatePresence>
                     {isGenerating && (
                       <GeneratingOverlay
-                        icon={item.icon}
+                        Icon={TopicIcon}
                         topic={item.label}
                         message={generationMessage}
                         onCancel={handleCancelGeneration}
@@ -654,7 +673,7 @@ function KidsDailyPage() {
 
       <div className="text-center pb-4 text-xs text-gray-500">
         Following {subscribedCount} news club{subscribedCount === 1 ? "" : "s"}
-        . Pick any card and tap Listen — fresh stories every time. ✨
+        . Pick any card and tap Listen — fresh stories every time.
       </div>
     </div>
   );

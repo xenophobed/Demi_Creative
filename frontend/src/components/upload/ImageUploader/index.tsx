@@ -1,6 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useDropzone } from 'react-dropzone'
 import { motion, AnimatePresence } from 'framer-motion'
+import {
+  Camera,
+  Crosshair,
+  FolderUp,
+  Image,
+  Sparkles,
+  TriangleAlert,
+} from 'lucide-react'
 import CameraCapture from '@/components/upload/CameraCapture'
 import ParentConsentGate from '@/components/common/ParentConsentGate'
 import useChildStore from '@/store/useChildStore'
@@ -121,13 +129,13 @@ function ImageUploader({
               exit={{ opacity: 0, scale: 0.9 }}
               className="flex flex-col items-center gap-4"
             >
-              <motion.span
-                className="text-6xl"
+              <motion.div
+                className="flex h-16 w-16 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-primary"
                 animate={{ y: [0, -10, 0] }}
                 transition={{ duration: 0.5, repeat: Infinity }}
               >
-                🎯
-              </motion.span>
+                <Crosshair className="h-8 w-8" strokeWidth={2.2} />
+              </motion.div>
               <p className="text-xl font-bold text-primary">Drop to upload</p>
             </motion.div>
           ) : isDragReject ? (
@@ -138,7 +146,9 @@ function ImageUploader({
               exit={{ opacity: 0 }}
               className="flex flex-col items-center gap-4"
             >
-              <span className="text-6xl">😅</span>
+              <span className="flex h-16 w-16 items-center justify-center rounded-lg border border-red-200 bg-red-100 text-red-500">
+                <TriangleAlert className="h-8 w-8" strokeWidth={2.2} />
+              </span>
               <p className="text-xl font-bold text-red-500">Unsupported file format</p>
               <p className="text-gray-500">Please upload PNG, JPG or GIF images</p>
             </motion.div>
@@ -151,19 +161,19 @@ function ImageUploader({
               className="flex flex-col items-center gap-4"
             >
               <div className="relative">
-                <motion.span
-                  className="text-6xl"
+                <motion.div
+                  className="flex h-16 w-16 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-primary"
                   animate={{ rotate: [0, -5, 5, 0] }}
                   transition={{ duration: 2, repeat: Infinity }}
                 >
-                  🖼️
-                </motion.span>
+                  <Image className="h-8 w-8" strokeWidth={2.1} />
+                </motion.div>
                 <motion.span
-                  className="absolute -top-2 -right-2 text-2xl"
+                  className="absolute -top-2 -right-2 flex h-7 w-7 items-center justify-center rounded-lg border border-accent/40 bg-white text-primary shadow-sm"
                   animate={{ scale: [1, 1.2, 1] }}
                   transition={{ duration: 1, repeat: Infinity }}
                 >
-                  ✨
+                  <Sparkles className="h-4 w-4" strokeWidth={2.2} />
                 </motion.span>
               </div>
 
@@ -204,7 +214,10 @@ function ImageUploader({
             activeTab === 'camera' ? 'bg-white text-primary shadow' : 'text-gray-600'
           }`}
         >
-          📸 Take Photo
+          <span className="inline-flex items-center gap-1.5">
+            <Camera className="h-4 w-4" strokeWidth={2.2} />
+            Take Photo
+          </span>
         </button>
         <button
           type="button"
@@ -215,7 +228,10 @@ function ImageUploader({
             activeTab === 'file' ? 'bg-white text-primary shadow' : 'text-gray-600'
           }`}
         >
-          📂 Upload File
+          <span className="inline-flex items-center gap-1.5">
+            <FolderUp className="h-4 w-4" strokeWidth={2.2} />
+            Upload File
+          </span>
         </button>
       </div>
 

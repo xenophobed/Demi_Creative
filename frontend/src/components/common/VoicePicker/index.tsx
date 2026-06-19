@@ -4,6 +4,17 @@ import { motion, AnimatePresence } from 'framer-motion'
 import type { AgeGroup } from '@/types/api'
 import apiClient from '@/api/client'
 import { storyService } from '@/api/services/storyService'
+import {
+  Bot,
+  BookOpen,
+  LoaderCircle,
+  Mic,
+  Play,
+  Radio,
+  Theater,
+  UserRound,
+  Volume2,
+} from 'lucide-react'
 
 export interface VoiceEntry {
   voice_id: string
@@ -32,26 +43,26 @@ const PROVIDER_COLORS: Record<string, string> = {
   elevenlabs: 'bg-amber-50 border-amber-200',
 }
 
-const VOICE_EMOJIS: Record<string, string> = {
+const VOICE_ICONS: Record<string, typeof Mic> = {
   // OpenAI
-  nova: '👩',
-  shimmer: '💃',
-  fable: '📖',
-  echo: '👨',
-  alloy: '🤖',
-  onyx: '🎭',
+  nova: UserRound,
+  shimmer: Radio,
+  fable: BookOpen,
+  echo: UserRound,
+  alloy: Bot,
+  onyx: Theater,
   // ElevenLabs (by display name keywords)
-  default: '🎙️',
+  default: Mic,
 }
 
-function getVoiceEmoji(voice: VoiceEntry): string {
+function getVoiceIcon(voice: VoiceEntry): typeof Mic {
   // Check by voice_id first (OpenAI voices)
-  if (voice.voice_id in VOICE_EMOJIS) return VOICE_EMOJIS[voice.voice_id]
+  if (voice.voice_id in VOICE_ICONS) return VOICE_ICONS[voice.voice_id]
   // Infer from description
   const desc = voice.description.toLowerCase()
-  if (desc.includes('female') || desc.includes('girl') || desc.includes('woman')) return '👩'
-  if (desc.includes('male') || desc.includes('man') || desc.includes('boy') || desc.includes('knight')) return '👨'
-  return VOICE_EMOJIS.default
+  if (desc.includes('female') || desc.includes('girl') || desc.includes('woman')) return UserRound
+  if (desc.includes('male') || desc.includes('man') || desc.includes('boy') || desc.includes('knight')) return UserRound
+  return VOICE_ICONS.default
 }
 
 // Max voices shown per age group for young children
@@ -190,9 +201,9 @@ function VoicePicker({ ageGroup, selectedVoice, onVoiceChange, className = '' }:
         <motion.span
           animate={{ rotate: 360 }}
           transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-          className="text-2xl"
+          className="text-primary"
         >
-          🎵
+          <LoaderCircle size={22} />
         </motion.span>
         <span className="ml-2 text-gray-500 text-sm">Loading voices...</span>
       </div>
@@ -219,6 +230,7 @@ function VoicePicker({ ageGroup, selectedVoice, onVoiceChange, className = '' }:
             const isSelected = selectedVoice === voice.voice_id
             const isPreviewing = previewingId === voice.voice_id
             const isLoadingPreview = previewLoading === voice.voice_id
+            const VoiceIcon = getVoiceIcon(voice)
 
             return (
               <motion.div
@@ -243,10 +255,12 @@ function VoicePicker({ ageGroup, selectedVoice, onVoiceChange, className = '' }:
               >
                 <div className="flex items-start gap-2">
                   <motion.span
-                    className={`text-xl ${ageGroup === '3-5' ? 'text-3xl' : ''}`}
+                    className={`flex items-center justify-center rounded-lg bg-gray-100 text-gray-600 ${
+                      ageGroup === '3-5' ? 'h-10 w-10' : 'h-8 w-8'
+                    }`}
                     animate={isSelected ? { scale: [1, 1.2, 1] } : {}}
                   >
-                    {getVoiceEmoji(voice)}
+                    <VoiceIcon size={ageGroup === '3-5' ? 22 : 18} />
                   </motion.span>
                   <div className="flex-1 min-w-0">
                     <div className={`font-medium truncate ${ageGroup === '3-5' ? 'text-base' : 'text-sm'}`}>
@@ -282,17 +296,17 @@ function VoicePicker({ ageGroup, selectedVoice, onVoiceChange, className = '' }:
                         animate={{ rotate: 360 }}
                         transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
                       >
-                        ⏳
+                        <LoaderCircle size={14} />
                       </motion.span>
                     ) : isPreviewing ? (
                       <motion.span
                         animate={{ scale: [1, 1.3, 1] }}
                         transition={{ duration: 0.5, repeat: Infinity }}
                       >
-                        🔊
+                        <Volume2 size={14} />
                       </motion.span>
                     ) : (
-                      '▶'
+                      <Play size={14} fill="currentColor" />
                     )}
                   </motion.button>
                 </div>
