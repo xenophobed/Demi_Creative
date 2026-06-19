@@ -17,6 +17,8 @@ from pathlib import Path
 import uuid
 from datetime import datetime, timedelta
 
+from ..paths import VIDEO_DIR, VIDEO_JOBS_DIR
+
 try:
     import replicate as _replicate
 except Exception:  # pragma: no cover - import fallback for test env
@@ -30,9 +32,11 @@ except Exception:  # pragma: no cover - import fallback for test env
 try:
     from claude_agent_sdk import tool, create_sdk_mcp_server
 except Exception:  # pragma: no cover - import fallback for test env
+
     def tool(*_args, **_kwargs):
         def decorator(func):
             return func
+
         return decorator
 
     def create_sdk_mcp_server(**kwargs):
@@ -43,13 +47,15 @@ except Exception:  # pragma: no cover - import fallback for test env
 VIDEO_STYLE_PROMPTS = {
     "gentle_animation": "Gently animate this children's painting with soft, slow movements. Keep the original artwork style intact while adding subtle motion like swaying trees, twinkling stars, or gently moving characters. The animation should be calm and soothing, suitable for all ages.",
     "playful": "Create a playful animation from this children's painting. Add bouncy, fun movements to the characters and elements. Keep the whimsical, child-drawn quality while making elements dance and move joyfully.",
-    "storybook": "Transform this children's painting into a storybook-style animation. Add gentle page-turning effects and bring elements to life as if the drawing is coming alive from a magical book."
+    "storybook": "Transform this children's painting into a storybook-style animation. Add gentle page-turning effects and bring elements to life as if the drawing is coming alive from a magical book.",
 }
 
 
 # Cheapest-everywhere policy: a low-cost, maintained, prompt-capable Replicate
 # image-to-video model. Overridable via env without a redeploy of code.
 DEFAULT_VIDEO_MODEL = "wan-video/wan-2.2-i2v-fast"
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+_LEGACY_VIDEO_JOBS_DIR = _REPO_ROOT / "data" / "video_jobs"
 
 
 def get_video_model() -> str:
@@ -72,14 +78,14 @@ def get_video_render_timeout() -> float:
 
 def get_video_output_path():
     """Get video output directory"""
-    video_dir = os.getenv("VIDEO_OUTPUT_PATH", "./data/videos")
+    video_dir = os.getenv("VIDEO_OUTPUT_PATH", str(VIDEO_DIR))
     Path(video_dir).mkdir(parents=True, exist_ok=True)
     return video_dir
 
 
 def get_video_jobs_path():
     """Get video jobs directory"""
-    jobs_dir = "./data/video_jobs"
+    jobs_dir = str(VIDEO_JOBS_DIR)
     Path(jobs_dir).mkdir(parents=True, exist_ok=True)
     return jobs_dir
 
@@ -98,7 +104,7 @@ def get_image_mime_type(image_path: str) -> str:
         ".jpeg": "image/jpeg",
         ".png": "image/png",
         ".webp": "image/webp",
-        ".gif": "image/gif"
+        ".gif": "image/gif",
     }
     return mime_types.get(ext, "image/png")
 
@@ -127,11 +133,12 @@ def save_job_status(job_id: str, job_data: Dict[str, Any]) -> None:
 
 def load_job_status(job_id: str) -> Optional[Dict[str, Any]]:
     """Load job status"""
-    jobs_dir = get_video_jobs_path()
-    job_file = Path(jobs_dir) / f"{job_id}.json"
-    if job_file.exists():
-        with open(job_file, "r", encoding="utf-8") as f:
-            return json.load(f)
+    primary = Path(get_video_jobs_path()) / f"{job_id}.json"
+    legacy = _LEGACY_VIDEO_JOBS_DIR / f"{job_id}.json"
+    for job_file in (primary, legacy):
+        if job_file.exists():
+            with open(job_file, "r", encoding="utf-8") as f:
+                return json.load(f)
     return None
 
 
@@ -146,12 +153,7 @@ def load_job_status(job_id: str) -> Optional[Dict[str, Any]]:
 
     The video will animate elements within the painting while preserving
     the original artistic style.""",
-    {
-        "image_path": str,
-        "style": str,
-        "duration_seconds": int,
-        "story_id": str
-    }
+    {"image_path": str, "style": str, "duration_seconds": int, "story_id": str},
 )
 async def generate_painting_video(args: Dict[str, Any]) -> Dict[str, Any]:
     """
@@ -171,39 +173,54 @@ async def generate_painting_video(args: Dict[str, Any]) -> Dict[str, Any]:
     # Verify image exists
     if not Path(image_path).exists():
         return {
-            "content": [{
-                "type": "text",
-                "text": json.dumps({
-                    "success": False,
-                    "error": f"Image file not found: {image_path}",
-                    "job_id": None
-                }, ensure_ascii=False)
-            }]
+            "content": [
+                {
+                    "type": "text",
+                    "text": json.dumps(
+                        {
+                            "success": False,
+                            "error": f"Image file not found: {image_path}",
+                            "job_id": None,
+                        },
+                        ensure_ascii=False,
+                    ),
+                }
+            ]
         }
 
     # Check Replicate availability + token (cheapest-everywhere video provider).
     if _replicate is None or _httpx is None:
         return {
-            "content": [{
-                "type": "text",
-                "text": json.dumps({
-                    "success": False,
-                    "error": "replicate/httpx SDK not installed",
-                    "job_id": None
-                }, ensure_ascii=False)
-            }]
+            "content": [
+                {
+                    "type": "text",
+                    "text": json.dumps(
+                        {
+                            "success": False,
+                            "error": "replicate/httpx SDK not installed",
+                            "job_id": None,
+                        },
+                        ensure_ascii=False,
+                    ),
+                }
+            ]
         }
     api_key = os.getenv("REPLICATE_API_TOKEN")
     if not api_key:
         return {
-            "content": [{
-                "type": "text",
-                "text": json.dumps({
-                    "success": False,
-                    "error": "REPLICATE_API_TOKEN environment variable not configured",
-                    "job_id": None
-                }, ensure_ascii=False)
-            }]
+            "content": [
+                {
+                    "type": "text",
+                    "text": json.dumps(
+                        {
+                            "success": False,
+                            "error": "REPLICATE_API_TOKEN environment variable not configured",
+                            "job_id": None,
+                        },
+                        ensure_ascii=False,
+                    ),
+                }
+            ]
         }
 
     try:
@@ -213,8 +230,7 @@ async def generate_painting_video(args: Dict[str, Any]) -> Dict[str, Any]:
 
         # Get style prompt + cost-clamped clip length
         style_prompt = VIDEO_STYLE_PROMPTS.get(
-            style,
-            VIDEO_STYLE_PROMPTS["gentle_animation"]
+            style, VIDEO_STYLE_PROMPTS["gentle_animation"]
         )
         clip_seconds = normalize_duration_seconds(duration_seconds)
         model = get_video_model()
@@ -269,22 +285,28 @@ async def generate_painting_video(args: Dict[str, Any]) -> Dict[str, Any]:
             "duration_seconds": clip_seconds,
             "model": model,
             "created_at": timestamp.isoformat(),
-            "completed_at": datetime.now().isoformat()
+            "completed_at": datetime.now().isoformat(),
         }
         save_job_status(job_id, job_data)
 
         return {
-            "content": [{
-                "type": "text",
-                "text": json.dumps({
-                    "success": True,
-                    "job_id": job_id,
-                    "status": "completed",
-                    "video_path": str(video_path),
-                    "video_filename": video_filename,
-                    "video_url": f"/data/videos/{video_filename}"
-                }, ensure_ascii=False, indent=2)
-            }]
+            "content": [
+                {
+                    "type": "text",
+                    "text": json.dumps(
+                        {
+                            "success": True,
+                            "job_id": job_id,
+                            "status": "completed",
+                            "video_path": str(video_path),
+                            "video_filename": video_filename,
+                            "video_url": f"/data/videos/{video_filename}",
+                        },
+                        ensure_ascii=False,
+                        indent=2,
+                    ),
+                }
+            ]
         }
 
     except Exception as e:
@@ -307,15 +329,21 @@ async def generate_painting_video(args: Dict[str, Any]) -> Dict[str, Any]:
         save_job_status(job_id, job_data)
 
         return {
-            "content": [{
-                "type": "text",
-                "text": json.dumps({
-                    "success": False,
-                    "job_id": job_id,
-                    "status": "failed",
-                    "error": f"Video generation failed: {error_message}",
-                }, ensure_ascii=False, indent=2)
-            }]
+            "content": [
+                {
+                    "type": "text",
+                    "text": json.dumps(
+                        {
+                            "success": False,
+                            "job_id": job_id,
+                            "status": "failed",
+                            "error": f"Video generation failed: {error_message}",
+                        },
+                        ensure_ascii=False,
+                        indent=2,
+                    ),
+                }
+            ]
         }
 
 
@@ -324,7 +352,7 @@ async def generate_painting_video(args: Dict[str, Any]) -> Dict[str, Any]:
     """Check the status of a video generation job.
 
     Returns the current status, progress percentage, and video URL if completed.""",
-    {"job_id": str}
+    {"job_id": str},
 )
 async def check_video_status(args: Dict[str, Any]) -> Dict[str, Any]:
     """
@@ -341,13 +369,15 @@ async def check_video_status(args: Dict[str, Any]) -> Dict[str, Any]:
     job_data = load_job_status(job_id)
     if not job_data:
         return {
-            "content": [{
-                "type": "text",
-                "text": json.dumps({
-                    "success": False,
-                    "error": f"Job not found: {job_id}"
-                }, ensure_ascii=False)
-            }]
+            "content": [
+                {
+                    "type": "text",
+                    "text": json.dumps(
+                        {"success": False, "error": f"Job not found: {job_id}"},
+                        ensure_ascii=False,
+                    ),
+                }
+            ]
         }
 
     # If job is in pending status, check for external updates
@@ -361,7 +391,7 @@ async def check_video_status(args: Dict[str, Any]) -> Dict[str, Any]:
         "progress_percent": job_data.get("progress_percent", 0),
         "created_at": job_data.get("created_at"),
         "completed_at": job_data.get("completed_at"),
-        "estimated_completion": job_data.get("estimated_completion")
+        "estimated_completion": job_data.get("estimated_completion"),
     }
 
     if status == "completed":
@@ -374,10 +404,9 @@ async def check_video_status(args: Dict[str, Any]) -> Dict[str, Any]:
         response["error_message"] = job_data.get("error")
 
     return {
-        "content": [{
-            "type": "text",
-            "text": json.dumps(response, ensure_ascii=False, indent=2)
-        }]
+        "content": [
+            {"type": "text", "text": json.dumps(response, ensure_ascii=False, indent=2)}
+        ]
     }
 
 
@@ -386,7 +415,7 @@ async def check_video_status(args: Dict[str, Any]) -> Dict[str, Any]:
     """Combine a generated video with audio narration.
 
     Uses ffmpeg to merge video and audio files into a single video with narration.""",
-    {"video_path": str, "audio_path": str, "output_filename": str}
+    {"video_path": str, "audio_path": str, "output_filename": str},
 )
 async def combine_video_audio(args: Dict[str, Any]) -> Dict[str, Any]:
     """
@@ -405,24 +434,34 @@ async def combine_video_audio(args: Dict[str, Any]) -> Dict[str, Any]:
     # Verify files exist
     if not Path(video_path).exists():
         return {
-            "content": [{
-                "type": "text",
-                "text": json.dumps({
-                    "success": False,
-                    "error": f"Video file not found: {video_path}"
-                }, ensure_ascii=False)
-            }]
+            "content": [
+                {
+                    "type": "text",
+                    "text": json.dumps(
+                        {
+                            "success": False,
+                            "error": f"Video file not found: {video_path}",
+                        },
+                        ensure_ascii=False,
+                    ),
+                }
+            ]
         }
 
     if not Path(audio_path).exists():
         return {
-            "content": [{
-                "type": "text",
-                "text": json.dumps({
-                    "success": False,
-                    "error": f"Audio file not found: {audio_path}"
-                }, ensure_ascii=False)
-            }]
+            "content": [
+                {
+                    "type": "text",
+                    "text": json.dumps(
+                        {
+                            "success": False,
+                            "error": f"Audio file not found: {audio_path}",
+                        },
+                        ensure_ascii=False,
+                    ),
+                }
+            ]
         }
 
     try:
@@ -442,30 +481,36 @@ async def combine_video_audio(args: Dict[str, Any]) -> Dict[str, Any]:
         cmd = [
             "ffmpeg",
             "-y",  # Overwrite output file
-            "-i", video_path,
-            "-i", audio_path,
-            "-c:v", "copy",
-            "-c:a", "aac",
+            "-i",
+            video_path,
+            "-i",
+            audio_path,
+            "-c:v",
+            "copy",
+            "-c:a",
+            "aac",
             "-shortest",
-            str(output_path)
+            str(output_path),
         ]
 
         result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=120  # 2-minute timeout
+            cmd, capture_output=True, text=True, timeout=120  # 2-minute timeout
         )
 
         if result.returncode != 0:
             return {
-                "content": [{
-                    "type": "text",
-                    "text": json.dumps({
-                        "success": False,
-                        "error": f"ffmpeg merge failed: {result.stderr}"
-                    }, ensure_ascii=False)
-                }]
+                "content": [
+                    {
+                        "type": "text",
+                        "text": json.dumps(
+                            {
+                                "success": False,
+                                "error": f"ffmpeg merge failed: {result.stderr}",
+                            },
+                            ensure_ascii=False,
+                        ),
+                    }
+                ]
             }
 
         # Get file size
@@ -473,47 +518,62 @@ async def combine_video_audio(args: Dict[str, Any]) -> Dict[str, Any]:
         file_size_mb = round(file_size / (1024 * 1024), 2)
 
         return {
-            "content": [{
-                "type": "text",
-                "text": json.dumps({
-                    "success": True,
-                    "output_path": str(output_path),
-                    "output_filename": output_filename,
-                    "video_url": f"/data/videos/{output_filename}",
-                    "file_size_mb": file_size_mb
-                }, ensure_ascii=False, indent=2)
-            }]
+            "content": [
+                {
+                    "type": "text",
+                    "text": json.dumps(
+                        {
+                            "success": True,
+                            "output_path": str(output_path),
+                            "output_filename": output_filename,
+                            "video_url": f"/data/videos/{output_filename}",
+                            "file_size_mb": file_size_mb,
+                        },
+                        ensure_ascii=False,
+                        indent=2,
+                    ),
+                }
+            ]
         }
 
     except subprocess.TimeoutExpired:
         return {
-            "content": [{
-                "type": "text",
-                "text": json.dumps({
-                    "success": False,
-                    "error": "ffmpeg processing timed out"
-                }, ensure_ascii=False)
-            }]
+            "content": [
+                {
+                    "type": "text",
+                    "text": json.dumps(
+                        {"success": False, "error": "ffmpeg processing timed out"},
+                        ensure_ascii=False,
+                    ),
+                }
+            ]
         }
     except FileNotFoundError:
         return {
-            "content": [{
-                "type": "text",
-                "text": json.dumps({
-                    "success": False,
-                    "error": "ffmpeg not installed, please install ffmpeg first"
-                }, ensure_ascii=False)
-            }]
+            "content": [
+                {
+                    "type": "text",
+                    "text": json.dumps(
+                        {
+                            "success": False,
+                            "error": "ffmpeg not installed, please install ffmpeg first",
+                        },
+                        ensure_ascii=False,
+                    ),
+                }
+            ]
         }
     except Exception as e:
         return {
-            "content": [{
-                "type": "text",
-                "text": json.dumps({
-                    "success": False,
-                    "error": f"Merge failed: {str(e)}"
-                }, ensure_ascii=False)
-            }]
+            "content": [
+                {
+                    "type": "text",
+                    "text": json.dumps(
+                        {"success": False, "error": f"Merge failed: {str(e)}"},
+                        ensure_ascii=False,
+                    ),
+                }
+            ]
         }
 
 
@@ -542,7 +602,7 @@ video_server = create_sdk_mcp_server(
         _generate_painting_video_tool,
         _check_video_status_tool,
         _combine_video_audio_tool,
-    ]
+    ],
 )
 
 

@@ -110,6 +110,43 @@ async def test_get_video_status_rejects_unowned_job_without_story_binding(
     assert exc.value.detail == "Video job is not linked to an owned story"
 
 
+def test_load_job_from_file_migrates_legacy_video_job(monkeypatch, tmp_path):
+    primary_jobs = tmp_path / "backend_jobs"
+    primary_videos = tmp_path / "backend_videos"
+    legacy_jobs = tmp_path / "legacy_jobs"
+    legacy_videos = tmp_path / "legacy_videos"
+    legacy_jobs.mkdir()
+    legacy_videos.mkdir()
+
+    legacy_video = legacy_videos / "video_job-1.mp4"
+    legacy_video.write_bytes(b"mp4")
+    (legacy_jobs / "job-1.json").write_text(
+        json.dumps(
+            {
+                "job_id": "job-1",
+                "story_id": "story-1",
+                "status": "completed",
+                "video_path": str(legacy_video),
+                "video_filename": legacy_video.name,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(video, "VIDEO_JOBS_DIR", primary_jobs)
+    monkeypatch.setattr(video, "VIDEO_DIR", primary_videos)
+    monkeypatch.setattr(video, "LEGACY_VIDEO_JOBS_DIR", legacy_jobs)
+    monkeypatch.setattr(video, "LEGACY_VIDEO_DIR", legacy_videos)
+
+    job = video.load_job_from_file("job-1")
+
+    assert job is not None
+    assert job["story_id"] == "story-1"
+    assert job["video_path"] == str(primary_videos / legacy_video.name)
+    assert (primary_jobs / "job-1.json").exists()
+    assert (primary_videos / legacy_video.name).read_bytes() == b"mp4"
+
+
 @pytest.mark.asyncio
 async def test_get_video_status_verifies_story_owner_before_returning_url(
     monkeypatch, tmp_path

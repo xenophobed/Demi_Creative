@@ -6,6 +6,7 @@ Supports generating animated videos from children's artwork
 """
 
 import json
+import shutil
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
@@ -18,33 +19,114 @@ from ..models import (
     VideoJobResponse,
     VideoJobStatusResponse,
     VideoStyle,
-    VideoStatus
+    VideoStatus,
 )
 from ..deps import get_current_user, get_story_for_owner
-from ...mcp_servers import generate_painting_video, check_video_status, combine_video_audio
+from ...mcp_servers import (
+    generate_painting_video,
+    check_video_status,
+    combine_video_audio,
+)
 from ...services.database import story_repo
 from ...services.achievement_service import FIRST_VIDEO, achievement_service
 from ...services.user_service import UserData
 
-
-router = APIRouter(
-    prefix="/api/v1/video",
-    tags=["Video Generation"]
-)
+router = APIRouter(prefix="/api/v1/video", tags=["Video Generation"])
 
 
 # ============================================================================
 # Configuration
 # ============================================================================
-from ...paths import VIDEO_DIR, VIDEO_JOBS_DIR, DATA_DIR
+from ...paths import BACKEND_DIR, VIDEO_DIR, VIDEO_JOBS_DIR, DATA_DIR
+
+LEGACY_DATA_DIR = BACKEND_DIR.parent / "data"
+LEGACY_VIDEO_DIR = LEGACY_DATA_DIR / "videos"
+LEGACY_VIDEO_JOBS_DIR = LEGACY_DATA_DIR / "video_jobs"
+
+
+def _load_json_file(path: Path) -> Optional[dict]:
+    if not path.exists():
+        return None
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def _candidate_job_files(job_id: str) -> list[Path]:
+    primary = VIDEO_JOBS_DIR / f"{job_id}.json"
+    legacy = LEGACY_VIDEO_JOBS_DIR / f"{job_id}.json"
+    if legacy == primary:
+        return [primary]
+    return [primary, legacy]
+
+
+def _iter_video_job_files() -> list[Path]:
+    files: list[Path] = []
+    seen: set[str] = set()
+    for jobs_dir in (VIDEO_JOBS_DIR, LEGACY_VIDEO_JOBS_DIR):
+        if not jobs_dir.exists():
+            continue
+        for job_file in jobs_dir.glob("*.json"):
+            if job_file.name in seen:
+                continue
+            seen.add(job_file.name)
+            files.append(job_file)
+    return files
+
+
+def _resolve_legacy_video_path(job_data: dict) -> Optional[Path]:
+    video_filename = job_data.get("video_filename")
+    raw_video_path = job_data.get("video_path")
+
+    candidates: list[Path] = []
+    if raw_video_path:
+        raw_path = Path(raw_video_path)
+        candidates.append(
+            raw_path if raw_path.is_absolute() else BACKEND_DIR.parent / raw_path
+        )
+    if video_filename:
+        candidates.append(LEGACY_VIDEO_DIR / video_filename)
+
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def _backfill_legacy_video(job_data: dict) -> dict:
+    """Copy legacy root-level rendered video into the backend-served data dir."""
+    video_filename = job_data.get("video_filename")
+    if not video_filename:
+        return job_data
+
+    target = VIDEO_DIR / video_filename
+    if target.exists():
+        job_data["video_path"] = str(target)
+        return job_data
+
+    source = _resolve_legacy_video_path(job_data)
+    if source is None:
+        return job_data
+
+    VIDEO_DIR.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(source, target)
+    job_data["video_path"] = str(target)
+    return job_data
 
 
 def load_job_from_file(job_id: str) -> Optional[dict]:
     """Load job status from file"""
-    job_file = VIDEO_JOBS_DIR / f"{job_id}.json"
-    if job_file.exists():
-        with open(job_file, "r", encoding="utf-8") as f:
-            return json.load(f)
+    primary = VIDEO_JOBS_DIR / f"{job_id}.json"
+    for job_file in _candidate_job_files(job_id):
+        job_data = _load_json_file(job_file)
+        if job_data is None:
+            continue
+
+        job_data = _backfill_legacy_video(job_data)
+        if job_file != primary:
+            VIDEO_JOBS_DIR.mkdir(parents=True, exist_ok=True)
+            with open(primary, "w", encoding="utf-8") as f:
+                json.dump(job_data, f, ensure_ascii=False, indent=2, default=str)
+        return job_data
     return None
 
 
@@ -72,7 +154,7 @@ async def call_mcp_tool(tool_ref, payload: dict) -> dict:
     response_model=VideoJobResponse,
     summary="Generate video",
     description="Generate an animated video for an artwork story",
-    status_code=status.HTTP_202_ACCEPTED
+    status_code=status.HTTP_202_ACCEPTED,
 )
 async def generate_video(
     request: VideoJobRequest,
@@ -94,30 +176,33 @@ async def generate_video(
         else:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Story is missing artwork image"
+                detail="Story is missing artwork image",
             )
 
     if not Path(image_path).exists():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Artwork image file not found: {image_path}"
+            detail=f"Artwork image file not found: {image_path}",
         )
 
     # 3. Call video generation tool
     try:
-        result = await call_mcp_tool(generate_painting_video, {
-            "image_path": image_path,
-            "style": request.style.value,
-            "duration_seconds": request.duration_seconds,
-            "story_id": request.story_id
-        })
+        result = await call_mcp_tool(
+            generate_painting_video,
+            {
+                "image_path": image_path,
+                "style": request.style.value,
+                "duration_seconds": request.duration_seconds,
+                "story_id": request.story_id,
+            },
+        )
 
         result_data = json.loads(result["content"][0]["text"])
 
         if not result_data.get("success") and not result_data.get("job_id"):
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=result_data.get("error", "Video generation failed")
+                detail=result_data.get("error", "Video generation failed"),
             )
 
         job_id = result_data["job_id"]
@@ -147,11 +232,14 @@ async def generate_video(
                 audio_path = str(DATA_DIR / audio_url.removeprefix("/data/"))
 
                 if video_path and Path(audio_path).exists():
-                    combine_result = await call_mcp_tool(combine_video_audio, {
-                        "video_path": video_path,
-                        "audio_path": audio_path,
-                        "output_filename": f"combined_{job_id}.mp4"
-                    })
+                    combine_result = await call_mcp_tool(
+                        combine_video_audio,
+                        {
+                            "video_path": video_path,
+                            "audio_path": audio_path,
+                            "output_filename": f"combined_{job_id}.mp4",
+                        },
+                    )
 
                     combine_data = json.loads(combine_result["content"][0]["text"])
                     if combine_data.get("success"):
@@ -161,7 +249,9 @@ async def generate_video(
                             with open(job_file, "r", encoding="utf-8") as f:
                                 job_data = json.load(f)
                             job_data["combined_video_url"] = combine_data["video_url"]
-                            job_data["combined_video_path"] = combine_data["output_path"]
+                            job_data["combined_video_path"] = combine_data[
+                                "output_path"
+                            ]
                             with open(job_file, "w", encoding="utf-8") as f:
                                 json.dump(job_data, f, ensure_ascii=False, indent=2)
 
@@ -170,7 +260,7 @@ async def generate_video(
             story_id=request.story_id,
             status=VideoStatus(job_status),
             estimated_completion=estimated_completion,
-            created_at=datetime.now()
+            created_at=datetime.now(),
         )
 
     except HTTPException:
@@ -179,7 +269,7 @@ async def generate_video(
         print(f"Error generating video: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Video generation failed, please try again later"
+            detail="Video generation failed, please try again later",
         )
 
 
@@ -187,7 +277,7 @@ async def generate_video(
     "/status/{job_id}",
     response_model=VideoJobStatusResponse,
     summary="Check video generation status",
-    description="Check video generation progress by job ID"
+    description="Check video generation progress by job ID",
 )
 async def get_video_status(
     job_id: str,
@@ -206,7 +296,7 @@ async def get_video_status(
         if not result_data.get("success"):
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=result_data.get("error", f"Job not found: {job_id}")
+                detail=result_data.get("error", f"Job not found: {job_id}"),
             )
 
         # Load job details to get combined video URL
@@ -239,7 +329,7 @@ async def get_video_status(
             video_url=video_url,
             error_message=result_data.get("error_message"),
             created_at=created_at,
-            completed_at=completed_at
+            completed_at=completed_at,
         )
 
     except HTTPException:
@@ -248,7 +338,7 @@ async def get_video_status(
         print(f"Error checking video status: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to check status"
+            detail="Failed to check status",
         )
 
 
@@ -258,8 +348,8 @@ async def get_video_status(
     description="Get video metadata by video ID",
     responses={
         200: {"description": "Successfully retrieved video info"},
-        404: {"description": "Video not found"}
-    }
+        404: {"description": "Video not found"},
+    },
 )
 async def get_video_info(
     video_id: str,
@@ -273,7 +363,7 @@ async def get_video_info(
     if job_data.get("status") != "completed":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Video generation not yet complete, current status: {job_data.get('status')}"
+            detail=f"Video generation not yet complete, current status: {job_data.get('status')}",
         )
 
     # Get video file info
@@ -282,31 +372,36 @@ async def get_video_info(
 
     # Prefer combined video
     final_path = combined_path if combined_path else video_path
-    final_url = job_data.get("combined_video_url") or f"/data/videos/{job_data.get('video_filename')}"
+    final_url = (
+        job_data.get("combined_video_url")
+        or f"/data/videos/{job_data.get('video_filename')}"
+    )
 
     file_size_mb = None
     if final_path and Path(final_path).exists():
         file_size = Path(final_path).stat().st_size
         file_size_mb = round(file_size / (1024 * 1024), 2)
 
-    return JSONResponse(content={
-        "video_id": video_id,
-        "story_id": job_data.get("story_id"),
-        "status": job_data.get("status"),
-        "style": job_data.get("style"),
-        "duration_seconds": job_data.get("duration_seconds"),
-        "video_url": final_url,
-        "has_audio": bool(combined_path),
-        "file_size_mb": file_size_mb,
-        "created_at": job_data.get("created_at"),
-        "completed_at": job_data.get("completed_at")
-    })
+    return JSONResponse(
+        content={
+            "video_id": video_id,
+            "story_id": job_data.get("story_id"),
+            "status": job_data.get("status"),
+            "style": job_data.get("style"),
+            "duration_seconds": job_data.get("duration_seconds"),
+            "video_url": final_url,
+            "has_audio": bool(combined_path),
+            "file_size_mb": file_size_mb,
+            "created_at": job_data.get("created_at"),
+            "completed_at": job_data.get("completed_at"),
+        }
+    )
 
 
 @router.get(
     "/story/{story_id}",
     summary="Get all videos for a story",
-    description="Get all videos associated with a specific story"
+    description="Get all videos associated with a specific story",
 )
 async def get_videos_by_story(
     story_id: str,
@@ -319,34 +414,37 @@ async def get_videos_by_story(
 
     # Scan job directory for related videos
     videos = []
-    if VIDEO_JOBS_DIR.exists():
-        for job_file in VIDEO_JOBS_DIR.glob("*.json"):
-            try:
-                with open(job_file, "r", encoding="utf-8") as f:
-                    job_data = json.load(f)
+    for job_file in _iter_video_job_files():
+        try:
+            job_data = load_job_from_file(job_file.stem)
+            if not job_data:
+                continue
 
-                if job_data.get("story_id") == story_id:
-                    video_url = job_data.get("combined_video_url") or (
-                        f"/data/videos/{job_data.get('video_filename')}"
-                        if job_data.get("video_filename") else None
-                    )
+            if job_data.get("story_id") == story_id:
+                video_url = job_data.get("combined_video_url") or (
+                    f"/data/videos/{job_data.get('video_filename')}"
+                    if job_data.get("video_filename")
+                    else None
+                )
 
-                    videos.append({
+                videos.append(
+                    {
                         "video_id": job_data.get("job_id"),
                         "status": job_data.get("status"),
                         "style": job_data.get("style"),
-                        "video_url": video_url if job_data.get("status") == "completed" else None,
+                        "video_url": (
+                            video_url if job_data.get("status") == "completed" else None
+                        ),
                         "has_audio": bool(job_data.get("combined_video_url")),
-                        "created_at": job_data.get("created_at")
-                    })
-            except (json.JSONDecodeError, IOError):
-                continue
+                        "created_at": job_data.get("created_at"),
+                    }
+                )
+        except (json.JSONDecodeError, IOError):
+            continue
 
     # Sort by creation time
     videos.sort(key=lambda x: x.get("created_at", ""), reverse=True)
 
-    return JSONResponse(content={
-        "story_id": story_id,
-        "total": len(videos),
-        "videos": videos
-    })
+    return JSONResponse(
+        content={"story_id": story_id, "total": len(videos), "videos": videos}
+    )
