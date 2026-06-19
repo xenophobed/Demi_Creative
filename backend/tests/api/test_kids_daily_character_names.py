@@ -22,7 +22,11 @@ class TestCharacterNamesInMockOutput:
     """Validate character names appear in mock-generated dialogue."""
 
     def test_mock_dialogue_lines_have_display_names(self):
-        """Mock output must include display_name on every line (#140)."""
+        """Mock output must include display_name on every line (#140).
+
+        The guest's label is the chosen Guest Anchor (not None), so the UI can
+        attribute the line without the name being spoken aloud.
+        """
         script = _build_mock_dialogue_script("space discovery", "6-8", "Professor Owl")
         for line in script.lines:
             if line.role == "curious_kid":
@@ -30,16 +34,20 @@ class TestCharacterNamesInMockOutput:
             elif line.role == "fun_expert":
                 assert line.display_name == "Duo"
             elif line.role == "guest":
-                assert line.display_name is None
+                assert line.display_name == "Professor Owl"
 
-    def test_mock_dialogue_text_uses_character_names(self):
-        """Mock builder should prefix text with character names where natural (#140)."""
+    def test_mock_dialogue_text_is_name_free(self):
+        """Spoken text must NOT contain the speaker's name — it is read by TTS.
+
+        Attribution lives in display_name / the role label; baking "Mimi:" /
+        "Duo:" into text made the narrator say the name aloud and doubled it on
+        screen. The name must never start the spoken sentence.
+        """
         script = _build_mock_dialogue_script("robots", "6-8", "Professor Owl")
         for line in script.lines:
-            if line.role == "curious_kid":
-                assert line.text.startswith("Mimi: "), f"curious_kid line should start with 'Mimi: ', got: {line.text!r}"
-            elif line.role == "fun_expert":
-                assert line.text.startswith("Duo: "), f"fun_expert line should start with 'Duo: ', got: {line.text!r}"
+            assert not line.text.startswith("Mimi:"), line.text
+            assert not line.text.startswith("Duo:"), line.text
+            assert not line.text.startswith("Professor Owl"), line.text
 
     def test_role_display_names_constant(self):
         """ROLE_DISPLAY_NAMES must map correctly (#140)."""
@@ -73,6 +81,7 @@ class TestCharacterNamesInAgentOutput:
             age_group="3-5",
         )
         lines = result["dialogue_script"]["lines"]
+        guest_name = result["dialogue_script"]["guest_character"]
         assert len(lines) > 0
         for line in lines:
             if line["role"] == "curious_kid":
@@ -80,7 +89,8 @@ class TestCharacterNamesInAgentOutput:
             elif line["role"] == "fun_expert":
                 assert line["display_name"] == "Duo"
             elif line["role"] == "guest":
-                assert line["display_name"] is None
+                # Guest is labeled with the chosen character, not None.
+                assert line["display_name"] == guest_name
 
 
 class TestTTSVoiceUnchanged:

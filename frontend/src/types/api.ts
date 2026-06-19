@@ -370,6 +370,7 @@ export interface MorningShowOnDemandRequest {
   child_id: string;
   category: string; // NewsCategory value
   age_group: string; // AgeGroup value
+  guest_character?: string; // chosen Guest Anchor name; honored only if owned
 }
 
 export interface MorningShowRateLimitResponse {

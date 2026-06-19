@@ -12,16 +12,19 @@ import {
   PawPrint,
   Play,
   Rocket,
+  Sparkles,
   Trophy,
+  Users,
   type LucideIcon,
 } from "lucide-react";
 import Card from "@/components/common/Card";
 import { storyService } from "@/api/services/storyService";
+import { memoryService } from "@/api/services/memoryService";
 import useAuthStore from "@/store/useAuthStore";
 import useChildStore from "@/store/useChildStore";
 import useKidsDailyGenerationStore from "@/store/useKidsDailyGenerationStore";
 import { kidsDailyGenerationManager } from "@/services/kidsDailyGenerationManager";
-import type { NewsCategory } from "@/types/api";
+import type { MemoryCharacter, NewsCategory } from "@/types/api";
 import LoginPrompt from "@/components/common/LoginPrompt";
 import QuotaExceededOverlay, {
   isQuotaError,
@@ -273,6 +276,90 @@ function GeneratingOverlay({
   );
 }
 
+/** Per-card popover that lets a child pick the Guest Anchor before listening.
+ *  Shown only when the child has 2+ characters. "Surprise me!" (value `null`)
+ *  defers to the backend's most-frequent default. */
+function GuestPickerOverlay({
+  characters,
+  onStart,
+  onCancel,
+}: {
+  characters: MemoryCharacter[];
+  onStart: (guest: string | null) => void;
+  onCancel: () => void;
+}) {
+  // `undefined` = nothing picked yet; `null` = explicit "Surprise me!".
+  const [selected, setSelected] = useState<string | null | undefined>(
+    undefined,
+  );
+
+  const options: Array<{ key: string; label: string; value: string | null }> = [
+    ...characters.map((c) => ({ key: c.name, label: c.name, value: c.name })),
+    { key: "__surprise__", label: "Surprise me!", value: null },
+  ];
+
+  return (
+    <motion.div
+      className="absolute inset-0 z-10 flex flex-col rounded-3xl bg-white/95 backdrop-blur-sm p-4 text-left"
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.95 }}
+    >
+      <div className="flex items-center gap-2 mb-2 text-gray-800">
+        <Users className="h-5 w-5 text-primary" strokeWidth={2.25} />
+        <span className="font-bold text-sm">Who joins the show?</span>
+      </div>
+
+      <div className="flex-1 overflow-y-auto space-y-1.5 pr-1">
+        {options.map((opt) => {
+          const isSelected =
+            selected === opt.value ||
+            (opt.value === null && selected === null);
+          return (
+            <button
+              key={opt.key}
+              type="button"
+              onClick={() => setSelected(opt.value)}
+              className={`w-full flex items-center gap-2 rounded-2xl border px-3 py-2 text-sm font-semibold transition-colors ${
+                isSelected
+                  ? "border-primary bg-primary/10 text-primary-dark"
+                  : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+              }`}
+            >
+              {opt.value === null && (
+                <Sparkles className="h-4 w-4 shrink-0" strokeWidth={2.25} />
+              )}
+              <span className="truncate">{opt.label}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="mt-2 grid grid-cols-[1fr_auto] gap-2">
+        <button
+          type="button"
+          disabled={selected === undefined}
+          onClick={() => onStart(selected ?? null)}
+          className={`h-11 rounded-2xl text-sm font-bold border transition-colors ${
+            selected === undefined
+              ? "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed"
+              : "bg-primary text-white border-transparent hover:bg-primary-dark"
+          }`}
+        >
+          Start episode
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="h-11 px-3 rounded-2xl text-sm font-semibold border border-gray-200 text-gray-600 bg-white hover:bg-gray-50 transition-colors"
+        >
+          Cancel
+        </button>
+      </div>
+    </motion.div>
+  );
+}
+
 function KidsDailyPage() {
   const { isAuthenticated } = useAuthStore();
   const { currentChild, defaultChildId } = useChildStore();
@@ -299,6 +386,11 @@ function KidsDailyPage() {
     topic: NewsCategory;
     seconds: number;
   } | null>(null);
+  // Guest Anchor picker: roster of the child's characters and which card (if
+  // any) is currently showing the "Who joins the show?" popover.
+  const [characters, setCharacters] = useState<MemoryCharacter[]>([]);
+  const [guestPickerTopic, setGuestPickerTopic] =
+    useState<NewsCategory | null>(null);
   const retryTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const subscribedCount = subscribedTopics.size;
   const subscribedTopicList = useMemo(
@@ -323,6 +415,27 @@ function KidsDailyPage() {
     if (!isAuthenticated) return;
     void loadSubscriptions();
   }, [isAuthenticated, loadSubscriptions]);
+
+  // Load the child's character roster so we can offer a Guest Anchor pick.
+  // Failure is non-blocking — without a roster we just skip the picker.
+  useEffect(() => {
+    if (!isAuthenticated || !childId) {
+      setCharacters([]);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const response = await memoryService.getCharacters(childId);
+        if (!cancelled) setCharacters(response.characters ?? []);
+      } catch {
+        if (!cancelled) setCharacters([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated, childId]);
 
   const ensureSubscribed = useCallback(
     async (topic: NewsCategory) => {
@@ -372,8 +485,9 @@ function KidsDailyPage() {
   );
 
   const handleListenNow = useCallback(
-    async (topic: NewsCategory) => {
+    async (topic: NewsCategory, guestCharacter?: string) => {
       if (!childId || generatingTopic) return;
+      setGuestPickerTopic(null);
       setError(null);
       beginGenerationState(topic, "Joining the news club...");
 
@@ -386,7 +500,12 @@ function KidsDailyPage() {
 
         let episodeId: string | null = null;
         await storyService.generateMorningShowOnDemandStream(
-          { child_id: childId, category: topic, age_group: ageGroup },
+          {
+            child_id: childId,
+            category: topic,
+            age_group: ageGroup,
+            ...(guestCharacter ? { guest_character: guestCharacter } : {}),
+          },
           {
             onStatus: (data) => {
               setGenerationMessage(data.message || "Making your episode...");
@@ -631,7 +750,11 @@ function KidsDailyPage() {
                               : `${theme.listenBtn} ${theme.listenBtnHover} text-white border-transparent`
                         }`}
                         disabled={generatingTopic !== null || isRateLimited}
-                        onClick={() => handleListenNow(item.topic)}
+                        onClick={() =>
+                          characters.length >= 2
+                            ? setGuestPickerTopic(item.topic)
+                            : handleListenNow(item.topic)
+                        }
                         whileTap={
                           !isGenerating && !isRateLimited
                             ? { scale: 0.95 }
@@ -660,6 +783,19 @@ function KidsDailyPage() {
                       </motion.button>
                     </div>
                   </div>
+
+                  {/* Guest Anchor picker (only when 2+ characters) */}
+                  <AnimatePresence>
+                    {guestPickerTopic === item.topic && !isGenerating && (
+                      <GuestPickerOverlay
+                        characters={characters}
+                        onStart={(guest) =>
+                          handleListenNow(item.topic, guest ?? undefined)
+                        }
+                        onCancel={() => setGuestPickerTopic(null)}
+                      />
+                    )}
+                  </AnimatePresence>
 
                   {/* Generating overlay */}
                   <AnimatePresence>

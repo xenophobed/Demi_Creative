@@ -539,6 +539,11 @@ class KidsDailyRequest(BaseModel):
     age_group: AgeGroup = Field(..., description="Age group")
     child_id: Optional[str] = Field(None, description="Child ID (optional)")
     category: NewsCategory = Field(default=NewsCategory.GENERAL, description="Topic category")
+    guest_character: Optional[str] = Field(
+        None,
+        max_length=100,
+        description="Chosen Guest Anchor name; honored only if the child owns it",
+    )
 
 
 class KidsDailyOnDemandRequest(BaseModel):
@@ -546,6 +551,11 @@ class KidsDailyOnDemandRequest(BaseModel):
     child_id: str = Field(..., min_length=1, max_length=100, description="Child ID")
     category: NewsCategory = Field(default=NewsCategory.GENERAL, description="Topic category")
     age_group: AgeGroup = Field(..., description="Age group")
+    guest_character: Optional[str] = Field(
+        None,
+        max_length=100,
+        description="Chosen Guest Anchor name; honored only if the child owns it",
+    )
 
 
 class KidsDailyRateLimitResponse(BaseModel):

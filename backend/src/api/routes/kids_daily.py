@@ -497,6 +497,7 @@ async def _build_episode(
             category=request.category.value,
             news_url=request.news_url,
             user_id=user.user_id,
+            guest_character=request.guest_character,
         )
     except Exception:
         # Graceful fallback to deterministic baseline conversion
@@ -510,14 +511,14 @@ async def _build_episode(
                 "lines": [
                     {
                         "role": "curious_kid",
-                        "text": "Mimi: What happened in this story?",
+                        "text": "What happened in this story?",
                         "display_name": "Mimi",
                         "timestamp_start": 0.0,
                         "timestamp_end": 4.0,
                     },
                     {
                         "role": "fun_expert",
-                        "text": "Duo: Here is a safe and simple explanation for kids.",
+                        "text": "Here is a safe and simple explanation for kids.",
                         "display_name": "Duo",
                         "timestamp_start": 4.0,
                         "timestamp_end": 8.0,
@@ -845,6 +846,7 @@ async def generate_kids_daily_on_demand(
         category=request.category,
         news_text=news_text,
         news_url=None,
+        guest_character=request.guest_character,
     )
     result = await _build_episode(build_request, user, source="on_demand")
     await usage_repo.increment(user.user_id, "kids_daily")
@@ -920,6 +922,7 @@ async def generate_kids_daily_on_demand_stream(
         category=request.category,
         news_text=news_text,
         news_url=None,
+        guest_character=request.guest_character,
     )
 
     async def event_generator() -> AsyncGenerator[str, None]:
@@ -938,6 +941,7 @@ async def generate_kids_daily_on_demand_stream(
             category=build_request.category.value,
             news_url=None,
             user_id=user.user_id,
+            guest_character=build_request.guest_character,
         ):
             if await http_request.is_disconnected():
                 logger.info("Client disconnected during on-demand script generation, aborting")
@@ -1012,6 +1016,7 @@ async def generate_kids_daily_stream(
             category=request.category.value,
             news_url=request.news_url,
             user_id=user.user_id,
+            guest_character=request.guest_character,
         ):
             if await http_request.is_disconnected():
                 logger.info("Client disconnected during kids daily generation, aborting")
