@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { BookOpen, Film } from "lucide-react";
+import { BookOpen, Film, Globe2, Library, Sparkles } from "lucide-react";
 import Button from "@/components/common/Button";
 import Loading from "@/components/common/Loading";
 import AgeAwareContent from "@/components/common/AgeAwareContent";
@@ -487,7 +487,7 @@ function StoryPage() {
           size="lg"
           className="flex-1"
           onClick={handleNewStory}
-          leftIcon={<span>✨</span>}
+          leftIcon={<Sparkles size={18} />}
         >
           Create New Story
         </Button>
@@ -496,7 +496,7 @@ function StoryPage() {
           size="lg"
           className="flex-1"
           onClick={() => navigate("/library")}
-          leftIcon={<span>📚</span>}
+          leftIcon={<Library size={18} />}
         >
           My Library
         </Button>
@@ -516,7 +516,10 @@ function StoryPage() {
             className="rounded-2xl bg-gradient-to-r from-rose-300 via-pink-300 to-rose-300 hover:from-rose-400 hover:via-pink-400 hover:to-rose-400 px-6 py-3 text-base font-bold text-white shadow-md hover:shadow-lg transition-all"
             onClick={() => setShareOpen(true)}
           >
-            🌐 Share to Content Hub
+            <span className="inline-flex items-center gap-2">
+              <Globe2 size={18} />
+              Share to Content Hub
+            </span>
           </button>
         )}
       </motion.div>

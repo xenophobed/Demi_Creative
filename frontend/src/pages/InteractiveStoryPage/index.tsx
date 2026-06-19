@@ -31,22 +31,43 @@ import {
   getInteractiveStoryPageState,
   type InteractiveStoryPageState,
 } from "./pageState";
+import {
+  Baby,
+  BookOpen,
+  CheckCircle,
+  Clock,
+  Flag,
+  Globe2,
+  Home,
+  Infinity as InfinityIcon,
+  Library,
+  Palette,
+  Rocket,
+  RotateCcw,
+  Save,
+  Sparkles,
+  Sunrise,
+  Trophy,
+  UserRound,
+  UsersRound,
+  XCircle,
+} from "lucide-react";
 
-const AGE_GROUPS: { value: AgeGroup; label: string; emoji: string }[] = [
-  { value: "3-5", label: "3-5 yrs", emoji: "🧒" },
-  { value: "6-8", label: "6-8 yrs", emoji: "👦" },
-  { value: "9-12", label: "9-12 yrs", emoji: "🧑" },
+const AGE_GROUPS = [
+  { value: "3-5" as AgeGroup, label: "3-5 yrs", icon: Baby },
+  { value: "6-8" as AgeGroup, label: "6-8 yrs", icon: UserRound },
+  { value: "9-12" as AgeGroup, label: "9-12 yrs", icon: UsersRound },
 ];
 
 const STORY_LENGTHS: {
   value: StoryLengthMode;
   label: string;
   sublabel: string;
-  emoji: string;
+  icon: typeof BookOpen;
 }[] = [
-  { value: "short", label: "Quick Tale", sublabel: "5 choices", emoji: "📖" },
-  { value: "medium", label: "Short Story", sublabel: "10 choices", emoji: "📚" },
-  { value: "unlimited", label: "Endless Adventure", sublabel: "No limit", emoji: "🌟" },
+  { value: "short", label: "Quick Tale", sublabel: "5 choices", icon: BookOpen },
+  { value: "medium", label: "Short Story", sublabel: "10 choices", icon: Library },
+  { value: "unlimited", label: "Endless Adventure", sublabel: "No limit", icon: InfinityIcon },
 ];
 
 function InteractiveStoryPageContent() {
@@ -329,8 +350,6 @@ function InteractiveStoryPageContent() {
             )
           : null;
         const selectedChoiceText = matchedChoice?.text || selectedChoiceId;
-        const selectedChoiceEmoji = matchedChoice?.emoji || "✅";
-
         return (
           <div
             key={`${segment.segment_id}-${index}`}
@@ -355,8 +374,8 @@ function InteractiveStoryPageContent() {
                 <p className="text-xs font-semibold uppercase tracking-wide text-primary mb-1">
                   You Chose
                 </p>
-                <p className="text-sm text-gray-700">
-                  <span className="mr-1">{selectedChoiceEmoji}</span>
+                <p className="inline-flex items-center justify-center gap-1.5 text-sm text-gray-700">
+                  <CheckCircle size={14} />
                   {selectedChoiceText}
                 </p>
               </motion.div>
@@ -406,11 +425,11 @@ function InteractiveStoryPageContent() {
         animate={{ opacity: 1, y: 0 }}
       >
         <motion.span
-          className="text-5xl inline-block"
+          className="mx-auto inline-flex h-14 w-14 items-center justify-center rounded-lg bg-primary/10 text-primary"
           animate={{ rotate: [0, -5, 5, 0] }}
           transition={{ duration: 3, repeat: Infinity }}
         >
-          🎭
+          <BookOpen size={30} />
         </motion.span>
         <h1 className="text-2xl md:text-3xl font-bold text-gray-800 mt-2">
           Interactive Story
@@ -431,7 +450,7 @@ function InteractiveStoryPageContent() {
             </span>
             {arrivingChoice ? (
               <span className="text-gray-600 truncate max-w-[18rem]">
-                · arrived via {arrivingChoice.emoji} {arrivingChoice.text}
+                · arrived via {arrivingChoice.text}
               </span>
             ) : (
               <span className="text-gray-500">· beginning of story</span>
@@ -455,7 +474,7 @@ function InteractiveStoryPageContent() {
           animate={{ opacity: 1, scale: 1 }}
         >
           <div className="flex items-center gap-2">
-            <span>❌</span>
+            <XCircle size={18} />
             <span>{error}</span>
           </div>
         </motion.div>
@@ -475,74 +494,80 @@ function InteractiveStoryPageContent() {
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
             >
-              <span className="text-lg mr-1">🌅</span> {sessionExpiredMsg}
+              <Sunrise className="mr-1 inline" size={18} /> {sessionExpiredMsg}
             </motion.div>
           )}
 
           {/* Age Group Selection */}
           <Card>
             <h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-              <span>👶</span>
+              <UserRound size={20} />
               Select Age Group
               <span className="text-red-500">*</span>
             </h2>
             <div className="grid grid-cols-3 gap-3">
-              {AGE_GROUPS.map((age) => (
-                <motion.button
-                  key={age.value}
-                  className={`
-                    p-4 rounded-xl border-2 text-center transition-colors
-                    ${
-                      selectedAge === age.value
-                        ? "border-primary bg-primary/10"
-                        : "border-gray-200 hover:border-primary/50"
-                    }
-                  `}
-                  onClick={() => setSelectedAge(age.value)}
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                >
-                  <span className="text-2xl block mb-1">{age.emoji}</span>
-                  <span className="text-sm font-medium">{age.label}</span>
-                </motion.button>
-              ))}
+              {AGE_GROUPS.map((age) => {
+                const Icon = age.icon
+                return (
+                  <motion.button
+                    key={age.value}
+                    className={`
+                      p-4 rounded-xl border-2 text-center transition-colors
+                      ${
+                        selectedAge === age.value
+                          ? "border-primary bg-primary/10"
+                          : "border-gray-200 hover:border-primary/50"
+                      }
+                    `}
+                    onClick={() => setSelectedAge(age.value)}
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    <Icon className="mx-auto mb-1 text-gray-700" size={24} />
+                    <span className="text-sm font-medium">{age.label}</span>
+                  </motion.button>
+                )
+              })}
             </div>
           </Card>
 
           {/* Story Length Mode (#331) */}
           <Card>
             <h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-              <span>⏱️</span>
+              <Clock size={20} />
               Story Length
             </h2>
             <div className="grid grid-cols-3 gap-3">
-              {STORY_LENGTHS.map((len) => (
-                <motion.button
-                  key={len.value}
-                  className={`
-                    p-4 rounded-xl border-2 text-center transition-colors
-                    ${
-                      selectedLength === len.value
-                        ? "border-primary bg-primary/10"
-                        : "border-gray-200 hover:border-primary/50"
-                    }
-                  `}
-                  onClick={() => setSelectedLength(len.value)}
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                >
-                  <span className="text-2xl block mb-1">{len.emoji}</span>
-                  <span className="text-sm font-medium block">{len.label}</span>
-                  <span className="text-xs text-gray-400">{len.sublabel}</span>
-                </motion.button>
-              ))}
+              {STORY_LENGTHS.map((len) => {
+                const Icon = len.icon
+                return (
+                  <motion.button
+                    key={len.value}
+                    className={`
+                      p-4 rounded-xl border-2 text-center transition-colors
+                      ${
+                        selectedLength === len.value
+                          ? "border-primary bg-primary/10"
+                          : "border-gray-200 hover:border-primary/50"
+                      }
+                    `}
+                    onClick={() => setSelectedLength(len.value)}
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    <Icon className="mx-auto mb-1 text-gray-700" size={24} />
+                    <span className="text-sm font-medium block">{len.label}</span>
+                    <span className="text-xs text-gray-400">{len.sublabel}</span>
+                  </motion.button>
+                )
+              })}
             </div>
           </Card>
 
           {/* Interest Tags */}
           <Card>
             <h2 className="text-lg font-bold text-gray-800 mb-2 flex items-center gap-2">
-              <span>💫</span>
+              <Sparkles size={20} />
               Select Interests
               <span className="text-sm font-normal text-gray-500">(1-5)</span>
             </h2>
@@ -584,7 +609,7 @@ function InteractiveStoryPageContent() {
           {/* Theme Input */}
           <Card>
             <h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-              <span>🎨</span>
+              <Palette size={20} />
               Story Theme
               <span className="text-sm font-normal text-gray-500">
                 (Optional)
@@ -630,7 +655,7 @@ function InteractiveStoryPageContent() {
               selectedInterests.length === 0 ||
               streaming.isStreaming
             }
-            leftIcon={<span>🚀</span>}
+            leftIcon={<Rocket size={18} />}
           >
             {streaming.isStreaming ? "Creating..." : "Start Story"}
           </Button>
@@ -713,7 +738,7 @@ function InteractiveStoryPageContent() {
                   size="md"
                   onClick={handleEndStory}
                   disabled={isLoading}
-                  leftIcon={<span>🏁</span>}
+                  leftIcon={<Flag size={18} />}
                 >
                   End My Story
                 </Button>
@@ -756,7 +781,7 @@ function InteractiveStoryPageContent() {
           {educationalSummary && (
             <Card>
               <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-                <span>📚</span>
+                <Library size={20} />
                 What You Learned
               </h3>
               <EducationalTags value={educationalSummary} />
@@ -766,7 +791,7 @@ function InteractiveStoryPageContent() {
           {/* Journey summary */}
           <Card variant="colorful" colorScheme="accent">
             <div className="text-center">
-              <span className="text-4xl block mb-2">🏆</span>
+              <Trophy className="mx-auto mb-2 text-yellow-600" size={36} />
               <h3 className="text-lg font-bold text-gray-800 mb-1">
                 You completed this story!
               </h3>
@@ -785,7 +810,7 @@ function InteractiveStoryPageContent() {
               onClick={handleSaveStory}
               disabled={saveStatus === "saving" || saveStatus === "saved"}
               isLoading={saveStatus === "saving"}
-              leftIcon={<span>{saveStatus === "saved" ? "✅" : "💾"}</span>}
+              leftIcon={saveStatus === "saved" ? <CheckCircle size={18} /> : <Save size={18} />}
             >
               {saveStatus === "saved"
                 ? "Saved!"
@@ -798,7 +823,7 @@ function InteractiveStoryPageContent() {
               size="lg"
               className="flex-1"
               onClick={handleReset}
-              leftIcon={<span>🔄</span>}
+              leftIcon={<RotateCcw size={18} />}
             >
               Play Again
             </Button>
@@ -807,7 +832,7 @@ function InteractiveStoryPageContent() {
               size="lg"
               className="flex-1"
               onClick={() => navigate("/")}
-              leftIcon={<span>🏠</span>}
+              leftIcon={<Home size={18} />}
             >
               Back to Home
             </Button>
@@ -821,7 +846,10 @@ function InteractiveStoryPageContent() {
                 className="rounded-2xl bg-gradient-to-r from-rose-300 via-pink-300 to-rose-300 hover:from-rose-400 hover:via-pink-400 hover:to-rose-400 px-6 py-3 text-base font-bold text-white shadow-md hover:shadow-lg transition-all"
                 onClick={() => setShareOpen(true)}
               >
-                🌐 Share to Content Hub
+                <span className="inline-flex items-center gap-2">
+                  <Globe2 size={18} />
+                  Share to Content Hub
+                </span>
               </button>
             </div>
           )}

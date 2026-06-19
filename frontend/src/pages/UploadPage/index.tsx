@@ -6,7 +6,6 @@ import ImagePreview from '@/components/upload/ImagePreview'
 import { StreamingVisualizer } from '@/components/streaming/StreamingVisualizer'
 import { PerspectiveContainer } from '@/components/depth/PerspectiveContainer'
 import TiltCard from '@/components/depth/TiltCard'
-import { FloatingElement } from '@/components/depth/ParallaxContainer'
 import { useStreamVisualizationContext } from '@/providers/StreamVisualizationProvider'
 import useStoryStore from '@/store/useStoryStore'
 import useAuthStore from '@/store/useAuthStore'
@@ -18,22 +17,46 @@ import type { AnimationPhase } from '@/types/streaming'
 import LoginPrompt from '@/components/common/LoginPrompt'
 import VoicePicker from '@/components/common/VoicePicker'
 import SuggestedThemes from '@/components/common/SuggestedThemes'
+import {
+  Baby,
+  Cake,
+  Droplets,
+  Heart,
+  Image,
+  ImagePlus,
+  Lightbulb,
+  Mic,
+  Paintbrush,
+  Palette,
+  Pencil,
+  Sparkles,
+  Square,
+  UserRound,
+  UsersRound,
+  XCircle,
+} from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 
-const AGE_GROUPS: { value: AgeGroup; label: string; emoji: string; description: string }[] = [
-  { value: '3-5', label: '3-5 yrs', emoji: '🧒', description: 'Simple & Fun' },
-  { value: '6-8', label: '6-8 yrs', emoji: '👦', description: 'Engaging' },
-  { value: '9-12', label: '9-12 yrs', emoji: '🧑', description: 'Rich Stories' },
+const AGE_GROUPS: {
+  value: AgeGroup
+  label: string
+  icon: LucideIcon
+  description: string
+}[] = [
+  { value: '3-5', label: '3-5 yrs', icon: Baby, description: 'Simple & Fun' },
+  { value: '6-8', label: '6-8 yrs', icon: UserRound, description: 'Engaging' },
+  { value: '9-12', label: '9-12 yrs', icon: UsersRound, description: 'Rich Stories' },
 ]
 
 const ART_THEMES = [
-  { value: 'none', label: 'Keep Original', emoji: '🖼️', description: 'Use your drawing as-is', swatch: 'linear-gradient(135deg, #e5e7eb, #d1d5db)' },
-  { value: 'cartoon', label: 'Cartoon', emoji: '🎨', description: 'Fun cartoon style', swatch: 'linear-gradient(135deg, #FFD700, #FF6B6B)' },
-  { value: 'oil_painting', label: 'Oil Painting', emoji: '🖌️', description: 'Classic oil painting', swatch: 'linear-gradient(135deg, #8B4513, #DAA520)' },
-  { value: 'watercolor', label: 'Watercolor', emoji: '💧', description: 'Soft watercolor', swatch: 'linear-gradient(135deg, #87CEEB, #98FB98)' },
-  { value: 'pixel_art', label: 'Pixel Art', emoji: '👾', description: 'Retro pixel style', swatch: 'linear-gradient(135deg, #00FF00, #0000FF)' },
-  { value: 'anime', label: 'Anime', emoji: '✨', description: 'Anime illustration', swatch: 'linear-gradient(135deg, #FF69B4, #9370DB)' },
-  { value: 'crayon', label: 'Crayon', emoji: '🖍️', description: 'Crayon drawing', swatch: 'linear-gradient(135deg, #FF4500, #FFD700)' },
-  { value: 'storybook', label: 'Storybook', emoji: '📖', description: 'Storybook illustration', swatch: 'linear-gradient(135deg, #DEB887, #8FBC8F)' },
+  { value: 'none', label: 'Keep Original', icon: Image, description: 'Use your drawing as-is', swatch: 'linear-gradient(135deg, #e5e7eb, #d1d5db)' },
+  { value: 'cartoon', label: 'Cartoon', icon: Palette, description: 'Fun cartoon style', swatch: 'linear-gradient(135deg, #FFD700, #FF6B6B)' },
+  { value: 'oil_painting', label: 'Oil Painting', icon: Paintbrush, description: 'Classic oil painting', swatch: 'linear-gradient(135deg, #8B4513, #DAA520)' },
+  { value: 'watercolor', label: 'Watercolor', icon: Droplets, description: 'Soft watercolor', swatch: 'linear-gradient(135deg, #87CEEB, #98FB98)' },
+  { value: 'pixel_art', label: 'Pixel Art', icon: Square, description: 'Retro pixel style', swatch: 'linear-gradient(135deg, #00FF00, #0000FF)' },
+  { value: 'anime', label: 'Anime', icon: Sparkles, description: 'Anime illustration', swatch: 'linear-gradient(135deg, #FF69B4, #9370DB)' },
+  { value: 'crayon', label: 'Crayon', icon: Pencil, description: 'Crayon drawing', swatch: 'linear-gradient(135deg, #FF4500, #FFD700)' },
+  { value: 'storybook', label: 'Storybook', icon: ImagePlus, description: 'Storybook illustration', swatch: 'linear-gradient(135deg, #DEB887, #8FBC8F)' },
 ] as const
 
 const YOUNG_CHILD_THEMES = new Set(['none', 'cartoon', 'crayon', 'watercolor', 'storybook'])
@@ -176,9 +199,9 @@ function UploadPage() {
         animate={{ opacity: 1, y: 0, rotateX: 0 }}
         transition={{ type: 'spring', stiffness: 100 }}
       >
-        <FloatingElement depth="near" float className="inline-block">
-          <span className="text-3xl">✏️</span>
-        </FloatingElement>
+        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10 text-primary">
+          <Pencil size={26} />
+        </div>
         <h1 className="text-2xl font-bold text-gray-800 mt-2">Create New Story</h1>
         <p className="text-gray-500 mt-2">Upload your artwork, begin the magical journey</p>
       </motion.div>
@@ -191,7 +214,7 @@ function UploadPage() {
       >
         <TiltCard maxTilt={6} glare dynamicShadow className="w-full">
           <div className="bg-white rounded-card p-6">
-            <StepHeader number={1} title="Upload Your Artwork" emoji="🖼️" />
+            <StepHeader number={1} title="Upload Your Artwork" icon={ImagePlus} />
             <AnimatePresence mode="wait">
               {imagePreviewUrl ? (
                 <motion.div
@@ -234,50 +257,57 @@ function UploadPage() {
       >
         <TiltCard maxTilt={4} glare={false} dynamicShadow className="w-full">
           <div className="bg-white rounded-card p-6">
-            <StepHeader number={2} title="Select Your Age" emoji="🎂" />
+            <StepHeader number={2} title="Select Your Age" icon={Cake} />
             <div className="grid grid-cols-3 gap-4">
-              {AGE_GROUPS.map((group, index) => (
-                <motion.button
-                  key={group.value}
-                  className={`age-select-card p-4 rounded-card border-2 transition-all preserve-3d ${
-                    selectedAgeGroup === group.value
-                      ? 'border-primary bg-primary/10 shadow-lg'
-                      : 'border-gray-200 hover:border-gray-300 hover:shadow-md'
-                  }`}
-                  onClick={() => handleAgeGroupSelect(group.value)}
-                  whileHover={
-                    prefersReducedMotion
-                      ? {}
-                      : {
-                          scale: 1.05,
-                          rotateY: 5,
-                          z: 20,
+              {AGE_GROUPS.map((group, index) => {
+                const Icon = group.icon
+                return (
+                  <motion.button
+                    key={group.value}
+                    className={`age-select-card p-4 rounded-card border-2 transition-all preserve-3d ${
+                      selectedAgeGroup === group.value
+                        ? 'border-primary bg-primary/10 shadow-lg'
+                        : 'border-gray-200 hover:border-gray-300 hover:shadow-md'
+                    }`}
+                    onClick={() => handleAgeGroupSelect(group.value)}
+                    whileHover={
+                      prefersReducedMotion
+                        ? {}
+                        : {
+                            scale: 1.05,
+                            rotateY: 5,
+                            z: 20,
+                          }
+                    }
+                    whileTap={{ scale: 0.95 }}
+                    initial={{ opacity: 0, y: 20, rotateX: 15 }}
+                    animate={{ opacity: 1, y: 0, rotateX: 0 }}
+                    transition={{ delay: 0.2 + index * 0.1 }}
+                  >
+                    <div className="text-center">
+                      <motion.div
+                        className={`mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-lg ${
+                          selectedAgeGroup === group.value
+                            ? 'bg-primary text-white'
+                            : 'bg-gray-100 text-gray-600'
+                        }`}
+                        animate={
+                          selectedAgeGroup === group.value
+                            ? { scale: [1, 1.1, 1], rotate: [0, 5, -5, 0] }
+                            : {}
                         }
-                  }
-                  whileTap={{ scale: 0.95 }}
-                  initial={{ opacity: 0, y: 20, rotateX: 15 }}
-                  animate={{ opacity: 1, y: 0, rotateX: 0 }}
-                  transition={{ delay: 0.2 + index * 0.1 }}
-                >
-                  <div className="text-center">
-                    <motion.span
-                      className="text-4xl block mb-2"
-                      animate={
-                        selectedAgeGroup === group.value
-                          ? { scale: [1, 1.1, 1], rotate: [0, 5, -5, 0] }
-                          : {}
-                      }
-                      transition={{ duration: 0.5 }}
-                    >
-                      {group.emoji}
-                    </motion.span>
-                    <span className="font-bold text-gray-800">{group.label}</span>
-                    <span className="block text-sm text-gray-500 mt-1">
-                      {group.description}
-                    </span>
-                  </div>
-                </motion.button>
-              ))}
+                        transition={{ duration: 0.5 }}
+                      >
+                        <Icon size={24} />
+                      </motion.div>
+                      <span className="font-bold text-gray-800">{group.label}</span>
+                      <span className="block text-sm text-gray-500 mt-1">
+                        {group.description}
+                      </span>
+                    </div>
+                  </motion.button>
+                )
+              })}
             </div>
           </div>
         </TiltCard>
@@ -291,7 +321,7 @@ function UploadPage() {
       >
         <TiltCard maxTilt={4} glare={false} dynamicShadow className="w-full">
           <div className="bg-white rounded-card p-6">
-            <StepHeader number={3} title="Choose Art Style" emoji="🎨" optional />
+            <StepHeader number={3} title="Choose Art Style" icon={Palette} optional />
             <p className="text-gray-500 text-sm mb-4">
               Transform your drawing into a different art style
             </p>
@@ -301,32 +331,35 @@ function UploadPage() {
                   if (!selectedAgeGroup || selectedAgeGroup !== '3-5') return true
                   return YOUNG_CHILD_THEMES.has(t.value)
                 })
-                .map((theme, index) => (
-                  <motion.button
-                    key={theme.value}
-                    className={`rounded-card border-2 transition-all text-center overflow-hidden ${
-                      selectedArtTheme === theme.value
-                        ? 'border-primary bg-primary/10 shadow-lg ring-2 ring-purple-500 scale-105'
-                        : 'border-gray-200 hover:border-gray-300 hover:shadow-md'
-                    }`}
-                    onClick={() => setSelectedArtTheme(theme.value)}
-                    whileHover={prefersReducedMotion ? {} : { scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    initial={{ opacity: 0, scale: 0.9 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ delay: 0.25 + index * 0.03 }}
-                  >
-                    <div
-                      className="w-full h-8 rounded-t-lg"
-                      style={{ background: theme.swatch }}
-                    />
-                    <div className="p-3 pt-2">
-                      <span className="text-2xl block mb-1">{theme.emoji}</span>
-                      <span className="font-medium text-gray-800 text-sm block">{theme.label}</span>
-                      <span className="text-xs text-gray-500">{theme.description}</span>
-                    </div>
-                  </motion.button>
-                ))}
+                .map((theme, index) => {
+                  const Icon = theme.icon
+                  return (
+                    <motion.button
+                      key={theme.value}
+                      className={`rounded-card border-2 transition-all text-center overflow-hidden ${
+                        selectedArtTheme === theme.value
+                          ? 'border-primary bg-primary/10 shadow-lg ring-2 ring-purple-500 scale-105'
+                          : 'border-gray-200 hover:border-gray-300 hover:shadow-md'
+                      }`}
+                      onClick={() => setSelectedArtTheme(theme.value)}
+                      whileHover={prefersReducedMotion ? {} : { scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ delay: 0.25 + index * 0.03 }}
+                    >
+                      <div
+                        className="w-full h-8 rounded-t-lg"
+                        style={{ background: theme.swatch }}
+                      />
+                      <div className="p-3 pt-2">
+                        <Icon className="mx-auto mb-1 text-gray-700" size={22} />
+                        <span className="font-medium text-gray-800 text-sm block">{theme.label}</span>
+                        <span className="text-xs text-gray-500">{theme.description}</span>
+                      </div>
+                    </motion.button>
+                  )
+                })}
             </div>
           </div>
         </TiltCard>
@@ -343,7 +376,7 @@ function UploadPage() {
             <StepHeader
               number={4}
               title="What Do You Like?"
-              emoji="❤️"
+              icon={Heart}
               optional
             />
             <p className="text-gray-500 text-sm mb-4">
@@ -392,7 +425,7 @@ function UploadPage() {
       >
         <TiltCard maxTilt={4} glare={false} dynamicShadow className="w-full">
           <div className="bg-white rounded-card p-6">
-            <StepHeader number={5} title="Suggested Themes" emoji="💡" optional />
+            <StepHeader number={5} title="Suggested Themes" icon={Lightbulb} optional />
             <SuggestedThemes
               onSelect={(theme) => {
                 if (!selectedInterestsList.includes(theme) && selectedInterestsList.length < 5) {
@@ -417,7 +450,7 @@ function UploadPage() {
             <StepHeader
               number={6}
               title="Choose a Narrator"
-              emoji="🎙️"
+              icon={Mic}
               optional
             />
             <div className="space-y-4">
@@ -470,7 +503,7 @@ function UploadPage() {
             exit={{ opacity: 0, y: -10, scale: 0.95 }}
           >
             <div className="flex items-center gap-2">
-              <span>❌</span>
+              <XCircle size={18} />
               <span>{uploadError}</span>
             </div>
           </motion.div>
@@ -506,11 +539,11 @@ function UploadPage() {
             {isReady ? (
               <>
                 <motion.span
-                  className="text-xl"
+                  className="inline-flex"
                   animate={{ rotate: [0, 10, -10, 0], scale: [1, 1.1, 1] }}
                   transition={{ duration: 2, repeat: Infinity }}
                 >
-                  ✨
+                  <Sparkles size={20} />
                 </motion.span>
                 Generate My Story
               </>
@@ -527,12 +560,12 @@ function UploadPage() {
 function StepHeader({
   number,
   title,
-  emoji,
+  icon: Icon,
   optional = false,
 }: {
   number: number
   title: string
-  emoji: string
+  icon: LucideIcon
   optional?: boolean
 }) {
   return (
@@ -543,9 +576,9 @@ function StepHeader({
       >
         {number}
       </motion.span>
-      <FloatingElement depth="near" float={false}>
-        <span className="text-xl">{emoji}</span>
-      </FloatingElement>
+      <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gray-100 text-gray-600">
+        <Icon size={18} />
+      </span>
       <h2 className="text-lg font-bold text-gray-800">{title}</h2>
       {optional && (
         <span className="text-sm text-gray-400 ml-auto">Optional</span>

@@ -16,6 +16,7 @@
 import { useCallback } from 'react'
 import { motion } from 'framer-motion'
 import { useVoiceInput, type AgeBand } from '@/hooks/useVoiceInput'
+import { Mic, Square } from 'lucide-react'
 
 export interface VoiceInputButtonProps {
   ageGroup: AgeBand
@@ -94,7 +95,7 @@ export function VoiceInputButton({
         aria-label={recording ? 'Stop recording' : 'Start voice input'}
         aria-pressed={recording}
       >
-        <span aria-hidden="true">{recording ? '⏹️' : '🎤'}</span>
+        {recording ? <Square size={20} fill="currentColor" /> : <Mic size={22} />}
       </motion.button>
 
       <span
