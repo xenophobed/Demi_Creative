@@ -555,7 +555,11 @@ function LibraryCard({
             </div>
             <div className="flex items-center gap-2">
               {item.audio_url && (
-                <MiniPlayer itemId={item.id} audioUrl={item.audio_url} />
+                <MiniPlayer
+                  itemId={item.id}
+                  audioUrl={item.audio_url}
+                  audioSegments={item.audio_segments}
+                />
               )}
               <ChevronRight size={16} className="text-gray-300" />
             </div>
@@ -747,7 +751,11 @@ function ListRow({
               </div>
               <div className="flex items-center gap-2">
                 {item.audio_url && (
-                  <MiniPlayer itemId={item.id} audioUrl={item.audio_url} />
+                  <MiniPlayer
+                    itemId={item.id}
+                    audioUrl={item.audio_url}
+                    audioSegments={item.audio_segments}
+                  />
                 )}
                 <ChevronRight size={16} className="text-gray-300" />
               </div>

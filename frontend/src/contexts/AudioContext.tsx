@@ -7,7 +7,9 @@ interface AudioState {
   currentId: string | null
   isPlaying: boolean
   progress: number // 0-1
-  play: (id: string, src: string) => void
+  // `src` may be a single URL or an ordered playlist (e.g. a multi-segment
+  // Kids Daily show); a playlist plays each clip back-to-back as one track.
+  play: (id: string, src: string | string[]) => void
   pause: () => void
   stop: () => void
 }
@@ -28,6 +30,9 @@ export function useAudio() {
 export function AudioProvider({ children }: { children: ReactNode }) {
   const howlRef = useRef<Howl | null>(null)
   const rafRef = useRef<number>(0)
+  // Playlist state for multi-segment tracks: ordered srcs + the index playing now.
+  const playlistRef = useRef<string[]>([])
+  const playlistIndexRef = useRef<number>(0)
   const [currentId, setCurrentId] = useState<string | null>(null)
   const [isPlaying, setIsPlaying] = useState(false)
   const [progress, setProgress] = useState(0)
@@ -39,6 +44,8 @@ export function AudioProvider({ children }: { children: ReactNode }) {
       howlRef.current = null
     }
     cancelAnimationFrame(rafRef.current)
+    playlistRef.current = []
+    playlistIndexRef.current = 0
     setIsPlaying(false)
     setProgress(0)
   }, [])
@@ -48,34 +55,29 @@ export function AudioProvider({ children }: { children: ReactNode }) {
     if (h && h.playing()) {
       const seek = h.seek() as number
       const dur = h.duration()
-      setProgress(dur > 0 ? seek / dur : 0)
+      // Spread progress across the whole playlist so the ring reflects the full
+      // show, not just the current clip. Clip durations differ, but treating
+      // each clip as an equal slice is a good-enough approximation for the ring.
+      const total = playlistRef.current.length || 1
+      const clipFraction = dur > 0 ? seek / dur : 0
+      setProgress((playlistIndexRef.current + clipFraction) / total)
       rafRef.current = requestAnimationFrame(updateProgress)
     }
   }, [])
 
-  const play = useCallback(
-    (id: string, src: string) => {
-      // If same track, toggle play/pause
-      if (currentId === id && howlRef.current) {
-        if (howlRef.current.playing()) {
-          howlRef.current.pause()
-          setIsPlaying(false)
-          cancelAnimationFrame(rafRef.current)
-        } else {
-          howlRef.current.play()
-          setIsPlaying(true)
-          rafRef.current = requestAnimationFrame(updateProgress)
-        }
-        return
-      }
-
-      // Stop previous audio
-      cleanup()
-
-      const resolvedSrc = resolveMediaUrl(src)
+  // Load + play one clip of the active playlist. When a clip ends, advance to
+  // the next; the last clip finishing ends the whole track.
+  const playClip = useCallback(
+    (index: number) => {
+      const playlist = playlistRef.current
+      const raw = playlist[index]
+      const resolvedSrc = raw ? resolveMediaUrl(raw) : null
       if (!resolvedSrc) {
+        cleanup()
         return
       }
+
+      playlistIndexRef.current = index
 
       const howl = new Howl({
         src: [resolvedSrc],
@@ -90,17 +92,52 @@ export function AudioProvider({ children }: { children: ReactNode }) {
           setProgress(0)
         },
         onend: () => {
-          setIsPlaying(false)
-          setProgress(1)
           cancelAnimationFrame(rafRef.current)
+          const next = playlistIndexRef.current + 1
+          if (next < playlistRef.current.length) {
+            howlRef.current?.unload()
+            playClip(next)
+          } else {
+            setIsPlaying(false)
+            setProgress(1)
+          }
         },
       })
 
       howlRef.current = howl
-      setCurrentId(id)
       howl.play()
     },
-    [currentId, cleanup, updateProgress]
+    [cleanup, updateProgress]
+  )
+
+  const play = useCallback(
+    (id: string, src: string | string[]) => {
+      const playlist = (Array.isArray(src) ? src : [src]).filter(Boolean)
+      if (playlist.length === 0) {
+        return
+      }
+
+      // If same track, toggle play/pause (resumes the same clip in a playlist).
+      if (currentId === id && howlRef.current) {
+        if (howlRef.current.playing()) {
+          howlRef.current.pause()
+          setIsPlaying(false)
+          cancelAnimationFrame(rafRef.current)
+        } else {
+          howlRef.current.play()
+          setIsPlaying(true)
+          rafRef.current = requestAnimationFrame(updateProgress)
+        }
+        return
+      }
+
+      // Stop previous audio and start the new track from its first clip.
+      cleanup()
+      playlistRef.current = playlist
+      setCurrentId(id)
+      playClip(0)
+    },
+    [currentId, cleanup, updateProgress, playClip]
   )
 
   const pause = useCallback(() => {

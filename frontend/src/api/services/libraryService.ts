@@ -31,6 +31,9 @@ export interface LibraryItem {
   // Kids Daily
   duration_seconds?: number
   is_new?: boolean
+  // Ordered per-line audio clips for multi-segment episodes (Kids Daily).
+  // When present the mini player plays the whole show as a sequential playlist.
+  audio_segments?: string[] | null
 }
 
 export interface LibraryResponse {

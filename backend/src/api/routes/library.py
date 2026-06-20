@@ -71,6 +71,45 @@ def _resolve_story_type(story: dict) -> LibraryItemType:
     return LibraryItemType.ART_STORY
 
 
+def _resolve_local_audio(audio_url: Optional[str]) -> Optional[str]:
+    """Drop locally-served audio URLs whose backing file no longer exists.
+
+    Remote URLs (anything not under /data/audio/) are returned unchanged.
+    """
+    if isinstance(audio_url, str) and audio_url.startswith("/data/audio/"):
+        filename = audio_url[len("/data/audio/") :]
+        file_path = AUDIO_DIR / filename
+        if not file_path.exists() or not file_path.is_file():
+            return None
+    return audio_url
+
+
+def _ordered_audio_segments(raw_urls: object) -> Optional[List[str]]:
+    """Build an ordered playlist from a {line_index -> url} audio map.
+
+    Keys are stringified integers ("0", "1", ...). We sort numerically so the
+    show plays in dialogue order, validate each clip the same way as the single
+    audio_url, and skip any missing/blank entries. Returns None when there is no
+    usable multi-clip audio.
+    """
+    if not isinstance(raw_urls, dict) or not raw_urls:
+        return None
+
+    def _index(key: object) -> int:
+        try:
+            return int(key)
+        except (TypeError, ValueError):
+            return 1 << 30  # push unparseable keys to the end, stable-ish
+
+    segments: List[str] = []
+    for key in sorted(raw_urls.keys(), key=_index):
+        url = _resolve_local_audio(raw_urls[key])
+        if isinstance(url, str) and url:
+            segments.append(url)
+
+    return segments or None
+
+
 def _story_to_library_item(
     story: dict,
     is_favorited: bool = False,
@@ -102,12 +141,18 @@ def _story_to_library_item(
         else _extract_title(text)
     )
 
-    audio_url = story.get("audio_url")
-    if isinstance(audio_url, str) and audio_url.startswith("/data/audio/"):
-        filename = audio_url[len("/data/audio/") :]
-        file_path = AUDIO_DIR / filename
-        if not file_path.exists() or not file_path.is_file():
-            audio_url = None
+    audio_url = _resolve_local_audio(story.get("audio_url"))
+
+    # Multi-segment episodes (Kids Daily) store one TTS clip per dialogue line in
+    # analysis.audio_urls ({"0": url, "1": url, ...}). Surface the whole show as an
+    # ordered playlist so the mini player plays every line, not just the first (#).
+    audio_segments: Optional[List[str]] = None
+    if item_type == LibraryItemType.KIDS_DAILY:
+        audio_segments = _ordered_audio_segments(analysis.get("audio_urls"))
+        # Fall back to the first segment if the legacy single audio_url is missing,
+        # so the play button still appears for episodes with per-line audio only.
+        if audio_segments and not audio_url:
+            audio_url = audio_segments[0]
 
     return LibraryItem(
         id=story["story_id"],
@@ -117,6 +162,7 @@ def _story_to_library_item(
         image_url=story.get("image_url"),
         thumbnail_url=thumbnail_url or story.get("image_url"),
         audio_url=audio_url,
+        audio_segments=audio_segments,
         created_at=story.get("created_at", ""),
         is_favorited=is_favorited,
         safety_score=story.get("safety_score"),
