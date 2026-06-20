@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { AVATAR_IDS } from "@/lib/avatars";
 import {
   avatarIconForId,
   isAnimalAvatarId,
@@ -7,6 +8,13 @@ import {
 } from "@/lib/avatarIcons";
 
 describe("avatar icon mapping", () => {
+  it("renders every whitelisted avatar with a distinct icon", () => {
+    const icons = AVATAR_IDS.map((id) => avatarIconForId(id));
+    const distinct = new Set(icons);
+
+    expect(distinct.size).toBe(AVATAR_IDS.length);
+  });
+
   it("normalizes legacy raw animal emoji values", () => {
     expect(normalizeAvatarId("🐶")).toBe("emoji:🐶");
     expect(isAnimalAvatarId("🐶")).toBe(true);
