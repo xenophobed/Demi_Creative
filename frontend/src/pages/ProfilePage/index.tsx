@@ -353,8 +353,8 @@ function ProfilePage() {
           className="cursor-pointer"
           onClick={() => navigate("/library?tab=interactive")}
         >
-          <div className="bg-gradient-to-br from-accent/20 to-accent/10 rounded-card p-5 text-center">
-            <Theater className="mx-auto mb-2 h-9 w-9 text-emerald-600" aria-hidden="true" />
+          <div className="bg-gradient-to-br from-secondary/20 to-secondary/10 rounded-card p-5 text-center">
+            <Theater className="mx-auto mb-2 h-9 w-9 text-teal-700" aria-hidden="true" />
             <div className="text-3xl font-bold text-gray-800">
               {statsLoading ? "..." : (stats?.interactive_count ?? 0)}
             </div>
@@ -367,8 +367,8 @@ function ProfilePage() {
           className="cursor-pointer"
           onClick={() => navigate("/library?tab=kids-news")}
         >
-          <div className="bg-gradient-to-br from-secondary/20 to-secondary/10 rounded-card p-5 text-center">
-            <Newspaper className="mx-auto mb-2 h-9 w-9 text-amber-600" aria-hidden="true" />
+          <div className="bg-gradient-to-br from-accent/20 to-accent/10 rounded-card p-5 text-center">
+            <Newspaper className="mx-auto mb-2 h-9 w-9 text-yellow-700" aria-hidden="true" />
             <div className="text-3xl font-bold text-gray-800">
               {statsLoading ? "..." : (stats?.news_count ?? 0)}
             </div>
