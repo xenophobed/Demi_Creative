@@ -1,5 +1,4 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Atom,
@@ -20,6 +19,8 @@ import Card from "@/components/common/Card";
 import { storyService } from "@/api/services/storyService";
 import useAuthStore from "@/store/useAuthStore";
 import useChildStore from "@/store/useChildStore";
+import useKidsDailyGenerationStore from "@/store/useKidsDailyGenerationStore";
+import { kidsDailyGenerationManager } from "@/services/kidsDailyGenerationManager";
 import type { NewsCategory } from "@/types/api";
 import LoginPrompt from "@/components/common/LoginPrompt";
 import QuotaExceededOverlay, {
@@ -275,17 +276,19 @@ function GeneratingOverlay({
 function KidsDailyPage() {
   const { isAuthenticated } = useAuthStore();
   const { currentChild, defaultChildId } = useChildStore();
-  const navigate = useNavigate();
 
   const childId = currentChild?.child_id || defaultChildId;
   const ageGroup = currentChild?.age_group || "6-8";
 
-  const [generatingTopic, setGeneratingTopic] = useState<NewsCategory | null>(
-    null,
+  // Generation progress lives in the store (#727) so it survives a
+  // navigation away/back; the manager owns the AbortController + the
+  // completion navigation so the episode still opens if the user left.
+  const generatingTopic = useKidsDailyGenerationStore((s) => s.generatingTopic);
+  const generationMessage = useKidsDailyGenerationStore(
+    (s) => s.generationMessage,
   );
-  const [generationMessage, setGenerationMessage] = useState<string | null>(
-    null,
-  );
+  const beginGenerationState = useKidsDailyGenerationStore((s) => s.begin);
+  const setGenerationMessage = useKidsDailyGenerationStore((s) => s.setMessage);
   const [subscribedTopics, setSubscribedTopics] = useState<Set<NewsCategory>>(
     () => new Set(),
   );
@@ -297,7 +300,6 @@ function KidsDailyPage() {
     seconds: number;
   } | null>(null);
   const retryTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
   const subscribedCount = subscribedTopics.size;
   const subscribedTopicList = useMemo(
     () => new Set(subscribedTopics),
@@ -373,11 +375,11 @@ function KidsDailyPage() {
     async (topic: NewsCategory) => {
       if (!childId || generatingTopic) return;
       setError(null);
-      setGeneratingTopic(topic);
-      setGenerationMessage("Joining the news club...");
+      beginGenerationState(topic, "Joining the news club...");
 
-      const controller = new AbortController();
-      abortRef.current = controller;
+      // Controller + completion navigation are owned by the manager so the
+      // run survives this page unmounting mid generation (#727).
+      const signal = kidsDailyGenerationManager.beginGeneration();
 
       try {
         await ensureSubscribed(topic);
@@ -396,16 +398,18 @@ function KidsDailyPage() {
               throw new Error(data.message || "Episode generation failed.");
             },
           },
-          controller.signal,
+          signal,
         );
 
         if (episodeId) {
-          navigate(`/kids-daily/${episodeId}`);
+          kidsDailyGenerationManager.navigateToEpisode(
+            `/kids-daily/${episodeId}`,
+          );
         } else {
           setError("The episode finished, but we could not open it yet.");
         }
       } catch (err: unknown) {
-        if (controller.signal.aborted) return; // user cancelled — do nothing
+        if (signal.aborted) return; // user cancelled — do nothing
 
         const status = (err as { response?: { status?: number } })?.response
           ?.status ?? (err as { status?: number })?.status;
@@ -445,19 +449,23 @@ function KidsDailyPage() {
           setError("Something went wrong — let's give it another go in a sec!");
         }
       } finally {
-        abortRef.current = null;
-        setGeneratingTopic(null);
-        setGenerationMessage(null);
+        // Clears progress only if this run still owns the controller, so a
+        // superseding run (or a cancel) isn't wiped out.
+        kidsDailyGenerationManager.finish(signal);
       }
     },
-    [childId, ageGroup, generatingTopic, ensureSubscribed, navigate],
+    [
+      childId,
+      ageGroup,
+      generatingTopic,
+      ensureSubscribed,
+      beginGenerationState,
+      setGenerationMessage,
+    ],
   );
 
   const handleCancelGeneration = useCallback(() => {
-    abortRef.current?.abort();
-    abortRef.current = null;
-    setGeneratingTopic(null);
-    setGenerationMessage(null);
+    kidsDailyGenerationManager.cancel();
   }, []);
 
   if (!isAuthenticated) {

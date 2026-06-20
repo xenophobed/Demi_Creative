@@ -28,6 +28,18 @@ interface AgentChatState {
   isLoadingMessages: boolean;
   error: string | null;
 
+  // --- Navigation-surviving streaming state (#727) ---------------------
+  // These live in the store (not AgentChatPanel local state) so an
+  // in-flight buddy reply keeps running and the progress/result reappear
+  // when the user navigates away and back. The AbortController is held at
+  // module scope below for the same reason.
+  isStreaming: boolean;
+  streamStatus: string | null;
+  streamTool: string | null;
+  streamError: string | null;
+  /** The session the active stream belongs to (cross-session bleed guard). */
+  streamingSessionId: string | null;
+
   loadSessions: (childId: string) => Promise<void>;
   selectSession: (sessionId: string) => Promise<void>;
   newSession: (childId: string) => Promise<AgentChatSessionSummary>;
@@ -44,8 +56,26 @@ interface AgentChatState {
   // Reconcile the server-issued session id from the first SSE `session`
   // event when the turn started without a selected session.
   adoptServerSession: (sessionId: string) => void;
+  // --- Streaming lifecycle (#727) -------------------------------------
+  /** Abort any prior stream, arm a fresh controller, return its signal. */
+  beginStream: (sessionId: string | null) => AbortSignal;
+  setStreamStatus: (text: string | null) => void;
+  setStreamTool: (text: string | null) => void;
+  setStreamError: (text: string | null) => void;
+  /** Keep the stream's owning session in sync when the server adopts one. */
+  adoptStreamSession: (sessionId: string) => void;
+  /** Clear progress flags; no-op if a newer stream has taken over. */
+  endStream: (signal?: AbortSignal) => void;
+  /** User pressed Stop — abort and leave a "stopped" note. */
+  cancelStream: (note?: string) => void;
+  /** Abort the active stream if the user switched to a different session. */
+  abortIfSessionChanged: (currentSessionId: string | null) => void;
   reset: () => void;
 }
+
+// Module-scoped so it outlives any single mount of AgentChatPanel — a
+// component unmount (navigation) must NOT abort the buddy reply (#727).
+let streamAbort: AbortController | null = null;
 
 let _counter = 0;
 function nextId(prefix: string): string {
@@ -69,6 +99,11 @@ const useAgentChatStore = create<AgentChatState>((set, get) => ({
   isLoadingSessions: false,
   isLoadingMessages: false,
   error: null,
+  isStreaming: false,
+  streamStatus: null,
+  streamTool: null,
+  streamError: null,
+  streamingSessionId: null,
 
   loadSessions: async (childId) => {
     set({ isLoadingSessions: true, error: null });
@@ -228,7 +263,73 @@ const useAgentChatStore = create<AgentChatState>((set, get) => ({
     }
   },
 
-  reset: () =>
+  beginStream: (sessionId) => {
+    // Supersede any prior in-flight stream so two replies never interleave.
+    streamAbort?.abort();
+    streamAbort = new AbortController();
+    set({
+      isStreaming: true,
+      streamStatus: null,
+      streamTool: null,
+      streamError: null,
+      streamingSessionId: sessionId,
+    });
+    return streamAbort.signal;
+  },
+
+  setStreamStatus: (text) => set({ streamStatus: text }),
+  setStreamTool: (text) => set({ streamTool: text }),
+  setStreamError: (text) => set({ streamError: text }),
+
+  adoptStreamSession: (sessionId) => set({ streamingSessionId: sessionId }),
+
+  endStream: (signal) => {
+    // A newer beginStream() may have replaced the controller while a stale
+    // turn was finishing; if so, leave the fresh stream's state intact.
+    if (signal && streamAbort && streamAbort.signal !== signal) return;
+    streamAbort = null;
+    set({
+      isStreaming: false,
+      streamStatus: null,
+      streamTool: null,
+      streamingSessionId: null,
+    });
+  },
+
+  cancelStream: (note) => {
+    streamAbort?.abort();
+    streamAbort = null;
+    set({
+      isStreaming: false,
+      streamStatus: note ?? null,
+      streamTool: null,
+      streamingSessionId: null,
+    });
+  },
+
+  abortIfSessionChanged: (currentSessionId) => {
+    const { isStreaming, streamingSessionId } = get();
+    if (
+      isStreaming &&
+      streamingSessionId !== null &&
+      currentSessionId !== streamingSessionId
+    ) {
+      streamAbort?.abort();
+      streamAbort = null;
+      set({
+        isStreaming: false,
+        streamStatus: null,
+        streamTool: null,
+        streamingSessionId: null,
+      });
+    }
+  },
+
+  reset: () => {
+    // Active stream belongs to the prior child/session — abort it so it
+    // can't write into the next child's freshly-loaded history.
+    streamAbort?.abort();
+    streamAbort = null;
     set({
       sessions: [],
       currentSessionId: null,
@@ -236,7 +337,13 @@ const useAgentChatStore = create<AgentChatState>((set, get) => ({
       isLoadingSessions: false,
       isLoadingMessages: false,
       error: null,
-    }),
+      isStreaming: false,
+      streamStatus: null,
+      streamTool: null,
+      streamError: null,
+      streamingSessionId: null,
+    });
+  },
 }));
 
 export default useAgentChatStore;
