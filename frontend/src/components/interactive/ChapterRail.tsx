@@ -60,9 +60,6 @@ function choiceMetaAt(
   return { emoji: found.emoji || "✅", text: found.text || choiceId };
 }
 
-const TRAVELER_LAYOUT_ID = "chapter-traveler";
-const TRAVELER_EMOJI = "🐾";
-
 // Proximity-falloff defaults shared by desktop + mobile dots.
 const DOT_SIZE_MIN = 6;
 const DOT_SIZE_MAX = 16;
@@ -324,12 +321,10 @@ function ChapterRail({
     [segments, choiceHistory],
   );
 
-  // Active card content: arrived-via choice came at the previous chapter.
+  // Active card content. We only surface which chapter the reader is on —
+  // the per-chapter "arrived via …" detail lives in the aria-label, not the
+  // visible card, so the card stays one line and fits inside the row pitch.
   const activeSegment = segments[activeIndex];
-  const arrivingChoice =
-    activeIndex > 0
-      ? choiceMetaAt(segments[activeIndex - 1], choiceHistory[activeIndex - 1])
-      : null;
   const isActiveEnding = !!activeSegment?.is_ending;
 
   // Build aria-labels once. Locked + arrived-via suffix per issue #433.
@@ -380,51 +375,20 @@ function ChapterRail({
   if (segments.length === 0) return null;
 
   // ---- Active card body shared by desktop + mobile ----
+  // Kept to a single line so it never spills past DESKTOP_ROW_PITCH and
+  // collides with the neighbouring dot buttons.
   const activeCardLabel = (
-    <>
-      <span className="block text-xs font-semibold uppercase tracking-wider text-primary">
-        Chapter {activeIndex + 1} of {segments.length}
-      </span>
-      <span className="mt-1 block text-sm leading-snug text-gray-700">
-        {arrivingChoice ? (
-          <>
-            arrived via{" "}
-            <span aria-hidden className="mr-0.5">
-              {arrivingChoice.emoji}
-            </span>
-            <span>{arrivingChoice.text}</span>
-          </>
-        ) : (
-          "Beginning of story"
-        )}
-      </span>
-      {isActiveEnding && (
-        <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
-          <span aria-hidden>🏁</span> Ending
-        </span>
-      )}
-    </>
+    <span className="block text-xs font-semibold uppercase tracking-wider text-primary">
+      Chapter {activeIndex + 1} of {segments.length}
+      {isActiveEnding && " · Ending"}
+    </span>
   );
 
   const activeCardCompact = (
-    <>
-      <span className="text-xs font-semibold text-primary">
-        Ch {activeIndex + 1}/{segments.length}
-      </span>
-      {arrivingChoice ? (
-        <span className="ml-1.5 inline-flex items-center gap-1 text-sm text-gray-700">
-          <span aria-hidden>{arrivingChoice.emoji}</span>
-          <span className="truncate max-w-[10rem]">{arrivingChoice.text}</span>
-        </span>
-      ) : (
-        <span className="ml-1.5 text-sm text-gray-500">· start</span>
-      )}
-      {isActiveEnding && (
-        <span aria-hidden className="ml-1.5 text-sm">
-          🏁
-        </span>
-      )}
-    </>
+    <span className="text-xs font-semibold text-primary">
+      Ch {activeIndex + 1}/{segments.length}
+      {isActiveEnding && " · End"}
+    </span>
   );
 
   return (
@@ -484,25 +448,9 @@ function ChapterRail({
                               : { opacity: 0, scale: 0.96 }
                           }
                           transition={{ duration: 0.2 }}
-                          className="relative w-full px-3 py-2"
+                          className="relative w-full px-3 py-1"
                         >
-                          <span
-                            className="absolute -left-1 top-1/2 -translate-y-1/2 inline-flex h-5 w-5 items-center justify-center"
-                            aria-hidden
-                          >
-                            <motion.span
-                              layoutId={TRAVELER_LAYOUT_ID}
-                              transition={{
-                                type: "spring",
-                                stiffness: 360,
-                                damping: 28,
-                              }}
-                              className="text-base"
-                            >
-                              {TRAVELER_EMOJI}
-                            </motion.span>
-                          </span>
-                          <div className="pl-5">{activeCardLabel}</div>
+                          {activeCardLabel}
                         </motion.div>
                       </AnimatePresence>
                     ) : (
@@ -570,17 +518,6 @@ function ChapterRail({
                       transition={{ duration: 0.2 }}
                       className="inline-flex items-center"
                     >
-                      <motion.span
-                        layoutId={TRAVELER_LAYOUT_ID}
-                        transition={{
-                          type: "spring",
-                          stiffness: 360,
-                          damping: 28,
-                        }}
-                        className="mr-1.5 text-base"
-                      >
-                        {TRAVELER_EMOJI}
-                      </motion.span>
                       {activeCardCompact}
                     </motion.div>
                   </AnimatePresence>

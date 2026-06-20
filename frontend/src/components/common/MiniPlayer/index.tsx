@@ -3,6 +3,9 @@ import { useAudio } from '@/contexts/AudioContext'
 interface MiniPlayerProps {
   itemId: string
   audioUrl: string
+  // Ordered per-segment clips for multi-part tracks (e.g. a Kids Daily show).
+  // When provided, the button plays the whole playlist; otherwise just audioUrl.
+  audioSegments?: string[] | null
 }
 
 const SIZE = 36
@@ -10,11 +13,16 @@ const STROKE = 3
 const RADIUS = (SIZE - STROKE) / 2
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS
 
-export default function MiniPlayer({ itemId, audioUrl }: MiniPlayerProps) {
+export default function MiniPlayer({ itemId, audioUrl, audioSegments }: MiniPlayerProps) {
   const { currentId, isPlaying, progress, play } = useAudio()
   const active = currentId === itemId
   const playing = active && isPlaying
   const dashOffset = CIRCUMFERENCE * (1 - (active ? progress : 0))
+
+  // Prefer the full playlist when an episode has more than one segment so the
+  // button plays the whole show; fall back to the single clip otherwise.
+  const playSource =
+    audioSegments && audioSegments.length > 1 ? audioSegments : audioUrl
 
   return (
     <button
@@ -22,7 +30,7 @@ export default function MiniPlayer({ itemId, audioUrl }: MiniPlayerProps) {
       style={{ width: SIZE, height: SIZE }}
       onClick={(e) => {
         e.stopPropagation()
-        play(itemId, audioUrl)
+        play(itemId, playSource)
       }}
       title={playing ? 'Pause' : 'Play'}
     >

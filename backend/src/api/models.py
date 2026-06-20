@@ -1538,6 +1538,14 @@ class LibraryItem(BaseModel):
     # Kids Daily specific
     duration_seconds: Optional[int] = Field(None, description="Episode duration in seconds")
     is_new: Optional[bool] = Field(None, description="Whether the episode is unplayed/new")
+    audio_segments: Optional[List[str]] = Field(
+        None,
+        description=(
+            "Ordered list of per-line audio URLs for multi-segment episodes "
+            "(Kids Daily). When present, the mini player plays the whole show "
+            "as a sequential playlist instead of just the first clip."
+        ),
+    )
 
 
 class LibraryResponse(BaseModel):

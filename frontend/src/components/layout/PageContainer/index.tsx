@@ -158,8 +158,10 @@ function PageContainerInner() {
               </span>
             </Link>
 
-            {/* Desktop navigation links — unchanged on >= 768px */}
-            <div className="hidden md:flex items-center gap-4">
+            {/* Desktop navigation links — shown on >= 1024px (lg).
+                Below lg (incl. iPad portrait, 768–1023px) the nav would
+                wrap/cram, so those widths use the hamburger drawer instead. */}
+            <div className="hidden lg:flex items-center gap-4">
               {isAuthenticated ? (
                 <>
                   <FeatureNavSelect
@@ -230,14 +232,14 @@ function PageContainerInner() {
               )}
             </div>
 
-            {/* Mobile hamburger button — visible on < 768px */}
+            {/* Mobile/tablet hamburger button — visible on < 1024px */}
             <button
               type="button"
               onClick={handleToggleMobile}
               aria-label={mobileOpen ? 'Close navigation menu' : 'Open navigation menu'}
               aria-expanded={mobileOpen}
               aria-controls="mobile-nav-drawer"
-              className="md:hidden inline-flex items-center justify-center min-h-[44px] min-w-[44px] rounded-btn text-gray-700 hover:bg-gray-100 transition-colors"
+              className="lg:hidden inline-flex items-center justify-center min-h-[44px] min-w-[44px] rounded-btn text-gray-700 hover:bg-gray-100 transition-colors"
             >
               {/* Hamburger / close icon (SVG, no new deps) */}
               <svg
@@ -272,7 +274,7 @@ function PageContainerInner() {
       {/* Mobile slide-out drawer + backdrop (only mounts when open) */}
       <AnimatePresence>
         {mobileOpen && (
-          <div className="md:hidden fixed inset-0 z-50">
+          <div className="lg:hidden fixed inset-0 z-50">
             {/* Backdrop: tap to close */}
             <motion.div
               className="absolute inset-0 bg-black/40"
