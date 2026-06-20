@@ -151,7 +151,7 @@ function UploadPage() {
   // Show loading state with enhanced streaming visualization
   if (currentUploadStatus === 'uploading' || currentUploadStatus === 'processing' || isLoading || isGenerating) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] perspective-1000">
+      <div className="flex flex-col items-center justify-center min-h-[60vh]">
         <PerspectiveContainer enableTilt={false} className="w-full max-w-md">
           <StreamingVisualizer
             phase={animationPhase}
@@ -191,12 +191,12 @@ function UploadPage() {
   }
 
   return (
-    <div className="space-y-6 perspective-1500">
+    <div className="space-y-6">
       {/* Page title with floating decoration */}
       <motion.div
         className="text-center relative"
-        initial={{ opacity: 0, y: -20, rotateX: 15 }}
-        animate={{ opacity: 1, y: 0, rotateX: 0 }}
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
         transition={{ type: 'spring', stiffness: 100 }}
       >
         <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10 text-primary">
@@ -219,9 +219,9 @@ function UploadPage() {
               {imagePreviewUrl ? (
                 <motion.div
                   key="preview"
-                  initial={{ opacity: 0, scale: 0.9, rotateY: -10 }}
-                  animate={{ opacity: 1, scale: 1, rotateY: 0 }}
-                  exit={{ opacity: 0, scale: 0.9, rotateY: 10 }}
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.9 }}
                   transition={{ type: 'spring', stiffness: 200 }}
                 >
                   <ImagePreview
@@ -264,7 +264,7 @@ function UploadPage() {
                 return (
                   <motion.button
                     key={group.value}
-                    className={`age-select-card p-4 rounded-card border-2 transition-all preserve-3d ${
+                    className={`age-select-card p-4 rounded-card border-2 transition-all ${
                       selectedAgeGroup === group.value
                         ? 'border-primary bg-primary/10 shadow-lg'
                         : 'border-gray-200 hover:border-gray-300 hover:shadow-md'
@@ -275,13 +275,12 @@ function UploadPage() {
                         ? {}
                         : {
                             scale: 1.05,
-                            rotateY: 5,
-                            z: 20,
+                            y: -4,
                           }
                     }
                     whileTap={{ scale: 0.95 }}
-                    initial={{ opacity: 0, y: 20, rotateX: 15 }}
-                    animate={{ opacity: 1, y: 0, rotateX: 0 }}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.2 + index * 0.1 }}
                   >
                     <div className="text-center">

@@ -485,19 +485,13 @@
   animation: card-flip-in 0.5s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* Float with depth */
+/* Gentle vertical float — no 3D rotation (#735) */
 @keyframes float-3d {
   0%, 100% {
-    transform: translateY(0) rotateX(0deg) rotateY(0deg);
-  }
-  25% {
-    transform: translateY(-8px) rotateX(2deg) rotateY(2deg);
+    transform: translateY(0);
   }
   50% {
-    transform: translateY(-12px) rotateX(0deg) rotateY(-1deg);
-  }
-  75% {
-    transform: translateY(-6px) rotateX(-1deg) rotateY(1deg);
+    transform: translateY(-8px);
   }
 }
 

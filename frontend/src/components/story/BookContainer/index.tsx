@@ -78,9 +78,9 @@ function BookContainer({
     const normalizedX = mouseX / (rect.width / 2)
     const normalizedY = mouseY / (rect.height / 2)
 
-    // Subtle tilt (max 8 degrees)
-    rotateY.set(normalizedX * 8)
-    rotateX.set(-normalizedY * 4)
+    // Very gentle tilt (#735) — a hint of life, not a full 3D swing
+    rotateY.set(normalizedX * 3)
+    rotateX.set(-normalizedY * 1.5)
   }
 
   const handleMouseLeave = () => {
