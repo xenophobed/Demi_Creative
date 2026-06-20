@@ -12,20 +12,25 @@ import type {
   TiltConfig,
 } from '@/types/streaming'
 
-// Default parallax configuration
+// Default parallax configuration.
+// Mouse-tracking 3D rotation is off by default (#735) — we favour calm, cheap
+// CSS micro-interactions over full-3D tilt on every surface. Residual angles are
+// kept gentle so re-enabling parallax can never feel heavy.
 export const defaultParallaxConfig: ParallaxConfig = {
-  enabled: true,
+  enabled: false,
   intensity: 0.5,
   smoothing: 0.1,
-  maxRotation: 8,
+  maxRotation: 4,
   maxTranslation: 20,
   perspective: 1000,
 }
 
-// Default tilt configuration for cards
+// Default tilt configuration for cards.
+// Disabled by default (#735): cards lift gently on hover via CSS instead of
+// rotating with the cursor. Kept available behind an explicit opt-in.
 export const defaultTiltConfig: TiltConfig = {
-  enabled: true,
-  maxTilt: 8,
+  enabled: false,
+  maxTilt: 4,
   scale: 1.02,
   speed: 300,
   glare: true,

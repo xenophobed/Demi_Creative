@@ -458,7 +458,7 @@ function HomePage() {
   }
 
   return (
-    <div className="space-y-8 perspective-1500">
+    <div className="space-y-8">
       <StarFlyAnimation
         active={starFlying}
         fromRef={newspaperRef}
@@ -467,9 +467,9 @@ function HomePage() {
       />
 
       <motion.section
-        className="hero-banner relative min-h-[540px] overflow-hidden rounded-card preserve-3d sm:min-h-[520px]"
-        initial={{ opacity: 0, y: 30, rotateX: 10 }}
-        animate={{ opacity: 1, y: 0, rotateX: 0 }}
+        className="hero-banner relative min-h-[540px] overflow-hidden rounded-card sm:min-h-[520px]"
+        initial={{ opacity: 0, y: 30 }}
+        animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6, type: 'spring', stiffness: 100 }}
       >
         <DepthLayer config={{ layer: 'background', parallaxFactor: 0.3 }}>

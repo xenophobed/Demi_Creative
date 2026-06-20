@@ -1,4 +1,4 @@
-import { motion, useSpring } from 'framer-motion'
+import { motion } from 'framer-motion'
 import { useState } from 'react'
 import type { StoryChoice } from '@/types/api'
 
@@ -19,7 +19,7 @@ function ChoiceButtons({
 }: ChoiceButtonsProps) {
   return (
     <div
-      className={`flex flex-col md:flex-row gap-3 perspective-1000 ${className}`}
+      className={`flex flex-col md:flex-row gap-3 ${className}`}
     >
       {choices.map((choice, index) => (
         <ChoiceButton
@@ -46,37 +46,16 @@ interface ChoiceButtonProps {
 function ChoiceButton({ choice, index, onChoose, isLoading, disabled }: ChoiceButtonProps) {
   const [isHovered, setIsHovered] = useState(false)
 
-  // 3D tilt effect
-  const rotateX = useSpring(0, { stiffness: 300, damping: 30 })
-  const rotateY = useSpring(0, { stiffness: 300, damping: 30 })
-  const scale = useSpring(1, { stiffness: 300, damping: 30 })
-
-  const handleMouseMove = (e: React.MouseEvent<HTMLButtonElement>) => {
-    if (disabled || isLoading) return
-
-    const rect = e.currentTarget.getBoundingClientRect()
-    const centerX = rect.left + rect.width / 2
-    const centerY = rect.top + rect.height / 2
-
-    const x = (e.clientX - centerX) / (rect.width / 2)
-    const y = (e.clientY - centerY) / (rect.height / 2)
-
-    rotateX.set(-y * 8)
-    rotateY.set(x * 8)
-  }
-
   const handleMouseEnter = () => {
     if (disabled || isLoading) return
     setIsHovered(true)
-    scale.set(1.02)
   }
 
   const handleMouseLeave = () => {
     setIsHovered(false)
-    rotateX.set(0)
-    rotateY.set(0)
-    scale.set(1)
   }
+
+  const interactive = !disabled && !isLoading
 
   return (
     <motion.button
@@ -87,32 +66,24 @@ function ChoiceButton({ choice, index, onChoose, isLoading, disabled }: ChoiceBu
         border-2 border-gray-200
         text-left font-medium text-gray-700
         transition-colors duration-200
-        preserve-3d gpu-accelerated
         ${
           disabled || isLoading
             ? 'opacity-50 cursor-not-allowed'
-            : 'hover:border-primary hover:shadow-lg cursor-pointer'
+            : 'hover:border-primary cursor-pointer'
         }
       `}
-      onClick={() => !disabled && !isLoading && onChoose(choice.choice_id)}
+      onClick={() => interactive && onChoose(choice.choice_id)}
       disabled={disabled || isLoading}
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.1 }}
       style={{
-        rotateX,
-        rotateY,
-        scale,
-        boxShadow: isHovered ? '0 15px 30px rgba(0,0,0,0.12)' : '0 4px 12px rgba(0,0,0,0.05)',
+        boxShadow: isHovered ? '0 10px 22px rgba(0,0,0,0.10)' : '0 4px 12px rgba(0,0,0,0.05)',
       }}
-      onMouseMove={handleMouseMove}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
-      whileTap={
-        !disabled && !isLoading
-          ? { scale: 0.98 }
-          : {}
-      }
+      whileHover={interactive ? { y: -3, scale: 1.02 } : undefined}
+      whileTap={interactive ? { scale: 0.98 } : undefined}
     >
           {/* Emoji */}
           <motion.span

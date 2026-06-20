@@ -50,18 +50,17 @@ const Card = forwardRef<HTMLDivElement, CardProps>(
       lg: 'p-8',
     }
 
-    // Depth-specific styling
+    // Depth-specific styling — soft shadows convey elevation without 3D
+    // translateZ layers (#735).
     const depthStyles = useMemo(() => {
       switch (depth) {
         case 'raised':
           return {
             boxShadow: '0 8px 30px rgba(0, 0, 0, 0.08)',
-            transform: 'translateZ(10px)',
           }
         case 'floating':
           return {
             boxShadow: '0 15px 40px rgba(0, 0, 0, 0.1)',
-            transform: 'translateZ(20px)',
           }
         default:
           return {}
