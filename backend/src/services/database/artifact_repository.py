@@ -29,6 +29,18 @@ from ...services.models.artifact_models import (
 )
 
 
+def _iso_or_none(value: Any) -> Optional[str]:
+    """Normalize a timestamp to an ISO-8601 string for TEXT columns.
+
+    Models parse stored timestamps into ``datetime`` objects on read; binding
+    those straight back fails on strict drivers (asyncpg: "expected str, got
+    datetime"). Strings and ``None`` pass through unchanged (#730).
+    """
+    if isinstance(value, datetime):
+        return value.isoformat().replace("+00:00", "Z")
+    return value
+
+
 # ============================================================================
 # Artifact Repository
 # ============================================================================
@@ -1284,8 +1296,11 @@ class RunRepository:
             return False
 
         now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-        started_at = run.started_at
-        completed_at = run.completed_at
+        # The Run model coerces stored TEXT timestamps into datetime objects on
+        # read, so re-serialize before binding — asyncpg rejects datetimes for
+        # the TEXT columns with "expected str, got datetime" (#730).
+        started_at = _iso_or_none(run.started_at)
+        completed_at = _iso_or_none(run.completed_at)
 
         if status == "running" and not started_at:
             started_at = now
