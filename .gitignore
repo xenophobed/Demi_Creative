@@ -43,6 +43,7 @@ data/audio/
 data/vectors/
 # runtime video job outputs
 data/video_jobs/
+data/videos/
 backend/data/
 
 # Node (root-level deps; frontend/node_modules covered below)

@@ -81,26 +81,12 @@ TABLE_ORDER: List[str] = [
     "child_achievements",
 ]
 
-# Tables that own a SERIAL "id" column the sequence of which needs
-# resetting after a bulk copy. (Tables with TEXT primary keys are not
-# in this list — their natural keys are inserted as-is.)
-SEQUENCE_TABLES: List[str] = [
-    "users",
-    "tokens",
-    "child_profiles",
-    "child_preferences",
-    "stories",
-    "sessions",
-    "story_segments",
-    "characters",
-    "user_agents",
-    "agent_chat_sessions",
-    "agent_chat_messages",
-    "runs",
-    "agent_steps",
-    "artifacts",
-    "favorites",
-]
+# Sequence resetting is handled generically in Phase C by introspecting
+# each copied table for a serial/identity column (see _reset_sequence).
+# A hand-maintained allow-list used to live here, but it silently omitted
+# tables (topic_subscriptions, *_artifact_links, ...) whose sequences then
+# never advanced past the bulk-copied MAX(id) — producing duplicate-key
+# 500s on the first real INSERT. Introspection cannot drift out of sync.
 
 
 @dataclass
@@ -149,17 +135,28 @@ async def _copy_table(sqlite_db, pg_db, name: str) -> int:
     return inserted
 
 
-async def _reset_sequence(pg_db, name: str) -> None:
-    """Bump <table>_id_seq to MAX(id) so future INSERTs don't collide."""
+async def _reset_sequence(pg_db, name: str) -> bool:
+    """Bump <table>'s id sequence to MAX(id) so future INSERTs don't collide.
+
+    Returns True if a sequence was found and reset. Tables with a TEXT
+    primary key (no serial/identity column) have no sequence and are
+    skipped without error.
+    """
     try:
+        seq = await pg_db.fetchone(
+            f"SELECT pg_get_serial_sequence('{name}', 'id') AS seq"
+        )
+        seq_name = seq["seq"] if seq else None
+        if not seq_name:
+            return False  # TEXT PK or no serial id — nothing to reset.
         await pg_db.execute(
-            f"SELECT setval(pg_get_serial_sequence('{name}', 'id'), "
+            f"SELECT setval('{seq_name}', "
             f"COALESCE((SELECT MAX(id) FROM {name}), 1))"
         )
         await pg_db.commit()
-    except Exception as exc:  # noqa: BLE001
-        # Some tables don't have a serial id (TEXT PK) — that's fine.
-        pass
+        return True
+    except Exception:  # noqa: BLE001
+        return False
 
 
 async def _replay_chromadb(chroma_path: Path, pg_db, dry_run: bool) -> Dict[str, int]:
@@ -304,11 +301,16 @@ async def main_async(args: argparse.Namespace) -> int:
             print(f"  ! {name:32s} ERROR: {exc}")
 
     # --- Phase C: bump sequences ---
+    # Reset the sequence for EVERY copied table (introspected per table),
+    # not a hand-maintained subset — a missed table leaves its sequence at
+    # 1 and the first real INSERT collides with bulk-copied rows.
     if not args.dry_run:
         print("\nPhase C: resetting SERIAL sequences")
-        for name in SEQUENCE_TABLES:
-            await _reset_sequence(pg_db, name)
-        print("  done")
+        reset = 0
+        for name in report.tables_copied:
+            if await _reset_sequence(pg_db, name):
+                reset += 1
+        print(f"  done ({reset} sequences reset)")
 
     # --- Phase D: ChromaDB -> pgvector ---
     if not args.skip_vectors:
