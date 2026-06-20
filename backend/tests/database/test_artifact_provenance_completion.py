@@ -179,6 +179,55 @@ async def test_story_text_artifact_links_to_character_record(db):
 
 
 @pytest.mark.asyncio
+async def test_update_status_binds_timestamps_as_strings_not_datetimes(db):
+    """Regression for #730.
+
+    The Run model coerces stored TEXT timestamps into ``datetime`` objects on
+    read. ``update_status`` re-reads the run and must re-serialize those values
+    to ISO strings before binding them, otherwise asyncpg rejects them with
+    ``DataError: expected str, got datetime`` against the TEXT columns on
+    Postgres. SQLite tolerates datetimes, so we assert on the *bound parameter
+    types* rather than on a raised error.
+    """
+    bound_timestamps: list[object] = []
+    original_execute = db.execute
+
+    async def spy_execute(sql, parameters=()):
+        if "UPDATE runs" in sql:
+            # started_at = $2, completed_at = $3 in the UPDATE statement
+            bound_timestamps.extend([parameters[1], parameters[2]])
+        return await original_execute(sql, parameters)
+
+    db.execute = spy_execute
+    try:
+        run_repo = RunRepository(db)
+        run_id = await run_repo.create(
+            RunCreate(story_id=None, workflow_type=WorkflowType.KIDS_DAILY)
+        )
+        # First transition stores started_at as a string.
+        await run_repo.update_status(run_id, "running")
+        # Second transition re-reads the run (started_at now a datetime) and
+        # must re-serialize before binding.
+        await run_repo.update_status(
+            run_id, "completed", result_summary={"episodes": 1}
+        )
+    finally:
+        db.execute = original_execute
+
+    assert bound_timestamps, "expected UPDATE runs statements to be captured"
+    for value in bound_timestamps:
+        assert value is None or isinstance(value, str), (
+            f"timestamp bound to TEXT column must be str/None, got "
+            f"{type(value).__name__}: {value!r}"
+        )
+
+    run = await RunRepository(db).get_by_id(run_id)
+    assert run.status.value == "completed"
+    assert run.started_at is not None
+    assert run.completed_at is not None
+
+
+@pytest.mark.asyncio
 async def test_kids_daily_script_image_and_audio_artifacts_publish_and_link(db):
     """Kids Daily visible outputs use published lifecycle with run/step lineage."""
     story_id = await create_test_story(db)
