@@ -15,7 +15,7 @@ Return strict JSON with this shape:
   "lines": [
     {
       "role": "curious_kid | fun_expert | guest",
-      "text": "Mimi: Why is this so cool?",
+      "text": "Why is this so cool?",
       "display_name": "Mimi",
       "timestamp_start": 0.0,
       "timestamp_end": 4.2
@@ -28,7 +28,8 @@ Return strict JSON with this shape:
 ## Rules
 - Keep language age-appropriate for the requested age group.
 - Use a conversational rhythm between Mimi (Curious Kid) and Duo (Fun Expert).
-- Prefix dialogue text with the character name (e.g., "Mimi: ..." or "Duo: ...").
+- Do NOT put the speaker's name in `text` — the name lives only in `display_name`. The `text` is spoken aloud by TTS, so a name there would be read out loud (e.g. "Duo, great question"). Write only what the character actually says.
+- Set `display_name` to "Mimi" for `curious_kid`, "Duo" for `fun_expert`, and the guest_character's name for `guest`.
 - Include a guest anchor line if guest_character is provided.
 - Keep every line positive and child-safe.
 - Do not include markdown fences or extra keys.

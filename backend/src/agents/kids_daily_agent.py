@@ -102,6 +102,23 @@ ROLE_DISPLAY_NAMES: Dict[str, Optional[str]] = {
     "guest": None,
 }
 
+def strip_self_name_prefix(text: str, speaker_name: Optional[str]) -> str:
+    """Remove a leading ``"Name:"`` / ``"Name says:"`` self-introduction.
+
+    Speaker attribution belongs in ``display_name`` / the role label, not in the
+    spoken sentence — otherwise TTS reads the name aloud and the UI shows it
+    twice. We only strip the line's *own* speaker name (case-insensitive), so
+    legitimate content like ``"Today: we learned..."`` is never touched.
+    """
+    if not text or not speaker_name:
+        return text
+    name = re.escape(speaker_name.strip())
+    if not name:
+        return text
+    pattern = rf"^\s*{name}\s*(?:says|said)?\s*[:\-—]\s*"
+    return re.sub(pattern, "", text, count=1, flags=re.IGNORECASE).lstrip()
+
+
 # Age rules for text conversion
 AGE_RULES: Dict[str, Dict[str, Any]] = {
     "3-5": {"max_sentences": 2, "max_words": 70, "tone": "warm and very simple"},
@@ -542,48 +559,51 @@ def _build_line_text(
 ) -> str:
     bucket = _age_bucket(age_group)
 
+    # NOTE: text is kept name-free. Speaker attribution comes from
+    # ``DialogueLine.display_name`` / role label, never from the spoken
+    # sentence — otherwise TTS reads the name aloud ("Duo, great question").
     if role == "curious_kid":
         if bucket == "3-5":
             prompts = [
-                f"Mimi: Why is the {topic} news so special?",
-                f"Mimi: What happened first in this {topic} story?",
-                f"Mimi: Can this help kids like me?",
+                f"Why is the {topic} news so special?",
+                f"What happened first in this {topic} story?",
+                "Can this help kids like me?",
             ]
         elif bucket in {"6-8"}:
             prompts = [
-                f"Mimi: How did this {topic} story begin?",
-                f"Mimi: What if we tried this idea at school?",
-                f"Mimi: Why does this matter in real life?",
+                f"How did this {topic} story begin?",
+                "What if we tried this idea at school?",
+                "Why does this matter in real life?",
             ]
         else:
             prompts = [
-                f"Mimi: But what about the hardest part of this {topic} challenge?",
-                "Mimi: How do experts know this will work long-term?",
-                "Mimi: What could go wrong, and how can people prepare?",
+                f"But what about the hardest part of this {topic} challenge?",
+                "How do experts know this will work long-term?",
+                "What could go wrong, and how can people prepare?",
             ]
         return prompts[idx % len(prompts)]
 
     if role == "guest":
-        return f"{guest_name} says: I can help explain this with a fun example from my own adventures!"
+        return "I can help explain this with a fun example from my own adventures!"
 
     # fun_expert
     if bucket == "3-5":
         answers = [
-            f"Duo: Great question! Think of {topic} like building a tiny helper for our world.",
-            "Duo: People worked together carefully, step by step, to keep everyone safe.",
-            "Duo: Yes. Small kind actions from kids can make a big difference.",
+            f"Great question! Think of {topic} like building a tiny helper for our world.",
+            "People worked together carefully, step by step, to keep everyone safe.",
+            "Yes. Small kind actions from kids can make a big difference.",
         ]
     elif bucket in {"6-8"}:
         answers = [
-            f"Duo: Imagine {topic} as a team puzzle where each piece solves part of the problem.",
-            "Duo: Scientists tested ideas, compared results, and improved the plan.",
-            "Duo: It matters because it can shape what we learn, build, and protect next.",
+            f"Imagine {topic} as a team puzzle where each piece solves part of the problem.",
+            "Scientists tested ideas, compared results, and improved the plan.",
+            "It matters because it can shape what we learn, build, and protect next.",
         ]
     else:
         answers = [
-            f"Duo: The big idea is that {topic} combines evidence, tradeoffs, and long-term planning.",
-            "Duo: Researchers validate with repeated observations and peer review.",
-            "Duo: Policy, engineering, and community behavior all affect final outcomes.",
+            f"The big idea is that {topic} combines evidence, tradeoffs, and long-term planning.",
+            "Researchers validate with repeated observations and peer review.",
+            "Policy, engineering, and community behavior all affect final outcomes.",
         ]
     return answers[idx % len(answers)]
 
@@ -606,13 +626,17 @@ def _build_mock_dialogue_script(
 
         text = _build_line_text(role, topic, age_group, idx, guest_name)
 
+        # Guest has no fixed persona name, so its display label is the chosen
+        # character. curious_kid/fun_expert use their fixed Mimi/Duo labels.
+        display_name = guest_name if role == "guest" else ROLE_DISPLAY_NAMES.get(role)
+
         start = round(current_time, 2)
         end = round(current_time + line_duration, 2)
         lines.append(
             DialogueLine(
                 role=role,
                 text=text,
-                display_name=ROLE_DISPLAY_NAMES.get(role),
+                display_name=display_name,
                 timestamp_start=start,
                 timestamp_end=end,
             )
@@ -786,8 +810,8 @@ async def _generate_dialogue_with_sdk(
         )
         normalized_lines[midpoint] = DialogueLine(
             role="guest",
-            text=f"{actual_guest} joins us with a fun tip: keep being curious and kind!",
-            display_name=None,
+            text="Here is a fun tip from me: keep being curious and kind!",
+            display_name=actual_guest,
             timestamp_start=guest_start,
             timestamp_end=guest_end,
         )
@@ -802,6 +826,13 @@ async def _generate_dialogue_with_sdk(
     actual_guest = (
         str(result_data.get("guest_character") or guest_name).strip() or guest_name
     )
+
+    # Label guest lines with the chosen character and defensively strip any
+    # self-name prefix the model may still have emitted (e.g. "Duo: ...").
+    for line in normalized_lines:
+        if line.role == "guest":
+            line.display_name = actual_guest
+        line.text = strip_self_name_prefix(line.text, line.display_name)
 
     script = DialogueScript(
         lines=normalized_lines,
@@ -822,6 +853,29 @@ async def _generate_dialogue_with_sdk(
 # ===========================================================================
 # Guest anchor resolution
 # ===========================================================================
+
+
+def _resolve_guest_choice(
+    requested: Optional[str],
+    characters: List[Dict[str, Any]],
+    fallback: str,
+) -> str:
+    """Honor the child's Guest Anchor pick if it's in their own roster.
+
+    Matching is case-insensitive and whitespace-tolerant. An unknown or empty
+    request falls back to the most-frequent character (``characters`` is sorted
+    by appearance count), then to ``fallback`` — so a spoofed or stale name can
+    never put an arbitrary character on the show.
+    """
+    most_frequent = characters[0].get("name", fallback) if characters else fallback
+    if not requested or not requested.strip():
+        return most_frequent
+    target = requested.strip().casefold()
+    for character in characters:
+        name = str(character.get("name", "")).strip()
+        if name and name.casefold() == target:
+            return name
+    return most_frequent
 
 
 def _default_guest(child_id: Optional[str]) -> str:
@@ -933,8 +987,16 @@ async def generate_kids_daily_dialogue(
     child_id: Optional[str] = None,
     news_url: Optional[str] = None,
     user_id: str = "",
+    guest_character: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Generate Kids Daily dialogue script with safety metadata."""
+    """Generate Kids Daily dialogue script with safety metadata.
+
+    ``guest_character`` is the child's explicit Guest Anchor pick. It is honored
+    only when it matches a character the child actually owns (validated against
+    ``character_repo``); otherwise we fall back to the most-frequent character,
+    then to a deterministic default. This keeps the guest tied to the child's
+    own art and prevents an arbitrary name being injected via the API.
+    """
 
     source_text = _clean_source_text(news_text, news_url)
     topic = _headline_from_text(source_text)
@@ -949,7 +1011,7 @@ async def generate_kids_daily_dialogue(
         try:
             characters = await character_repo.get_characters(user_id, child_id)
             if characters:
-                guest_name = characters[0].get("name", guest_name)
+                guest_name = _resolve_guest_choice(guest_character, characters, guest_name)
         except Exception:
             pass  # Fall back to default guest
 
@@ -1016,6 +1078,7 @@ async def generate_kids_daily_episode(
     category: str,
     news_url: Optional[str] = None,
     user_id: str = "",
+    guest_character: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Compose kid summary + dialogue script payload for Kids Daily."""
 
@@ -1036,6 +1099,7 @@ async def generate_kids_daily_episode(
         child_id=child_id,
         news_url=news_url,
         user_id=user_id,
+        guest_character=guest_character,
     )
 
     return {
@@ -1060,6 +1124,7 @@ async def stream_kids_daily_generation(
     category: str,
     news_url: Optional[str] = None,
     user_id: str = "",
+    guest_character: Optional[str] = None,
 ) -> AsyncGenerator[Dict[str, Any], None]:
     """Stream Kids Daily generation progress events."""
 
@@ -1083,6 +1148,7 @@ async def stream_kids_daily_generation(
         category=category,
         news_url=news_url,
         user_id=user_id,
+        guest_character=guest_character,
     )
 
     yield {

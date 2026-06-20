@@ -11,6 +11,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 import time
 from datetime import datetime
 from pathlib import Path
@@ -520,6 +521,22 @@ def _voice_assignment_for_age(age_group: str) -> Dict[str, Dict[str, float | str
     return table.get(age_group, table["6-8"])
 
 
+def _strip_self_name_prefix(text: str, speaker_name: Optional[str]) -> str:
+    """Strip a leading ``"Name:"`` / ``"Name says:"`` self-introduction.
+
+    Only the line's *own* speaker name is removed (case-insensitive), so real
+    content like ``"Today: we learned..."`` is never touched. Mirrors the
+    agent-side guard in ``kids_daily_agent`` for defense-in-depth.
+    """
+    if not text or not speaker_name:
+        return text
+    name = re.escape(str(speaker_name).strip())
+    if not name:
+        return text
+    pattern = rf"^\s*{name}\s*(?:says|said)?\s*[:\-—]\s*"
+    return re.sub(pattern, "", text, count=1, flags=re.IGNORECASE).lstrip()
+
+
 def _extract_lines(dialogue_script: Any) -> List[Dict[str, Any]]:
     if isinstance(dialogue_script, dict):
         return dialogue_script.get("lines", []) or []
@@ -552,6 +569,16 @@ async def generate_multi_speaker_audio(dialogue_script: Any, age_group: str) -> 
     lines = _extract_lines(dialogue_script)
     if not lines:
         return {}
+
+    # Defense-in-depth: never let a speaker's own name leak into synthesized
+    # audio. Generators keep ``text`` name-free, but if a stale/cached script
+    # still carries a "Name: ..." prefix we strip it here using the line's own
+    # display_name so the child never hears "Duo, great question."
+    for line in lines:
+        if isinstance(line, dict):
+            line["text"] = _strip_self_name_prefix(
+                str(line.get("text", "")), line.get("display_name")
+            )
 
     voices = _voice_assignment_for_age(age_group)
     audio_urls: Dict[str, str] = {}
