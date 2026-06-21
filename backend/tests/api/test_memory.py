@@ -130,52 +130,47 @@ class TestMemoryCharactersEndpoints:
             assert "main_characters" in resp.json()
             assert "other_characters" in resp.json()
 
-    async def test_get_characters_grouped_main_and_other(self, test_client):
+    async def test_get_characters_grouped_by_appearance_frequency(self, test_client):
+        """Main characters are the top 5 by appearance frequency, not story-lead.
+
+        A frequently-appearing supporting character must rank as "main", and a
+        one-off lead must drop to "other" once 5 more-frequent characters exist.
+        """
         child_id = f"child-chr-group-{uuid.uuid4().hex[:8]}"
-        story_id_1 = f"story-chr-group-1-{uuid.uuid4().hex[:8]}"
-        story_id_2 = f"story-chr-group-2-{uuid.uuid4().hex[:8]}"
         async with test_client as client:
             from backend.src.services.database import character_repo, story_repo
 
-            await character_repo.upsert_character(
-                user_id="test_user",
-                child_id=child_id,
-                name="Hero Fox",
-                description="The protagonist",
-            )
-            await character_repo.upsert_character(
-                user_id="test_user",
-                child_id=child_id,
-                name="Helper Bunny",
-                description="The helper",
-            )
+            # Seed 6 characters with descending appearance frequency.
+            # frequency: Star=6, Comet=5, Nova=4, Luna=3, Sol=2, Pip=1
+            seeds = [
+                ("Star", 6),
+                ("Comet", 5),
+                ("Nova", 4),
+                ("Luna", 3),
+                ("Sol", 2),
+                ("Pip", 1),
+            ]
+            for name, freq in seeds:
+                for _ in range(freq):
+                    await character_repo.upsert_character(
+                        user_id="test_user",
+                        child_id=child_id,
+                        name=name,
+                        description=f"{name} character",
+                    )
 
+            # Make the *least* frequent character (Pip) the lead of a story.
+            # Under the old rule this forced Pip into "main"; it must NOT now.
+            story_id = f"story-chr-group-{uuid.uuid4().hex[:8]}"
             await story_repo.create(
                 {
-                    "story_id": story_id_1,
+                    "story_id": story_id,
                     "user_id": "test_user",
                     "child_id": child_id,
                     "age_group": "6-8",
-                    "story": {"text": "Story one", "word_count": 2},
+                    "story": {"text": "Pip's tale", "word_count": 2},
                     "educational_value": {"themes": [], "concepts": [], "moral": None},
-                    "characters": [
-                        {"character_name": "Hero Fox"},
-                        {"character_name": "Helper Bunny"},
-                    ],
-                    "analysis": {},
-                    "safety_score": 0.9,
-                    "story_type": "image_to_story",
-                }
-            )
-            await story_repo.create(
-                {
-                    "story_id": story_id_2,
-                    "user_id": "test_user",
-                    "child_id": child_id,
-                    "age_group": "6-8",
-                    "story": {"text": "Story two", "word_count": 2},
-                    "educational_value": {"themes": [], "concepts": [], "moral": None},
-                    "characters": [{"name": "Hero Fox"}],
+                    "characters": [{"character_name": "Pip"}],
                     "analysis": {},
                     "safety_score": 0.9,
                     "story_type": "image_to_story",
@@ -188,12 +183,19 @@ class TestMemoryCharactersEndpoints:
 
             main_names = [c["name"] for c in body["main_characters"]]
             other_names = [c["name"] for c in body["other_characters"]]
-            assert "Hero Fox" in main_names
-            assert "Helper Bunny" in other_names
 
-            hero = next(c for c in body["main_characters"] if c["name"] == "Hero Fox")
-            assert hero["main_story_count"] == 2
-            assert hero["character_role"] == "main"
+            # Top 5 by frequency are "main"; the 6th drops to "other".
+            assert main_names == ["Star", "Comet", "Nova", "Luna", "Sol"]
+            assert other_names == ["Pip"]
+
+            # A one-off story lead with the lowest frequency is NOT main.
+            assert "Pip" not in main_names
+            pip = next(c for c in body["other_characters"] if c["name"] == "Pip")
+            assert pip["character_role"] == "other"
+
+            star = next(c for c in body["main_characters"] if c["name"] == "Star")
+            assert star["character_role"] == "main"
+            assert star["appearance_count"] == 6
 
     async def test_delete_single_character_item(self, test_client):
         child_id = f"child-chr-item-{uuid.uuid4().hex[:8]}"
