@@ -45,6 +45,16 @@ def get_jwt_secret() -> Optional[str]:
     return os.getenv("SUPABASE_JWT_SECRET")
 
 
+def _looks_like_jwt(token: str) -> bool:
+    """Return True if the token is structurally a JWT (three segments).
+
+    A JWS compact-serialized JWT is `header.payload.signature` — exactly two
+    dots. Opaque legacy tokens have none, so this cheaply filters them out
+    before any decode attempt.
+    """
+    return bool(token) and token.count(".") == 2
+
+
 def _fetch_jwks_keys() -> Optional[list[dict[str, Any]]]:
     """Fetch and cache JWKS keys from the Supabase project."""
     global _jwks_keys
@@ -74,6 +84,14 @@ def decode_supabase_token(token: str) -> Optional[SupabaseClaims]:
     Returns SupabaseClaims on success, None if the token is invalid or
     no Supabase auth is configured.
     """
+    # Structural guard: a JWT has exactly three dot-separated segments.
+    # Legacy custom tokens are opaque `secrets.token_urlsafe` strings with no
+    # dots, so skip them here silently — they are validated downstream by the
+    # legacy fallback. This avoids a wasted jwt.decode and a misleading
+    # "Not enough segments" WARNING on every legacy-authed request (#740).
+    if not _looks_like_jwt(token):
+        return None
+
     claims = _decode_with_jwks(token)
     if claims:
         return claims
