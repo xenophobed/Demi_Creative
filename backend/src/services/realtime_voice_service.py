@@ -37,12 +37,6 @@ try:
 except Exception:  # pragma: no cover - import fallback for test env
     OpenAI = None
 
-try:
-    from elevenlabs.client import AsyncElevenLabs as _elevenlabs_AsyncClient
-    from elevenlabs import VoiceSettings as _elevenlabs_VoiceSettings
-except Exception:  # pragma: no cover - import fallback for test env
-    _elevenlabs_AsyncClient = None
-    _elevenlabs_VoiceSettings = None
 
 # httpx is a hard dep (see requirements.txt). Aliasing the class through
 # the module gives tests a stable monkeypatch target — they can swap
@@ -393,257 +387,6 @@ class MockRealtimeVoiceProvider:
 
 
 # ---------------------------------------------------------------------------
-# Hybrid provider — Whisper STT + ElevenLabs Flash TTS (#614)
-# ---------------------------------------------------------------------------
-
-MAX_UTTERANCE_BYTES: int = 2 * 1024 * 1024  # 2 MB
-MAX_UTTERANCE_MS: int = 30_000  # 30 s
-
-_MIME_EXT_MAP: Dict[str, str] = {
-    "audio/webm": "audio.webm",
-    "audio/mp4": "audio.mp4",
-    "audio/mpeg": "audio.mp3",
-    "audio/wav": "audio.wav",
-    "audio/pcm": "audio.wav",
-}
-
-
-def _extension_for(mime_type: str) -> str:
-    """Pick a filename suffix the OpenAI SDK can sniff for Whisper."""
-    base = mime_type.split(";", 1)[0].strip().lower()
-    return _MIME_EXT_MAP.get(base, "audio.bin")
-
-
-# Per-age TTS overrides land in #608 (Phase C). For v1 the provider
-# exposes a global default and the broker can override via constructor.
-DEFAULT_TTS_MODEL: str = "eleven_flash_v2_5"
-DEFAULT_TTS_VOICE_ID: str = "21m00Tcm4TlvDq8ikWAM"  # ElevenLabs "Rachel"
-
-
-class HybridRealtimeVoiceProvider:
-    """Whisper STT + ElevenLabs Flash TTS, brokered in-memory.
-
-    Audio bytes live in ``handle.provider_state["buffer"]`` (bytearray)
-    only — never flushed to disk. ``finalize_utterance`` calls Whisper
-    via the existing OpenAI client pattern (``io.BytesIO`` + ``buffer.name``
-    extension hint) and runs the same safety check as ``stt_service``.
-
-    Graceful degradation:
-      - Missing ``OPENAI_API_KEY`` → ``finalize_utterance`` returns
-        ``success=False, error="provider_unavailable"``. The broker
-        translates to ``VoiceWSErrorEvent(code="provider_unavailable")``.
-      - Missing ``ELEVENLABS_API_KEY`` → ``synthesize_speech`` yields an
-        empty async generator. Session continues; buddy is silent. The
-        broker emits ``assistant_text(is_final=True)`` and skips
-        ``audio_chunk`` events.
-      - SDK import failure → handled the same way.
-
-    Single-tenant — one handle per session. The broker must never share
-    a handle across concurrent coroutines on the same session.
-    """
-
-    name: str = "hybrid"
-    WHISPER_MODEL: str = "whisper-1"
-
-    def __init__(
-        self,
-        *,
-        tts_model: str = DEFAULT_TTS_MODEL,
-        tts_voice_id: str = DEFAULT_TTS_VOICE_ID,
-    ) -> None:
-        self.tts_model = tts_model
-        self.tts_voice_id = tts_voice_id
-
-    @property
-    def _stt_available(self) -> bool:
-        return bool(os.getenv("OPENAI_API_KEY")) and OpenAI is not None
-
-    @property
-    def _tts_available(self) -> bool:
-        return (
-            bool(os.getenv("ELEVENLABS_API_KEY"))
-            and _elevenlabs_AsyncClient is not None
-            and _elevenlabs_VoiceSettings is not None
-        )
-
-    async def start_session(
-        self,
-        *,
-        user_id: str,
-        child_id: str,
-        target_age: int,
-        persona: str = "buddy_default",
-    ) -> SessionHandle:
-        return SessionHandle(
-            session_id=f"voice_hybrid_{uuid4().hex[:12]}",
-            user_id=user_id,
-            child_id=child_id,
-            target_age=target_age,
-            persona=persona,
-            provider_state={
-                "buffer": bytearray(),
-                "bytes_received": 0,
-                "mime_type": "audio/webm",
-                "utterances": 0,
-                "forced_flush": False,
-            },
-        )
-
-    async def push_audio(self, handle: SessionHandle, audio_bytes: bytes) -> None:
-        state = handle.provider_state
-        buffer: bytearray = state["buffer"]
-        buffer.extend(audio_bytes)
-        state["bytes_received"] = len(buffer)
-        if len(buffer) >= MAX_UTTERANCE_BYTES:
-            # Soft signal — broker checks state["forced_flush"] between
-            # pushes if it wants to pre-empt. We never raise.
-            state["forced_flush"] = True
-
-    async def finalize_utterance(self, handle: SessionHandle) -> FinalTranscript:
-        state = handle.provider_state
-        audio_bytes = bytes(state["buffer"])
-        # Reset immediately so a concurrent push (broker bug) doesn't
-        # pollute the next utterance with leftover bytes.
-        state["buffer"] = bytearray()
-        state["bytes_received"] = 0
-        state["forced_flush"] = False
-        state["utterances"] = state.get("utterances", 0) + 1
-
-        if not audio_bytes:
-            return FinalTranscript(
-                success=True, text="", language="en", duration_ms=0,
-                safety_passed=False, error="empty_utterance",
-                provider=self.name,
-            )
-
-        if not self._stt_available:
-            return FinalTranscript(
-                success=False, text="", language="en", duration_ms=0,
-                safety_passed=False, error="provider_unavailable",
-                provider=self.name,
-            )
-
-        mime_type = state.get("mime_type", "audio/webm")
-        api_key = os.getenv("OPENAI_API_KEY")
-
-        def _sync_transcribe() -> Dict[str, Any]:
-            client = OpenAI(api_key=api_key)  # type: ignore[misc]
-            buf = io.BytesIO(audio_bytes)
-            buf.name = _extension_for(mime_type)
-            response = client.audio.transcriptions.create(  # type: ignore[union-attr]
-                model=self.WHISPER_MODEL,
-                file=buf,
-                response_format="verbose_json",
-            )
-            duration_s = float(getattr(response, "duration", 0.0) or 0.0)
-            return {
-                "text": getattr(response, "text", "") or "",
-                "language": getattr(response, "language", "en"),
-                "duration_ms": int(round(duration_s * 1000)),
-            }
-
-        loop = asyncio.get_running_loop()
-        try:
-            result = await loop.run_in_executor(None, _sync_transcribe)
-        except Exception as exc:
-            logger.warning(
-                "[session=%s] Whisper transcribe failed: %s",
-                handle.session_id, exc,
-            )
-            return FinalTranscript(
-                success=False, text="", language="en", duration_ms=0,
-                safety_passed=False, error=f"stt_failed: {exc}",
-                provider=self.name,
-            )
-
-        text = (result.get("text") or "").strip()
-        # Lazy import to avoid circular dependency on stt_service at load.
-        from . import stt_service as _stt
-
-        try:
-            safety_envelope = await _stt._safety_check_text(text, handle.target_age)
-            score = float(safety_envelope.get("safety_score", 0.0))
-        except Exception as exc:
-            logger.warning(
-                "[session=%s] safety check raised; fail-closed: %s",
-                handle.session_id, exc,
-            )
-            return FinalTranscript(
-                success=True, text="", language=result["language"],
-                duration_ms=result["duration_ms"],
-                safety_passed=False, error="safety_check_failed",
-                provider=self.name,
-            )
-
-        safety_passed = score >= SAFETY_THRESHOLD
-        return FinalTranscript(
-            success=True,
-            text=text if safety_passed else "",
-            language=result["language"],
-            duration_ms=result["duration_ms"],
-            safety_passed=safety_passed,
-            provider=self.name,
-        )
-
-    async def synthesize_speech(
-        self,
-        handle: SessionHandle,
-        text: str,
-    ) -> AsyncIterator[bytes]:
-        if not text.strip():
-            async def _empty() -> AsyncIterator[bytes]:
-                if False:  # pragma: no cover
-                    yield b""
-            return _empty()
-
-        if not self._tts_available:
-            logger.info(
-                "[session=%s] TTS unavailable — yielding empty stream",
-                handle.session_id,
-            )
-            async def _silent() -> AsyncIterator[bytes]:
-                if False:  # pragma: no cover
-                    yield b""
-            return _silent()
-
-        api_key = os.getenv("ELEVENLABS_API_KEY")
-        voice_id = self.tts_voice_id
-        model_id = self.tts_model
-
-        async def _stream_chunks() -> AsyncIterator[bytes]:
-            try:
-                client = _elevenlabs_AsyncClient(api_key=api_key)  # type: ignore[misc]
-                voice_settings = _elevenlabs_VoiceSettings(  # type: ignore[misc]
-                    stability=0.5, similarity_boost=0.75, style=0.2,
-                )
-                audio_stream = await client.text_to_speech.convert(
-                    voice_id=voice_id,
-                    text=text,
-                    model_id=model_id,
-                    voice_settings=voice_settings,
-                    output_format="mp3_44100_128",
-                )
-                async for chunk in audio_stream:
-                    if chunk:
-                        yield chunk
-            except Exception as exc:
-                logger.warning(
-                    "[session=%s] ElevenLabs TTS failed mid-stream: %s",
-                    handle.session_id, exc,
-                )
-                return
-
-        return _stream_chunks()
-
-    async def close(self, handle: SessionHandle) -> None:
-        # No persistent connections — Whisper is one-shot, ElevenLabs
-        # stream closes when its iterator exhausts. Clear the buffer
-        # so nothing leaks if a caller holds the handle past close.
-        handle.provider_state.pop("buffer", None)
-        handle.provider_state["closed"] = True
-
-
-# ---------------------------------------------------------------------------
 # OpenAI Realtime provider — broker-integrated (#645)
 # ---------------------------------------------------------------------------
 
@@ -656,6 +399,11 @@ _E2_NOT_IMPLEMENTED: str = "E2 — broker integration"
 # Per-OpenAI Realtime API spec — the upstream WS endpoint. The model
 # query parameter is appended at connection time.
 OPENAI_REALTIME_WS_URL: str = "wss://api.openai.com/v1/realtime"
+
+# GA Realtime audio sample rate (Hz) for the nested ``audio.{input,output}
+# .format`` objects. 24 kHz mono 16-bit little-endian PCM is OpenAI's
+# recommended GA default.
+OPENAI_REALTIME_AUDIO_RATE: int = 24000
 
 # Per-age voice subset (PRD §3.16.6). 3-5 is parent-locked to the gentle
 # ``alloy`` voice; older tiers get richer choices. The broker passes the
@@ -967,12 +715,16 @@ class OpenAIRealtimeProvider:
         if self._ws_available and open_upstream:
             try:
                 ws_url = f"{OPENAI_REALTIME_WS_URL}?model={chosen_model}"
+                # GA Realtime API (beta shape removed by OpenAI 2026-05):
+                # the ``OpenAI-Beta: realtime=v1`` header MUST NOT be sent —
+                # it triggers ``invalid_request_error.beta_api_shape_disabled``
+                # and the upstream closes with WS code 4000. Authorization is
+                # the only required header now. See #751.
                 # Use the module alias so tests can monkeypatch a fake.
                 cm_or_awaitable = _websockets_connect(  # type: ignore[misc]
                     ws_url,
                     additional_headers={
                         "Authorization": f"Bearer {api_key}",
-                        "OpenAI-Beta": "realtime=v1",
                     },
                 )
                 # ``websockets.connect`` returns an object that's both
@@ -998,19 +750,56 @@ class OpenAIRealtimeProvider:
                 from .realtime_voice_tools import (
                     filter_tool_definitions_by_skills,
                 )
-                tools_for_session = filter_tool_definitions_by_skills(
-                    enabled_skills,
-                )
+                # GA only accepts {type,name,description,parameters} on a
+                # function tool. Our defs also carry an internal ``version``
+                # (used for drift detection elsewhere) which GA rejects with
+                # ``Unknown parameter: 'session.tools[N].version'`` — strip to
+                # the allowed keys here rather than mutate the source defs.
+                _GA_TOOL_KEYS = ("type", "name", "description", "parameters")
+                tools_for_session = [
+                    {k: t[k] for k in _GA_TOOL_KEYS if k in t}
+                    for t in filter_tool_definitions_by_skills(enabled_skills)
+                ]
+                # GA session shape (#751): ``type: "realtime"`` is required;
+                # ``modalities`` → ``output_modalities``; the flat
+                # ``input/output_audio_format`` strings + ``voice`` +
+                # ``input_audio_transcription`` now live under a nested
+                # ``audio`` object, and formats are ``{type, rate}`` objects.
+                # ``turn_detection: null`` keeps turn-taking MANUAL — the
+                # broker drives ``input_audio_buffer.commit`` + ``response
+                # .create`` from the frontend's VAD, so server-side VAD must
+                # stay off or it would double-trigger responses.
                 await upstream_ws.send(json.dumps({
                     "type": "session.update",
                     "session": {
-                        "modalities": ["audio", "text"],
-                        "voice": voice,
+                        "type": "realtime",
+                        "model": chosen_model,
+                        # GA accepts ["text"] OR ["audio"], never both. For a
+                        # spoken buddy we request ["audio"]; the model still
+                        # streams the spoken text as
+                        # ``response.output_audio_transcript.*`` events, which
+                        # feed the pre-delivery safety gate.
+                        "output_modalities": ["audio"],
                         "instructions": system_prompt,
-                        "input_audio_format": "pcm16",
-                        "output_audio_format": "pcm16",
-                        "input_audio_transcription": {"model": "whisper-1"},
+                        "audio": {
+                            "input": {
+                                "format": {
+                                    "type": "audio/pcm",
+                                    "rate": OPENAI_REALTIME_AUDIO_RATE,
+                                },
+                                "turn_detection": None,
+                                "transcription": {"model": "gpt-4o-transcribe"},
+                            },
+                            "output": {
+                                "format": {
+                                    "type": "audio/pcm",
+                                    "rate": OPENAI_REALTIME_AUDIO_RATE,
+                                },
+                                "voice": voice,
+                            },
+                        },
                         "tools": tools_for_session,
+                        "tool_choice": "auto",
                     },
                 }))
             except Exception as exc:
@@ -1019,6 +808,16 @@ class OpenAIRealtimeProvider:
                     exc,
                 )
                 upstream_ws = None
+
+        # #752: if we asked to open the WS-broker upstream but it failed,
+        # mark the session unavailable so ``finalize_utterance`` returns a
+        # clean ``provider_unavailable`` envelope. Without this, the relay
+        # path later calls ``upstream_ws.recv()`` on ``None`` and surfaces a
+        # raw ``AttributeError`` ("'NoneType' object has no attribute
+        # 'recv'") to the child as a generic failure. When ``open_upstream``
+        # is False (WebRTC-direct path) a ``None`` upstream is expected and
+        # NOT a degraded state — the browser uses the client secret instead.
+        relay_unavailable = open_upstream and upstream_ws is None
 
         return SessionHandle(
             session_id=f"voice_openai_{uuid4().hex[:12]}",
@@ -1033,6 +832,7 @@ class OpenAIRealtimeProvider:
                 "voice": voice,
                 "system_prompt": system_prompt,
                 "upstream_ws": upstream_ws,
+                "provider_unavailable": relay_unavailable,
                 "pending_events": [],
                 # ``prompt_cache_hit`` is set by the broker when it
                 # detects the upstream returned a cached-prompt header.
@@ -1063,7 +863,9 @@ class OpenAIRealtimeProvider:
         audio_bytes: bytes,
     ) -> None:
         """Forward a chunk of child audio to the upstream model."""
-        if handle.provider_state.get("provider_unavailable"):
+        # Gate on the live resource, not a cached flag: if there's no
+        # upstream WS there's nothing to forward (#752).
+        if handle.provider_state.get("upstream_ws") is None:
             return
         # OpenAI expects base64-encoded PCM audio in input_audio_buffer.append.
         await self._send_event(handle, {
@@ -1083,7 +885,12 @@ class OpenAIRealtimeProvider:
         broker is responsible for running the per-age safety check on
         the result.
         """
-        if handle.provider_state.get("provider_unavailable"):
+        # #752: no upstream WS → degrade cleanly with a typed
+        # ``provider_unavailable`` envelope instead of later calling
+        # ``.recv()`` on ``None`` (which surfaced a raw AttributeError to
+        # the child). Covers both the WS-open-failed case and the no-key /
+        # mint-failed degraded handles (which carry no ``upstream_ws``).
+        if handle.provider_state.get("upstream_ws") is None:
             return FinalTranscript(
                 success=False, text="", language="en", duration_ms=0,
                 safety_passed=False, error="provider_unavailable",
@@ -1133,7 +940,12 @@ class OpenAIRealtimeProvider:
         in ``handle.provider_state["pending_events"]`` so the next call
         can replay them.
         """
-        ws = handle.provider_state["upstream_ws"]
+        ws = handle.provider_state.get("upstream_ws")
+        if ws is None:
+            # #752: never call ``.recv()`` on a missing upstream. Callers
+            # gate on ``provider_unavailable`` before reaching here, but a
+            # clean error beats a raw AttributeError if that ever slips.
+            raise RuntimeError("provider_unavailable")
         pending: List[Dict[str, Any]] = handle.provider_state.setdefault(
             "pending_events", []
         )
@@ -1230,7 +1042,7 @@ class OpenAIRealtimeProvider:
         already accepted the model's reply text via safety check and
         we are now just relaying the corresponding audio chunks.
         """
-        if handle.provider_state.get("provider_unavailable"):
+        if handle.provider_state.get("upstream_ws") is None:
             async def _empty() -> AsyncIterator[bytes]:
                 if False:  # pragma: no cover
                     yield b""
@@ -1337,13 +1149,26 @@ def _extract_audio_delta(ev: Dict[str, Any]) -> bytes:
 async def _ev_to_reply_events(ev: Dict[str, Any]) -> AsyncIterator[ReplyEvent]:
     """Map one upstream event to zero-or-more ReplyEvent records."""
     ev_type = ev.get("type", "")
-    if ev_type in ("response.audio_transcript.delta", "response.output_text.delta"):
+    # GA renamed the streamed-text events. With ``output_modalities:
+    # ["audio"]`` the spoken text arrives as
+    # ``response.output_audio_transcript.*``; ``response.output_text.*`` is
+    # the text-only mode. We accept the GA names AND the legacy beta names so
+    # the pre-delivery safety gate keeps receiving reply text — a missed
+    # rename here would be a silent fail-open (audio forwarded, text empty).
+    if ev_type in (
+        "response.output_audio_transcript.delta",
+        "response.audio_transcript.delta",
+        "response.output_text.delta",
+        "response.text.delta",
+    ):
         delta = ev.get("delta", "") or ""
         if delta:
             yield ReplyEvent(kind="text_delta", text=delta)
     elif ev_type in (
+        "response.output_audio_transcript.done",
         "response.audio_transcript.done",
         "response.output_text.done",
+        "response.text.done",
     ):
         # OpenAI emits the full transcript text in ``transcript`` or ``text``.
         text = (
@@ -1388,18 +1213,15 @@ def _select_provider(
 ) -> RealtimeVoiceProvider:
     """Pick the provider for this process.
 
-    Priority:
+    Priority (#754 — the stitched Hybrid provider was removed; we run the
+    OpenAI single-model realtime provider, with Mock for keyless envs):
       1. Explicit ``override`` — test injection.
       2. ``REALTIME_VOICE_PROVIDER=mock`` → MockRealtimeVoiceProvider.
-      3. ``REALTIME_VOICE_PROVIDER=hybrid`` → HybridRealtimeVoiceProvider
-         (degrades internally when keys are missing).
-      4. ``REALTIME_VOICE_PROVIDER=openai`` →
+      3. ``REALTIME_VOICE_PROVIDER=openai`` →
          a) OPENAI_API_KEY set → OpenAIRealtimeProvider
-         b) OPENAI_API_KEY missing → Hybrid (next tier in the
-            graceful-degradation chain; Hybrid further degrades to a
-            ``provider_unavailable`` envelope if its own key is missing).
-      5. Missing ``OPENAI_API_KEY`` → Mock (dev/test env without keys).
-      6. Default → Mock until an operator opts into a real provider.
+         b) OPENAI_API_KEY missing → Mock (keyless dev/test fallback).
+      4. Missing ``OPENAI_API_KEY`` → Mock (dev/test env without keys).
+      5. Default → Mock until an operator opts into a real provider.
     """
     if override is not None:
         return override
@@ -1408,20 +1230,16 @@ def _select_provider(
     if requested == "mock":
         return MockRealtimeVoiceProvider()
 
-    if requested == "hybrid":
-        return HybridRealtimeVoiceProvider()
-
     if requested == "openai":
         if os.getenv("OPENAI_API_KEY"):
             return OpenAIRealtimeProvider()
-        # Fallback chain: openai -> hybrid -> mock. Hybrid itself
-        # degrades internally if ELEVENLABS / OPENAI keys go missing,
-        # so half-deployed envs still don't crash.
+        # Keyless fallback: openai -> mock so half-deployed dev/test envs
+        # don't crash.
         logger.warning(
             "REALTIME_VOICE_PROVIDER=openai but OPENAI_API_KEY missing "
-            "— falling back to HybridRealtimeVoiceProvider"
+            "— falling back to MockRealtimeVoiceProvider"
         )
-        return HybridRealtimeVoiceProvider()
+        return MockRealtimeVoiceProvider()
 
     if not os.getenv("OPENAI_API_KEY"):
         return MockRealtimeVoiceProvider()

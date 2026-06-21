@@ -57,6 +57,7 @@ from ...services.database import (
 )
 from ...services.realtime_voice_service import (
     FinalTranscript,
+    OPENAI_REALTIME_AUDIO_RATE,
     RealtimeVoiceProvider,
     SessionHandle,
     _select_provider,
@@ -487,7 +488,14 @@ async def start_voice_session(
         ws_url="/api/v1/me/agent/voice/stream",
         provider_config=VoiceProviderConfig(
             provider=provider.name,  # type: ignore[arg-type]
-            sample_rate_hz=16_000,
+            # #755: the OpenAI Realtime GA session runs at 24kHz pcm16, so the
+            # client must capture at that rate for the broker to forward audio
+            # verbatim. Other providers (mock) stay at 16kHz.
+            sample_rate_hz=(
+                OPENAI_REALTIME_AUDIO_RATE
+                if provider.name == "openai_realtime"
+                else 16_000
+            ),
             audio_format="pcm16",
         ),
         openai_realtime_client_secret=openai_secret,

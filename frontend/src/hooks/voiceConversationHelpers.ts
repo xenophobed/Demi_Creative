@@ -174,6 +174,29 @@ export function detectSilenceVad(args: SilenceVadArgs): SilenceVadResult {
 // WS frame builders + parser
 // ---------------------------------------------------------------------------
 
+/** Default PCM capture rate (Hz) for the WS-broker path. Matches the GA
+ *  OpenAI Realtime session default; overridden by the session response's
+ *  `provider_config.sample_rate_hz` when present. #755 */
+export const PCM_TARGET_SAMPLE_RATE = 24000;
+
+/** ScriptProcessor buffer size (samples/channel). ~85ms at 24kHz — small
+ *  enough for low latency, large enough to keep WS frame overhead modest. */
+export const PCM_FRAME_SAMPLES = 2048;
+
+/** Convert a Float32 mono buffer (range [-1,1]) to little-endian 16-bit PCM.
+ *  OpenAI Realtime input requires raw pcm16, not the webm/opus container
+ *  MediaRecorder emits — this is the core of the #755 fix. Returns the
+ *  underlying ArrayBuffer ready for `buildAudioChunkFrame`.
+ */
+export function floatToPcm16(input: Float32Array): ArrayBuffer {
+  const out = new Int16Array(input.length);
+  for (let i = 0; i < input.length; i++) {
+    const s = Math.max(-1, Math.min(1, input[i]));
+    out[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+  }
+  return out.buffer;
+}
+
 /** Build the discriminated `audio_chunk` envelope the broker expects.
  *  Uses btoa over a chunked Latin-1 conversion to avoid hitting argument-
  *  list limits on large ArrayBuffers.
