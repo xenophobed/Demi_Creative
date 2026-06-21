@@ -657,6 +657,11 @@ _E2_NOT_IMPLEMENTED: str = "E2 — broker integration"
 # query parameter is appended at connection time.
 OPENAI_REALTIME_WS_URL: str = "wss://api.openai.com/v1/realtime"
 
+# GA Realtime audio sample rate (Hz) for the nested ``audio.{input,output}
+# .format`` objects. 24 kHz mono 16-bit little-endian PCM is OpenAI's
+# recommended GA default.
+OPENAI_REALTIME_AUDIO_RATE: int = 24000
+
 # Per-age voice subset (PRD §3.16.6). 3-5 is parent-locked to the gentle
 # ``alloy`` voice; older tiers get richer choices. The broker passes the
 # chosen voice through ``persona`` → ``voice_session_config``.
@@ -967,12 +972,16 @@ class OpenAIRealtimeProvider:
         if self._ws_available and open_upstream:
             try:
                 ws_url = f"{OPENAI_REALTIME_WS_URL}?model={chosen_model}"
+                # GA Realtime API (beta shape removed by OpenAI 2026-05):
+                # the ``OpenAI-Beta: realtime=v1`` header MUST NOT be sent —
+                # it triggers ``invalid_request_error.beta_api_shape_disabled``
+                # and the upstream closes with WS code 4000. Authorization is
+                # the only required header now. See #751.
                 # Use the module alias so tests can monkeypatch a fake.
                 cm_or_awaitable = _websockets_connect(  # type: ignore[misc]
                     ws_url,
                     additional_headers={
                         "Authorization": f"Bearer {api_key}",
-                        "OpenAI-Beta": "realtime=v1",
                     },
                 )
                 # ``websockets.connect`` returns an object that's both
@@ -998,19 +1007,56 @@ class OpenAIRealtimeProvider:
                 from .realtime_voice_tools import (
                     filter_tool_definitions_by_skills,
                 )
-                tools_for_session = filter_tool_definitions_by_skills(
-                    enabled_skills,
-                )
+                # GA only accepts {type,name,description,parameters} on a
+                # function tool. Our defs also carry an internal ``version``
+                # (used for drift detection elsewhere) which GA rejects with
+                # ``Unknown parameter: 'session.tools[N].version'`` — strip to
+                # the allowed keys here rather than mutate the source defs.
+                _GA_TOOL_KEYS = ("type", "name", "description", "parameters")
+                tools_for_session = [
+                    {k: t[k] for k in _GA_TOOL_KEYS if k in t}
+                    for t in filter_tool_definitions_by_skills(enabled_skills)
+                ]
+                # GA session shape (#751): ``type: "realtime"`` is required;
+                # ``modalities`` → ``output_modalities``; the flat
+                # ``input/output_audio_format`` strings + ``voice`` +
+                # ``input_audio_transcription`` now live under a nested
+                # ``audio`` object, and formats are ``{type, rate}`` objects.
+                # ``turn_detection: null`` keeps turn-taking MANUAL — the
+                # broker drives ``input_audio_buffer.commit`` + ``response
+                # .create`` from the frontend's VAD, so server-side VAD must
+                # stay off or it would double-trigger responses.
                 await upstream_ws.send(json.dumps({
                     "type": "session.update",
                     "session": {
-                        "modalities": ["audio", "text"],
-                        "voice": voice,
+                        "type": "realtime",
+                        "model": chosen_model,
+                        # GA accepts ["text"] OR ["audio"], never both. For a
+                        # spoken buddy we request ["audio"]; the model still
+                        # streams the spoken text as
+                        # ``response.output_audio_transcript.*`` events, which
+                        # feed the pre-delivery safety gate.
+                        "output_modalities": ["audio"],
                         "instructions": system_prompt,
-                        "input_audio_format": "pcm16",
-                        "output_audio_format": "pcm16",
-                        "input_audio_transcription": {"model": "whisper-1"},
+                        "audio": {
+                            "input": {
+                                "format": {
+                                    "type": "audio/pcm",
+                                    "rate": OPENAI_REALTIME_AUDIO_RATE,
+                                },
+                                "turn_detection": None,
+                                "transcription": {"model": "gpt-4o-transcribe"},
+                            },
+                            "output": {
+                                "format": {
+                                    "type": "audio/pcm",
+                                    "rate": OPENAI_REALTIME_AUDIO_RATE,
+                                },
+                                "voice": voice,
+                            },
+                        },
                         "tools": tools_for_session,
+                        "tool_choice": "auto",
                     },
                 }))
             except Exception as exc:
@@ -1019,6 +1065,16 @@ class OpenAIRealtimeProvider:
                     exc,
                 )
                 upstream_ws = None
+
+        # #752: if we asked to open the WS-broker upstream but it failed,
+        # mark the session unavailable so ``finalize_utterance`` returns a
+        # clean ``provider_unavailable`` envelope. Without this, the relay
+        # path later calls ``upstream_ws.recv()`` on ``None`` and surfaces a
+        # raw ``AttributeError`` ("'NoneType' object has no attribute
+        # 'recv'") to the child as a generic failure. When ``open_upstream``
+        # is False (WebRTC-direct path) a ``None`` upstream is expected and
+        # NOT a degraded state — the browser uses the client secret instead.
+        relay_unavailable = open_upstream and upstream_ws is None
 
         return SessionHandle(
             session_id=f"voice_openai_{uuid4().hex[:12]}",
@@ -1033,6 +1089,7 @@ class OpenAIRealtimeProvider:
                 "voice": voice,
                 "system_prompt": system_prompt,
                 "upstream_ws": upstream_ws,
+                "provider_unavailable": relay_unavailable,
                 "pending_events": [],
                 # ``prompt_cache_hit`` is set by the broker when it
                 # detects the upstream returned a cached-prompt header.
@@ -1063,7 +1120,9 @@ class OpenAIRealtimeProvider:
         audio_bytes: bytes,
     ) -> None:
         """Forward a chunk of child audio to the upstream model."""
-        if handle.provider_state.get("provider_unavailable"):
+        # Gate on the live resource, not a cached flag: if there's no
+        # upstream WS there's nothing to forward (#752).
+        if handle.provider_state.get("upstream_ws") is None:
             return
         # OpenAI expects base64-encoded PCM audio in input_audio_buffer.append.
         await self._send_event(handle, {
@@ -1083,7 +1142,12 @@ class OpenAIRealtimeProvider:
         broker is responsible for running the per-age safety check on
         the result.
         """
-        if handle.provider_state.get("provider_unavailable"):
+        # #752: no upstream WS → degrade cleanly with a typed
+        # ``provider_unavailable`` envelope instead of later calling
+        # ``.recv()`` on ``None`` (which surfaced a raw AttributeError to
+        # the child). Covers both the WS-open-failed case and the no-key /
+        # mint-failed degraded handles (which carry no ``upstream_ws``).
+        if handle.provider_state.get("upstream_ws") is None:
             return FinalTranscript(
                 success=False, text="", language="en", duration_ms=0,
                 safety_passed=False, error="provider_unavailable",
@@ -1133,7 +1197,12 @@ class OpenAIRealtimeProvider:
         in ``handle.provider_state["pending_events"]`` so the next call
         can replay them.
         """
-        ws = handle.provider_state["upstream_ws"]
+        ws = handle.provider_state.get("upstream_ws")
+        if ws is None:
+            # #752: never call ``.recv()`` on a missing upstream. Callers
+            # gate on ``provider_unavailable`` before reaching here, but a
+            # clean error beats a raw AttributeError if that ever slips.
+            raise RuntimeError("provider_unavailable")
         pending: List[Dict[str, Any]] = handle.provider_state.setdefault(
             "pending_events", []
         )
@@ -1230,7 +1299,7 @@ class OpenAIRealtimeProvider:
         already accepted the model's reply text via safety check and
         we are now just relaying the corresponding audio chunks.
         """
-        if handle.provider_state.get("provider_unavailable"):
+        if handle.provider_state.get("upstream_ws") is None:
             async def _empty() -> AsyncIterator[bytes]:
                 if False:  # pragma: no cover
                     yield b""
@@ -1337,13 +1406,26 @@ def _extract_audio_delta(ev: Dict[str, Any]) -> bytes:
 async def _ev_to_reply_events(ev: Dict[str, Any]) -> AsyncIterator[ReplyEvent]:
     """Map one upstream event to zero-or-more ReplyEvent records."""
     ev_type = ev.get("type", "")
-    if ev_type in ("response.audio_transcript.delta", "response.output_text.delta"):
+    # GA renamed the streamed-text events. With ``output_modalities:
+    # ["audio"]`` the spoken text arrives as
+    # ``response.output_audio_transcript.*``; ``response.output_text.*`` is
+    # the text-only mode. We accept the GA names AND the legacy beta names so
+    # the pre-delivery safety gate keeps receiving reply text — a missed
+    # rename here would be a silent fail-open (audio forwarded, text empty).
+    if ev_type in (
+        "response.output_audio_transcript.delta",
+        "response.audio_transcript.delta",
+        "response.output_text.delta",
+        "response.text.delta",
+    ):
         delta = ev.get("delta", "") or ""
         if delta:
             yield ReplyEvent(kind="text_delta", text=delta)
     elif ev_type in (
+        "response.output_audio_transcript.done",
         "response.audio_transcript.done",
         "response.output_text.done",
+        "response.text.done",
     ):
         # OpenAI emits the full transcript text in ``transcript`` or ``text``.
         text = (
