@@ -7,6 +7,7 @@ import {
   detectSilenceVad,
   detectVoiceCapabilities,
   dispatchForServerEvent,
+  floatToPcm16,
   isSafariBelow16,
   parseServerEvent,
   pickAudioMimeType,
@@ -402,5 +403,35 @@ describe("buildWsUrl (#617)", () => {
     expect(
       buildWsUrl("https://e.com", "/voice", "tok+with/special chars"),
     ).toBe("wss://e.com/voice?token=tok%2Bwith%2Fspecial%20chars");
+  });
+});
+
+// ------------------------------- floatToPcm16 (#755) ----------------------
+
+describe("floatToPcm16", () => {
+  const asInt16 = (buf: ArrayBuffer) => new Int16Array(buf);
+
+  it("maps full-scale +/- and zero to 16-bit bounds", () => {
+    const out = asInt16(floatToPcm16(new Float32Array([0, 1, -1])));
+    expect(out[0]).toBe(0);
+    expect(out[1]).toBe(32767); // +1 -> max positive
+    expect(out[2]).toBe(-32768); // -1 -> max negative
+  });
+
+  it("clamps out-of-range samples instead of wrapping", () => {
+    const out = asInt16(floatToPcm16(new Float32Array([2.5, -2.5])));
+    expect(out[0]).toBe(32767);
+    expect(out[1]).toBe(-32768);
+  });
+
+  it("produces little-endian bytes consumable as raw pcm16", () => {
+    // 0.5 * 32767 = 16383 (0x3FFF) -> LE bytes [0xFF, 0x3F]
+    const bytes = new Uint8Array(floatToPcm16(new Float32Array([0.5])));
+    expect([bytes[0], bytes[1]]).toEqual([0xff, 0x3f]);
+  });
+
+  it("preserves sample count (one Int16 per input sample)", () => {
+    const out = floatToPcm16(new Float32Array(2048));
+    expect(out.byteLength).toBe(2048 * 2);
   });
 });
