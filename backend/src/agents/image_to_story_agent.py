@@ -771,7 +771,9 @@ Return your response as JSON:
   "concepts": ["concept1", "concept2"],
   "moral": "the moral lesson",
   "characters": [{{"name": "...", "description": "...", "appearances": 1}}]
-}}"""
+}}
+
+For "characters", list ONLY living characters (people, animals, or creatures with a name and personality). Do NOT include settings, places, or objects (e.g. "The Forest", "The Castle", "The Mirror")."""
 
     client = AsyncAnthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
     try:

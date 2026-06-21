@@ -30,6 +30,48 @@ class CharacterRepository:
         cleaned = " ".join(cleaned.split())
         return cleaned.strip()
 
+    # Head nouns that mark a story *setting* (place) or *prop* (object) rather
+    # than a character. Used to keep non-characters out of the roster (#742).
+    _SETTING_OBJECT_NOUNS = frozenset({
+        # places / settings
+        "forest", "ocean", "sea", "castle", "kingdom", "realm", "world", "land",
+        "village", "town", "city", "mountain", "mountains", "river", "lake",
+        "sky", "garden", "meadow", "valley", "cave", "cavern", "island",
+        "palace", "tower", "temple", "dungeon", "desert", "jungle", "swamp",
+        "field", "beach", "harbor", "harbour", "bridge", "road", "path", "maze",
+        "labyrinth", "wonderland",
+        # objects / props
+        "mirror", "sword", "shield", "key", "book", "lamp", "lantern", "crown",
+        "ring", "map", "door", "gate", "box", "chest", "wand", "staff",
+        "potion", "gem", "jewel", "stone", "crystal", "orb", "amulet",
+        "necklace", "scroll", "bell", "clock", "candle", "torch", "flute",
+        "drum", "compass", "telescope", "portal", "throne",
+    })
+
+    _LEADING_ARTICLES = ("the ", "a ", "an ")
+
+    @classmethod
+    def _is_non_character_name(cls, name: str) -> bool:
+        """True if `name` denotes a story setting or prop, not a character.
+
+        Heuristic: the name opens with an article ("The/A/An") AND ends in a
+        known place/object noun — e.g. "The Enchanted Forest", "The Mirror".
+        Both signals are required because real character names rarely start
+        with an article, and an article alone is not enough ("The Wizard" is a
+        character). Requiring both keeps false positives near zero, because we
+        would rather keep an odd character than silently drop a real one.
+        """
+        cleaned = cls._sanitize_name(name)
+        if not cleaned:
+            return False
+        lowered = cleaned.casefold()
+        if not lowered.startswith(cls._LEADING_ARTICLES):
+            return False
+        tokens = [t for t in re.split(r"[^\w]+", lowered) if t]
+        if not tokens:
+            return False
+        return tokens[-1] in cls._SETTING_OBJECT_NOUNS
+
     @classmethod
     def _normalized_name_key(cls, name: str) -> str:
         """Build key used for dedupe and matching.
@@ -110,7 +152,7 @@ class CharacterRepository:
         description: Optional[str] = None,
         visual_features: Optional[Dict[str, Any]] = None,
         traits: Optional[List[str]] = None,
-    ) -> Dict[str, Any]:
+    ) -> Optional[Dict[str, Any]]:
         """Insert a new character or update an existing one.
 
         On conflict (same user_id + child_id + name): increments appearance_count,
@@ -126,6 +168,12 @@ class CharacterRepository:
         cleaned_name = self._sanitize_name(name)
         if not cleaned_name:
             raise ValueError("Character name cannot be empty")
+
+        # Settings ("The Enchanted Forest") and props ("The Mirror") are mined
+        # from story text but are not characters — never persist them, so they
+        # cannot pollute the gallery or Morning Show guest picker (#742).
+        if self._is_non_character_name(cleaned_name):
+            return None
 
         canonical = await self._find_by_normalized_name(user_id, child_id, cleaned_name)
         target_name = canonical["name"] if canonical else cleaned_name
@@ -175,6 +223,11 @@ class CharacterRepository:
         for item in deserialized:
             key = self._normalized_name_key(item.get("name", ""))
             if not key:
+                continue
+
+            # Exclude settings/props persisted before the write-side guard
+            # existed (#742), so legacy junk disappears without a migration.
+            if self._is_non_character_name(item.get("name", "")):
                 continue
 
             if key not in merged:
