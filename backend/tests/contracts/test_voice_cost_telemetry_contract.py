@@ -377,14 +377,6 @@ class TestNonOpenAIProvidersStillWork:
         assert "model" not in handle.provider_state
 
     @pytest.mark.asyncio
-    async def test_hybrid_provider_start_session_does_not_carry_model_state(self):
-        provider = rtvs.HybridRealtimeVoiceProvider()
-        handle = await provider.start_session(
-            user_id="u", child_id="c", target_age=7,
-        )
-        assert "model" not in handle.provider_state
-
-    @pytest.mark.asyncio
     async def test_estimate_cost_safe_for_non_openai_sessions(self):
         # Broker passes the provider's ``model`` straight through; for
         # Mock/Hybrid this is the empty string or None. Either should

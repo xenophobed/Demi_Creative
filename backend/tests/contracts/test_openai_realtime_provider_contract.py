@@ -41,7 +41,6 @@ import pytest
 
 from backend.src.services import realtime_voice_service as rtvs
 from backend.src.services.realtime_voice_service import (
-    HybridRealtimeVoiceProvider,
     MockRealtimeVoiceProvider,
     OPENAI_REALTIME_CLIENT_SECRETS_URL,
     OPENAI_REALTIME_MODEL_DEFAULT,
@@ -414,20 +413,15 @@ class TestSelectProviderRouting:
         assert isinstance(chosen, OpenAIRealtimeProvider)
         assert chosen.name == "openai_realtime"
 
-    def test_openai_env_without_api_key_falls_back_to_hybrid(self, monkeypatch):
-        # Fallback chain: openai -> hybrid -> mock. Without OPENAI_API_KEY
-        # the OpenAI provider can't mint a secret, so we fall back to
-        # Hybrid (which itself degrades internally if its keys are missing).
+    def test_openai_env_without_api_key_falls_back_to_mock(self, monkeypatch):
+        # #754: the Hybrid provider was removed, so the keyless fallback
+        # chain is openai -> mock. Without OPENAI_API_KEY the OpenAI provider
+        # can't mint a secret, so we fall back to Mock.
         monkeypatch.setenv("REALTIME_VOICE_PROVIDER", "openai")
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         chosen = _select_provider()
-        assert isinstance(chosen, HybridRealtimeVoiceProvider)
-        assert chosen.name == "hybrid"
-
-    def test_hybrid_env_still_returns_hybrid_no_regression(self, monkeypatch):
-        monkeypatch.setenv("REALTIME_VOICE_PROVIDER", "hybrid")
-        chosen = _select_provider()
-        assert isinstance(chosen, HybridRealtimeVoiceProvider)
+        assert isinstance(chosen, MockRealtimeVoiceProvider)
+        assert chosen.name == "mock"
 
     def test_mock_env_still_returns_mock_no_regression(self, monkeypatch):
         monkeypatch.setenv("REALTIME_VOICE_PROVIDER", "mock")
