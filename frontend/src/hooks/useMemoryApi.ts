@@ -156,6 +156,20 @@ function memoryDataScore(
   return characters.length * 5 + profileScore(preferences);
 }
 
+/**
+ * Decide whether to show the resolved primary child's memory instead of the
+ * explicitly-selected child's. We only borrow another child's data when the
+ * selected child has NONE of its own — an explicit, non-empty selection is
+ * never overridden, even by a higher-activity sibling (#747).
+ */
+export function shouldUseFallbackMemory(
+  hasFallbackChild: boolean,
+  preferredScore: number,
+  fallbackScore: number,
+): boolean {
+  return hasFallbackChild && preferredScore === 0 && fallbackScore > 0;
+}
+
 export function useMemoryApi(childId: string | null) {
   const queryClient = useQueryClient();
   const { user } = useAuthStore();
@@ -249,7 +263,11 @@ export function useMemoryApi(childId: string | null) {
     fallbackCharacters,
     fallbackPreferences,
   );
-  const useFallbackData = !!fallbackChildId && fallbackScore > preferredScore;
+  const useFallbackData = shouldUseFallbackMemory(
+    !!fallbackChildId,
+    preferredScore,
+    fallbackScore,
+  );
   const activeChildId = useFallbackData ? fallbackChildId : preferredChildId;
 
   const activeCharacters = useFallbackData
