@@ -14,6 +14,10 @@ interface CharacterGalleryProps {
   deletingCharacterName?: string | null;
 }
 
+// "Main characters" = the most frequently appearing characters (top N by
+// appearance_count). Keep in sync with the backend grouping and useMemoryApi.
+const MAIN_CHARACTER_LIMIT = 5;
+
 const CARD_COLORS = [
   "from-purple-100 to-purple-50 border-purple-200",
   "from-blue-100 to-blue-50 border-blue-200",
@@ -36,18 +40,18 @@ function CharacterGallery({
 }: CharacterGalleryProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const hasGrouped = mainCharacters.length > 0 || otherCharacters.length > 0;
+  // Fallback when the backend sent no grouped arrays: rank by appearance
+  // frequency and treat the top N as main characters, the rest as other.
+  const rankedByFrequency = [...characters].sort(
+    (a, b) =>
+      Number(b.appearance_count || 0) - Number(a.appearance_count || 0),
+  );
   const resolvedMainCharacters = hasGrouped
     ? mainCharacters
-    : characters.filter(
-        (c) =>
-          Number(c.main_story_count || 0) > 0 || c.character_role === "main",
-      );
+    : rankedByFrequency.slice(0, MAIN_CHARACTER_LIMIT);
   const resolvedOtherCharacters = hasGrouped
     ? otherCharacters
-    : characters.filter(
-        (c) =>
-          !(Number(c.main_story_count || 0) > 0 || c.character_role === "main"),
-      );
+    : rankedByFrequency.slice(MAIN_CHARACTER_LIMIT);
 
   const renderCharacterCards = (items: MemoryCharacter[], offset = 0) =>
     items.map((character, index) => (

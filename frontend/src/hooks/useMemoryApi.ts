@@ -14,6 +14,11 @@ import type {
 } from "@/types/api";
 import useAuthStore from "@/store/useAuthStore";
 
+// "Main characters" = the most frequently appearing characters (top N by
+// appearance_count). Keep in sync with MAIN_CHARACTER_LIMIT in
+// backend/src/services/database/character_repository.py.
+const MAIN_CHARACTER_LIMIT = 5;
+
 function normalizeCharacterName(name: string): string {
   if (!name) return "";
   return name
@@ -84,12 +89,10 @@ function mergeCharacters(items: MemoryCharacter[]): MemoryCharacter[] {
       main_story_count:
         Number(existing.main_story_count || 0) +
         Number(item.main_story_count || 0),
-      character_role:
-        Number(existing.main_story_count || 0) +
-          Number(item.main_story_count || 0) >
-        0
-          ? "main"
-          : "other",
+      // Grouping is decided by appearance frequency (see splitCharacterGroups);
+      // preserve whichever role the backend assigned rather than re-deriving it
+      // from main_story_count, which no longer gates main/other.
+      character_role: existing.character_role ?? item.character_role,
       description:
         (item.description?.length || 0) > (existing.description?.length || 0)
           ? item.description
@@ -104,19 +107,10 @@ function mergeCharacters(items: MemoryCharacter[]): MemoryCharacter[] {
     });
   }
 
-  return Array.from(merged.values())
-    .map((c) => {
-      const role: MemoryCharacter["character_role"] =
-        Number(c.main_story_count || 0) > 0 ? "main" : "other";
-      return {
-        ...c,
-        character_role: role,
-      };
-    })
-    .sort(
-      (a, b) =>
-        Number(b.appearance_count || 0) - Number(a.appearance_count || 0),
-    );
+  return Array.from(merged.values()).sort(
+    (a, b) =>
+      Number(b.appearance_count || 0) - Number(a.appearance_count || 0),
+  );
 }
 
 function splitCharacterGroups(
@@ -128,14 +122,16 @@ function splitCharacterGroups(
     return { main: hintedMain, other: hintedOther };
   }
 
-  const main = allCharacters.filter(
-    (c) => Number(c.main_story_count || 0) > 0 || c.character_role === "main",
+  // Fallback when the backend sent no grouped hints: rank by appearance
+  // frequency and treat the top N as main characters, the rest as other.
+  const ranked = [...allCharacters].sort(
+    (a, b) =>
+      Number(b.appearance_count || 0) - Number(a.appearance_count || 0),
   );
-  const other = allCharacters.filter(
-    (c) =>
-      !(Number(c.main_story_count || 0) > 0 || c.character_role === "main"),
-  );
-  return { main, other };
+  return {
+    main: ranked.slice(0, MAIN_CHARACTER_LIMIT),
+    other: ranked.slice(MAIN_CHARACTER_LIMIT),
+  };
 }
 
 function profileScore(profile: PreferenceProfile | null): number {

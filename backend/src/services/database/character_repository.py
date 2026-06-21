@@ -15,6 +15,10 @@ from typing import Any, Dict, List, Optional
 
 from .connection import db_manager
 
+# Number of most-frequently-appearing characters shown as "Main characters"
+# in the Profile → Memory gallery. The rest are grouped as "Other characters".
+MAIN_CHARACTER_LIMIT = 5
+
 
 class CharacterRepository:
     def __init__(self):
@@ -339,40 +343,40 @@ class CharacterRepository:
     async def get_characters_grouped(
         self, user_id: str, child_id: str
     ) -> Dict[str, List[Dict[str, Any]]]:
-        """Return character gallery split into main/supporting groups."""
+        """Return character gallery split into main/supporting groups.
+
+        "Main characters" are the most frequently appearing characters — the
+        top ``MAIN_CHARACTER_LIMIT`` by ``appearance_count`` — because the
+        gallery should surface a child's recurring stars, not whoever happened
+        to lead a single story. Everyone else is grouped as "other". Ties are
+        broken by recency (``last_seen_at``) then name for a stable ordering.
+
+        ``main_story_count`` is still attached to each entry for reference, but
+        it no longer gates the grouping.
+        """
         characters = await self.get_characters(user_id, child_id)
         main_story_counts = await self._get_main_story_counts(user_id, child_id)
 
+        ranked = sorted(
+            (dict(item) for item in characters),
+            key=lambda c: (
+                int(c.get("appearance_count", 0)),
+                c.get("last_seen_at", "") or "",
+                c.get("name", "") or "",
+            ),
+            reverse=True,
+        )
+
         main_characters: List[Dict[str, Any]] = []
         other_characters: List[Dict[str, Any]] = []
-
-        for item in characters:
-            entry = dict(item)
+        for index, entry in enumerate(ranked):
             key = self._normalized_name_key(entry.get("name", ""))
-            main_count = int(main_story_counts.get(key, 0)) if key else 0
-            entry["main_story_count"] = main_count
-            entry["character_role"] = "main" if main_count > 0 else "other"
-
-            if main_count > 0:
-                main_characters.append(entry)
-            else:
-                other_characters.append(entry)
-
-        main_characters.sort(
-            key=lambda c: (
-                int(c.get("main_story_count", 0)),
-                int(c.get("appearance_count", 0)),
-                c.get("last_seen_at", ""),
-            ),
-            reverse=True,
-        )
-        other_characters.sort(
-            key=lambda c: (
-                int(c.get("appearance_count", 0)),
-                c.get("last_seen_at", ""),
-            ),
-            reverse=True,
-        )
+            entry["main_story_count"] = (
+                int(main_story_counts.get(key, 0)) if key else 0
+            )
+            is_main = index < MAIN_CHARACTER_LIMIT
+            entry["character_role"] = "main" if is_main else "other"
+            (main_characters if is_main else other_characters).append(entry)
 
         # Keep backward compatibility for existing consumers.
         all_characters = main_characters + other_characters

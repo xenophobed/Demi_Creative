@@ -515,3 +515,77 @@ class TestJsonFields:
         assert char["appearance_count"] == 2
         assert char["visual_features"] == {"features": ["star forehead", "sparkly fur"]}
         assert char["traits"] == ["curious", "gentle"]
+
+
+# ============================================================================
+# get_characters_grouped — main/other by appearance frequency (Issue #746)
+# ============================================================================
+
+
+class TestGroupedByFrequency:
+    """Contract: 'Main characters' are the top-N most frequently appearing.
+
+    Regression for #746 — grouping used to be gated by main_story_count
+    (was this character a story's lead), which mis-sorted frequent supporting
+    characters into 'other' and one-off leads into 'main'.
+    """
+
+    @pytest.fixture
+    async def db_with_stories(self, db):
+        """Augment the in-memory db with a minimal stories table."""
+        await db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS stories (
+                story_id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL DEFAULT '',
+                child_id TEXT NOT NULL,
+                characters TEXT,
+                created_at TEXT NOT NULL DEFAULT ''
+            )
+            """
+        )
+        await db.commit()
+        return db
+
+    @pytest.mark.asyncio
+    async def test_top5_by_appearance_are_main(self, db_with_stories):
+        repo = CharacterRepository()
+        repo._db = db_with_stories
+
+        # frequency: Star=6, Comet=5, Nova=4, Luna=3, Sol=2, Pip=1
+        seeds = [("Star", 6), ("Comet", 5), ("Nova", 4), ("Luna", 3), ("Sol", 2), ("Pip", 1)]
+        for name, freq in seeds:
+            for _ in range(freq):
+                await repo.upsert_character(
+                    user_id="u1", child_id="c1", name=name, description=f"{name}"
+                )
+
+        # Make the least-frequent character (Pip) the lead of a story.
+        await db_with_stories.execute(
+            "INSERT INTO stories (story_id, user_id, child_id, characters, created_at) VALUES (?, ?, ?, ?, ?)",
+            ("s1", "u1", "c1", json.dumps([{"character_name": "Pip"}]), "2026-01-01"),
+        )
+        await db_with_stories.commit()
+
+        grouped = await repo.get_characters_grouped("u1", "c1")
+        main_names = [c["name"] for c in grouped["main_characters"]]
+        other_names = [c["name"] for c in grouped["other_characters"]]
+
+        assert main_names == ["Star", "Comet", "Nova", "Luna", "Sol"]
+        assert other_names == ["Pip"]
+        # A one-off story lead with the lowest frequency must NOT be main.
+        assert all(c["character_role"] == "main" for c in grouped["main_characters"])
+        pip = grouped["other_characters"][0]
+        assert pip["character_role"] == "other"
+        assert pip["main_story_count"] == 1  # still reported, just not gating
+
+    @pytest.mark.asyncio
+    async def test_fewer_than_limit_all_main(self, db_with_stories):
+        repo = CharacterRepository()
+        repo._db = db_with_stories
+        for name in ["A", "B", "C"]:
+            await repo.upsert_character(user_id="u2", child_id="c2", name=name)
+
+        grouped = await repo.get_characters_grouped("u2", "c2")
+        assert len(grouped["main_characters"]) == 3
+        assert grouped["other_characters"] == []
