@@ -273,9 +273,33 @@ class ChildProfileRepository:
             (now, now, user_id, child_id),
         )
         if existing.is_default:
-            await self._sync_user_default(user_id, None)
+            # Promote the oldest remaining active profile so the account is
+            # never left without a default child (#744). Only fall back to
+            # None when no active profile remains.
+            await self._promote_new_default(user_id)
         await self._db.commit()
         return await self.get_for_user(user_id, child_id, include_archived=True)
+
+    async def _promote_new_default(self, user_id: str) -> None:
+        """Make the oldest remaining active profile the default, if any."""
+        row = await self._db.fetchone(
+            """
+            SELECT child_id FROM child_profiles
+            WHERE user_id = ? AND archived_at IS NULL
+            ORDER BY created_at ASC
+            LIMIT 1
+            """,
+            (user_id,),
+        )
+        new_default = row.get("child_id") if row else None
+        if new_default:
+            now = datetime.now().isoformat()
+            await self._db.execute(
+                "UPDATE child_profiles SET is_default = 1, updated_at = ? "
+                "WHERE user_id = ? AND child_id = ?",
+                (now, user_id, new_default),
+            )
+        await self._sync_user_default(user_id, new_default)
 
     async def _clear_default(self, user_id: str) -> None:
         await self._db.execute(
