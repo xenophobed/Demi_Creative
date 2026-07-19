@@ -13,11 +13,7 @@ import type {
   PreferenceProfile,
 } from "@/types/api";
 import useAuthStore from "@/store/useAuthStore";
-
-// "Main characters" = the most frequently appearing characters (top N by
-// appearance_count). Keep in sync with MAIN_CHARACTER_LIMIT in
-// backend/src/services/database/character_repository.py.
-const MAIN_CHARACTER_LIMIT = 5;
+import { splitByAppearanceFrequency } from "@/lib/characterGrouping";
 
 function normalizeCharacterName(name: string): string {
   if (!name) return "";
@@ -122,16 +118,9 @@ function splitCharacterGroups(
     return { main: hintedMain, other: hintedOther };
   }
 
-  // Fallback when the backend sent no grouped hints: rank by appearance
-  // frequency and treat the top N as main characters, the rest as other.
-  const ranked = [...allCharacters].sort(
-    (a, b) =>
-      Number(b.appearance_count || 0) - Number(a.appearance_count || 0),
-  );
-  return {
-    main: ranked.slice(0, MAIN_CHARACTER_LIMIT),
-    other: ranked.slice(MAIN_CHARACTER_LIMIT),
-  };
+  // Fallback when the backend sent no grouped hints: divide by appearance
+  // frequency using the same rule as the backend.
+  return splitByAppearanceFrequency(allCharacters);
 }
 
 function profileScore(profile: PreferenceProfile | null): number {

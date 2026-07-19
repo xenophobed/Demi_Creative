@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { Palette, Star, Users } from "lucide-react";
 import Card from "@/components/common/Card";
 import type { MemoryCharacter } from "@/types/api";
+import { splitByAppearanceFrequency } from "@/lib/characterGrouping";
 
 interface CharacterGalleryProps {
   characters: MemoryCharacter[];
@@ -13,10 +14,6 @@ interface CharacterGalleryProps {
   onDeleteCharacter?: (name: string) => Promise<void> | void;
   deletingCharacterName?: string | null;
 }
-
-// "Main characters" = the most frequently appearing characters (top N by
-// appearance_count). Keep in sync with the backend grouping and useMemoryApi.
-const MAIN_CHARACTER_LIMIT = 5;
 
 const CARD_COLORS = [
   "from-purple-100 to-purple-50 border-purple-200",
@@ -40,18 +37,15 @@ function CharacterGallery({
 }: CharacterGalleryProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const hasGrouped = mainCharacters.length > 0 || otherCharacters.length > 0;
-  // Fallback when the backend sent no grouped arrays: rank by appearance
-  // frequency and treat the top N as main characters, the rest as other.
-  const rankedByFrequency = [...characters].sort(
-    (a, b) =>
-      Number(b.appearance_count || 0) - Number(a.appearance_count || 0),
-  );
+  // Fallback when the backend sent no grouped arrays: divide by appearance
+  // frequency using the same rule as the backend.
+  const fallbackGroups = splitByAppearanceFrequency(characters);
   const resolvedMainCharacters = hasGrouped
     ? mainCharacters
-    : rankedByFrequency.slice(0, MAIN_CHARACTER_LIMIT);
+    : fallbackGroups.main;
   const resolvedOtherCharacters = hasGrouped
     ? otherCharacters
-    : rankedByFrequency.slice(MAIN_CHARACTER_LIMIT);
+    : fallbackGroups.other;
 
   const renderCharacterCards = (items: MemoryCharacter[], offset = 0) =>
     items.map((character, index) => (

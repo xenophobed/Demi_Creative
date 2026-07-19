@@ -6,14 +6,14 @@
 
 **Explorer**: Railway is like a house for our Python brain. When someone visits the website and asks for a story, the request travels to Railway where our FastAPI server lives, thinks about it, and sends back the answer.
 
-**Maker**: Railway is a PaaS (Platform as a Service) that runs our FastAPI backend as a containerized process. It auto-deploys from the `main` branch on GitHub using Nixpacks (a buildpack system), injects environment variables, and provides health monitoring.
+**Maker**: Railway is a PaaS (Platform as a Service) that runs our FastAPI backend as a containerized process. This project currently deploys manually with `railway up`, using Nixpacks (a buildpack system), injected environment variables, and health monitoring.
 
 ## How It Works
 
 ### Deployment Pipeline
 ```
-1. Developer pushes to main branch on GitHub
-2. Railway detects the push → triggers a new build
+1. Developer merges verified changes to `main` on GitHub
+2. Developer runs `railway up --detach` from the repository root
 3. Nixpacks reads requirements.txt → installs Python dependencies
 4. Railway runs the start command: python backend/scripts/start_server.py
 5. Server starts on Railway's assigned PORT → health check passes
@@ -48,7 +48,7 @@ If health checks fail, Railway automatically restarts the process (up to 3 retri
 
 **Nixpacks**: Railway's build system that auto-detects your language (Python, Node, etc.) and installs dependencies. It reads `requirements.txt` for Python and creates a container image automatically.
 
-**Auto-Deploy**: Every push to the `main` branch triggers a new deployment. This means code merged on GitHub is live in production within ~2 minutes. Fast feedback, but also means broken code deploys immediately.
+**Deployment source of truth**: A GitHub push alone does not deploy this project today. Production is updated only after a verified change is merged to `main` and explicitly deployed with the Railway CLI. If Railway is later connected to GitHub, update this document and the operations guide together.
 
 **Zero-Downtime Deploy**: Railway starts the new version alongside the old one, waits for the health check to pass, then switches traffic. Users never see downtime during deployments.
 
@@ -61,4 +61,4 @@ If health checks fail, Railway automatically restarts the process (up to 3 retri
 
 ## Thinking Question
 
-Railway auto-deploys every push to `main`. What if someone merges a broken migration that corrupts the database? The code deploys, the server starts, but database queries fail. How would you add a pre-deploy check that runs migrations in a test database first? Think about: staging environments, migration dry-runs, and rollback strategies.
+Railway currently deploys manually after changes reach `main`. What if someone deploys a broken migration that corrupts the database? The code deploys, the server starts, but database queries fail. How would you add a pre-deploy check that runs migrations in a test database first? Think about: staging environments, migration dry-runs, and rollback strategies.

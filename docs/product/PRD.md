@@ -1167,8 +1167,8 @@ Prevents throwaway accounts that drain quota.
 
 | Layer | Service | Dev (local) | Prod (deployed) |
 |-------|---------|-------------|-----------------|
-| Frontend | Vercel (free) | Vite dev server | Auto-deploys from `main` |
-| Backend | Railway ($5–7/month) | `uvicorn` local | FastAPI on Railway |
+| Frontend | Vercel (free) | Vite dev server | Manual `vercel deploy --prod` |
+| Backend | Railway ($5–7/month) | `uvicorn` local | Manual `railway up` |
 | Database | Supabase (free tier) | SQLite (aiosqlite) | PostgreSQL (asyncpg) |
 | Vector Search | Supabase pgvector | ChromaDB (local) | pgvector extension in Supabase PostgreSQL |
 | File Storage | Supabase Storage | Local disk (`data/`) | Supabase Storage buckets (CDN URLs) |

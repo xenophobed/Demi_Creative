@@ -345,14 +345,22 @@ class CharacterRepository:
     ) -> Dict[str, List[Dict[str, Any]]]:
         """Return character gallery split into main/supporting groups.
 
-        "Main characters" are the most frequently appearing characters — the
-        top ``MAIN_CHARACTER_LIMIT`` by ``appearance_count`` — because the
-        gallery should surface a child's recurring stars, not whoever happened
-        to lead a single story. Everyone else is grouped as "other". Ties are
-        broken by recency (``last_seen_at``) then name for a stable ordering.
+        "Main characters" are the most frequently appearing characters, because
+        the gallery should surface a child's recurring stars, not whoever
+        happened to lead a single story. The split scales with how many
+        characters exist:
 
-        ``main_story_count`` is still attached to each entry for reference, but
-        it no longer gates the grouping.
+        - More than ``MAIN_CHARACTER_LIMIT`` characters: the top
+          ``MAIN_CHARACTER_LIMIT`` by ``appearance_count`` are "main".
+        - ``MAIN_CHARACTER_LIMIT`` or fewer: only the most-frequent
+          character(s) — those tied at the highest ``appearance_count`` — are
+          "main", so a small cast still divides instead of all landing in
+          "main". If every character appears equally often (including a single
+          character), they are all "main".
+
+        Ties are broken by recency (``last_seen_at``) then name for a stable
+        ordering. ``main_story_count`` is still attached to each entry for
+        reference, but it no longer gates the grouping.
         """
         characters = await self.get_characters(user_id, child_id)
         main_story_counts = await self._get_main_story_counts(user_id, child_id)
@@ -366,17 +374,32 @@ class CharacterRepository:
             ),
             reverse=True,
         )
-
-        main_characters: List[Dict[str, Any]] = []
-        other_characters: List[Dict[str, Any]] = []
-        for index, entry in enumerate(ranked):
+        for entry in ranked:
             key = self._normalized_name_key(entry.get("name", ""))
             entry["main_story_count"] = (
                 int(main_story_counts.get(key, 0)) if key else 0
             )
-            is_main = index < MAIN_CHARACTER_LIMIT
-            entry["character_role"] = "main" if is_main else "other"
-            (main_characters if is_main else other_characters).append(entry)
+
+        if len(ranked) > MAIN_CHARACTER_LIMIT:
+            main_characters = ranked[:MAIN_CHARACTER_LIMIT]
+            other_characters = ranked[MAIN_CHARACTER_LIMIT:]
+        else:
+            # Small cast: only the most-frequent character(s) are main. ranked
+            # is sorted by appearance_count desc, so the top count is first.
+            top_count = (
+                int(ranked[0].get("appearance_count", 0)) if ranked else 0
+            )
+            main_characters = [
+                e for e in ranked if int(e.get("appearance_count", 0)) == top_count
+            ]
+            other_characters = [
+                e for e in ranked if int(e.get("appearance_count", 0)) != top_count
+            ]
+
+        for entry in main_characters:
+            entry["character_role"] = "main"
+        for entry in other_characters:
+            entry["character_role"] = "other"
 
         # Keep backward compatibility for existing consumers.
         all_characters = main_characters + other_characters

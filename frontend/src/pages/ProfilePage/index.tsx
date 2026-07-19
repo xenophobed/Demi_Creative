@@ -3,14 +3,14 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
 import {
+  BookOpen,
   Check,
   Flame,
   Gift,
+  ImagePlus,
   Newspaper,
-  Palette,
   PartyPopper,
   Star,
-  Theater,
 } from "lucide-react";
 import Button from "@/components/common/Button";
 import Card from "@/components/common/Card";
@@ -340,7 +340,7 @@ function ProfilePage() {
           onClick={() => navigate("/library?tab=art-stories")}
         >
           <div className="bg-gradient-to-br from-primary/10 to-primary/5 rounded-card p-5 text-center">
-            <Palette className="mx-auto mb-2 h-9 w-9 text-primary" aria-hidden="true" />
+            <ImagePlus className="mx-auto mb-2 h-9 w-9 text-primary" aria-hidden="true" />
             <div className="text-3xl font-bold text-gray-800">
               {statsLoading ? "..." : (stats?.art_story_count ?? 0)}
             </div>
@@ -354,7 +354,7 @@ function ProfilePage() {
           onClick={() => navigate("/library?tab=interactive")}
         >
           <div className="bg-gradient-to-br from-secondary/20 to-secondary/10 rounded-card p-5 text-center">
-            <Theater className="mx-auto mb-2 h-9 w-9 text-teal-700" aria-hidden="true" />
+            <BookOpen className="mx-auto mb-2 h-9 w-9 text-teal-700" aria-hidden="true" />
             <div className="text-3xl font-bold text-gray-800">
               {statsLoading ? "..." : (stats?.interactive_count ?? 0)}
             </div>
