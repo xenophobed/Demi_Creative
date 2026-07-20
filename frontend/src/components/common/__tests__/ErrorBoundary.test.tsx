@@ -35,6 +35,15 @@ describe('ErrorBoundary', () => {
     expect(next).toEqual({ hasError: true, error: boom })
   })
 
+  it('recognizes the transient stream-provider bootstrap error', () => {
+    expect(
+      ErrorBoundary.isTransientBootstrapError(
+        new Error('useStreamVisualizationContext must be used within a StreamVisualizationProvider'),
+      ),
+    ).toBe(true)
+    expect(ErrorBoundary.isTransientBootstrapError(new Error('unrelated render failure'))).toBe(false)
+  })
+
   it('componentDidCatch logs the error and errorInfo to console.error', () => {
     const instance = new ErrorBoundary({ children: null })
     const err = new Error('render exploded')
@@ -48,6 +57,31 @@ describe('ErrorBoundary', () => {
       err,
       info,
     )
+  })
+
+  it('retries a transient bootstrap failure only once within the recovery window', () => {
+    const values = new Map<string, string>()
+    const reload = vi.fn()
+    vi.stubGlobal('window', {
+      sessionStorage: {
+        getItem: (key: string) => values.get(key) ?? null,
+        setItem: (key: string, value: string) => values.set(key, value),
+        removeItem: (key: string) => values.delete(key),
+      },
+      location: { reload },
+    })
+
+    const instance = new ErrorBoundary({ children: null })
+    const error = new Error(
+      'useStreamVisualizationContext must be used within a StreamVisualizationProvider',
+    )
+    const info: ErrorInfo = { componentStack: '' }
+
+    instance.componentDidCatch(error, info)
+    instance.componentDidCatch(error, info)
+
+    expect(reload).toHaveBeenCalledTimes(1)
+    vi.unstubAllGlobals()
   })
 
   it('handleReload invokes the onReload override when provided', () => {
