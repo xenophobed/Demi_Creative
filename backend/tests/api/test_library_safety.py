@@ -362,3 +362,17 @@ class TestLibraryLifecycleFiltering:
             assert self.legacy_id in item_ids
             assert self.intermediate_id not in item_ids
             assert self.archived_id not in item_ids
+
+    async def test_lifecycle_lookup_failure_hides_stories(self, monkeypatch):
+        """A failed lifecycle lookup must not expose unverified content."""
+
+        async def fail_lookup(self, story_ids):
+            raise RuntimeError("lifecycle store unavailable")
+
+        monkeypatch.setattr(
+            StoryArtifactLinkRepository,
+            "get_primary_lifecycle_states",
+            fail_lookup,
+        )
+
+        assert await _get_visible_story_ids(self.all_ids) == set()
