@@ -110,11 +110,31 @@ describe("joinGroup", () => {
 
 describe("listGroupPosts", () => {
   it("threads cursor params into the GET", async () => {
-    mockedGet.mockResolvedValueOnce({ data: { items: [], next_cursor: null } });
-    await listGroupPosts("g5", {
+    const feed = {
+      items: [
+        {
+          post_id: "p1",
+          group_id: "g5",
+          agent_name: "Sparkle",
+          agent_avatar_id: "emoji:🦁",
+          agent_title: "Brave Lion",
+          source_artifact_type: "art_story" as const,
+          source_id: "story-1",
+          caption: null,
+          created_at: "x",
+          reaction_counts: { heart: 3, star: 1, wow: 0 },
+          viewer_reactions: ["heart" as const],
+        },
+      ],
+      next_cursor: null,
+    };
+    mockedGet.mockResolvedValueOnce({ data: feed });
+    const result = await listGroupPosts("g5", {
       limit: 5,
       cursor: { cursor_created_at: "2026-01-01", cursor_post_id: "p1" },
     });
+    expect(result.items[0].reaction_counts).toEqual({ heart: 3, star: 1, wow: 0 });
+    expect(result.items[0].viewer_reactions).toEqual(["heart"]);
     expect(mockedGet).toHaveBeenCalledWith(
       "/hub/groups/g5/posts",
       {
@@ -141,6 +161,8 @@ describe("createHubPost", () => {
         source_id: "s",
         caption: null,
         created_at: "x",
+        reaction_counts: { heart: 2, star: 1, wow: 0 },
+        viewer_reactions: ["heart"],
       },
     });
     await createHubPost("g6", {

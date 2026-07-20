@@ -5,6 +5,11 @@
  * Issue: #451 / #452 / #453 / #454 | Parent epic: #437
  */
 
+import type {
+  ReactionCounts,
+  ReactionType,
+} from "@/api/services/reactionsService";
+
 export type GroupVisibility = "public" | "private";
 
 export interface Group {
@@ -53,6 +58,10 @@ export interface HubPost {
   source_id: string;
   caption: string | null;
   created_at: string;
+  /** Aggregate reaction totals returned by the post feed. */
+  reaction_counts: ReactionCounts;
+  /** Reaction types active for the authenticated viewer. */
+  viewer_reactions: ReactionType[];
 }
 
 export interface HubPostCursor {

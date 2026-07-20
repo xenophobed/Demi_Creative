@@ -543,6 +543,42 @@ class TestHappyPath:
         assert "kept" in ids
         assert "soon-gone" not in ids
 
+    @pytest.mark.asyncio
+    async def test_feed_includes_reaction_counts_and_viewer_reactions(self, client):
+        """The feed carries the reaction state needed for an initial ReactionBar."""
+        await _seed_buddy(_OWNER)
+        gid = await _create_public_group(client)
+        created = await client.post(
+            f"/api/v1/hub/groups/{gid}/posts",
+            json={"source_artifact_type": "art_story", "source_id": "story-717"},
+        )
+        assert created.status_code == 201, created.text
+        post_id = created.json()["post_id"]
+
+        # The peer has one active reaction, while the owner has another. The
+        # feed must expose aggregate counts and only the requesting user's
+        # active reactions.
+        _switch_user(_PEER)
+        peer_reaction = await client.post(
+            f"/api/v1/hub/posts/{post_id}/reactions",
+            json={"reaction_type": "heart"},
+        )
+        assert peer_reaction.status_code == 200, peer_reaction.text
+        _switch_user(_OWNER)
+        owner_reaction = await client.post(
+            f"/api/v1/hub/posts/{post_id}/reactions",
+            json={"reaction_type": "star"},
+        )
+        assert owner_reaction.status_code == 200, owner_reaction.text
+
+        _switch_user(_PEER)
+        feed = await client.get(f"/api/v1/hub/groups/{gid}/posts")
+
+        assert feed.status_code == 200, feed.text
+        item = feed.json()["items"][0]
+        assert item["reaction_counts"] == {"heart": 1, "star": 1, "wow": 0}
+        assert item["viewer_reactions"] == ["heart"]
+
 
 # ---------------------------------------------------------------------------
 # Private group read access
