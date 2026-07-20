@@ -233,6 +233,90 @@ async def _call_mcp_tool(tool_ref: Any, args: Dict[str, Any]) -> Dict[str, Any]:
     return result
 
 
+async def _validate_styled_image_for_delivery(
+    styled_image_path: str,
+    original_image_path: str,
+    child_age: int,
+    theme: str,
+    session_id: str,
+) -> tuple[Optional[str], Dict[str, Any]]:
+    """Return a styled image only after a successful vision safety check.
+
+    The direct agent path feeds its result to My Agent without passing through
+    the API-route safety gate. Keep this boundary fail-closed: a missing file,
+    validator exception, unsafe verdict, or unexpected validator path all
+    discard the generated image. The original drawing remains the caller's
+    fallback, so the unsafe candidate is never exposed.
+    """
+    fallback = {
+        "used_image_path": original_image_path,
+        "safety_passed": False,
+        "fell_back": True,
+    }
+
+    if not Path(styled_image_path).is_file():
+        logger.warning(
+            "Styled image safety validation skipped for missing file; discarding "
+            "candidate | original=%s styled=%s theme=%s session=%s",
+            original_image_path,
+            styled_image_path,
+            theme,
+            session_id,
+        )
+        return None, {**fallback, "reason": "Styled image file is missing"}
+
+    try:
+        from ..mcp_servers.image_style_server import validate_and_fallback
+
+        safety_result = await validate_and_fallback(
+            styled_image_path=styled_image_path,
+            original_image_path=original_image_path,
+            child_age=child_age,
+            theme=theme,
+            session_id=session_id,
+        )
+    except Exception as exc:  # noqa: BLE001 — safety boundary fails closed
+        logger.warning(
+            "Styled image safety validation failed; discarding candidate | "
+            "original=%s styled=%s theme=%s session=%s error=%s",
+            original_image_path,
+            styled_image_path,
+            theme,
+            session_id,
+            exc,
+            exc_info=True,
+        )
+        return None, {**fallback, "reason": f"Safety validation exception: {exc}"}
+
+    if not isinstance(safety_result, dict):
+        logger.warning(
+            "Styled image safety validator returned malformed result; discarding "
+            "candidate | original=%s styled=%s theme=%s session=%s",
+            original_image_path,
+            styled_image_path,
+            theme,
+            session_id,
+        )
+        return None, {**fallback, "reason": "Malformed safety validation result"}
+
+    if (
+        safety_result.get("safety_passed") is True
+        and safety_result.get("used_image_path") == styled_image_path
+    ):
+        return styled_image_path, safety_result
+
+    logger.warning(
+        "Styled image failed safety validation; discarding candidate | "
+        "original=%s styled=%s theme=%s session=%s reason=%s",
+        original_image_path,
+        styled_image_path,
+        theme,
+        session_id,
+        safety_result.get("reason"),
+    )
+    return None, safety_result
+
+
 def _should_use_mock() -> bool:
     """Return True in pytest, or when force-mock is enabled in test env only."""
     if os.getenv("PYTEST_CURRENT_TEST") is not None:
@@ -864,29 +948,17 @@ For "characters", list ONLY living characters (people, animals, or creatures wit
             pass
         # Step 5b: Re-validate the styled image for child safety (#710).
         # The API routes already gate stylized images via validate_and_fallback;
-        # the agent-direct path (used by My Agent) bypassed that check, so the
-        # styled image could be returned without a vision safety pass. We
-        # fail closed here — discard the styled image and fall back to the
-        # original drawing if validation fails or errors.
-        if styled_image_path and Path(styled_image_path).exists():
-            try:
-                from ..mcp_servers.image_style_server import validate_and_fallback
-
-                styled_image_safety = await validate_and_fallback(
+        # keep the direct agent path under the same fail-closed boundary.
+        if styled_image_path:
+            styled_image_path, _styled_image_safety = (
+                await _validate_styled_image_for_delivery(
                     styled_image_path=styled_image_path,
                     original_image_path=str(image_path),
                     child_age=child_age,
                     theme=art_theme,
                     session_id=child_id,
                 )
-                if not styled_image_safety.get("safety_passed"):
-                    styled_image_path = None
-            except Exception:
-                logger.warning(
-                    "Styled image safety validation failed (agent path), using original",
-                    exc_info=True,
-                )
-                styled_image_path = None
+            )
         yield {"type": "tool_result", "data": {"status": "completed"}}
 
     # Step 6: Audio generation (if enabled)
