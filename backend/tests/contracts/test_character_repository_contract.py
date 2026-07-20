@@ -589,3 +589,21 @@ class TestGroupedByFrequency:
         grouped = await repo.get_characters_grouped("u2", "c2")
         assert len(grouped["main_characters"]) == 3
         assert grouped["other_characters"] == []
+
+    @pytest.mark.asyncio
+    async def test_small_cast_uses_highest_frequency_as_main(self, db_with_stories):
+        repo = CharacterRepository()
+        repo._db = db_with_stories
+
+        for _ in range(3):
+            await repo.upsert_character(
+                user_id="u3", child_id="c3", name="Star", description="Star"
+            )
+        await repo.upsert_character(
+            user_id="u3", child_id="c3", name="Pip", description="Pip"
+        )
+
+        grouped = await repo.get_characters_grouped("u3", "c3")
+
+        assert [c["name"] for c in grouped["main_characters"]] == ["Star"]
+        assert [c["name"] for c in grouped["other_characters"]] == ["Pip"]

@@ -20,7 +20,7 @@ User's Browser
        ▼
 ┌─────────────┐
 │  Railway    │  ← Runs the FastAPI server (backend)
-│  (Server)   │     Backend auto-deploys from GitHub
+│  (Server)   │     Backend deploys manually from the repository
 └──────┬──────┘
        │ SQL + Auth
        ▼
@@ -66,4 +66,4 @@ User's Browser
 
 ## Thinking Question
 
-Our backend auto-deploys from GitHub but our frontend is manually deployed. What could go wrong if we push a backend change that adds a new API field, but forget to deploy the frontend that needs that field? How would you design a system to prevent this mismatch?
+Our backend and frontend are currently deployed manually from the same repository. What could go wrong if we deploy a backend change that adds a new API field, but forget to deploy the frontend that needs that field? How would you design a system to prevent this mismatch?
