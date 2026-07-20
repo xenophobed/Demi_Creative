@@ -235,6 +235,33 @@ class VoiceSessionRepository:
         total = row.get("total_seconds", 0) or 0
         return int(total)
 
+    async def sum_cost_in_window(
+        self,
+        *,
+        provider: str,
+        since_iso: str,
+    ) -> float:
+        """Return finalized session cost for a provider since ``since_iso``.
+
+        Only ended sessions with a recorded cost contribute. The OpenAI
+        Realtime monthly ceiling uses this as its month-to-date source of
+        truth; other providers are excluded by the explicit provider filter.
+        """
+        row = await self._db.fetchone(
+            """
+            SELECT COALESCE(SUM(cost_estimate_usd), 0) AS total_cost
+            FROM voice_sessions
+            WHERE provider = ?
+              AND ended_at >= ?
+              AND ended_at IS NOT NULL
+              AND cost_estimate_usd IS NOT NULL
+            """,
+            (provider, since_iso),
+        )
+        if not row:
+            return 0.0
+        return float(row.get("total_cost", 0) or 0.0)
+
     @classmethod
     def _row_to_data(cls, row: dict) -> VoiceSessionData:
         cache_raw = row.get("prompt_cache_hit")

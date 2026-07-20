@@ -37,6 +37,7 @@ import asyncio
 import base64
 import json
 import logging
+import os
 import time
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
@@ -63,6 +64,7 @@ from ...services.realtime_voice_service import (
     _select_provider,
     estimate_session_cost_usd,
     log_voice_session_end,
+    OPENAI_REALTIME_MONTHLY_CAP_USD_ENV,
     safety_threshold_for_age,
 )
 from ...services.realtime_voice_tools import (
@@ -104,6 +106,12 @@ WS_CLOSE_INTERNAL = 1011  # unexpected error
 # bypassed and this object is used directly. Reset to None after tests.
 _TEST_PROVIDER_OVERRIDE: Optional[RealtimeVoiceProvider] = None
 
+# OpenAI Realtime monthly cost ceiling (#720). The cap is deliberately read
+# at request time so operators can adjust it without a code change/redeploy.
+OPENAI_REALTIME_COST_WARN_RATIO: float = 0.80
+OPENAI_REALTIME_COST_PROVIDER: str = "openai_realtime"
+OPENAI_REALTIME_COST_LIMIT_CODE: str = "VOICE_COST_LIMIT_EXCEEDED"
+
 
 def _set_test_provider_override(provider: Optional[RealtimeVoiceProvider]) -> None:
     """Test-only seam — install a stub provider for the broker."""
@@ -115,6 +123,75 @@ def _provider_for_session() -> RealtimeVoiceProvider:
     if _TEST_PROVIDER_OVERRIDE is not None:
         return _TEST_PROVIDER_OVERRIDE
     return _select_provider()
+
+
+def _openai_realtime_month_start() -> str:
+    """Return the local-naive ISO timestamp used by voice session rows."""
+    now = datetime.now()
+    return now.replace(
+        day=1, hour=0, minute=0, second=0, microsecond=0,
+    ).isoformat()
+
+
+def _openai_realtime_monthly_cap_usd() -> Optional[float]:
+    """Parse the optional operator-set monthly OpenAI Realtime cap."""
+    raw = os.getenv(OPENAI_REALTIME_MONTHLY_CAP_USD_ENV, "").strip()
+    if not raw:
+        return None
+    try:
+        cap = float(raw)
+    except ValueError:
+        logger.warning(
+            "Ignoring invalid %s=%r", OPENAI_REALTIME_MONTHLY_CAP_USD_ENV, raw,
+        )
+        return None
+    if cap <= 0:
+        logger.warning(
+            "Ignoring non-positive %s=%r",
+            OPENAI_REALTIME_MONTHLY_CAP_USD_ENV,
+            raw,
+        )
+        return None
+    return cap
+
+
+async def _enforce_openai_realtime_cost_ceiling(
+    provider: RealtimeVoiceProvider,
+) -> None:
+    """Warn at 80% and refuse new OpenAI sessions at 100% of the cap."""
+    if provider.name != OPENAI_REALTIME_COST_PROVIDER:
+        return
+
+    cap_usd = _openai_realtime_monthly_cap_usd()
+    if cap_usd is None:
+        return
+
+    month_to_date_usd = await voice_session_repo.sum_cost_in_window(
+        provider=OPENAI_REALTIME_COST_PROVIDER,
+        since_iso=_openai_realtime_month_start(),
+    )
+    if month_to_date_usd >= cap_usd:
+        logger.warning(
+            "OpenAI Realtime monthly cost reached 100%%: spent=$%.4f cap=$%.4f; "
+            "refusing new session",
+            month_to_date_usd,
+            cap_usd,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail={
+                "code": OPENAI_REALTIME_COST_LIMIT_CODE,
+                "month_to_date_usd": month_to_date_usd,
+                "monthly_cap_usd": cap_usd,
+            },
+        )
+    if month_to_date_usd >= cap_usd * OPENAI_REALTIME_COST_WARN_RATIO:
+        logger.warning(
+            "OpenAI Realtime monthly cost is at or above 80%%: "
+            "spent=$%.4f cap=$%.4f",
+            month_to_date_usd,
+            cap_usd,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -421,6 +498,10 @@ async def start_voice_session(
         )
 
     provider = _provider_for_session()
+
+    # #720: enforce the application-side monthly ceiling before creating a
+    # persisted session or minting any OpenAI credentials.
+    await _enforce_openai_realtime_cost_ceiling(provider)
 
     # Direct browser → OpenAI delivery cannot enforce the broker's
     # pre-delivery assistant safety gate. Keep every session on the WS
