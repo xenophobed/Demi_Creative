@@ -1,12 +1,12 @@
 """
 WebRTC direct-mode transport contract tests (#647).
 
-Locks the REST `/voice/session` surface for the opt-in WebRTC path:
+Locks the REST `/voice/session` surface and its safety-preserving transport
+policy:
 
-  - ``prefer_webrtc=true`` on the OpenAI Realtime provider yields
-    ``transport: "webrtc"`` + a populated
-    ``openai_realtime_client_secret`` so the browser can complete the
-    SDP handshake directly against OpenAI.
+  - ``prefer_webrtc=true`` on the OpenAI Realtime provider still yields
+    ``transport: "ws"``. Direct browser → OpenAI delivery is disabled until
+    assistant output can pass through the server-side pre-delivery safety gate.
   - ``prefer_webrtc=true`` on a non-OpenAI provider (mock / hybrid)
     gracefully degrades to ``transport: "ws"`` (no 4xx — the WS broker
     is the universal fallback, never a refusal).
@@ -223,10 +223,10 @@ class TestSchemaContract:
 # ===========================================================================
 
 class TestPreferWebRTCWithOpenAIProvider:
-    """``prefer_webrtc=true`` on the OpenAI path returns the WebRTC contract."""
+    """The OpenAI path stays on the server-relay transport for safety."""
 
     @pytest.mark.asyncio
-    async def test_prefer_webrtc_true_yields_transport_webrtc(
+    async def test_prefer_webrtc_true_stays_on_server_relay(
         self, openai_client, consented_child,
     ):
         response = await openai_client.post(
@@ -235,15 +235,13 @@ class TestPreferWebRTCWithOpenAIProvider:
         )
         assert response.status_code == 200, response.text
         body = response.json()
-        assert body["transport"] == "webrtc"
-        # The browser uses this secret to POST the SDP offer directly to
-        # OpenAI — without it the WebRTC handshake is dead on arrival.
-        assert body["openai_realtime_client_secret"], (
-            "openai_realtime_client_secret must be populated for WebRTC"
+        assert body["transport"] == "ws"
+        assert body["openai_realtime_client_secret"] is None, (
+            "direct-mode credentials must not be exposed while WebRTC is disabled"
         )
 
     @pytest.mark.asyncio
-    async def test_prefer_webrtc_true_records_transport_in_voice_sessions_row(
+    async def test_prefer_webrtc_true_records_server_relay_transport(
         self, openai_client, consented_child,
     ):
         response = await openai_client.post(
@@ -254,7 +252,7 @@ class TestPreferWebRTCWithOpenAIProvider:
         session_id = response.json()["session_id"]
         persisted = await voice_session_repo.get_by_id(session_id)
         assert persisted is not None
-        assert persisted.transport == "webrtc"
+        assert persisted.transport == "ws"
 
 
 class TestPreferWebRTCWithMockProvider:

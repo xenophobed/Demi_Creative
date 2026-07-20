@@ -358,11 +358,8 @@ async def start_voice_session(
     prefer_webrtc: bool = Query(
         default=False,
         description=(
-            "E4 (#647) WebRTC opt-in. When ``true`` AND the active provider "
-            "supports browser-direct realtime (OpenAI), the response sets "
-            "``transport=\"webrtc\"`` and surfaces an ephemeral OpenAI "
-            "client secret. Non-OpenAI providers silently fall back to "
-            "``ws`` — the WS broker is the universal path."
+            "Deprecated WebRTC preference. All sessions use the server-relay "
+            "transport so assistant output passes the server-side safety gate."
         ),
     ),
 ) -> VoiceSessionStartResponse:
@@ -425,14 +422,11 @@ async def start_voice_session(
 
     provider = _provider_for_session()
 
-    # #647: WebRTC is opt-in AND only meaningful when the provider can
-    # serve a browser-direct realtime handshake. Today that's only
-    # ``openai_realtime``. Anything else silently degrades to WS — the
-    # client never sees a 4xx for asking, because the WS broker is the
-    # universal fallback and refusing would break the panel UX.
+    # Direct browser → OpenAI delivery cannot enforce the broker's
+    # pre-delivery assistant safety gate. Keep every session on the WS
+    # broker until a server-mediated WebRTC path exists. ``prefer_webrtc``
+    # remains accepted for backwards compatibility with older clients.
     selected_transport: str = "ws"
-    if prefer_webrtc and provider.name == "openai_realtime":
-        selected_transport = "webrtc"
 
     persisted = await voice_session_repo.create_session(
         user_id=user.user_id,
@@ -447,39 +441,10 @@ async def start_voice_session(
         child_id=request.child_id,
     )
 
-    # For the OpenAI Realtime provider we bundle the ephemeral client
-    # secret so the frontend can hold it for E4's WebRTC transport.
-    # Pre-#647 the secret was minted for both paths (so a client could
-    # try WebRTC after the fact); we keep that behavior unchanged.
+    # Never expose a direct-mode credential while the server-relay path is
+    # the only safety-preserving transport. This also prevents clients from
+    # bypassing the broker by attempting the old WebRTC handshake manually.
     openai_secret: Optional[str] = None
-    if provider.name == "openai_realtime":
-        try:
-            target_age = _target_age_for(profile.age_group)
-            preview_handle = await provider.start_session(
-                user_id=user.user_id,
-                child_id=request.child_id,
-                target_age=target_age,
-                persona=profile.voice_persona or "buddy_default",
-                voice_premium_voice=bool(
-                    getattr(profile, "voice_premium_voice", False)
-                ),
-                voice_premium_voice_consent=bool(
-                    getattr(profile, "voice_premium_voice_consent", False)
-                ),
-            )
-            openai_secret = (
-                preview_handle.provider_state.get("openai_client_secret") or None
-            )
-            # Release the preview handle's upstream WS (if any) — the WS
-            # broker will mint its own when the client connects.
-            try:
-                await provider.close(preview_handle)
-            except Exception:  # pragma: no cover
-                pass
-        except Exception as exc:
-            logger.warning(
-                "Failed to pre-mint OpenAI client secret for /session: %s", exc,
-            )
 
     return VoiceSessionStartResponse(
         session_id=persisted.session_id,
