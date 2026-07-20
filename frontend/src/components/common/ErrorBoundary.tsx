@@ -13,6 +13,40 @@ interface ErrorBoundaryState {
   error: Error | null
 }
 
+const BOOTSTRAP_RECOVERY_KEY = 'creative-workshop:bootstrap-recovery'
+const BOOTSTRAP_RECOVERY_WINDOW_MS = 30_000
+
+/**
+ * This error was observed during a transient production bundle/bootstrap
+ * mismatch. A single automatic retry lets the browser recover from a stale
+ * document without creating an infinite reload loop.
+ */
+function isTransientBootstrapError(error: Error): boolean {
+  return error.message.includes(
+    'useStreamVisualizationContext must be used within a StreamVisualizationProvider',
+  )
+}
+
+function attemptBootstrapRecovery(): boolean {
+  if (typeof window === 'undefined' || typeof window.sessionStorage === 'undefined') {
+    return false
+  }
+
+  try {
+    const previousAttempt = Number(window.sessionStorage.getItem(BOOTSTRAP_RECOVERY_KEY))
+    if (Number.isFinite(previousAttempt) && Date.now() - previousAttempt < BOOTSTRAP_RECOVERY_WINDOW_MS) {
+      return false
+    }
+
+    window.sessionStorage.setItem(BOOTSTRAP_RECOVERY_KEY, String(Date.now()))
+    window.location.reload()
+    return true
+  } catch {
+    // Storage and reload can be unavailable in privacy-restricted contexts.
+    return false
+  }
+}
+
 /**
  * Global ErrorBoundary.
  *
@@ -33,9 +67,20 @@ interface ErrorBoundaryState {
  *  - Recovering from async errors thrown outside React render
  */
 class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  static isTransientBootstrapError = isTransientBootstrapError
+
   state: ErrorBoundaryState = {
     hasError: false,
     error: null,
+  }
+
+  componentDidMount(): void {
+    // A successful mount proves that any prior bootstrap retry recovered.
+    try {
+      window.sessionStorage.removeItem(BOOTSTRAP_RECOVERY_KEY)
+    } catch {
+      // Ignore storage failures; the boundary still provides its fallback.
+    }
   }
 
   static getDerivedStateFromError(error: Error): ErrorBoundaryState {
@@ -45,8 +90,11 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
     // Log so developers can debug. No remote reporting (out of scope).
-    // eslint-disable-next-line no-console
     console.error('ErrorBoundary caught an error:', error, errorInfo)
+
+    if (isTransientBootstrapError(error)) {
+      attemptBootstrapRecovery()
+    }
   }
 
   handleReload = (): void => {
