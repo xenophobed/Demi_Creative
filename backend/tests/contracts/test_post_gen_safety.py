@@ -425,3 +425,120 @@ async def test_image_to_story_direct_stream_invokes_post_gen_safety(
         "safety_check content_type=image_story" in rec.getMessage()
         for rec in caplog.records
     )
+
+
+@pytest.mark.asyncio
+async def test_agent_direct_styled_image_safety_keeps_only_validated_image(
+    monkeypatch, tmp_path
+):
+    """The agent-direct path must pass a generated image through vision safety."""
+
+    from backend.src.agents import image_to_story_agent
+    import importlib
+    image_style_module = importlib.import_module(
+        "backend.src.mcp_servers.image_style_server"
+    )
+
+    styled_image = tmp_path / "styled.png"
+    styled_image.write_bytes(b"styled")
+    validate_mock = AsyncMock(return_value={
+        "used_image_path": str(styled_image),
+        "safety_passed": True,
+        "fell_back": False,
+    })
+    monkeypatch.setattr(image_style_module, "validate_and_fallback", validate_mock)
+
+    selected_path, safety = await image_to_story_agent._validate_styled_image_for_delivery(
+        str(styled_image), "/uploads/original.png", 7, "cartoon", "child-710"
+    )
+
+    assert selected_path == str(styled_image)
+    assert safety["safety_passed"] is True
+    validate_mock.assert_awaited_once_with(
+        styled_image_path=str(styled_image),
+        original_image_path="/uploads/original.png",
+        child_age=7,
+        theme="cartoon",
+        session_id="child-710",
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "validation_result, expected_safety_passed",
+    [
+        ({"used_image_path": "/uploads/original.png", "safety_passed": False}, False),
+        ({"used_image_path": "/uploads/original.png", "safety_passed": True}, True),
+    ],
+)
+async def test_agent_direct_styled_image_safety_discards_failed_validation(
+    monkeypatch, tmp_path, validation_result, expected_safety_passed
+):
+    """Unsafe or failed validation must never return the styled image."""
+
+    from backend.src.agents import image_to_story_agent
+    import importlib
+    image_style_module = importlib.import_module(
+        "backend.src.mcp_servers.image_style_server"
+    )
+
+    styled_image = tmp_path / "styled.png"
+    styled_image.write_bytes(b"styled")
+    validate_mock = AsyncMock(return_value=validation_result)
+    monkeypatch.setattr(image_style_module, "validate_and_fallback", validate_mock)
+
+    selected_path, safety = await image_to_story_agent._validate_styled_image_for_delivery(
+        str(styled_image), "/uploads/original.png", 7, "cartoon", "child-710"
+    )
+
+    assert selected_path is None
+    assert safety["safety_passed"] is expected_safety_passed
+
+
+@pytest.mark.asyncio
+async def test_agent_direct_styled_image_safety_fails_closed_on_missing_file(
+    monkeypatch,
+):
+    """A missing generated file is discarded instead of being returned unchecked."""
+
+    from backend.src.agents import image_to_story_agent
+    import importlib
+    image_style_module = importlib.import_module(
+        "backend.src.mcp_servers.image_style_server"
+    )
+
+    validate_mock = AsyncMock()
+    monkeypatch.setattr(image_style_module, "validate_and_fallback", validate_mock)
+
+    selected_path, safety = await image_to_story_agent._validate_styled_image_for_delivery(
+        "/missing/styled.png", "/uploads/original.png", 7, "cartoon", "child-710"
+    )
+
+    assert selected_path is None
+    assert safety["safety_passed"] is False
+    validate_mock.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_agent_direct_styled_image_safety_fails_closed_on_validator_error(
+    monkeypatch, tmp_path
+):
+    """Validator failures and malformed envelopes must discard the candidate."""
+
+    from backend.src.agents import image_to_story_agent
+    import importlib
+    image_style_module = importlib.import_module(
+        "backend.src.mcp_servers.image_style_server"
+    )
+
+    styled_image = tmp_path / "styled.png"
+    styled_image.write_bytes(b"styled")
+    validate_mock = AsyncMock(return_value=None)
+    monkeypatch.setattr(image_style_module, "validate_and_fallback", validate_mock)
+
+    selected_path, safety = await image_to_story_agent._validate_styled_image_for_delivery(
+        str(styled_image), "/uploads/original.png", 7, "cartoon", "child-710"
+    )
+
+    assert selected_path is None
+    assert safety["safety_passed"] is False
