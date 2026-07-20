@@ -235,6 +235,42 @@ class TestQuotaQueries:
             user_id="voice_parent", child_id="child_beta", since_iso=an_hour_ago,
         ) == 0
 
+    @pytest.mark.asyncio
+    async def test_sum_cost_in_window_scopes_provider_and_ended_rows(
+        self, test_db, repo,
+    ):
+        openai_session = await repo.create_session(
+            user_id="voice_parent", child_id="child_alpha",
+            provider="openai_realtime",
+        )
+        await repo.end_session(
+            session_id=openai_session.session_id,
+            reason="user_ended",
+            duration_seconds=60,
+            cost_estimate_usd=8.25,
+        )
+
+        hybrid_session = await repo.create_session(
+            user_id="voice_parent", child_id="child_alpha", provider="hybrid",
+        )
+        await repo.end_session(
+            session_id=hybrid_session.session_id,
+            reason="user_ended",
+            duration_seconds=60,
+            cost_estimate_usd=99.0,
+        )
+
+        # In-flight sessions have no finalized cost and must not count.
+        await repo.create_session(
+            user_id="voice_parent", child_id="child_alpha",
+            provider="openai_realtime",
+        )
+
+        an_hour_ago = (datetime.now() - timedelta(hours=1)).isoformat()
+        assert await repo.sum_cost_in_window(
+            provider="openai_realtime", since_iso=an_hour_ago,
+        ) == pytest.approx(8.25)
+
 
 # ---------------------- get_by_id -------------------------------------------
 

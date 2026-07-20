@@ -239,6 +239,72 @@ class TestSessionEndpoint:
         assert response.status_code == 429
         assert response.json()["detail"]["code"] == "VOICE_QUOTA_EXHAUSTED"
 
+    @pytest.mark.asyncio
+    async def test_openai_cost_cap_warns_at_80_percent(
+        self, client, consented_child, monkeypatch, caplog,
+    ):
+        provider = MockRealtimeVoiceProvider()
+        provider.name = "openai_realtime"
+        voice_realtime._set_test_provider_override(provider)
+        monkeypatch.setenv("OPENAI_REALTIME_MONTHLY_CAP_USD", "10")
+
+        spent = await voice_session_repo.create_session(
+            user_id=PARENT_USER.user_id,
+            child_id=consented_child.child_id,
+            provider="openai_realtime",
+        )
+        await voice_session_repo.end_session(
+            session_id=spent.session_id,
+            reason="user_ended",
+            duration_seconds=60,
+            cost_estimate_usd=8.0,
+        )
+
+        with caplog.at_level("WARNING"):
+            response = await client.post(
+                "/api/v1/me/agent/voice/session",
+                json={"child_id": consented_child.child_id},
+            )
+
+        assert response.status_code == 200, response.text
+        assert any(
+            "OpenAI Realtime monthly cost is at or above 80%" in record.message
+            for record in caplog.records
+        )
+
+    @pytest.mark.asyncio
+    async def test_openai_cost_cap_hard_stops_at_100_percent(
+        self, client, consented_child, monkeypatch,
+    ):
+        provider = MockRealtimeVoiceProvider()
+        provider.name = "openai_realtime"
+        voice_realtime._set_test_provider_override(provider)
+        monkeypatch.setenv("OPENAI_REALTIME_MONTHLY_CAP_USD", "10")
+
+        spent = await voice_session_repo.create_session(
+            user_id=PARENT_USER.user_id,
+            child_id=consented_child.child_id,
+            provider="openai_realtime",
+        )
+        await voice_session_repo.end_session(
+            session_id=spent.session_id,
+            reason="user_ended",
+            duration_seconds=60,
+            cost_estimate_usd=10.0,
+        )
+
+        response = await client.post(
+            "/api/v1/me/agent/voice/session",
+            json={"child_id": consented_child.child_id},
+        )
+
+        assert response.status_code == 429
+        assert response.json()["detail"]["code"] == "VOICE_COST_LIMIT_EXCEEDED"
+        assert await voice_session_repo.sum_cost_in_window(
+            provider="openai_realtime",
+            since_iso="0001-01-01T00:00:00",
+        ) == pytest.approx(10.0)
+
 
 # ============================================================================
 # WS broker contract (sync TestClient — WS support)
