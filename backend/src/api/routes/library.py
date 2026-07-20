@@ -184,11 +184,11 @@ def _is_safe(item: LibraryItem) -> bool:
 async def _get_visible_story_ids(story_ids: List[str]) -> set:
     """Resolve which story IDs are lifecycle-visible in the library (#712/#713).
 
-    A story is visible when its primary/canonical artifact is in a visible
-    lifecycle state (published or candidate). Legacy stories that have NO
-    primary artifact link have no lifecycle state at all, so we keep them
-    visible to avoid hiding a user's existing content. Stories whose primary
-    artifacts exist but are all intermediate/archived are hidden.
+    A story with primary artifacts is visible only when at least one primary
+    artifact is in a visible lifecycle state (published or candidate).
+    Legacy stories without a primary artifact link remain visible for
+    backwards compatibility. Stories with linked primary artifacts that are
+    all intermediate/archived are hidden.
 
     Returns the set of story_ids that should be shown. Batched to one query
     set (chunked) to avoid N+1 lookups.
@@ -200,9 +200,8 @@ async def _get_visible_story_ids(story_ids: List[str]) -> set:
     try:
         states_by_story = await link_repo.get_primary_lifecycle_states(story_ids)
     except Exception:
-        # On lookup failure, fail open rather than hide the whole library —
-        # safety_score filtering still applies independently.
-        return set(story_ids)
+        # Do not expose content when its lifecycle state cannot be verified.
+        return set()
 
     visible: set = set()
     for sid in story_ids:
@@ -213,7 +212,7 @@ async def _get_visible_story_ids(story_ids: List[str]) -> set:
         elif states & VISIBLE_LIFECYCLE_STATES:
             # At least one primary artifact is published or candidate.
             visible.add(sid)
-        # else: primary artifacts exist but are all intermediate/archived → hide
+        # Otherwise primary artifacts are all intermediate/archived → hide.
     return visible
 
 
