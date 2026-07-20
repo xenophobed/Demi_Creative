@@ -993,7 +993,7 @@ class VoiceSessionStartRequest(BaseModel):
 
 class VoiceProviderConfig(BaseModel):
     """Sub-shape of VoiceSessionStartResponse — provider-specific runtime hints."""
-    provider: Literal["mock", "hybrid", "openai_realtime"] = Field(
+    provider: Literal["mock", "openai_realtime"] = Field(
         ..., description="Which RealtimeVoiceProvider impl backs this session."
     )
     sample_rate_hz: int = Field(default=16_000, ge=8_000, le=48_000)

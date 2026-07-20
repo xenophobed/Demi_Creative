@@ -130,13 +130,14 @@ class TestProviderSelection:
         chosen = _select_provider()
         assert chosen.name == "mock"
 
-    def test_hybrid_env_returns_hybrid_provider_after_614(self, monkeypatch):
-        # #614 wired the real hybrid provider — REALTIME_VOICE_PROVIDER=hybrid
-        # now returns it. The provider itself degrades when API keys are
-        # missing, so half-deployed envs still don't crash.
+    def test_hybrid_env_is_retired_and_falls_back_to_mock(self, monkeypatch):
+        # #754 removed the Hybrid provider. A stale REALTIME_VOICE_PROVIDER=
+        # hybrid value is no longer recognised and falls through to the safe
+        # Mock default rather than crashing.
         monkeypatch.setenv("REALTIME_VOICE_PROVIDER", "hybrid")
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         chosen = _select_provider()
-        assert chosen.name == "hybrid"
+        assert chosen.name == "mock"
 
     def test_missing_openai_key_returns_mock(self, monkeypatch):
         monkeypatch.delenv("REALTIME_VOICE_PROVIDER", raising=False)

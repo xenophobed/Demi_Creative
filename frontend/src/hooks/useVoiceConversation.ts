@@ -34,9 +34,11 @@ import {
   detectSilenceVad,
   detectVoiceCapabilities,
   dispatchForServerEvent,
+  floatToPcm16,
   parseRealtimeEvent,
   parseServerEvent,
-  pickAudioMimeType,
+  PCM_FRAME_SAMPLES,
+  PCM_TARGET_SAMPLE_RATE,
   RTC_HANDSHAKE_BUDGET_MS,
 } from "./voiceConversationHelpers";
 import {
@@ -113,7 +115,6 @@ export interface UseVoiceConversationResult {
 const DEFAULT_BARGE_IN_RMS = 0.04;
 const DEFAULT_BARGE_IN_SUSTAINED_MS = 150;
 const DEFAULT_SILENCE_VAD_MS = 1500;
-const AUDIO_CHUNK_TIMESLICE_MS = 250;
 const TTS_END_QUIET_WINDOW_MS = 400;
 
 function nowMs(): number {
@@ -169,6 +170,10 @@ export function useVoiceConversation(
   const remoteStreamSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
+  // #755: PCM16 capture nodes for the WS-broker path (replaces MediaRecorder
+  // so OpenAI Realtime receives raw pcm16, not webm/opus).
+  const pcmProcessorRef = useRef<ScriptProcessorNode | null>(null);
+  const pcmSinkRef = useRef<GainNode | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
@@ -276,6 +281,11 @@ export function useVoiceConversation(
   const closeAudioContext = useCallback(() => {
     const ctx = audioCtxRef.current;
     if (ctx) {
+      // #755: tear down the PCM capture nodes first so onaudioprocess stops
+      // firing before the context closes.
+      try { pcmProcessorRef.current?.disconnect(); } catch { /* ignore */ }
+      if (pcmProcessorRef.current) pcmProcessorRef.current.onaudioprocess = null;
+      try { pcmSinkRef.current?.disconnect(); } catch { /* ignore */ }
       try { analyserRef.current?.disconnect(); } catch { /* ignore */ }
       try { sourceRef.current?.disconnect(); } catch { /* ignore */ }
       try { outputAnalyserRef.current?.disconnect(); } catch { /* ignore */ }
@@ -283,6 +293,8 @@ export function useVoiceConversation(
       try { remoteStreamSourceRef.current?.disconnect(); } catch { /* ignore */ }
       ctx.close().catch(() => { /* ignore */ });
     }
+    pcmProcessorRef.current = null;
+    pcmSinkRef.current = null;
     audioCtxRef.current = null;
     analyserRef.current = null;
     sourceRef.current = null;
@@ -896,42 +908,53 @@ export function useVoiceConversation(
       streamRef.current = stream;
 
       const Ctor = pickAudioContextCtor();
-      if (Ctor) {
-        const ctx = new Ctor();
-        try { await ctx.resume(); } catch { /* ignore */ }
-        audioCtxRef.current = ctx;
-        const source = ctx.createMediaStreamSource(stream);
-        const analyser = ctx.createAnalyser();
-        analyser.fftSize = 512;
-        source.connect(analyser);
-        sourceRef.current = source;
-        analyserRef.current = analyser;
-        startAnalyserLoop();
-      }
-
-      const mimeType = pickAudioMimeType((m) => MediaRecorder.isTypeSupported?.(m));
-      let recorder: MediaRecorder;
-      try {
-        recorder = mimeType
-          ? new MediaRecorder(stream, { mimeType })
-          : new MediaRecorder(stream);
-      } catch {
-        onError?.("network", "MediaRecorder failed to start");
+      if (!Ctor) {
+        onError?.("network", "Web Audio is not supported in this browser");
         send({ type: "streamError" });
         return;
       }
-      recorder.ondataavailable = async (ev) => {
-        if (!ev.data || ev.data.size === 0) return;
-        const arrayBuf = await ev.data.arrayBuffer();
-        const seq = seqRef.current++;
-        const frame = buildAudioChunkFrame(seq, arrayBuf);
+      // #755: capture at the provider's expected rate so the broker can
+      // forward raw PCM straight to OpenAI Realtime (which requires pcm16,
+      // not the webm/opus MediaRecorder used to emit). Falls back to the
+      // browser default rate if the requested rate is unsupported.
+      const targetRate =
+        response.provider_config?.sample_rate_hz || PCM_TARGET_SAMPLE_RATE;
+      let ctx: AudioContext;
+      try {
+        ctx = new Ctor({ sampleRate: targetRate });
+      } catch {
+        ctx = new Ctor();
+      }
+      try { await ctx.resume(); } catch { /* ignore */ }
+      audioCtxRef.current = ctx;
+      const source = ctx.createMediaStreamSource(stream);
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 512;
+      source.connect(analyser);
+      sourceRef.current = source;
+      analyserRef.current = analyser;
+      startAnalyserLoop();
+
+      // PCM16 capture: convert Float32 frames → 16-bit LE PCM and stream as
+      // base64 `audio_chunk` envelopes. ScriptProcessor keeps this
+      // dependency-free; an AudioWorklet is the future-proof upgrade. The
+      // sink gain is 0 so we never echo the mic to the speakers — the node
+      // only exists to pull audio through the processor.
+      const processor = ctx.createScriptProcessor(PCM_FRAME_SAMPLES, 1, 1);
+      const sink = ctx.createGain();
+      sink.gain.value = 0;
+      processor.onaudioprocess = (ev) => {
         const wsNow = wsRef.current;
-        if (wsNow && wsNow.readyState === WebSocket.OPEN) {
-          wsNow.send(JSON.stringify(frame));
-        }
+        if (!wsNow || wsNow.readyState !== WebSocket.OPEN) return;
+        const pcm = floatToPcm16(ev.inputBuffer.getChannelData(0));
+        const seq = seqRef.current++;
+        wsNow.send(JSON.stringify(buildAudioChunkFrame(seq, pcm)));
       };
-      recorderRef.current = recorder;
-      recorder.start(AUDIO_CHUNK_TIMESLICE_MS);
+      source.connect(processor);
+      processor.connect(sink);
+      sink.connect(ctx.destination);
+      pcmProcessorRef.current = processor;
+      pcmSinkRef.current = sink;
     },
     [childId, persona, preferWebRTC, bargeInRmsThreshold, bargeInSustainedMs, silenceVadMs, onCaption, onError, send],
   );
