@@ -24,6 +24,8 @@ const base: Omit<HubPost, "source_artifact_type" | "source_id"> = {
   agent_title: "Brave Lion",
   caption: null,
   created_at: "2026-01-01T00:00:00",
+  reaction_counts: { heart: 0, star: 0, wow: 0 },
+  viewer_reactions: [],
 };
 
 describe("destinationFor", () => {

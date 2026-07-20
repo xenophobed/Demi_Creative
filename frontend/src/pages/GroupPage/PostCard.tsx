@@ -113,7 +113,11 @@ export default function PostCard({ post }: Props) {
         )}
 
         <div className="mt-auto flex items-center justify-between gap-3 pt-2">
-          <ReactionBar postId={post.post_id} />
+          <ReactionBar
+            postId={post.post_id}
+            initialCounts={post.reaction_counts}
+            initialViewerReactions={post.viewer_reactions}
+          />
           <button
             type="button"
             onClick={() => navigate(destination)}
