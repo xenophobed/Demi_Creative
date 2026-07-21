@@ -33,16 +33,24 @@ import SignInPrompt from "@/components/common/SignInPrompt";
 import { AnimalAvatarIcon } from "@/lib/avatarIcons";
 
 export default function MyAgentPage() {
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const user = useAuthStore((s) => s.user);
   const currentChild = useChildStore((s) => s.currentChild);
   const childProfiles = useChildStore((s) => s.childProfiles);
   const childProfilesLoading = useChildStore((s) => s.isLoading);
   const loadChildProfiles = useChildStore((s) => s.loadChildProfiles);
   const defaultChildId = useChildStore((s) => s.defaultChildId);
-  const childId = currentChild?.child_id ?? defaultChildId;
+  // Parent accounts must wait for the server-backed child profiles before
+  // using an ID. The child store starts with a locally generated fallback
+  // ID, which is not owned by the account and causes transient 404s during
+  // the first My Agent mount (#763 follow-up).
+  const childProfilesResolved =
+    user?.role !== "parent" || currentChild != null || childProfiles.length > 0;
+  const childId = childProfilesResolved
+    ? (currentChild?.child_id ?? defaultChildId)
+    : undefined;
   const ageGroup = currentChild?.age_group;
 
-  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
-  const user = useAuthStore((s) => s.user);
   const onboardedAt = user?.onboarded_at;
   const isPendingChildApproval =
     user?.role === "child" && user?.consent_status === "pending_parent_consent";
@@ -240,7 +248,7 @@ export default function MyAgentPage() {
         </div>
         <OnboardingModal
           open={onboardingOpen}
-          childId={childId}
+          childId={childId ?? defaultChildId}
           ageGroup={ageGroup}
           onClose={() => setOnboardingOpen(false)}
         />
