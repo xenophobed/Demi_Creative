@@ -124,20 +124,26 @@ function getItemTypeLabel(item: LibraryItem): string {
 
 function RecentCreationCard({ item, onClick }: { item: LibraryItem; onClick: () => void }) {
   const imageUrl = item.thumbnail_url || item.image_url
+  const [imageFailed, setImageFailed] = useState(false)
   const FallbackIcon =
     item.type === 'interactive' ? BookOpen : item.type === 'art-story' ? ImagePlus : Newspaper
 
   return (
     <motion.div
-      className="card-kid cursor-pointer"
+      className="card-kid w-full min-w-0 cursor-pointer"
       onClick={onClick}
       whileHover={{ scale: 1.02 }}
       whileTap={{ scale: 0.98 }}
     >
       <div className="flex gap-4">
         <div className="flex h-16 w-16 flex-shrink-0 items-center justify-center overflow-hidden rounded-lg bg-gradient-to-br from-primary/20 to-secondary/20">
-          {imageUrl ? (
-            <img src={resolveMediaUrl(imageUrl) || ''} alt="" className="h-full w-full object-cover" />
+          {imageUrl && !imageFailed ? (
+            <img
+              src={resolveMediaUrl(imageUrl) || ''}
+              alt=""
+              className="h-full w-full object-cover"
+              onError={() => setImageFailed(true)}
+            />
           ) : (
             <FallbackIcon className="text-primary" size={28} />
           )}
