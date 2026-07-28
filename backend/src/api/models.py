@@ -1140,8 +1140,10 @@ class ParentApprovalStatusResponse(BaseModel):
     """Pending approval resend/status response."""
     status: str = Field(..., description="Approval status")
     parent_email: Optional[str] = Field(None, description="Parent/guardian email")
-    approval_token: Optional[str] = Field(None, description="Development/test approval token")
-    approval_url: Optional[str] = Field(None, description="Development/test approval URL")
+    email_sent: bool = Field(
+        default=False,
+        description="Whether the approval email was accepted by the email provider",
+    )
 
 
 class UserLoginRequest(BaseModel):

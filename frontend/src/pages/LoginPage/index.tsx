@@ -28,6 +28,10 @@ function friendlyAuthError(raw: string, mode: AuthMode): string {
     return 'This email is already registered. Try signing in instead?'
   if (lower.includes('too many requests') || lower.includes('rate limit'))
     return 'Too many attempts. Please wait a moment and try again.'
+  if (lower.includes('parent approval email service is not configured'))
+    return 'Your account was created, but approval email is not configured yet. Please contact support.'
+  if (lower.includes('parent approval email could not be delivered'))
+    return 'Your account was created, but we could not deliver the parent approval email. Please try again later.'
   if (lower.includes('network') || lower.includes('fetch') || lower.includes('timeout'))
     return 'Network issue detected. Please check your connection and try again.'
   if (lower.includes('request failed with status code'))
@@ -69,8 +73,8 @@ function LoginPage() {
   const [error, setError] = useState<string | null>(null)
   const [pendingParentApproval, setPendingParentApproval] = useState<{
     parentEmail: string
-    approvalUrl?: string | null
   } | null>(null)
+  const [approvalEmailError, setApprovalEmailError] = useState<string | null>(null)
   const [confirmationPending, setConfirmationPending] = useState(false)
   const [emailConfirmation, setEmailConfirmation] = useState(false)
   const [confirmationEmail, setConfirmationEmail] = useState('')
@@ -156,11 +160,17 @@ function LoginPage() {
       setAuth(response.user, response.token.access_token)
 
       if (mode === 'register' && response.user.role === 'child') {
-        const approval = await authService.resendParentApproval()
         setPendingParentApproval({
-          parentEmail: approval.parent_email || parentEmail.trim().toLowerCase(),
-          approvalUrl: approval.approval_url,
+          parentEmail: response.user.parent_email || parentEmail.trim().toLowerCase(),
         })
+        try {
+          const approval = await authService.resendParentApproval()
+          setPendingParentApproval({
+            parentEmail: approval.parent_email || parentEmail.trim().toLowerCase(),
+          })
+        } catch (err) {
+          setApprovalEmailError(friendlyAuthError(getErrorMessage(err), 'register'))
+        }
         return
       }
 
@@ -242,15 +252,15 @@ function LoginPage() {
     if (!pendingParentApproval) return
     setIsLoading(true)
     setError(null)
+    setApprovalEmailError(null)
     try {
       const approval = await authService.resendParentApproval()
       setPendingParentApproval({
         parentEmail: approval.parent_email || pendingParentApproval.parentEmail,
-        approvalUrl: approval.approval_url,
       })
-      setConfirmationNotice('Parent approval request refreshed.')
+      setConfirmationNotice('Approval email sent. Ask your parent or guardian to check their inbox and spam folder.')
     } catch (err) {
-      setError(friendlyAuthError(getErrorMessage(err), 'register'))
+      setApprovalEmailError(friendlyAuthError(getErrorMessage(err), 'register'))
     } finally {
       setIsLoading(false)
     }
@@ -328,18 +338,14 @@ function LoginPage() {
             >
               <div className="text-5xl">📬</div>
               <h2 className="text-xl font-bold text-gray-800">Parent approval needed</h2>
-              <p className="text-gray-500 text-sm">
-                We sent an approval request to your parent or guardian. You can come back after they approve it.
-              </p>
-              <p className="text-gray-400 text-xs break-all">{pendingParentApproval.parentEmail}</p>
-              {pendingParentApproval.approvalUrl && (
-                <a
-                  href={pendingParentApproval.approvalUrl}
-                  className="block rounded-lg bg-gray-50 px-3 py-2 text-xs font-medium text-primary hover:bg-primary/10"
-                >
-                  Open approval link
-                </a>
+              {approvalEmailError ? (
+                <p className="text-red-700 text-sm">{approvalEmailError}</p>
+              ) : (
+                <p className="text-gray-500 text-sm">
+                  We sent an approval email to your parent or guardian. They can approve the account from that email.
+                </p>
               )}
+              <p className="text-gray-400 text-xs break-all">{pendingParentApproval.parentEmail}</p>
               {confirmationNotice && (
                 <p className="text-xs text-green-700">{confirmationNotice}</p>
               )}

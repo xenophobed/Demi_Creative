@@ -4,6 +4,7 @@ User API Routes
 User authentication and management API endpoints
 """
 
+import logging
 import os
 from datetime import datetime
 from typing import Optional
@@ -12,6 +13,11 @@ from urllib.parse import urlparse
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
 
 from ...services.database import referral_repo
+from ...services.email_service import (
+    EmailDeliveryError,
+    EmailDeliveryNotConfigured,
+    send_parent_approval_email,
+)
 from ...services.user_service import UserData, user_service
 from ..deps import get_current_user
 from ..models import (
@@ -32,6 +38,7 @@ from ..models import (
 )
 
 router = APIRouter(prefix="/api/v1/users", tags=["User Authentication"])
+logger = logging.getLogger(__name__)
 
 
 _PLACEHOLDER_FRONTEND_URLS = {
@@ -239,15 +246,42 @@ async def resend_parent_approval(
             parent_email=user.parent_email,
         )
 
-    token = user_service.create_parent_approval_token(user.user_id, user.parent_email)
+    approval_hours = 72
+    token = user_service.create_parent_approval_token(
+        user.user_id,
+        user.parent_email,
+        expires_in_seconds=approval_hours * 3600,
+    )
     base_url = _resolve_frontend_base_url(request)
     approval_url = f"{base_url}/parent-approval?token={token}"
+
+    try:
+        await send_parent_approval_email(
+            parent_email=user.parent_email,
+            child_name=user.display_name or user.username,
+            approval_url=approval_url,
+            expires_in_hours=approval_hours,
+        )
+    except EmailDeliveryNotConfigured as exc:
+        logger.warning("Parent approval email delivery is not configured")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Parent approval email service is not configured",
+        ) from exc
+    except EmailDeliveryError as exc:
+        logger.exception(
+            "Parent approval email delivery failed for user %s",
+            user.user_id,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Parent approval email could not be delivered. Please try again.",
+        ) from exc
 
     return ParentApprovalStatusResponse(
         status="pending_parent_consent",
         parent_email=user.parent_email,
-        approval_token=token,
-        approval_url=approval_url,
+        email_sent=True,
     )
 
 
