@@ -114,7 +114,7 @@ describe("authService registration ownership", () => {
         data: {
           status: "pending_parent_consent",
           parent_email: "parent@test.com",
-          approval_url: "http://test/parent-approval?token=abc",
+          email_sent: true,
         },
       })
       .mockResolvedValueOnce({

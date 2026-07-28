@@ -79,8 +79,7 @@ export interface ParentApprovalResponse {
 export interface ParentApprovalStatusResponse {
   status: string
   parent_email?: string | null
-  approval_token?: string | null
-  approval_url?: string | null
+  email_sent: boolean
 }
 
 // Returned when Supabase requires email confirmation before login

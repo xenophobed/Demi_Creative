@@ -112,9 +112,9 @@ export default function MyAgentPage() {
     try {
       const response = await authService.resendParentApproval();
       setApprovalNotice(
-        response.approval_url
-          ? `Approval link refreshed: ${response.approval_url}`
-          : "Approval request refreshed.",
+        response.email_sent
+          ? "Approval email sent. Ask your parent or guardian to check their inbox and spam folder."
+          : "Approval email was not sent. Try again later.",
       );
     } catch {
       setApprovalNotice("We could not resend approval right now. Try again later.");
