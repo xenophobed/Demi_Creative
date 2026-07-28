@@ -1,6 +1,7 @@
 """Parent approval email delivery contract tests."""
 
 from unittest.mock import AsyncMock, patch
+from urllib.parse import parse_qs, urlparse
 
 import pytest
 
@@ -58,7 +59,13 @@ async def test_resend_sends_email_and_does_not_return_approval_token(test_client
     assert "approval_token" not in response.json()
     send_email.assert_awaited_once()
     assert send_email.await_args.kwargs["parent_email"] == "parent@example.com"
-    assert "https://creative.demi-app.com/parent-approval?token=" in send_email.await_args.kwargs["approval_url"]
+    approval_url = send_email.await_args.kwargs["approval_url"]
+    assert "https://creative.demi-app.com/parent-approval?token=" in approval_url
+    token = parse_qs(urlparse(approval_url).query)["token"][0]
+    payload, error = users_route.user_service._decode_parent_approval_token(token)
+    assert error is None
+    assert payload["sub"] == _PENDING_CHILD.user_id
+    assert payload["parent_email"] == _PENDING_CHILD.parent_email
 
 
 @pytest.mark.asyncio
